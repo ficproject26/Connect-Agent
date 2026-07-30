@@ -7,7 +7,7 @@ import axios from 'axios';
  * - Intercepts 401 responses to trigger logout / redirect
  */
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:4000/api',
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8001/api',
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
