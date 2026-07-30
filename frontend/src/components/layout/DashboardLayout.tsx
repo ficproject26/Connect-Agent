@@ -96,7 +96,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
           <img
             src="/logo.jpg"
             alt="Logo"
-            className="h-10 w-10 rounded-xl object-cover shadow-sm transition-transform duration-300 group-hover:scale-105 group-hover:rotate-3"
+            className="h-10 w-10 rounded-xl object-contain shadow-sm transition-transform duration-300 group-hover:scale-105 group-hover:rotate-3"
           />
           <div className={`flex flex-col transition-all duration-300 ease-in-out origin-left ${
             isSidebarExpanded 
@@ -342,7 +342,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
             <div className="flex flex-col gap-6">
               <div className="flex items-center justify-between border-b border-[#d7c3b5]/50 pb-4">
                 <Link to="/dashboard" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2">
-                  <img src="/logo.jpg" alt="Logo" className="h-8 w-8 rounded-lg object-cover" />
+                  <img src="/logo.jpg" alt="Logo" className="h-8 w-8 rounded-lg object-contain" />
                   <span className="font-black text-sm tracking-wide text-[#864f19]">
                     ConnectPortal
                   </span>

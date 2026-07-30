@@ -38,7 +38,7 @@ export const Welcome: React.FC = () => {
       <div className="w-full max-w-2xl text-center z-10 space-y-8">
         {/* Brand Banner */}
         <div className="flex flex-col items-center">
-          <img src="/logo.jpg" alt="Connect App Logo" className="h-16 w-16 rounded-2xl shadow-md border border-[#d7c3b5]/50 mb-4 object-cover" />
+          <img src="/logo.jpg" alt="Connect App Logo" className="h-16 w-16 rounded-2xl shadow-md border border-[#d7c3b5]/50 mb-4 object-contain" />
           <h1 className="text-4xl md:text-5xl font-black font-sans tracking-wide text-[#1b1c1c] leading-tight">
             CONNECT <span className="text-[#864f19]">APP</span>
           </h1>
