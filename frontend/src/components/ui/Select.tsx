@@ -69,7 +69,7 @@ export const Select: React.FC<SelectProps> = ({
   };
 
   return (
-    <div className={`relative w-full animate-fade-in ${className}`} ref={dropdownRef}>
+    <div className={`relative w-full animate-fade-in ${isOpen ? 'z-40' : 'z-10'} ${className}`} ref={dropdownRef}>
       {label && (
         <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 ml-1 uppercase">
           {label}
@@ -79,7 +79,7 @@ export const Select: React.FC<SelectProps> = ({
       {/* Trigger Button / Input Display */}
       <div
         onClick={() => !disabled && setIsOpen((prev) => !prev)}
-        className={`relative flex items-center justify-between px-3.5 py-2 text-sm rounded-2xl bg-white dark:bg-slate-800 border ${
+        className={`relative flex items-center justify-between px-3.5 py-2.5 text-sm rounded-2xl bg-white dark:bg-slate-800 border ${
           isOpen ? 'border-[#864f19] ring-2 ring-[#864f19]/20' : 'border-slate-200/90 dark:border-slate-700/60'
         } text-slate-900 dark:text-white shadow-xs cursor-pointer transition-all ${
           disabled ? 'opacity-50 cursor-not-allowed bg-slate-100' : 'hover:border-[#864f19]/60'
@@ -96,7 +96,7 @@ export const Select: React.FC<SelectProps> = ({
 
       {/* Dropdown Menu Popup */}
       {isOpen && (
-        <div className="absolute z-50 mt-1.5 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <div className="absolute left-0 right-0 top-full z-50 mt-1.5 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
           {/* Search Box inside Dropdown */}
           {isSearchable && options.length > 5 && (
             <div className="p-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 flex items-center gap-2">
