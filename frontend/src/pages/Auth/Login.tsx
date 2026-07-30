@@ -34,6 +34,10 @@ export const Login: React.FC = () => {
     try {
       const loggedInUser: any = await login(data.email, data.password);
       if (loggedInUser) {
+        if (loggedInUser.kycStatus === 'pending' || loggedInUser.status === 'pending_approval') {
+          navigate('/pending');
+          return;
+        }
         const userRole = loggedInUser.role;
         if (userRole === 'delivery_partner') {
           navigate('/dashboard/delivery');

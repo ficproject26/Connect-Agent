@@ -223,6 +223,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         mockName = mockState === 'Tamil Nadu' ? 'Karthik Raja (Hosur Pincode Agent)' : 'Anil Mehta (Bengaluru Pincode Agent)';
       }
 
+      const isApprovedDemo = ['state@forge.in', 'division@forge.in', 'district@forge.in', 'pincode@forge.in'].includes(email.toLowerCase());
+      const mockKycStatus: 'approved' | 'pending' = isApprovedDemo ? 'approved' : 'pending';
+      const mockStatus: 'active' | 'pending_approval' = isApprovedDemo ? 'active' : 'pending_approval';
+
       const sandboxAgent: AgentProfile = {
         _id: `sandbox_${Date.now()}`,
         name: mockName,
@@ -236,8 +240,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           division: mockDivision,
           pincode: mockPincode
         },
-        kycStatus: 'approved',
-        status: 'active',
+        kycStatus: mockKycStatus,
+        status: mockStatus,
         kycDocs: {},
         registrationFeePaid: true,
         performanceScore: 92,

@@ -23,12 +23,12 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
   }
 
   // Handle pending verification redirects (except for the pending page itself)
-  if (user.kycStatus === 'pending' && window.location.pathname !== '/pending') {
+  if ((user.kycStatus === 'pending' || user.status === 'pending_approval') && window.location.pathname !== '/pending') {
     return <Navigate to="/pending" replace />;
   }
 
   // Handle active accounts going to pending page
-  if (user.kycStatus === 'approved' && window.location.pathname === '/pending') {
+  if (user.kycStatus === 'approved' && user.status === 'active' && window.location.pathname === '/pending') {
     return <Navigate to="/dashboard" replace />;
   }
 

@@ -10,13 +10,13 @@ export const PendingApproval: React.FC = () => {
   const { user, role, updateProfile, logout, addNotification } = useAuth();
 
   const handleInstantActivate = () => {
-    updateProfile({ status: 'active' });
+    updateProfile({ status: 'active', kycStatus: 'approved' });
     addNotification('Account Activated', 'Your account was approved and activated by Executive Operations.', 'high', 'system');
     
     // Redirect to proper dashboard
-    if (role === 'delivery_partner') navigate('/delivery/dashboard');
-    else if (role === 'technician') navigate('/technician/dashboard');
-    else navigate('/');
+    if (role === 'delivery_partner') navigate('/dashboard/delivery');
+    else if (role === 'technician') navigate('/dashboard/technician');
+    else navigate('/dashboard');
   };
 
   const handleLogout = () => {
