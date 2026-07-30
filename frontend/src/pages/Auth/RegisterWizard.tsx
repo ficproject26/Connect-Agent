@@ -513,12 +513,12 @@ export const RegisterWizard: React.FC = () => {
         <div className="absolute bottom-[-10%] right-[-10%] w-[55%] h-[55%] bg-[#34647b]/10 rounded-full blur-[120px]" />
 
         <div className="w-full max-w-xl text-center z-10 space-y-6">
-          <Card className="glass-card-auth p-8 bg-white border border-slate-200/80 rounded-3xl shadow-2xl space-y-6">
+          <Card className="p-8 bg-white border border-slate-200/80 rounded-3xl shadow-2xl space-y-6">
             <div className="inline-flex p-4 bg-emerald-50 text-emerald-500 rounded-full animate-bounce">
               <CheckCircle className="w-16 h-16" />
             </div>
 
-            <h2 className="text-2xl font-black text-slate-800 tracking-tight">Registration Submitted Successfully!</h2>
+            <h2 className="text-2xl font-black text-slate-900 tracking-tight">Registration Submitted Successfully!</h2>
             
             <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 space-y-3 text-left">
               <div className="flex justify-between">
