@@ -1,0 +1,8 @@
+# Routes — Placeholder
+# Implement route files here:
+# - auth.routes.ts
+# - order.routes.ts
+# - job.routes.ts
+# - wallet.routes.ts
+# - executive.routes.ts
+# - notification.routes.ts

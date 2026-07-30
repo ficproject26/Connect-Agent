@@ -1,0 +1,358 @@
+import React, { useState, useEffect } from 'react';
+import { Card, CardHeader, CardTitle, CardBody, CardFooter } from '../../components/ui/Card';
+import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
+import { Select } from '../../components/ui/Select';
+import { useAuth, UserProfile } from '../../context/AuthContext';
+import { 
+  User, Phone, MapPin, Landmark, ShieldCheck, 
+  Settings, LogOut, ArrowRight, Save, ShieldAlert, Award,
+  Camera, Truck
+} from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+
+const getVehicleLabel = (type: string) => {
+  switch (type) {
+    case 'bicycle': return 'Bicycle';
+    case 'electric_scooter': return 'E-Bike / Electric Scooter';
+    case 'motorcycle': return 'Motorcycle / Scooter';
+    case 'auto_rickshaw': return 'Auto Rickshaw';
+    case 'van': return 'Delivery Van / Mini Truck';
+    default: return 'Vehicle';
+  }
+};
+
+export const ProfileModule: React.FC = () => {
+  const navigate = useNavigate();
+  const { user, role, updateProfile, addNotification, logout } = useAuth();
+
+  const [name, setName] = useState(user?.name || '');
+  const [email, setEmail] = useState(user?.email || '');
+  const [mobile, setMobile] = useState(user?.mobile || '');
+  const [altMobile, setAltMobile] = useState(user?.alternateMobile || '');
+  const [lang, setLang] = useState(user?.preferredLanguage || 'English');
+  const [blood, setBlood] = useState(user?.bloodGroup || 'O+');
+  const [profilePic, setProfilePic] = useState(user?.profilePhoto || '');
+  const [vehicleDetails, setVehicleDetails] = useState<UserProfile['vehicleDetails']>(() => {
+    const details = user?.vehicleDetails;
+    if (details) {
+      if ((!details.vehicleTypes || details.vehicleTypes.length === 0) && (details.model || details.number)) {
+        return {
+          ...details,
+          vehicleTypes: ['motorcycle'],
+          vehicles: {
+            motorcycle: {
+              model: details.model || '',
+              number: details.number || ''
+            }
+          }
+        };
+      }
+      return details;
+    }
+    return {
+      type: 'both',
+      number: '',
+      model: '',
+      licenseNumber: '',
+      workingArea: '',
+      vehicleTypes: [],
+      vehicles: {}
+    };
+  });
+  const [selectedVehicleType, setSelectedVehicleType] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (vehicleDetails?.vehicleTypes && vehicleDetails.vehicleTypes.length > 0) {
+      if (!selectedVehicleType || !vehicleDetails.vehicleTypes.includes(selectedVehicleType)) {
+        setSelectedVehicleType(vehicleDetails.vehicleTypes[0]);
+      }
+    } else {
+      setSelectedVehicleType('');
+    }
+  }, [vehicleDetails?.vehicleTypes, selectedVehicleType]);
+
+  const handleProfilePicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        setProfilePic(base64String);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleProfileSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    
+    setTimeout(() => {
+      setIsSubmitting(false);
+      updateProfile({
+        name,
+        email,
+        mobile,
+        alternateMobile: altMobile,
+        preferredLanguage: lang,
+        bloodGroup: blood,
+        profilePhoto: profilePic,
+        vehicleDetails: vehicleDetails
+      });
+      addNotification('Profile Updated', 'Personal contact and vehicle details successfully updated in operations portal.', 'medium', 'system');
+    }, 1200);
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+  };
+
+  return (
+    <div className="space-y-6">
+      
+      <div className="flex justify-between items-center bg-white dark:bg-background-cardDark p-6 rounded-forge border border-forgeGray-200/40 dark:border-slate-800 shadow-sm">
+        <div>
+          <h1 className="text-2xl font-black text-forgeGray-900 dark:text-white font-sans">
+            Profile Settings
+          </h1>
+          <p className="text-xs font-semibold text-forgeGray-450 dark:text-forgeGray-400 mt-1 uppercase tracking-wider">
+            Review linked verification credentials and modify operational details
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* Left Side profile block (1 col) */}
+        <div className="space-y-6">
+          <Card variant="default" className="text-center p-6 flex flex-col items-center">
+            <div className="h-24 w-24 rounded-full text-white font-sans font-black text-3xl flex items-center justify-center shadow mb-4 relative">
+              {profilePic ? (
+                <img src={profilePic} alt="Profile" className="h-full w-full rounded-full object-cover" />
+              ) : (
+                <div className="h-full w-full rounded-full bg-secondary flex items-center justify-center">
+                  {user?.name?.charAt(0) || 'U'}
+                </div>
+              )}
+              
+              <label 
+                htmlFor="profile-pic-upload" 
+                className="absolute bottom-0 right-0 bg-blue-600 text-white p-2 rounded-full border border-white dark:border-slate-900 shadow cursor-pointer hover:bg-blue-700 transition z-20 flex items-center justify-center"
+              >
+                <Camera className="w-3.5 h-3.5" />
+              </label>
+              <input 
+                type="file" 
+                id="profile-pic-upload" 
+                accept="image/*" 
+                onChange={handleProfilePicChange} 
+                className="hidden" 
+              />
+            </div>
+
+            <h3 className="font-extrabold text-base text-forgeGray-900 dark:text-white">{user?.name}</h3>
+            <p className="text-[10px] text-forgeGray-450 font-semibold uppercase mt-0.5 tracking-wider">
+              {role?.replace('_', ' ')} Portal
+            </p>
+            <p className="text-[10px] text-emerald-600 font-bold bg-emerald-100/50 px-2 py-0.5 rounded uppercase mt-2">
+              Account Active
+            </p>
+
+            <div className="w-full border-t border-forgeGray-100 dark:border-slate-800/80 pt-6 mt-6 space-y-2">
+              <button onClick={() => navigate('/shared/settings')} className="w-full flex items-center justify-between p-2.5 hover:bg-forgeGray-50 dark:hover:bg-slate-800 text-xs font-semibold rounded-lg text-forgeGray-650">
+                <span className="flex items-center"><Settings className="w-4 h-4 mr-2" /> App Preferences</span>
+                <ChevronRight className="w-4 h-4 text-forgeGray-400" />
+              </button>
+              
+              <button onClick={handleLogout} className="w-full flex items-center p-2.5 hover:bg-red-50 dark:hover:bg-red-950/20 text-xs font-semibold rounded-lg text-red-500">
+                <LogOut className="w-4 h-4 mr-2" /> Logout Session
+              </button>
+            </div>
+          </Card>
+        </div>
+
+        {/* Right Side form block (2 cols) */}
+        <div className="lg:col-span-2 space-y-6">
+          <form onSubmit={handleProfileSave} className="space-y-6">
+            <Card variant="default">
+              <CardHeader>
+                <div className="flex items-center space-x-2">
+                  <User className="w-5 h-5 text-secondary dark:text-primary" />
+                  <CardTitle>Personal Particulars</CardTitle>
+                </div>
+              </CardHeader>
+              
+              <CardBody className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Input label="Full Name" value={name} onChange={(e) => setName(e.target.value)} />
+                  <Input label="Email Address" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Input
+                    label="Primary Mobile"
+                    maxLength={10}
+                    value={mobile}
+                    onChange={(e) => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  />
+                  <Input
+                    label="Alternate Mobile"
+                    maxLength={10}
+                    value={altMobile}
+                    onChange={(e) => setAltMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Select
+                    label="Preferred Language"
+                    options={[
+                      { value: 'English', label: 'English' },
+                      { value: 'Hindi', label: 'Hindi' },
+                      { value: 'Kannada', label: 'Kannada' },
+                      { value: 'Tamil', label: 'Tamil' },
+                    ]}
+                    value={lang}
+                    onChange={(e) => setLang(e.target.value)}
+                  />
+                  <Select
+                    label="Blood Group"
+                    options={[
+                      { value: 'A+', label: 'A+' },
+                      { value: 'B+', label: 'B+' },
+                      { value: 'O+', label: 'O+' },
+                      { value: 'AB+', label: 'AB+' },
+                    ]}
+                    value={blood}
+                    onChange={(e) => setBlood(e.target.value)}
+                  />
+                </div>
+
+                {/* Inline Vehicle Details Section */}
+                {(role === 'delivery_partner' || role === 'technician') && (
+                  <div className="pt-6 border-t border-forgeGray-100 dark:border-slate-800/80 space-y-4">
+                    <div className="flex items-center space-x-2 pb-2">
+                      <Truck className="w-5 h-5 text-secondary dark:text-primary" />
+                      <h4 className="text-sm font-black text-forgeGray-900 dark:text-white font-sans">
+                        Registered Vehicles Details
+                      </h4>
+                    </div>
+
+                    {vehicleDetails?.vehicleTypes && vehicleDetails.vehicleTypes.length > 0 ? (
+                      <div className="space-y-4">
+                        {/* Selector Dropdown Box for Multiple Vehicles */}
+                        {vehicleDetails.vehicleTypes.length > 1 && (
+                          <div className="pb-2">
+                            <Select
+                              label="Select Vehicle to Edit"
+                              options={vehicleDetails.vehicleTypes.map((vType: string) => ({
+                                value: vType,
+                                label: getVehicleLabel(vType)
+                              }))}
+                              value={selectedVehicleType}
+                              onChange={(e) => setSelectedVehicleType(e.target.value)}
+                            />
+                          </div>
+                        )}
+
+                        {selectedVehicleType && (() => {
+                          const vehiclesDict = (vehicleDetails.vehicles || {}) as any;
+                          const vehicleInfo = vehiclesDict[selectedVehicleType] || { model: '', number: '' };
+                          return (
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between pb-1">
+                                <span className="bg-primary/10 text-primary hover:bg-primary/20 px-2 py-0.5 rounded text-[10px] font-black uppercase">
+                                  {getVehicleLabel(selectedVehicleType)}
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <Input 
+                                  label={`${getVehicleLabel(selectedVehicleType)} Model`} 
+                                  value={vehicleInfo.model || ''} 
+                                  onChange={(e) => {
+                                    const newModel = e.target.value;
+                                    setVehicleDetails((prev: any) => {
+                                      const dict = (prev?.vehicles || {}) as any;
+                                      return {
+                                        ...prev,
+                                        type: prev?.type || 'both',
+                                        number: prev?.number || '',
+                                        model: prev?.model || '',
+                                        licenseNumber: prev?.licenseNumber || '',
+                                        workingArea: prev?.workingArea || '',
+                                        vehicles: {
+                                          ...dict,
+                                          [selectedVehicleType]: {
+                                            ...(dict[selectedVehicleType] || { number: '', rcPhoto: '' }),
+                                            model: newModel
+                                          }
+                                        }
+                                      };
+                                    });
+                                  }} 
+                                />
+                                <Input 
+                                  label="Registration Plate Number" 
+                                  value={vehicleInfo.number || ''} 
+                                  onChange={(e) => {
+                                    const newNum = e.target.value;
+                                    setVehicleDetails((prev: any) => {
+                                      const dict = (prev?.vehicles || {}) as any;
+                                      return {
+                                        ...prev,
+                                        type: prev?.type || 'both',
+                                        number: prev?.number || '',
+                                        model: prev?.model || '',
+                                        licenseNumber: prev?.licenseNumber || '',
+                                        workingArea: prev?.workingArea || '',
+                                        vehicles: {
+                                          ...dict,
+                                          [selectedVehicleType]: {
+                                            ...(dict[selectedVehicleType] || { model: '', rcPhoto: '' }),
+                                            number: newNum
+                                          }
+                                        }
+                                      };
+                                    });
+                                  }} 
+                                />
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    ) : (
+                      <div className="text-center py-6 text-forgeGray-455 dark:text-forgeGray-400 text-xs font-semibold">
+                        No registered vehicles found. Please contact administration.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardBody>
+
+              <CardFooter>
+                <Button type="submit" variant="primary" isLoading={isSubmitting} leftIcon={<Save className="w-4 h-4" />}>
+                  Save Changes
+                </Button>
+              </CardFooter>
+            </Card>
+          </form>
+        </div>
+
+      </div>
+
+    </div>
+  );
+};
+
+// Internal icon reuse helper
+const ChevronRight = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+  </svg>
+);
+
+export default ProfileModule;

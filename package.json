@@ -1,0 +1,11 @@
+{
+  "name": "forge-connect-root",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "setup": "npm install --prefix frontend && npm install --prefix backend && node setup-env.js",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev:backend": "npm run dev --prefix backend",
+    "dev": "npx concurrently -n \"frontend,backend\" -c \"cyan.bold,magenta.bold\" \"npm run dev --prefix frontend\" \"npm run dev --prefix backend\""
+  }
+}
