@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import mongoose from 'mongoose';
 import Agent from '../models/Agent';
 import { generateToken } from '../utils/jwt';
 import { z } from 'zod';
@@ -66,6 +67,40 @@ export const register = async (req: Request, res: Response) => {
 
     await newAgent.save();
 
+    // Also sync registration to users collection for Admin Panel join requests
+    try {
+      const db = mongoose.connection.db;
+      if (db) {
+        const assignedAreaStr = validatedData.territory?.state || validatedData.territory?.district || validatedData.territory?.division || validatedData.territory?.pincode || '';
+        await db.collection('users').updateOne(
+          { email: validatedData.email.toLowerCase() },
+          {
+            $set: {
+              name: validatedData.name,
+              email: validatedData.email.toLowerCase(),
+              phone: validatedData.phone,
+              password: newAgent.password,
+              role: 'agent',
+              level: validatedData.role,
+              assignedArea: assignedAreaStr,
+              registrationId,
+              status: 'pending',
+              isActive: false,
+              kyc: {
+                aadhaarImage: validatedData.kycDocs?.aadhaarCard || '',
+                panImage: validatedData.kycDocs?.panCard || '',
+                selfie: validatedData.kycDocs?.passportPhoto || ''
+              },
+              createdAt: new Date()
+            }
+          },
+          { upsert: true }
+        );
+      }
+    } catch (syncError) {
+      console.error('Error syncing user to admin collection:', syncError);
+    }
+
     // Return registration information (success screen requirements)
     const agentObj = newAgent.toObject();
     const { password, ...agentData } = agentObj;
@@ -98,6 +133,27 @@ export const login = async (req: Request, res: Response) => {
     const isMatch = await agent.comparePassword(validatedData.password);
     if (!isMatch) {
       return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    // Sync latest status from admin users collection if updated by Admin
+    try {
+      const db = mongoose.connection.db;
+      if (db) {
+        const userDoc = await db.collection('users').findOne({ email: validatedData.email.toLowerCase() });
+        if (userDoc && userDoc.status) {
+          const uStatus = String(userDoc.status).toLowerCase();
+          if (uStatus === 'approved' && agent.kycStatus !== 'approved') {
+            agent.kycStatus = 'approved';
+            await agent.save();
+          } else if (uStatus === 'rejected' && agent.kycStatus !== 'rejected') {
+            agent.kycStatus = 'rejected';
+            agent.rejectionReason = userDoc.rejectionReason || 'Rejected by Admin';
+            await agent.save();
+          }
+        }
+      }
+    } catch (statusSyncErr) {
+      console.error('Error syncing status from admin collection:', statusSyncErr);
     }
 
     // Workflow validation: Approved (Login Enabled) / Pending Approval / Rejected (Show Reason)
