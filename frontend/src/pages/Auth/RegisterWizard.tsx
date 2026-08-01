@@ -492,7 +492,17 @@ export const RegisterWizard: React.FC = () => {
         setFormErrors('Registration completed, but no ID was returned.');
       }
     } catch (err: any) {
-      setFormErrors(err.response?.data?.message || 'Registration failed. Duplicate email or phone.');
+      if (err.response?.data?.message) {
+        setFormErrors(err.response.data.message);
+      } else if (err.response?.data?.errors) {
+        // Zod validation errors from backend
+        const validationMessages = err.response.data.errors.map((e: any) => e.message).join('. ');
+        setFormErrors(validationMessages || 'Validation failed. Please check your inputs.');
+      } else if (err.code === 'ERR_NETWORK' || !err.response) {
+        setFormErrors('Unable to reach the server. Please check your internet connection and try again.');
+      } else {
+        setFormErrors('Registration failed. Please try again or contact support.');
+      }
     } finally {
       setIsSubmitting(false);
     }
