@@ -13,35 +13,55 @@ const PageLoader = () => (
   </div>
 );
 
+// Helper for retryable lazy imports (auto-reloads page if deployment updated chunk hashes)
+const lazyWithRetry = (componentImport: () => Promise<any>) =>
+  lazy(async () => {
+    const pageHasBeenRefreshed = JSON.parse(
+      window.sessionStorage.getItem('retry-lazy-refreshed') || 'false'
+    );
+    try {
+      const component = await componentImport();
+      window.sessionStorage.setItem('retry-lazy-refreshed', 'false');
+      return component;
+    } catch (error) {
+      if (!pageHasBeenRefreshed) {
+        window.sessionStorage.setItem('retry-lazy-refreshed', 'true');
+        window.location.reload();
+        return new Promise(() => {});
+      }
+      throw error;
+    }
+  });
+
 // Lazy Loaded Pages
-const Welcome = lazy(() => import('../pages/Auth/Welcome'));
-const Login = lazy(() => import('../pages/Auth/Login'));
-const ForgotPassword = lazy(() => import('../pages/Auth/ForgotPassword'));
-const OTPVerification = lazy(() => import('../pages/Auth/OTPVerification'));
-const RegisterWizard = lazy(() => import('../pages/Auth/RegisterWizard'));
-const PendingApproval = lazy(() => import('../pages/Auth/PendingApproval'));
-const NotFound = lazy(() => import('../pages/NotFound'));
+const Welcome = lazyWithRetry(() => import('../pages/Auth/Welcome'));
+const Login = lazyWithRetry(() => import('../pages/Auth/Login'));
+const ForgotPassword = lazyWithRetry(() => import('../pages/Auth/ForgotPassword'));
+const OTPVerification = lazyWithRetry(() => import('../pages/Auth/OTPVerification'));
+const RegisterWizard = lazyWithRetry(() => import('../pages/Auth/RegisterWizard'));
+const PendingApproval = lazyWithRetry(() => import('../pages/Auth/PendingApproval'));
+const NotFound = lazyWithRetry(() => import('../pages/NotFound'));
 
 // Agent Dashboard Overview Routing Dynamic Gateway
-const DashboardOverview = lazy(() => import('../pages/Dashboard/DashboardOverview'));
+const DashboardOverview = lazyWithRetry(() => import('../pages/Dashboard/DashboardOverview'));
 
 // Custom page components
-const VendorsList = lazy(() => import('../pages/Vendors/VendorsList'));
-const TargetsList = lazy(() => import('../pages/Tasks/TargetsList'));
-const TicketsList = lazy(() => import('../pages/Tickets/TicketsList'));
-const KycVerification = lazy(() => import('../pages/Kyc/KycVerification'));
-const WalletDashboard = lazy(() => import('../pages/Wallet/WalletDashboard'));
+const VendorsList = lazyWithRetry(() => import('../pages/Vendors/VendorsList'));
+const TargetsList = lazyWithRetry(() => import('../pages/Tasks/TargetsList'));
+const TicketsList = lazyWithRetry(() => import('../pages/Tickets/TicketsList'));
+const KycVerification = lazyWithRetry(() => import('../pages/Kyc/KycVerification'));
+const WalletDashboard = lazyWithRetry(() => import('../pages/Wallet/WalletDashboard'));
 
 // Placeholder modules for other agent views
-const UnderConstruction = lazy(() => import('../pages/UnderConstruction'));
-const ProfileModule = lazy(() => import('../pages/Profile/ProfileModule'));
-const SettingsModule = lazy(() => import('../pages/Settings/SettingsModule'));
-const ReportsModule = lazy(() => import('../pages/Reports/ReportsModule'));
-const NotificationCenter = lazy(() => import('../pages/Notifications/NotificationCenter'));
-const AttendanceLogs = lazy(() => import('../pages/Attendance/AttendanceLogs'));
-const FieldVisitsModule = lazy(() => import('../pages/FieldVisits/FieldVisitsModule'));
-const AgentManagement = lazy(() => import('../pages/Agents/AgentManagement'));
-const LeaderboardModule = lazy(() => import('../pages/Leaderboard/LeaderboardModule'));
+const UnderConstruction = lazyWithRetry(() => import('../pages/UnderConstruction'));
+const ProfileModule = lazyWithRetry(() => import('../pages/Profile/ProfileModule'));
+const SettingsModule = lazyWithRetry(() => import('../pages/Settings/SettingsModule'));
+const ReportsModule = lazyWithRetry(() => import('../pages/Reports/ReportsModule'));
+const NotificationCenter = lazyWithRetry(() => import('../pages/Notifications/NotificationCenter'));
+const AttendanceLogs = lazyWithRetry(() => import('../pages/Attendance/AttendanceLogs'));
+const FieldVisitsModule = lazyWithRetry(() => import('../pages/FieldVisits/FieldVisitsModule'));
+const AgentManagement = lazyWithRetry(() => import('../pages/Agents/AgentManagement'));
+const LeaderboardModule = lazyWithRetry(() => import('../pages/Leaderboard/LeaderboardModule'));
 
 export const AppRoutes: React.FC = () => {
   return (
