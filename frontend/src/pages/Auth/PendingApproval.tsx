@@ -3,21 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
-import { Clock, ShieldCheck, CheckCircle2, RefreshCw, LogOut } from 'lucide-react';
+import { Clock, CheckCircle2, LogOut } from 'lucide-react';
 
 export const PendingApproval: React.FC = () => {
   const navigate = useNavigate();
-  const { user, role, updateProfile, logout, addNotification } = useAuth();
-
-  const handleInstantActivate = () => {
-    updateProfile({ status: 'active', kycStatus: 'approved' });
-    addNotification('Account Activated', 'Your account was approved and activated by Executive Operations.', 'high', 'system');
-    
-    // Redirect to proper dashboard
-    if (role === 'delivery_partner') navigate('/dashboard/delivery');
-    else if (role === 'technician') navigate('/dashboard/technician');
-    else navigate('/dashboard');
-  };
+  const { user, logout } = useAuth();
 
   const handleLogout = () => {
     logout();
@@ -69,26 +59,6 @@ export const PendingApproval: React.FC = () => {
                 <p className="text-[9px] text-forgeGray-300">Identity document lookup in progress (DL/Certificates)</p>
               </div>
             </div>
-          </div>
-
-          {/* Executive Bypass widget for testing */}
-          <div className="border border-amber-500/20 bg-amber-500/10 p-4 rounded-xl mb-6">
-            <p className="text-[10px] font-bold text-amber-400 uppercase tracking-widest flex items-center justify-center space-x-1.5 mb-2">
-              <ShieldCheck className="w-4 h-4" />
-              <span>Executive Testing Bypass Panel</span>
-            </p>
-            <p className="text-[10px] text-forgeGray-300 mb-3 leading-tight">
-              Bypass the standard review wait time to immediately activate this profile and access dashboards.
-            </p>
-            <Button
-              onClick={handleInstantActivate}
-              variant="primary"
-              size="sm"
-              leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
-              className="bg-amber-500 hover:bg-amber-600 text-white font-bold"
-            >
-              Instantly Activate Account
-            </Button>
           </div>
 
           {/* Action triggers */}

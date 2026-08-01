@@ -15,9 +15,7 @@ async function startServer() {
     await mongoose.connect(MONGODB_URI);
     console.log('Successfully connected to MongoDB.');
     
-    // Seed initial agents
-    const { seedAgents } = await import('./utils/seed');
-    await seedAgents();
+    // Database connected
   } catch (error) {
     console.error('Warning: Failed to connect to MongoDB. Starting server without DB:', error);
   }

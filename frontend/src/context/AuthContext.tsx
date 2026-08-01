@@ -271,17 +271,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       return data;
     } catch (error: any) {
-      console.warn('Backend register fallback — activating Sandbox registration for:', agentData?.email);
-      const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-      const randDigits = Math.floor(1000 + Math.random() * 9000);
-      const mockRegistrationId = `REG-${dateStr}-${randDigits}`;
-
-      return {
-        message: 'Agent registered successfully. Pending Admin approval.',
-        registrationId: mockRegistrationId,
-        role: agentData?.role || 'state',
-        status: 'pending'
-      };
+      console.error('Backend registration error:', error);
+      throw error;
     }
   };
 
