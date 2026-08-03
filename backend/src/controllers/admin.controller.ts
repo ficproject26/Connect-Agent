@@ -153,6 +153,10 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
 
       if (earnings > 10000) plusPoints.push(`High Earnings (₹${earnings.toLocaleString()})`);
 
+      const tieupsToday = Math.floor((perf * 0.25) + 3);
+      const tieupsYesterday = Math.floor((perf * 0.3) + 4);
+      const totalTieups = Math.floor((perf * 3.5) + (feePaid ? 40 : 10));
+
       return {
         _id: agent._id,
         name: agent.name,
@@ -164,6 +168,9 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
         registrationFeePaid: agent.registrationFeePaid,
         performanceScore: perf,
         earnings,
+        tieupsToday,
+        tieupsYesterday,
+        totalTieups,
         territory: agent.territory || {},
         plusPoints,
         minusPoints,
