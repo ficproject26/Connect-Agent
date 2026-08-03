@@ -211,6 +211,27 @@ export const getMe = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Agent not found' });
     }
 
+    // Sync latest status from admin users collection if updated by Admin
+    try {
+      const db = mongoose.connection.db;
+      if (db) {
+        const userDoc = await db.collection('users').findOne({ email: agent.email.toLowerCase() });
+        if (userDoc && userDoc.status) {
+          const uStatus = String(userDoc.status).toLowerCase();
+          if (uStatus === 'approved' && agent.kycStatus !== 'approved') {
+            agent.kycStatus = 'approved';
+            await agent.save();
+          } else if (uStatus === 'rejected' && agent.kycStatus !== 'rejected') {
+            agent.kycStatus = 'rejected';
+            agent.rejectionReason = userDoc.rejectionReason || 'Rejected by Admin';
+            await agent.save();
+          }
+        }
+      }
+    } catch (statusSyncErr) {
+      console.error('Error syncing status from admin collection in getMe:', statusSyncErr);
+    }
+
     return res.status(200).json({ agent });
   } catch (error) {
     console.error('Get profile error:', error);

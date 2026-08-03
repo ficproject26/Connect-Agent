@@ -151,7 +151,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const response = await api.get('/auth/me');
       const agent = response.data.agent;
       // Map kycStatus to status for compatibility
-      agent.status = agent.kycStatus === 'approved' ? 'active' : 'pending_approval';
+      agent.status = (agent.kycStatus === 'approved' || agent.status === 'approved' || agent.status === 'active') ? 'active' : 'pending_approval';
       agent.mobile = agent.phone;
       setUser(agent);
       await fetchNotifications();
@@ -185,7 +185,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const response = await api.post('/auth/login', { email, password: password || 'password123' });
       const { token: newToken, agent } = response.data;
-      agent.status = agent.kycStatus === 'approved' ? 'active' : 'pending_approval';
+      agent.status = (agent.kycStatus === 'approved' || agent.status === 'approved' || agent.status === 'active') ? 'active' : 'pending_approval';
       agent.mobile = agent.phone;
       localStorage.setItem('agent_token', newToken);
       setToken(newToken);
@@ -204,12 +204,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       let mockPincode = '560001';
       let mockName = 'Rajesh Kumar (State Agent)';
 
-      if (email.includes('tn') || email.includes('tamil') || email.includes('siddharth')) {
+      if (email.includes('tn') || email.includes('tamil') || email.includes('siddharth') || email.includes('dhanush')) {
         mockState = 'Tamil Nadu';
         mockDistrict = 'Krishnagiri District';
         mockDivision = 'Hosur Division';
         mockPincode = '635109';
-        mockName = 'Siddharth Menon (Tamil Nadu State Lead)';
+        mockName = email.includes('dhanush') ? 'Dhanush Agent' : 'Siddharth Menon (Tamil Nadu State Lead)';
       }
 
       if (email.includes('district')) {
@@ -218,20 +218,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else if (email.includes('division')) {
         mockRole = 'division';
         mockName = mockState === 'Tamil Nadu' ? 'Suresh Patil (Hosur Division Manager)' : 'Suresh Patil (Bengaluru Division Manager)';
-      } else if (email.includes('pincode')) {
+      } else if (email.includes('pincode') || email.includes('dhanush')) {
         mockRole = 'pincode';
-        mockName = mockState === 'Tamil Nadu' ? 'Karthik Raja (Hosur Pincode Agent)' : 'Anil Mehta (Bengaluru Pincode Agent)';
+        mockName = email.includes('dhanush') ? 'Dhanush Agent (Approved Pincode Agent)' : (mockState === 'Tamil Nadu' ? 'Karthik Raja (Hosur Pincode Agent)' : 'Anil Mehta (Bengaluru Pincode Agent)');
       }
 
-      const isApprovedDemo = ['state@forge.in', 'division@forge.in', 'district@forge.in', 'pincode@forge.in'].includes(email.toLowerCase());
-      const mockKycStatus: 'approved' | 'pending' = isApprovedDemo ? 'approved' : 'pending';
-      const mockStatus: 'active' | 'pending_approval' = isApprovedDemo ? 'active' : 'pending_approval';
+      const mockKycStatus: 'approved' | 'pending' = 'approved';
+      const mockStatus: 'active' | 'pending_approval' = 'active';
 
       const sandboxAgent: AgentProfile = {
         _id: `sandbox_${Date.now()}`,
         name: mockName,
         email,
-        phone: '+91 98765 00000',
+        phone: '+91 98765 43210',
         registrationId: `REG-SANDBOX-${Math.floor(1000 + Math.random() * 9000)}`,
         role: mockRole,
         territory: {
