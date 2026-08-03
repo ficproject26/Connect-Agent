@@ -277,6 +277,22 @@ export const RegisterWizard: React.FC = () => {
         setFormErrors('Phone number must be exactly 10 digits.');
         return;
       }
+      if (!address.state) {
+        setFormErrors('Please select your assigned State.');
+        return;
+      }
+      if (role !== 'state' && !address.district) {
+        setFormErrors('Please select your assigned District.');
+        return;
+      }
+      if ((role === 'division' || role === 'pincode') && !address.division) {
+        setFormErrors('Please select your assigned Division.');
+        return;
+      }
+      if (role === 'pincode' && !address.pincode) {
+        setFormErrors('Please enter your assigned 6-digit Pincode.');
+        return;
+      }
     }
 
     if (currentStep === 2) {
@@ -524,6 +540,112 @@ export const RegisterWizard: React.FC = () => {
                     setFormErrors('');
                   }}
                 />
+
+                {/* Territory Hierarchy Selector (Directly under Role Selection) */}
+                <div className="p-4 bg-amber-50/50 border border-amber-200/80 rounded-xl space-y-3">
+                  <div className="text-xs font-black text-[#864f19] uppercase tracking-wider">
+                    Assigned Territory Selection ({role.toUpperCase()} AGENT)
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {/* 1. STATE SELECTOR (Visible for All Roles: State, District, Division, Pincode) */}
+                    <Select
+                      label="State (Required)"
+                      options={[
+                        { value: '', label: '-- Select Assigned State --' },
+                        ...ALL_INDIAN_STATES.map(s => ({ value: s, label: s }))
+                      ]}
+                      value={address.state}
+                      onChange={(e) => {
+                        const selState = e.target.value;
+                        setAddress({
+                          ...address,
+                          state: selState,
+                          district: '',
+                          division: '',
+                          pincode: '',
+                          postOffice: ''
+                        });
+                        setFormErrors('');
+                      }}
+                    />
+
+                    {/* 2. DISTRICT SELECTOR (Visible for District, Division, and Pincode Agents) */}
+                    {role !== 'state' && (
+                      <Select
+                        label="District (Required)"
+                        disabled={!address.state}
+                        options={[
+                          { value: '', label: address.state ? '-- Select Assigned District --' : 'Select State First' },
+                          ...(STATE_DISTRICTS[address.state] || ["District Main", "District North", "District South", "District East", "District West"]).map(d => ({ value: d, label: d }))
+                        ]}
+                        value={address.district}
+                        onChange={(e) => {
+                          const selDistrict = e.target.value;
+                          setAddress({
+                            ...address,
+                            district: selDistrict,
+                            division: '',
+                            pincode: '',
+                            postOffice: ''
+                          });
+                          setFormErrors('');
+                        }}
+                      />
+                    )}
+
+                    {/* 3. DIVISION SELECTOR (Visible for Division and Pincode Agents) */}
+                    {(role === 'division' || role === 'pincode') && (
+                      <Select
+                        label="Division (Required)"
+                        disabled={!address.district}
+                        options={[
+                          { value: '', label: address.district ? '-- Select Assigned Division --' : 'Select District First' },
+                          ...(DISTRICT_DIVISIONS[address.district] || [
+                            `${address.district} Central Division`,
+                            `${address.district} North Division`,
+                            `${address.district} South Division`,
+                            `${address.district} East Division`,
+                            `${address.district} West Division`
+                          ]).map(div => ({ value: div, label: div }))
+                        ]}
+                        value={address.division}
+                        onChange={(e) => {
+                          const selDiv = e.target.value;
+                          setAddress({
+                            ...address,
+                            division: selDiv,
+                            pincode: '',
+                            postOffice: ''
+                          });
+                          setFormErrors('');
+                        }}
+                      />
+                    )}
+
+                    {/* 4. PINCODE INPUT & BRANCH (Visible for Pincode Agents) */}
+                    {role === 'pincode' && (
+                      <>
+                        <Input
+                          label="Pincode (6 Digits)"
+                          maxLength={6}
+                          placeholder="Enter 6-digit Pincode (e.g. 635109)"
+                          value={address.pincode}
+                          onChange={(e) => handlePincodeChange(e.target.value)}
+                        />
+
+                        {address.postOffice && (
+                          <Input
+                            label="Post Office Branch"
+                            value={address.postOffice}
+                            disabled
+                            className="bg-slate-50 cursor-not-allowed opacity-80"
+                            placeholder="Auto-populated"
+                          />
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="md:col-span-2">
