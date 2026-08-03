@@ -225,18 +225,6 @@ export const RegisterWizard: React.FC = () => {
   // Dynamic placeholders based on selected role
   const sample = ROLE_SAMPLES[role];
 
-  // Geography selectors helper
-  const stateOptions = Object.keys(GEOGRAPHY_DATA).map(s => ({ value: s, label: s }));
-  const divisionOptions = address.state && GEOGRAPHY_DATA[address.state]
-    ? Object.keys(GEOGRAPHY_DATA[address.state]).map(div => ({ value: div, label: div }))
-    : [];
-  const districtOptions = address.state && address.division && GEOGRAPHY_DATA[address.state]?.[address.division]
-    ? Object.keys(GEOGRAPHY_DATA[address.state][address.division]).map(dist => ({ value: dist, label: dist }))
-    : [];
-  const pincodeOptions = address.state && address.division && address.district && GEOGRAPHY_DATA[address.state]?.[address.division]?.[address.district]
-    ? GEOGRAPHY_DATA[address.state][address.division][address.district].map(pin => ({ value: pin, label: pin }))
-    : [];
-
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, docType: string) => {
     setFormErrors('');
     const file = e.target.files?.[0];
