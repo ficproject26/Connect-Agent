@@ -40,16 +40,25 @@ export const register = async (req: Request, res: Response) => {
   try {
     const validatedData = registerSchema.parse(req.body);
     
+    // Parse dob to Date object or undefined if invalid
+    let parsedDob: Date | undefined;
+    if (validatedData.dob) {
+      const d = new Date(validatedData.dob);
+      if (!isNaN(d.getTime())) {
+        parsedDob = d;
+      }
+    }
+
     // Check if agent already exists by email
     const existingAgentEmail = await Agent.findOne({ email: validatedData.email.toLowerCase() });
     if (existingAgentEmail) {
-      return res.status(400).json({ message: 'Email already registered' });
+      return res.status(400).json({ message: 'Email address is already registered. Please use another email or log in.' });
     }
 
     // Check if agent already exists by phone
     const existingAgentPhone = await Agent.findOne({ phone: validatedData.phone });
     if (existingAgentPhone) {
-      return res.status(400).json({ message: 'Phone number already registered' });
+      return res.status(400).json({ message: 'Phone number is already registered. Please use another phone number.' });
     }
 
     // Generate unique Registration ID: REG-YYYYMMDD-XXXX
@@ -60,6 +69,7 @@ export const register = async (req: Request, res: Response) => {
     const newAgent = new Agent({
       ...validatedData,
       email: validatedData.email.toLowerCase(),
+      dob: parsedDob,
       registrationId,
       kycStatus: 'pending',
       registrationFeePaid: false
@@ -114,10 +124,19 @@ export const register = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ message: 'Validation failed', errors: error.errors });
+      const errMsgs = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+      return res.status(400).json({ message: `Validation failed: ${errMsgs}`, errors: error.errors });
+    }
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern || {})[0] || 'Field';
+      return res.status(400).json({ message: `${field.charAt(0).toUpperCase() + field.slice(1)} is already registered.` });
+    }
+    if (error.name === 'ValidationError') {
+      const msgs = Object.values(error.errors || {}).map((e: any) => e.message).join('. ');
+      return res.status(400).json({ message: msgs || 'Validation error' });
     }
     console.error('Registration error:', error);
-    return res.status(500).json({ message: 'Internal server error' });
+    return res.status(500).json({ message: error.message || 'Internal server error' });
   }
 };
 
