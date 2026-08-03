@@ -10,16 +10,75 @@ import { ArrowLeft, ArrowRight, Save, Shield, FileText, CheckCircle, Eye, EyeOff
 import { AgentNetworkHero } from '../../components/auth/AgentNetworkHero';
 import connectPortalLogo from '../../assets/connect_portal_logo.png';
 
-const GEOGRAPHY_DATA: Record<string, Record<string, Record<string, string[]>>> = {
-  "Karnataka": {
-    "Bengaluru Division": {
-      "Bengaluru Urban": ["560001", "560037"],
-      "Tumakuru": ["572101"]
-    },
-    "Mysuru Division": {
-      "Mysuru": ["570001"]
-    }
-  }
+const ALL_INDIAN_STATES = [
+  "Tamil Nadu",
+  "Karnataka",
+  "Kerala",
+  "Andhra Pradesh",
+  "Telangana",
+  "Maharashtra",
+  "Delhi",
+  "Gujarat",
+  "Uttar Pradesh",
+  "West Bengal",
+  "Rajasthan",
+  "Madhya Pradesh",
+  "Punjab",
+  "Haryana",
+  "Bihar",
+  "Odisha",
+  "Assam"
+];
+
+const STATE_DISTRICTS: Record<string, string[]> = {
+  "Tamil Nadu": ["Krishnagiri", "Dharmapuri", "Chennai", "Coimbatore", "Salem", "Tiruchirappalli", "Madurai", "Vellore", "Erode", "Tirunelveli", "Kanchipuram", "Thanjavur", "Cuddalore", "Dindigul", "Theni", "Tiruppur"],
+  "Karnataka": ["Bengaluru Urban", "Bengaluru Rural", "Mysuru", "Tumakuru", "Dakshina Kannada", "Hubballi-Dharwad", "Belagavi", "Mangaluru", "Ballari", "Shivamogga", "Udupi", "Kolar", "Mandya", "Hassan"],
+  "Kerala": ["Ernakulam", "Thiruvananthapuram", "Kozhikode", "Thrissur", "Kollam", "Kottayam", "Palakkad", "Malappuram", "Kannur", "Alappuzha", "Idukki", "Wayanad", "Kasaragod", "Pathanamthitta"],
+  "Andhra Pradesh": ["Visakhapatnam", "Vijayawada", "Guntur", "NTR District", "Tirupati", "Nellore", "Kakinada", "Kurnool", "Anantapur", "Kadapa", "Eluru", "Ongole"],
+  "Telangana": ["Hyderabad", "Rangareddy", "Medchal-Malkajgiri", "Warangal", "Nizamabad", "Karimnagar", "Khammam", "Mahabubnagar", "Nalgonda", "Sangareddy"],
+  "Maharashtra": ["Mumbai City", "Mumbai Suburban", "Pune", "Thane", "Nagpur", "Nashik", "Chhatrapati Sambhaji Nagar (Aurangabad)", "Solapur", "Kolhapur", "Navi Mumbai"],
+  "Delhi": ["New Delhi", "Central Delhi", "South Delhi", "North Delhi", "East Delhi", "West Delhi", "Gurugram / NCR", "Noida / NCR"],
+  "Gujarat": ["Ahmedabad", "Surat", "Vadodara", "Rajkot", "Bhavnagar", "Jamnagar", "Gandhinagar", "Junagadh", "Anand"],
+  "Uttar Pradesh": ["Lucknow", "Noida / Gautam Buddha Nagar", "Ghaziabad", "Kanpur", "Varanasi", "Agra", "Prayagraj", "Meerut", "Gorakhpur", "Bareilly"],
+  "West Bengal": ["Kolkata", "Howrah", "North 24 Parganas", "South 24 Parganas", "Hooghly", "Darjeeling", "Siliguri", "Paschim Bardhaman"],
+  "Rajasthan": ["Jaipur", "Jodhpur", "Udaipur", "Kota", "Ajmer", "Bikaner", "Bhilwara", "Alwar"],
+  "Madhya Pradesh": ["Indore", "Bhopal", "Gwalior", "Jabalpur", "Ujjain", "Sagar"],
+  "Punjab": ["Ludhiana", "Amritsar", "Jalandhar", "Patiala", "Mohali (SAS Nagar)", "Bathinda"],
+  "Haryana": ["Gurugram", "Faridabad", "Panipat", "Ambala", "Karnal", "Hisar", "Rohtak"],
+  "Bihar": ["Patna", "Gaya", "Muzaffarpur", "Bhagalpur", "Darbhanga", "Purnia"],
+  "Odisha": ["Khordha (Bhubaneswar)", "Cuttack", "Ganjam", "Sundargarh (Rourkela)", "Puri", "Sambalpur"],
+  "Assam": ["Kamrup Metropolitan (Guwahati)", "Dibrugarh", "Silchar", "Jorhat", "Nagaon"]
+};
+
+const DISTRICT_DIVISIONS: Record<string, string[]> = {
+  "Krishnagiri": ["Hosur Division", "Krishnagiri Division", "Denkanikottai Division", "Pochampalli Division"],
+  "Dharmapuri": ["Dharmapuri Division", "Harur Division", "Palacode Division"],
+  "Chennai": ["Chennai Central Division", "Chennai North Division", "Chennai South Division", "Adyar Division", "Anna Nagar Division"],
+  "Coimbatore": ["Coimbatore North Division", "Coimbatore South Division", "Pollachi Division"],
+  "Salem": ["Salem Urban Division", "Salem West Division", "Attur Division"],
+  "Tiruchirappalli": ["Trichy East Division", "Trichy West Division", "Srirangam Division"],
+  "Madurai": ["Madurai North Division", "Madurai South Division", "Tirumangalam Division"],
+  "Vellore": ["Vellore Division", "Gudiyatham Division", "Ranipet Division"],
+
+  "Bengaluru Urban": ["Bengaluru South Division", "Bengaluru North Division", "Bengaluru East Division", "Bengaluru West Division", "Electronic City Division", "Whitefield Division"],
+  "Bengaluru Rural": ["Nelamangala Division", "Doddaballapura Division", "Devanahalli Division"],
+  "Mysuru": ["Mysuru City Division", "Mysuru Rural Division", "Nanjangud Division", "Hunsur Division"],
+  "Tumakuru": ["Tumakuru Division", "Tiptur Division", "Madhugiri Division"],
+  "Dakshina Kannada": ["Mangaluru Division", "Bantwal Division", "Puttur Division"],
+
+  "Ernakulam": ["Kochi Division", "Aluva Division", "Muvattupuzha Division"],
+  "Thiruvananthapuram": ["Trivandrum City Division", "Attingal Division", "Neyyattinkara Division"],
+
+  "Visakhapatnam": ["Vizag City Division", "Anakapalle Division"],
+  "Vijayawada": ["Vijayawada Urban Division", "Gudivada Division"],
+  "Hyderabad": ["Hyderabad Central Division", "Secunderabad Division", "Charminar Division", "Cyberabad Division"],
+
+  "Mumbai City": ["South Mumbai Division", "Central Mumbai Division"],
+  "Mumbai Suburban": ["Western Suburbs Division", "Eastern Suburbs Division", "Andheri Division", "Borivali Division"],
+  "Pune": ["Pune City Division", "Pimpri-Chinchwad Division", "Baramati Division"],
+
+  "New Delhi": ["Connaught Place Division", "Chanakyapuri Division"],
+  "Gurugram / NCR": ["DLF Cyber City Division", "Gurugram South Division"]
 };
 
 const PINCODE_DIRECTORY: Record<string, { state: string, division: string, district: string, postOffice: string }> = {
@@ -27,6 +86,7 @@ const PINCODE_DIRECTORY: Record<string, { state: string, division: string, distr
   "560037": { state: "Karnataka", division: "Bengaluru Division", district: "Bengaluru Urban", postOffice: "Marathahalli" },
   "572101": { state: "Karnataka", division: "Bengaluru Division", district: "Tumakuru", postOffice: "Tumkur Head Office" },
   "570001": { state: "Karnataka", division: "Mysuru Division", district: "Mysuru", postOffice: "Mysuru Head Office" },
+  "635109": { state: "Tamil Nadu", division: "Hosur Division", district: "Krishnagiri", postOffice: "Hosur Head Office" },
   "635206": { state: "Tamil Nadu", division: "Dharmapuri Division", district: "Krishnagiri", postOffice: "Singarapettai Post Office" }
 };
 
@@ -115,201 +175,20 @@ export const RegisterWizard: React.FC = () => {
     let updatedAddress = {
       ...address,
       pincode: cleaned,
-      state: '',
-      division: '',
-      district: '',
-      postOffice: ''
     };
 
     if (cleaned.length === 6) {
       const match = PINCODE_DIRECTORY[cleaned];
       if (match) {
-        updatedAddress.state = match.state;
-        updatedAddress.division = match.division;
-        updatedAddress.district = match.district;
+        if (!address.state) updatedAddress.state = match.state;
+        if (!address.district) updatedAddress.district = match.district;
+        if (!address.division) updatedAddress.division = match.division;
         updatedAddress.postOffice = match.postOffice;
       } else {
-        // Resolve Indian State by Pincode Prefix
-        const firstDigit = cleaned.charAt(0);
-        const prefixTwo = parseInt(cleaned.slice(0, 2), 10);
-        
-        let state = "Karnataka";
-        let division = "Bengaluru Division";
-        let district = "Bengaluru Urban";
-        let postOffice = `Post Office Sector-${cleaned.slice(-3)}`;
-
-        if (firstDigit === '1') {
-          if (prefixTwo === 11) {
-            state = "Delhi";
-            division = "Delhi Division";
-            district = "New Delhi";
-          } else if (prefixTwo >= 12 && prefixTwo <= 13) {
-            state = "Haryana";
-            division = "Gurugram Division";
-            district = "Gurugram";
-          } else if (prefixTwo >= 14 && prefixTwo <= 16) {
-            state = "Punjab";
-            division = "Jalandhar Division";
-            district = "Amritsar";
-          } else if (prefixTwo === 17) {
-            state = "Himachal Pradesh";
-            division = "Shimla Division";
-            district = "Shimla";
-          } else {
-            state = "Jammu & Kashmir";
-            division = "Srinagar Division";
-            district = "Srinagar";
-          }
-        } else if (firstDigit === '2') {
-          if (prefixTwo >= 20 && prefixTwo <= 28) {
-            state = "Uttar Pradesh";
-            division = "Lucknow Division";
-            district = "Lucknow";
-          } else {
-            state = "Uttarakhand";
-            division = "Dehradun Division";
-            district = "Dehradun";
-          }
-        } else if (firstDigit === '3') {
-          if (prefixTwo >= 30 && prefixTwo <= 34) {
-            state = "Rajasthan";
-            division = "Jaipur Division";
-            district = "Jaipur";
-          } else {
-            state = "Gujarat";
-            division = "Ahmedabad Division";
-            district = "Ahmedabad";
-          }
-        } else if (firstDigit === '4') {
-          if (prefixTwo >= 45 && prefixTwo <= 48) {
-            state = "Madhya Pradesh";
-            division = "Bhopal Division";
-            district = "Bhopal";
-          } else if (prefixTwo === 49) {
-            state = "Chhattisgarh";
-            division = "Raipur Division";
-            district = "Raipur";
-          } else {
-            state = "Maharashtra";
-            division = "Konkan Division";
-            district = "Mumbai";
-          }
-        } else if (firstDigit === '5') {
-          if (prefixTwo >= 56 && prefixTwo <= 59) {
-            state = "Karnataka";
-            division = "Bengaluru Division";
-            district = "Bengaluru Urban";
-          } else if (prefixTwo >= 50 && prefixTwo <= 53) {
-            state = "Andhra Pradesh";
-            division = "Vijayawada Division";
-            district = "Vijayawada";
-          } else {
-            state = "Telangana";
-            division = "Hyderabad Division";
-            district = "Hyderabad";
-          }
-        } else if (firstDigit === '6') {
-          if (prefixTwo >= 67 && prefixTwo <= 69) {
-            state = "Kerala";
-            division = "Kochi Division";
-            district = "Ernakulam";
-          } else {
-            state = "Tamil Nadu";
-            const prefixThree = parseInt(cleaned.slice(0, 3), 10);
-            
-            if (prefixThree === 600) {
-              division = "Chennai Division";
-              district = "Chennai";
-              postOffice = `Chennai G.P.O. Sec-${cleaned.slice(-3)}`;
-            } else if (prefixThree >= 601 && prefixThree <= 603) {
-              division = "Chennai Division";
-              district = "Kanchipuram";
-              postOffice = `Kanchipuram Branch Sec-${cleaned.slice(-3)}`;
-            } else if (prefixThree >= 605 && prefixThree <= 608) {
-              division = "Trichy Division";
-              district = "Cuddalore";
-              postOffice = `Cuddalore Branch Sec-${cleaned.slice(-3)}`;
-            } else if (prefixThree >= 609 && prefixThree <= 614) {
-              division = "Trichy Division";
-              district = "Thanjavur";
-              postOffice = `Thanjavur Branch Sec-${cleaned.slice(-3)}`;
-            } else if (prefixThree >= 620 && prefixThree <= 622) {
-              division = "Trichy Division";
-              district = "Tiruchirappalli";
-              postOffice = `Tiruchirappalli H.O. Sec-${cleaned.slice(-3)}`;
-            } else if (prefixThree >= 623 && prefixThree <= 625) {
-              division = "Madurai Division";
-              district = "Madurai";
-              postOffice = `Madurai H.O. Sec-${cleaned.slice(-3)}`;
-            } else if (prefixThree >= 626 && prefixThree <= 628) {
-              division = "Madurai Division";
-              district = "Tirunelveli";
-              postOffice = `Tirunelveli Branch Sec-${cleaned.slice(-3)}`;
-            } else if (prefixThree >= 630 && prefixThree <= 632) {
-              division = "Vellore Division";
-              district = "Vellore";
-              postOffice = `Vellore Head Office Sec-${cleaned.slice(-3)}`;
-            } else if (prefixThree === 635) {
-              division = "Dharmapuri Division";
-              district = "Krishnagiri";
-              postOffice = `Krishnagiri Branch Sec-${cleaned.slice(-3)}`;
-            } else if (prefixThree >= 636 && prefixThree <= 637) {
-              division = "Salem Division";
-              district = "Salem";
-              postOffice = `Salem H.O. Sec-${cleaned.slice(-3)}`;
-            } else if (prefixThree >= 638 && prefixThree <= 640) {
-              division = "Coimbatore Division";
-              district = "Coimbatore";
-              postOffice = `Coimbatore H.O. Sec-${cleaned.slice(-3)}`;
-            } else if (prefixThree >= 641 && prefixThree <= 643) {
-              division = "Coimbatore Division";
-              district = "Erode";
-              postOffice = `Erode Branch Sec-${cleaned.slice(-3)}`;
-            } else {
-              division = "Chennai Division";
-              district = "Tamil Nadu District";
-              postOffice = `Tamil Nadu Branch Sec-${cleaned.slice(-3)}`;
-            }
-          }
-        } else if (firstDigit === '7') {
-          if (prefixTwo >= 70 && prefixTwo <= 74) {
-            state = "West Bengal";
-            division = "Kolkata Division";
-            district = "Kolkata";
-          } else if (prefixTwo >= 75 && prefixTwo <= 77) {
-            state = "Odisha";
-            division = "Bhubaneswar Division";
-            district = "Khordha";
-          } else if (prefixTwo === 78) {
-            state = "Assam";
-            division = "Guwahati Division";
-            district = "Kamrup";
-          } else {
-            state = "Meghalaya";
-            division = "Shillong Division";
-            district = "East Khasi Hills";
-          }
-        } else if (firstDigit === '8') {
-          if (prefixTwo >= 80 && prefixTwo <= 83) {
-            state = "Bihar";
-            division = "Patna Division";
-            district = "Patna";
-          } else {
-            state = "Jharkhand";
-            division = "Ranchi Division";
-            district = "Ranchi";
-          }
-        } else if (firstDigit === '9') {
-          state = "Army Post Office";
-          division = "APS Division";
-          district = "Central Base Post Office";
-        }
-
-        updatedAddress.state = state;
-        updatedAddress.division = division;
-        updatedAddress.district = district;
-        updatedAddress.postOffice = postOffice;
+        updatedAddress.postOffice = `Post Office Sec-${cleaned.slice(-3)}`;
       }
+    } else {
+      updatedAddress.postOffice = '';
     }
     
     setAddress(updatedAddress);
@@ -413,8 +292,24 @@ export const RegisterWizard: React.FC = () => {
     }
 
     if (currentStep === 2) {
-      if (!address.state || !address.division || !address.district || !address.pincode || !address.fullAddress) {
-        setFormErrors('All address fields are required.');
+      if (!address.state) {
+        setFormErrors('Please select your assigned State.');
+        return;
+      }
+      if (role !== 'state' && !address.district) {
+        setFormErrors('Please select your assigned District.');
+        return;
+      }
+      if ((role === 'division' || role === 'pincode') && !address.division) {
+        setFormErrors('Please select your assigned Division.');
+        return;
+      }
+      if (role === 'pincode' && !address.pincode) {
+        setFormErrors('Please enter your assigned 6-digit Pincode.');
+        return;
+      }
+      if (!address.fullAddress) {
+        setFormErrors('Please enter your full street/building address.');
         return;
       }
     }
@@ -714,60 +609,121 @@ export const RegisterWizard: React.FC = () => {
               </div>
             )}
 
-            {/* STEP 2: Address Information (Automatic Pincode Lookup) */}
+            {/* STEP 2: Territory & Address Details (Role-based Territory Hierarchy) */}
             {currentStep === 2 && (
               <div className="space-y-4">
                 <div className="pb-2 border-b border-slate-100">
                   <h3 className="font-extrabold text-lg text-slate-800">Territory & Address Details</h3>
-                  <p className="text-xs text-slate-500 font-semibold mt-1">Enter your 6-digit Pincode to automatically populate State, Division, District, and Post Office details.</p>
+                  <p className="text-xs text-slate-500 font-semibold mt-1">
+                    {role === 'state' && 'Select your assigned State territory.'}
+                    {role === 'district' && 'Select your assigned State and District territory.'}
+                    {role === 'division' && 'Select your assigned State, District, and Division territory.'}
+                    {role === 'pincode' && 'Select your State, District, Division, and enter your 6-digit Pincode.'}
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="md:col-span-2">
-                    <Input
-                      label="Pincode"
-                      maxLength={6}
-                      placeholder="Enter 6-digit Pincode (e.g. 560001)"
-                      value={address.pincode}
-                      onChange={(e) => handlePincodeChange(e.target.value)}
-                    />
-                  </div>
-
-                  <Input
-                    label="State"
+                  {/* 1. STATE SELECTOR (Visible for All Roles: State, District, Division, Pincode) */}
+                  <Select
+                    label="State (Required)"
+                    options={[
+                      { value: '', label: '-- Select Assigned State --' },
+                      ...ALL_INDIAN_STATES.map(s => ({ value: s, label: s }))
+                    ]}
                     value={address.state}
-                    disabled
-                    className="bg-slate-50 cursor-not-allowed opacity-80"
-                    placeholder="Auto-populated"
+                    onChange={(e) => {
+                      const selState = e.target.value;
+                      setAddress({
+                        ...address,
+                        state: selState,
+                        district: '',
+                        division: '',
+                        pincode: '',
+                        postOffice: ''
+                      });
+                      setFormErrors('');
+                    }}
                   />
 
-                  <Input
-                    label="Division"
-                    value={address.division}
-                    disabled
-                    className="bg-slate-50 cursor-not-allowed opacity-80"
-                    placeholder="Auto-populated"
-                  />
+                  {/* 2. DISTRICT SELECTOR (Visible for District, Division, and Pincode Agents) */}
+                  {role !== 'state' && (
+                    <Select
+                      label="District (Required)"
+                      disabled={!address.state}
+                      options={[
+                        { value: '', label: address.state ? '-- Select Assigned District --' : 'Select State First' },
+                        ...(STATE_DISTRICTS[address.state] || ["District Main", "District North", "District South", "District East", "District West"]).map(d => ({ value: d, label: d }))
+                      ]}
+                      value={address.district}
+                      onChange={(e) => {
+                        const selDistrict = e.target.value;
+                        setAddress({
+                          ...address,
+                          district: selDistrict,
+                          division: '',
+                          pincode: '',
+                          postOffice: ''
+                        });
+                        setFormErrors('');
+                      }}
+                    />
+                  )}
 
-                  <Input
-                    label="District"
-                    value={address.district}
-                    disabled
-                    className="bg-slate-50 cursor-not-allowed opacity-80"
-                    placeholder="Auto-populated"
-                  />
+                  {/* 3. DIVISION SELECTOR (Visible for Division and Pincode Agents) */}
+                  {(role === 'division' || role === 'pincode') && (
+                    <Select
+                      label="Division (Required)"
+                      disabled={!address.district}
+                      options={[
+                        { value: '', label: address.district ? '-- Select Assigned Division --' : 'Select District First' },
+                        ...(DISTRICT_DIVISIONS[address.district] || [
+                          `${address.district} Central Division`,
+                          `${address.district} North Division`,
+                          `${address.district} South Division`,
+                          `${address.district} East Division`,
+                          `${address.district} West Division`
+                        ]).map(div => ({ value: div, label: div }))
+                      ]}
+                      value={address.division}
+                      onChange={(e) => {
+                        const selDiv = e.target.value;
+                        setAddress({
+                          ...address,
+                          division: selDiv,
+                          pincode: '',
+                          postOffice: ''
+                        });
+                        setFormErrors('');
+                      }}
+                    />
+                  )}
 
-                  <Input
-                    label="Post Office Branch"
-                    value={address.postOffice}
-                    disabled
-                    className="bg-slate-50 cursor-not-allowed opacity-80"
-                    placeholder="Auto-populated"
-                  />
+                  {/* 4. PINCODE INPUT & BRANCH (Visible for Pincode Agents) */}
+                  {role === 'pincode' && (
+                    <>
+                      <Input
+                        label="Pincode (6 Digits)"
+                        maxLength={6}
+                        placeholder="Enter 6-digit Pincode (e.g. 635109)"
+                        value={address.pincode}
+                        onChange={(e) => handlePincodeChange(e.target.value)}
+                      />
+
+                      {address.postOffice && (
+                        <Input
+                          label="Post Office Branch"
+                          value={address.postOffice}
+                          disabled
+                          className="bg-slate-50 cursor-not-allowed opacity-80"
+                          placeholder="Auto-populated"
+                        />
+                      )}
+                    </>
+                  )}
 
                   <div className="md:col-span-2">
                     <Input
-                      label="Full Address"
+                      label="Full Street Address"
                       placeholder="Street name, landmark, building number"
                       value={address.fullAddress}
                       onChange={(e) => setAddress({ ...address, fullAddress: e.target.value })}
