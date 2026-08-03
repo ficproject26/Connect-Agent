@@ -590,8 +590,10 @@ export const AgentManagement: React.FC = () => {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [kycFilter, setKycFilter] = useState<string>('all');
+  const [selectedTierFilter, setSelectedTierFilter] = useState<'all' | 'state' | 'district' | 'division' | 'pincode'>('all');
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({
     'state-01': true,
+    'state-02': true,
     'dist-101': true,
     'div-201': true
   });
@@ -666,6 +668,62 @@ export const AgentManagement: React.FC = () => {
 
     return activeStateNodes;
   }, [hierarchyData, activeRole, user]);
+
+  // Expand / Collapse helper handlers for hierarchy tree workflow
+  const expandAll = () => {
+    const newExpanded: Record<string, boolean> = {};
+    const markExpanded = (node: AgentNode) => {
+      newExpanded[node._id] = true;
+      node.districts?.forEach(markExpanded);
+      node.divisions?.forEach(markExpanded);
+    };
+    rootNodes.forEach(markExpanded);
+    setExpandedNodes(newExpanded);
+  };
+
+  const collapseAll = () => {
+    setExpandedNodes({});
+  };
+
+  // Filtered nodes based on Tier Level Dropdown, KYC status, and Search Term
+  const displayedNodes = useMemo(() => {
+    let list = rootNodes;
+
+    if (kycFilter !== 'all') {
+      list = list.filter(n => n.kycStatus === kycFilter);
+    }
+
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      const matchNode = (n: AgentNode): boolean => {
+        return (
+          n.name.toLowerCase().includes(q) ||
+          n.email.toLowerCase().includes(q) ||
+          n.registrationId.toLowerCase().includes(q) ||
+          (n.territory?.state || '').toLowerCase().includes(q) ||
+          (n.territory?.district || '').toLowerCase().includes(q) ||
+          (n.territory?.division || '').toLowerCase().includes(q) ||
+          (n.territory?.pincode || '').toLowerCase().includes(q)
+        );
+      };
+      list = list.filter(matchNode);
+    }
+
+    if (selectedTierFilter === 'state') {
+      return list.filter(n => n.role === 'state');
+    }
+    if (selectedTierFilter === 'district') {
+      return list.flatMap(s => s.role === 'district' ? [s] : (s.districts || []));
+    }
+    if (selectedTierFilter === 'division') {
+      return list.flatMap(s => s.role === 'division' ? [s] : (s.districts?.flatMap(d => d.divisions || []) || []));
+    }
+    if (selectedTierFilter === 'pincode') {
+      return list.flatMap(s => s.role === 'pincode' ? [s] : (s.districts?.flatMap(d => d.divisions?.flatMap(p => p.pincodes || []) || []) || []));
+    }
+
+    return list;
+  }, [rootNodes, selectedTierFilter, kycFilter, searchTerm]);
 
   // Aggregate stats across scoped hierarchy
   const stats = useMemo(() => {
@@ -1075,52 +1133,66 @@ export const AgentManagement: React.FC = () => {
 
       {/* Hierarchy Tree Content */}
       <div className="bg-white rounded-2xl border border-[#d7c3b5]/40 p-6 shadow-sm space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-[#d7c3b5]/30 gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-extrabold text-[#52443a] uppercase tracking-wider">HIERARCHY SCOPE:</span>
-            {activeRole === 'state' || activeRole === 'executive' || (activeRole as any) === 'admin' ? (
-              <>
-                <span className="px-2 py-0.5 bg-blue-600 text-white rounded text-xs font-black">State Level</span>
-                <ChevronRight className="w-4 h-4 text-slate-400" />
-                <span className="px-2 py-0.5 bg-[#864f19] text-white rounded text-xs font-black">District Level</span>
-                <ChevronRight className="w-4 h-4 text-slate-400" />
-                <span className="px-2 py-0.5 bg-amber-100 text-amber-900 rounded text-xs font-extrabold">Division Level</span>
-                <ChevronRight className="w-4 h-4 text-slate-400" />
-                <span className="px-2 py-0.5 bg-slate-100 text-slate-800 rounded text-xs font-extrabold">Pincode Level</span>
-                <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                  All 3 Downstream Tiers
-                </span>
-              </>
-            ) : activeRole === 'district' ? (
-              <>
-                <span className="px-2 py-0.5 bg-[#864f19] text-white rounded text-xs font-black">District Level</span>
-                <ChevronRight className="w-4 h-4 text-slate-400" />
-                <span className="px-2 py-0.5 bg-amber-100 text-amber-900 rounded text-xs font-extrabold">Division Level</span>
-                <ChevronRight className="w-4 h-4 text-slate-400" />
-                <span className="px-2 py-0.5 bg-slate-100 text-slate-800 rounded text-xs font-extrabold">Pincode Level</span>
-                <span className="text-[10px] font-bold text-[#864f19] bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                  Next 2 Downstream Tiers
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="px-2 py-0.5 bg-amber-600 text-white rounded text-xs font-black">Division Level</span>
-                <ChevronRight className="w-4 h-4 text-slate-400" />
-                <span className="px-2 py-0.5 bg-slate-100 text-slate-800 rounded text-xs font-extrabold">Pincode Level</span>
-                <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                  Only Pincode Downstream Tier
-                </span>
-              </>
-            )}
+        {/* Hierarchy Dropdown & Filter Controls */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-[#d7c3b5]/30">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-xs font-extrabold text-[#52443a] uppercase tracking-wider flex items-center gap-1">
+              <Filter className="w-3.5 h-3.5 text-[#864f19]" /> HIERARCHY SCOPE:
+            </span>
+
+            {/* Dropdown 1: Tier Level Selector */}
+            <div className="relative">
+              <select
+                value={selectedTierFilter}
+                onChange={(e) => setSelectedTierFilter(e.target.value as any)}
+                className="bg-[#fbf9f8] border border-[#d7c3b5]/70 text-[#1b1c1c] text-xs font-extrabold rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19] cursor-pointer shadow-2xs"
+              >
+                <option value="all">⚡ All Tiers (Full 4-Level Tree)</option>
+                <option value="state">🔹 State Agents Level Only</option>
+                <option value="district">🔸 District Agents Level Only</option>
+                <option value="division">🟡 Division Managers Level Only</option>
+                <option value="pincode">📍 Pincode Agents Level Only</option>
+              </select>
+            </div>
+
+            {/* Dropdown 2: KYC Compliance Status Selector */}
+            <div className="relative">
+              <select
+                value={kycFilter}
+                onChange={(e) => setKycFilter(e.target.value)}
+                className="bg-[#fbf9f8] border border-[#d7c3b5]/70 text-[#1b1c1c] text-xs font-extrabold rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19] cursor-pointer shadow-2xs"
+              >
+                <option value="all">🌐 All KYC Statuses</option>
+                <option value="approved">✓ Approved KYC Agents</option>
+                <option value="pending">⏳ Pending Verification</option>
+                <option value="rejected">✕ Rejected Applications</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Quick Expand / Collapse Workflow Buttons */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={expandAll}
+              className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-xl border border-blue-200 transition cursor-pointer flex items-center gap-1"
+            >
+              <ChevronDown className="w-3.5 h-3.5" /> Expand All Tiers
+            </button>
+            <button
+              onClick={collapseAll}
+              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition cursor-pointer flex items-center gap-1"
+            >
+              <ChevronRight className="w-3.5 h-3.5" /> Collapse All Tiers
+            </button>
           </div>
         </div>
 
         {/* Tree Content */}
         <div className="space-y-4">
-          {rootNodes.length === 0 ? (
-            <p className="text-center text-xs font-semibold text-slate-400 py-8">No agents found for this role hierarchy.</p>
+          {displayedNodes.length === 0 ? (
+            <p className="text-center text-xs font-semibold text-slate-400 py-8">No agents found for this role hierarchy filter.</p>
           ) : (
-            rootNodes.map((node) => {
+            displayedNodes.map((node) => {
               // Level 1 (State Node)
               if (node.role === 'state') {
                 const isStateExpanded = !!expandedNodes[node._id];
