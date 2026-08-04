@@ -167,11 +167,14 @@ export const RegisterWizard: React.FC = () => {
   const [personalInfo, setPersonalInfo] = useState(initialDraft?.personalInfo || {
     name: '',
     phone: '',
+    altPhone: '',
     email: '',
     password: '',
     confirmPassword: '',
     dob: '',
-    gender: 'male'
+    gender: 'male',
+    aadhaarNumber: '',
+    panNumber: ''
   });
 
   const [address, setAddress] = useState(initialDraft?.address || {
@@ -255,7 +258,7 @@ export const RegisterWizard: React.FC = () => {
     } catch (e) { }
     setCurrentStep(1);
     setRole('state');
-    setPersonalInfo({ name: '', phone: '', email: '', password: '', confirmPassword: '', dob: '', gender: 'male' });
+    setPersonalInfo({ name: '', phone: '', altPhone: '', email: '', password: '', confirmPassword: '', dob: '', gender: 'male', aadhaarNumber: '', panNumber: '' });
     setAddress({ state: '', division: '', district: '', pincode: '', postOffice: '', fullAddress: '' });
     setProfessionalInfo({ qualification: '', experience: 'fresher', previousCompany: '' });
     setDocuments({
@@ -362,8 +365,8 @@ export const RegisterWizard: React.FC = () => {
     setFormErrors('');
 
     if (currentStep === 1) {
-      if (!personalInfo.name || !personalInfo.phone || !personalInfo.email || !personalInfo.password || !personalInfo.confirmPassword || !personalInfo.dob) {
-        setFormErrors('All personal information fields are required.');
+      if (!personalInfo.name || !personalInfo.phone || !personalInfo.email || !personalInfo.password || !personalInfo.confirmPassword) {
+        setFormErrors('All personal credential fields are required.');
         return;
       }
       if (personalInfo.password !== personalInfo.confirmPassword) {
@@ -378,25 +381,25 @@ export const RegisterWizard: React.FC = () => {
         setFormErrors('Phone number must be exactly 10 digits.');
         return;
       }
-      if (!address.state) {
-        setFormErrors('Please select your assigned State.');
-        return;
-      }
-      if (role !== 'state' && !address.district) {
-        setFormErrors('Please select your assigned District.');
-        return;
-      }
-      if ((role === 'division' || role === 'pincode') && !address.division) {
-        setFormErrors('Please select your assigned Division.');
-        return;
-      }
-      if (role === 'pincode' && !address.pincode) {
-        setFormErrors('Please enter your assigned 6-digit Pincode.');
-        return;
-      }
     }
 
     if (currentStep === 2) {
+      if (!personalInfo.dob) {
+        setFormErrors('Please select your Date of Birth.');
+        return;
+      }
+      if (personalInfo.altPhone && !/^\d{10}$/.test(personalInfo.altPhone)) {
+        setFormErrors('Alternative mobile number must be 10 digits.');
+        return;
+      }
+      if (!personalInfo.aadhaarNumber || !/^\d{12}$/.test(personalInfo.aadhaarNumber)) {
+        setFormErrors('Please enter a valid 12-digit Aadhaar Number.');
+        return;
+      }
+      if (!personalInfo.panNumber || personalInfo.panNumber.length !== 10) {
+        setFormErrors('Please enter a valid 10-character PAN Number.');
+        return;
+      }
       if (!address.state) {
         setFormErrors('Please select your assigned State.');
         return;
@@ -624,12 +627,12 @@ export const RegisterWizard: React.FC = () => {
 
           <div className="space-y-6 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
             
-            {/* STEP 1: Personal Details */}
+            {/* STEP 1: Role & Login Credentials */}
             {currentStep === 1 && (
               <div className="space-y-4">
                 <div className="pb-2 border-b border-slate-100">
-                  <h3 className="font-extrabold text-lg text-slate-800">Role & Personal Information</h3>
-                  <p className="text-xs text-slate-500 font-semibold mt-1">Select the agent role and configure your credentials.</p>
+                  <h3 className="font-extrabold text-lg text-slate-800">Role & Credentials</h3>
+                  <p className="text-xs text-slate-500 font-semibold mt-1">Select your role and set your account login credentials.</p>
                 </div>
 
                 <Select
@@ -656,13 +659,154 @@ export const RegisterWizard: React.FC = () => {
                   }}
                 />
 
-                {/* Territory Hierarchy Selector (Directly under Role Selection) */}
-                <div className="p-4 bg-amber-50/50 border border-amber-200/80 rounded-xl space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="md:col-span-2">
+                    <Input
+                      label="Full Name (Required)"
+                      placeholder={`e.g. ${sample.name}`}
+                      value={personalInfo.name}
+                      onChange={(e) => setPersonalInfo({ ...personalInfo, name: e.target.value })}
+                    />
+                  </div>
+
+                  <Input
+                    label="Primary Mobile Number (Required)"
+                    maxLength={10}
+                    placeholder={`e.g. ${sample.phone}`}
+                    value={personalInfo.phone}
+                    onChange={(e) => setPersonalInfo({ ...personalInfo, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                  />
+
+                  <Input
+                    label="Email Address (Required)"
+                    type="email"
+                    placeholder={`e.g. ${sample.email}`}
+                    value={personalInfo.email}
+                    onChange={(e) => setPersonalInfo({ ...personalInfo, email: e.target.value })}
+                  />
+
+                  <Input
+                    label="Password (Required)"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="••••••••"
+                    value={personalInfo.password}
+                    onChange={(e) => setPersonalInfo({ ...personalInfo, password: e.target.value })}
+                    rightIcon={
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="focus:outline-none text-slate-400 hover:text-slate-600 cursor-pointer"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    }
+                  />
+
+                  <Input
+                    label="Confirm Password (Required)"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="••••••••"
+                    value={personalInfo.confirmPassword}
+                    onChange={(e) => setPersonalInfo({ ...personalInfo, confirmPassword: e.target.value })}
+                  />
+
+                  <Select
+                    label="Gender"
+                    options={[
+                      { value: 'male', label: 'Male' },
+                      { value: 'female', label: 'Female' },
+                      { value: 'other', label: 'Other' }
+                    ]}
+                    value={personalInfo.gender}
+                    onChange={(e) => setPersonalInfo({ ...personalInfo, gender: e.target.value })}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* STEP 2: Profile Photo, Verification & Address Details */}
+            {currentStep === 2 && (
+              <div className="space-y-5">
+                <div className="pb-2 border-b border-slate-100">
+                  <h3 className="font-extrabold text-lg text-slate-800">Verification & Address Details</h3>
+                  <p className="text-xs text-slate-500 font-semibold mt-1">
+                    Provide your profile photo, alternative contact, ID verification numbers, and address.
+                  </p>
+                </div>
+
+                {/* 1. Profile Photo */}
+                <div className="p-4 bg-slate-50/80 border border-slate-200 rounded-xl space-y-2">
+                  <label className="block text-xs font-bold text-slate-700">• Profile Photo (Required)</label>
+                  <div className="flex items-center gap-4">
+                    {documents.passportPhoto.dataUrl ? (
+                      <img src={documents.passportPhoto.dataUrl} alt="Profile Preview" className="w-16 h-16 rounded-xl object-cover border-2 border-emerald-500 shadow-xs" />
+                    ) : (
+                      <div className="w-16 h-16 rounded-xl bg-slate-200 flex items-center justify-center text-slate-400 font-bold text-[11px] border border-slate-300">
+                        No Photo
+                      </div>
+                    )}
+                    <div className="flex-1 space-y-1">
+                      <input
+                        type="file"
+                        id="profile-photo-step2"
+                        accept="image/jpeg,image/jpg,image/png"
+                        onChange={(e) => handleFileUpload(e, 'passportPhoto')}
+                        className="hidden"
+                      />
+                      <label
+                        htmlFor="profile-photo-step2"
+                        className="inline-flex items-center gap-1.5 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold px-3 py-2 rounded-xl border border-slate-300 cursor-pointer transition-colors shadow-2xs"
+                      >
+                        {documents.passportPhoto.dataUrl ? '✓ Photo Uploaded (Click to Change)' : 'Upload Profile Photo'}
+                      </label>
+                      <p className="text-[11px] text-slate-400">Clear passport size photo. Allowed: JPG, PNG (Max 5MB)</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* 2. Alternative Mobile Number */}
+                  <Input
+                    label="• Alternative Mobile Number (Optional)"
+                    maxLength={10}
+                    placeholder="e.g. 9876543210"
+                    value={personalInfo.altPhone || ''}
+                    onChange={(e) => setPersonalInfo({ ...personalInfo, altPhone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                  />
+
+                  {/* 3. Date of Birth */}
+                  <Input
+                    label="• Date of Birth (Required)"
+                    type="date"
+                    value={personalInfo.dob}
+                    onChange={(e) => setPersonalInfo({ ...personalInfo, dob: e.target.value })}
+                  />
+
+                  {/* 4. Aadhaar Number */}
+                  <Input
+                    label="• Aadhaar Number (12 Digits - Required)"
+                    maxLength={12}
+                    placeholder="e.g. 123456789012"
+                    value={personalInfo.aadhaarNumber || ''}
+                    onChange={(e) => setPersonalInfo({ ...personalInfo, aadhaarNumber: e.target.value.replace(/\D/g, '').slice(0, 12) })}
+                  />
+
+                  {/* 5. PAN Number */}
+                  <Input
+                    label="• PAN Number (10 Characters - Required)"
+                    maxLength={10}
+                    placeholder="e.g. ABCDE1234F"
+                    value={personalInfo.panNumber || ''}
+                    onChange={(e) => setPersonalInfo({ ...personalInfo, panNumber: e.target.value.toUpperCase().slice(0, 10) })}
+                  />
+                </div>
+
+                {/* 6. Address & Territory Details */}
+                <div className="p-4 bg-amber-50/50 border border-amber-200/80 rounded-xl space-y-3 mt-2">
                   <div className="text-xs font-black text-[#864f19] uppercase tracking-wider">
-                    Assigned Territory Selection ({role.toUpperCase()} AGENT)
+                    • Address & Territory Details ({role.toUpperCase()} AGENT)
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {/* 1. STATE SELECTOR (Visible for All Roles: State, District, Division, Pincode) */}
                     <Select
                       label="State (Required)"
                       options={[
@@ -684,7 +828,6 @@ export const RegisterWizard: React.FC = () => {
                       }}
                     />
 
-                    {/* 2. DISTRICT SELECTOR (Visible for District, Division, and Pincode Agents) */}
                     {role !== 'state' && (
                       <Select
                         label="District (Required)"
@@ -708,7 +851,6 @@ export const RegisterWizard: React.FC = () => {
                       />
                     )}
 
-                    {/* 3. DIVISION SELECTOR (Visible for Division and Pincode Agents) */}
                     {(role === 'division' || role === 'pincode') && (
                       <Select
                         label="Division (Required)"
@@ -737,7 +879,6 @@ export const RegisterWizard: React.FC = () => {
                       />
                     )}
 
-                    {/* 4. PINCODE INPUT & BRANCH (Visible for Pincode Agents) */}
                     {role === 'pincode' && (
                       <>
                         <Input
@@ -760,195 +901,10 @@ export const RegisterWizard: React.FC = () => {
                       </>
                     )}
                   </div>
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="md:col-span-2">
+                  <div className="mt-3">
                     <Input
-                      label="Full Name"
-                      placeholder={`e.g. ${sample.name}`}
-                      value={personalInfo.name}
-                      onChange={(e) => setPersonalInfo({ ...personalInfo, name: e.target.value })}
-                    />
-                  </div>
-
-                  <Input
-                    label="Phone Number"
-                    maxLength={10}
-                    placeholder={`e.g. ${sample.phone}`}
-                    value={personalInfo.phone}
-                    onChange={(e) => setPersonalInfo({ ...personalInfo, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
-                  />
-
-                  <Input
-                    label="Email Address"
-                    type="email"
-                    placeholder={`e.g. ${sample.email}`}
-                    value={personalInfo.email}
-                    onChange={(e) => setPersonalInfo({ ...personalInfo, email: e.target.value })}
-                  />
-
-                  <Input
-                    label="Password"
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="••••••••"
-                    value={personalInfo.password}
-                    onChange={(e) => setPersonalInfo({ ...personalInfo, password: e.target.value })}
-                    rightIcon={
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="focus:outline-none text-slate-400 hover:text-slate-600 cursor-pointer"
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    }
-                  />
-
-                  <Input
-                    label="Confirm Password"
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="••••••••"
-                    value={personalInfo.confirmPassword}
-                    onChange={(e) => setPersonalInfo({ ...personalInfo, confirmPassword: e.target.value })}
-                  />
-
-                  <Input
-                    label="Date of Birth"
-                    type="date"
-                    value={personalInfo.dob}
-                    onChange={(e) => setPersonalInfo({ ...personalInfo, dob: e.target.value })}
-                  />
-
-                  <Select
-                    label="Gender"
-                    options={[
-                      { value: 'male', label: 'Male' },
-                      { value: 'female', label: 'Female' },
-                      { value: 'other', label: 'Other' }
-                    ]}
-                    value={personalInfo.gender}
-                    onChange={(e) => setPersonalInfo({ ...personalInfo, gender: e.target.value })}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* STEP 2: Territory & Address Details (Role-based Territory Hierarchy) */}
-            {currentStep === 2 && (
-              <div className="space-y-4">
-                <div className="pb-2 border-b border-slate-100">
-                  <h3 className="font-extrabold text-lg text-slate-800">Territory & Address Details</h3>
-                  <p className="text-xs text-slate-500 font-semibold mt-1">
-                    {role === 'state' && 'Select your assigned State territory.'}
-                    {role === 'district' && 'Select your assigned State and District territory.'}
-                    {role === 'division' && 'Select your assigned State, District, and Division territory.'}
-                    {role === 'pincode' && 'Select your State, District, Division, and enter your 6-digit Pincode.'}
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* 1. STATE SELECTOR (Visible for All Roles: State, District, Division, Pincode) */}
-                  <Select
-                    label="State (Required)"
-                    options={[
-                      { value: '', label: '-- Select Assigned State --' },
-                      ...ALL_INDIAN_STATES.map(s => ({ value: s, label: s }))
-                    ]}
-                    value={address.state}
-                    onChange={(e) => {
-                      const selState = e.target.value;
-                      setAddress({
-                        ...address,
-                        state: selState,
-                        district: '',
-                        division: '',
-                        pincode: '',
-                        postOffice: ''
-                      });
-                      setFormErrors('');
-                    }}
-                  />
-
-                  {/* 2. DISTRICT SELECTOR (Visible for District, Division, and Pincode Agents) */}
-                  {role !== 'state' && (
-                    <Select
-                      label="District (Required)"
-                      disabled={!address.state}
-                      options={[
-                        { value: '', label: address.state ? '-- Select Assigned District --' : 'Select State First' },
-                        ...(STATE_DISTRICTS[address.state] || ["District Main", "District North", "District South", "District East", "District West"]).map(d => ({ value: d, label: d }))
-                      ]}
-                      value={address.district}
-                      onChange={(e) => {
-                        const selDistrict = e.target.value;
-                        setAddress({
-                          ...address,
-                          district: selDistrict,
-                          division: '',
-                          pincode: '',
-                          postOffice: ''
-                        });
-                        setFormErrors('');
-                      }}
-                    />
-                  )}
-
-                  {/* 3. DIVISION SELECTOR (Visible for Division and Pincode Agents) */}
-                  {(role === 'division' || role === 'pincode') && (
-                    <Select
-                      label="Division (Required)"
-                      disabled={!address.district}
-                      options={[
-                        { value: '', label: address.district ? '-- Select Assigned Division --' : 'Select District First' },
-                        ...(DISTRICT_DIVISIONS[address.district] || [
-                          `${address.district} Central Division`,
-                          `${address.district} North Division`,
-                          `${address.district} South Division`,
-                          `${address.district} East Division`,
-                          `${address.district} West Division`
-                        ]).map(div => ({ value: div, label: div }))
-                      ]}
-                      value={address.division}
-                      onChange={(e) => {
-                        const selDiv = e.target.value;
-                        setAddress({
-                          ...address,
-                          division: selDiv,
-                          pincode: '',
-                          postOffice: ''
-                        });
-                        setFormErrors('');
-                      }}
-                    />
-                  )}
-
-                  {/* 4. PINCODE INPUT & BRANCH (Visible for Pincode Agents) */}
-                  {role === 'pincode' && (
-                    <>
-                      <Input
-                        label="Pincode (6 Digits)"
-                        maxLength={6}
-                        placeholder="Enter 6-digit Pincode (e.g. 635109)"
-                        value={address.pincode}
-                        onChange={(e) => handlePincodeChange(e.target.value)}
-                      />
-
-                      {address.postOffice && (
-                        <Input
-                          label="Post Office Branch"
-                          value={address.postOffice}
-                          disabled
-                          className="bg-slate-50 cursor-not-allowed opacity-80"
-                          placeholder="Auto-populated"
-                        />
-                      )}
-                    </>
-                  )}
-
-                  <div className="md:col-span-2">
-                    <Input
-                      label="Full Street Address"
+                      label="Full Street Address (Required)"
                       placeholder="Street name, landmark, building number"
                       value={address.fullAddress}
                       onChange={(e) => setAddress({ ...address, fullAddress: e.target.value })}
