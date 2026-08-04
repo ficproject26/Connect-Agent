@@ -150,6 +150,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const response = await api.get('/auth/me');
       const agent = response.data.agent;
+      if (agent.kycStatus && agent.kycStatus !== 'approved' && agent.status !== 'approved' && agent.status !== 'active') {
+        console.warn('Agent account is pending Admin approval. Logging out.');
+        logout();
+        return;
+      }
       // Map kycStatus to status for compatibility
       agent.status = (agent.kycStatus === 'approved' || agent.status === 'approved' || agent.status === 'active') ? 'active' : 'pending_approval';
       agent.mobile = agent.phone;
@@ -195,6 +200,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }, 100);
       return agent;
     } catch (error: any) {
+      if (error.response) {
+        throw error;
+      }
+      if (!email.endsWith('@forge.in') && !email.includes('sandbox')) {
+        throw error;
+      }
       console.warn('Backend login fallback — activating Sandbox Agent account for:', email);
       
       let mockRole: UserRole = 'state';
