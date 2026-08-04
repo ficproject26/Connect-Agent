@@ -52,10 +52,13 @@ export const Login: React.FC = () => {
         setErrorMsg('Invalid email or password.');
       }
     } catch (err: any) {
-      if (err.response?.data?.message) {
-        setErrorMsg(err.response.data.message);
+      const serverMsg = err.response?.data?.message || err.response?.data?.msg || err.response?.data?.error;
+      if (serverMsg) {
+        setErrorMsg(serverMsg);
+      } else if (err.code === 'ERR_NETWORK' || !err.response) {
+        setErrorMsg('Unable to connect to backend server. Please check your network or server status.');
       } else {
-        setErrorMsg('Something went wrong. Please check your connection.');
+        setErrorMsg(err.message || 'Login failed. Please check your email and password.');
       }
     } finally {
       setIsLoading(false);
