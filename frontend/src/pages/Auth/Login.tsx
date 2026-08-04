@@ -4,10 +4,12 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useAuth } from '../../context/AuthContext';
-import { AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { AlertCircle, Eye, EyeOff, Smartphone, Mail, ArrowRight } from 'lucide-react';
 import { AgentNetworkHero } from '../../components/auth/AgentNetworkHero';
 
 import connectPortalLogo from '../../assets/connect_portal_logo.png';
+
+const INDIAN_MOBILE_REGEX = /^[6-9][0-9]{9}$/;
 
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -18,7 +20,10 @@ type LoginFields = z.infer<typeof loginSchema>;
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, addNotification } = useAuth();
+  const [authMode, setAuthMode] = useState<'email' | 'mobile'>('email');
+  const [mobileNumber, setMobileNumber] = useState('');
+  const [mobileError, setMobileError] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -27,6 +32,39 @@ export const Login: React.FC = () => {
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '' }
   });
+
+  const handleMobileChange = (val: string) => {
+    let clean = val.replace(/\D/g, '');
+    if (clean.length > 0 && !/^[6-9]/.test(clean)) {
+      clean = '';
+    }
+    if (clean.length > 10) clean = clean.slice(0, 10);
+    
+    setMobileNumber(clean);
+
+    if (clean.length === 0) {
+      setMobileError('Mobile number is required.');
+    } else if (!/^[6-9]/.test(clean)) {
+      setMobileError('Mobile number must start with 6, 7, 8, or 9.');
+    } else if (clean.length < 10) {
+      setMobileError('Enter a valid 10-digit mobile number.');
+    } else {
+      setMobileError('');
+    }
+  };
+
+  const isMobileValid = INDIAN_MOBILE_REGEX.test(mobileNumber);
+
+  const handleSendMobileOtp = () => {
+    if (!isMobileValid) return;
+    setIsLoading(true);
+    setErrorMsg('');
+    setTimeout(() => {
+      setIsLoading(false);
+      addNotification('OTP Sent', `6-digit OTP sent to +91 ${mobileNumber}.`, 'medium', 'system');
+      navigate('/verify-otp', { state: { email: `${mobileNumber}@mobile.connect`, mobileNumber } });
+    }, 1000);
+  };
 
   const onSubmit = async (data: LoginFields) => {
     setErrorMsg('');
@@ -96,6 +134,28 @@ export const Login: React.FC = () => {
             </div>
           </div>
 
+          {/* Login Method Toggle */}
+          <div className="flex bg-[#f3ede8] p-1 rounded-xl gap-1">
+            <button
+              type="button"
+              onClick={() => setAuthMode('email')}
+              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                authMode === 'email' ? 'bg-white text-[#864f19] shadow-sm' : 'text-[#847468] hover:text-[#1b1c1c]'
+              }`}
+            >
+              <Mail className="w-3.5 h-3.5" /> Email Login
+            </button>
+            <button
+              type="button"
+              onClick={() => setAuthMode('mobile')}
+              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                authMode === 'mobile' ? 'bg-white text-[#864f19] shadow-sm' : 'text-[#847468] hover:text-[#1b1c1c]'
+              }`}
+            >
+              <Smartphone className="w-3.5 h-3.5" /> Mobile OTP Login
+            </button>
+          </div>
+
           {/* Error Message */}
           {errorMsg && (
             <div className="p-3.5 bg-red-50 text-[#ba1a1a] border border-red-200 rounded-xl text-xs flex items-center gap-2.5 font-bold">
@@ -107,82 +167,129 @@ export const Login: React.FC = () => {
           {/* Form Card */}
           <div className="bg-white rounded-[20px] border border-[#eae8e7] shadow-sm p-8 space-y-5">
 
-            {/* Email */}
-            <div className="space-y-1.5">
-              <label className="block text-[10px] font-extrabold text-[#52443a] uppercase tracking-wider">
-                Email Address
-              </label>
-              <input
-                type="email"
-                placeholder="email@example.com"
-                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/70 rounded-xl py-3 px-4 text-sm text-[#1b1c1c] placeholder-[#847468] focus:outline-none focus:border-[#864f19] focus:ring-1 focus:ring-[#864f19] transition-all font-medium"
-                {...formRegister('email')}
-              />
-              {errors.email?.message && (
-                <p className="text-[10px] text-[#ba1a1a] font-bold mt-1">{errors.email.message}</p>
-              )}
-            </div>
+            {authMode === 'email' ? (
+              <>
+                {/* Email */}
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-extrabold text-[#52443a] uppercase tracking-wider">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="email@example.com"
+                    className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/70 rounded-xl py-3 px-4 text-sm text-[#1b1c1c] placeholder-[#847468] focus:outline-none focus:border-[#864f19] focus:ring-1 focus:ring-[#864f19] transition-all font-medium"
+                    {...formRegister('email')}
+                  />
+                  {errors.email?.message && (
+                    <p className="text-[10px] text-[#ba1a1a] font-bold mt-1">{errors.email.message}</p>
+                  )}
+                </div>
 
-            {/* Password */}
-            <div className="space-y-1.5">
-              <div className="flex justify-between items-center">
-                <label className="block text-[10px] font-extrabold text-[#52443a] uppercase tracking-wider">
-                  Password
-                </label>
-                <a
-                  href="#"
-                  onClick={(e) => { e.preventDefault(); alert('Password reset instructions sent to your email.'); }}
-                  className="text-[10px] font-bold text-[#864f19] hover:underline"
-                >
-                  Forgot Password?
-                </a>
-              </div>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="••••••••"
-                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/70 rounded-xl py-3 pl-4 pr-11 text-sm text-[#1b1c1c] placeholder-[#847468] focus:outline-none focus:border-[#864f19] focus:ring-1 focus:ring-[#864f19] transition-all font-medium"
-                  {...formRegister('password')}
-                />
+                {/* Password */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <label className="block text-[10px] font-extrabold text-[#52443a] uppercase tracking-wider">
+                      Password
+                    </label>
+                    <a
+                      href="#"
+                      onClick={(e) => { e.preventDefault(); alert('Password reset instructions sent to your registered email or mobile.'); }}
+                      className="text-[10px] font-bold text-[#864f19] hover:underline"
+                    >
+                      Forgot Password?
+                    </a>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="••••••••"
+                      className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/70 rounded-xl py-3 pl-4 pr-11 text-sm text-[#1b1c1c] placeholder-[#847468] focus:outline-none focus:border-[#864f19] focus:ring-1 focus:ring-[#864f19] transition-all font-medium"
+                      {...formRegister('password')}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#847468] hover:text-[#864f19] focus:outline-none cursor-pointer transition-colors flex items-center"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  {errors.password?.message && (
+                    <p className="text-[10px] text-[#ba1a1a] font-bold mt-1">{errors.password.message}</p>
+                  )}
+                </div>
+
+                {/* Submit Button */}
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#847468] hover:text-[#864f19] focus:outline-none cursor-pointer transition-colors flex items-center"
+                  onClick={handleSubmit(onSubmit)}
+                  disabled={isLoading}
+                  className="w-full py-3.5 mt-2 bg-[#864f19] hover:bg-[#a3672f] text-white rounded-xl text-xs font-bold uppercase tracking-wider active:scale-[0.98] transition-all border-none shadow-md shadow-[#864f19]/20 cursor-pointer flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {isLoading ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                      </svg>
+                      Logging in...
+                    </>
+                  ) : 'Login to Dashboard'}
                 </button>
-              </div>
-              {errors.password?.message && (
-                <p className="text-[10px] text-[#ba1a1a] font-bold mt-1">{errors.password.message}</p>
-              )}
-            </div>
+              </>
+            ) : (
+              <>
+                {/* Mobile Number */}
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-extrabold text-[#52443a] uppercase tracking-wider">
+                    Mobile Number (10 Digits)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-extrabold text-[#864f19]">
+                      +91
+                    </span>
+                    <input
+                      type="text"
+                      maxLength={10}
+                      placeholder="e.g. 9876543210"
+                      value={mobileNumber}
+                      onChange={(e) => handleMobileChange(e.target.value)}
+                      className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/70 rounded-xl py-3 pl-12 pr-4 text-sm text-[#1b1c1c] font-semibold placeholder-[#847468] focus:outline-none focus:border-[#864f19] focus:ring-1 focus:ring-[#864f19] transition-all"
+                    />
+                  </div>
+                  {mobileError && (
+                    <p className="text-[10px] text-[#ba1a1a] font-bold mt-1">{mobileError}</p>
+                  )}
+                  {isMobileValid && (
+                    <p className="text-[10px] text-emerald-600 font-bold mt-1">✓ Valid Indian mobile number (+91)</p>
+                  )}
+                </div>
 
-            {/* Submit Button */}
-            <button
-              type="button"
-              onClick={handleSubmit(onSubmit)}
-              disabled={isLoading}
-              className="w-full py-3.5 mt-2 bg-[#864f19] hover:bg-[#a3672f] text-white rounded-xl text-xs font-bold uppercase tracking-wider active:scale-[0.98] transition-all border-none shadow-md shadow-[#864f19]/20 cursor-pointer flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              {isLoading ? (
-                <>
-                  <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                  </svg>
-                  Logging in...
-                </>
-              ) : 'Login to Dashboard'}
-            </button>
+                {/* Submit OTP Button */}
+                <button
+                  type="button"
+                  onClick={handleSendMobileOtp}
+                  disabled={!isMobileValid || isLoading}
+                  className="w-full py-3.5 mt-2 bg-[#864f19] hover:bg-[#a3672f] text-white rounded-xl text-xs font-bold uppercase tracking-wider active:scale-[0.98] transition-all border-none shadow-md shadow-[#864f19]/20 cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isLoading ? 'Sending OTP...' : (
+                    <>
+                      <span>Get 6-Digit OTP</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              </>
+            )}
+
             <button
               type="button"
               onClick={() => navigate('/register')}
-              className="w-full py-3.5 mt-3 bg-[#864f19] hover:bg-[#a3672f] text-white rounded-xl text-xs font-bold uppercase tracking-wider active:scale-[0.98] transition-all border-none shadow-md shadow-[#864f19]/20 cursor-pointer flex items-center justify-center gap-2"
+              className="w-full py-3 mt-1 bg-slate-100 hover:bg-slate-200 text-[#52443a] rounded-xl text-xs font-bold uppercase tracking-wider transition-all border-none cursor-pointer"
             >
-              Register Now
+              Apply for Agent Onboarding
             </button>
           </div>
-
 
         </div>
       </div>

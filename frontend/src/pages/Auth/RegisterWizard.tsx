@@ -387,8 +387,8 @@ export const RegisterWizard: React.FC = () => {
         setFormErrors('Password must be at least 6 characters long.');
         return;
       }
-      if (!/^\d{10}$/.test(personalInfo.phone)) {
-        setFormErrors('Phone number must be exactly 10 digits.');
+      if (!/^[6-9][0-9]{9}$/.test(personalInfo.phone)) {
+        setFormErrors('Mobile number must start with 6, 7, 8, or 9 and be exactly 10 digits.');
         return;
       }
     }
@@ -398,8 +398,8 @@ export const RegisterWizard: React.FC = () => {
         setFormErrors('Please select your Date of Birth.');
         return;
       }
-      if (personalInfo.altPhone && !/^\d{10}$/.test(personalInfo.altPhone)) {
-        setFormErrors('Alternative mobile number must be 10 digits.');
+      if (personalInfo.altPhone && !/^[6-9][0-9]{9}$/.test(personalInfo.altPhone)) {
+        setFormErrors('Alternative mobile number must start with 6, 7, 8, or 9 and be 10 digits.');
         return;
       }
       if (!personalInfo.aadhaarNumber || !/^\d{12}$/.test(personalInfo.aadhaarNumber)) {
@@ -679,13 +679,26 @@ export const RegisterWizard: React.FC = () => {
                     />
                   </div>
 
-                  <Input
-                    label="Primary Mobile Number (Required)"
-                    maxLength={10}
-                    placeholder={`e.g. ${sample.phone}`}
-                    value={personalInfo.phone}
-                    onChange={(e) => setPersonalInfo({ ...personalInfo, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
-                  />
+                  <div>
+                    <Input
+                      label="Primary Mobile Number (Required)"
+                      maxLength={10}
+                      placeholder={`e.g. ${sample.phone}`}
+                      value={personalInfo.phone}
+                      onChange={(e) => {
+                        let val = e.target.value.replace(/\D/g, '');
+                        if (val.length > 0 && !/^[6-9]/.test(val)) val = '';
+                        if (val.length > 10) val = val.slice(0, 10);
+                        setPersonalInfo({ ...personalInfo, phone: val });
+                      }}
+                    />
+                    {personalInfo.phone.length > 0 && personalInfo.phone.length < 10 && (
+                      <p className="text-[10px] text-red-500 font-bold mt-1">Enter a valid 10-digit mobile number starting with 6, 7, 8, or 9.</p>
+                    )}
+                    {personalInfo.phone.length === 10 && !/^[6-9][0-9]{9}$/.test(personalInfo.phone) && (
+                      <p className="text-[10px] text-red-500 font-bold mt-1">Mobile number must start with 6, 7, 8, or 9.</p>
+                    )}
+                  </div>
 
                   <Input
                     label="Email Address (Required)"
@@ -801,13 +814,23 @@ export const RegisterWizard: React.FC = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* 2. Alternative Mobile Number */}
-                  <Input
-                    label="• Alternative Mobile Number (Optional)"
-                    maxLength={10}
-                    placeholder="e.g. 9876543210"
-                    value={personalInfo.altPhone || ''}
-                    onChange={(e) => setPersonalInfo({ ...personalInfo, altPhone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
-                  />
+                  <div>
+                    <Input
+                      label="• Alternative Mobile Number (Optional)"
+                      maxLength={10}
+                      placeholder="e.g. 9876543210"
+                      value={personalInfo.altPhone || ''}
+                      onChange={(e) => {
+                        let val = e.target.value.replace(/\D/g, '');
+                        if (val.length > 0 && !/^[6-9]/.test(val)) val = '';
+                        if (val.length > 10) val = val.slice(0, 10);
+                        setPersonalInfo({ ...personalInfo, altPhone: val });
+                      }}
+                    />
+                    {personalInfo.altPhone && personalInfo.altPhone.length > 0 && personalInfo.altPhone.length < 10 && (
+                      <p className="text-[10px] text-red-500 font-bold mt-1">Enter a valid 10-digit mobile number starting with 6, 7, 8, or 9.</p>
+                    )}
+                  </div>
 
                   {/* 3. Date of Birth */}
                   <Input
