@@ -925,9 +925,18 @@ export const RegisterWizard: React.FC = () => {
                 </div>
 
                 <div className="space-y-4">
-                  <Input
-                    label="Highest Qualification"
-                    placeholder="e.g. Bachelor of Commerce / MBA / High School"
+                  <Select
+                    label="Highest Qualification (Required)"
+                    options={[
+                      { value: '', label: '-- Select Highest Qualification --' },
+                      { value: '10th Pass', label: '10th Pass / SSLC' },
+                      { value: '12th Pass', label: '12th Pass / Higher Secondary (10+2)' },
+                      { value: 'Diploma', label: 'Diploma / ITI' },
+                      { value: 'Graduate', label: "Bachelor's Degree (B.A / B.Sc / B.Com / B.Tech / B.E / BBA / BCA)" },
+                      { value: 'Post Graduate', label: "Master's Degree (M.A / M.Sc / M.Com / M.Tech / MBA / MCA)" },
+                      { value: 'Doctorate', label: 'Doctorate / Ph.D.' },
+                      { value: 'Other', label: 'Other Professional Qualification' }
+                    ]}
                     value={professionalInfo.qualification}
                     onChange={(e) => setProfessionalInfo({ ...professionalInfo, qualification: e.target.value })}
                   />
