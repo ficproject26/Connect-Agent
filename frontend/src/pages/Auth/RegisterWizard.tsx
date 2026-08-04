@@ -225,7 +225,51 @@ export const RegisterWizard: React.FC = () => {
   // Dynamic placeholders based on selected role
   const sample = ROLE_SAMPLES[role];
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, docType: string) => {
+  const compressImageFile = (file: File): Promise<string> => {
+    return new Promise((resolve) => {
+      if (!file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => resolve('');
+        reader.readAsDataURL(file);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxDim = 1200;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', 0.7));
+          } else {
+            resolve(e.target?.result as string);
+          }
+        };
+        img.onerror = () => resolve(e.target?.result as string);
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, docType: string) => {
     setFormErrors('');
     const file = e.target.files?.[0];
     if (!file) return;
@@ -243,18 +287,20 @@ export const RegisterWizard: React.FC = () => {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
+    try {
+      const dataUrl = await compressImageFile(file);
       setDocuments(prev => ({
         ...prev,
         [docType]: {
           fileName: file.name,
-          dataUrl: reader.result as string,
+          dataUrl: dataUrl,
           size: file.size
         }
       }));
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('File compression error:', err);
+      setFormErrors('Failed to process file. Please try uploading a smaller file.');
+    }
   };
 
   const nextStep = () => {
