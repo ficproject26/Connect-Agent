@@ -400,16 +400,8 @@ export const RegisterWizard: React.FC = () => {
         setFormErrors(validationMessages);
       } else if (err.response?.data?.message && err.response.data.message !== 'Validation failed' && err.response.data.message !== 'Resource not found') {
         setFormErrors(err.response.data.message);
-      } else if (err.code === 'ERR_NETWORK' || !err.response || err.response?.status === 404 || err.response?.status >= 500) {
-        // Unreachable network, 404 endpoint or backend server offline: complete fallback registration
-        const fallbackRegId = `REG-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`;
-        setSuccessData({
-          registrationId: fallbackRegId,
-          role: role,
-          status: 'pending'
-        });
       } else {
-        setFormErrors(err.response?.data?.message || err.message || 'Registration failed. Please verify your input details and try again.');
+        setFormErrors(err.response?.data?.message || err.message || 'Registration failed due to network or server error. Please check your connection and try again.');
       }
     } finally {
       setIsSubmitting(false);

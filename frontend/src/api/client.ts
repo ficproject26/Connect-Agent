@@ -2,6 +2,7 @@ import axios from 'axios';
 
 const getAgentBackendUrl = () => {
   if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+  if (import.meta.env.NEXT_PUBLIC_API_URL) return import.meta.env.NEXT_PUBLIC_API_URL.endsWith('/api') ? import.meta.env.NEXT_PUBLIC_API_URL : `${import.meta.env.NEXT_PUBLIC_API_URL}/api`;
   if (typeof window === 'undefined') return 'http://localhost:8001/api';
   const hostname = window.location.hostname;
   if (
@@ -14,7 +15,7 @@ const getAgentBackendUrl = () => {
   ) {
     return `http://${hostname || 'localhost'}:8001/api`;
   }
-  return 'https://connect-admin-backend.onrender.com/api';
+  return 'https://connect-agent-oy0d.onrender.com/api';
 };
 
 /**
