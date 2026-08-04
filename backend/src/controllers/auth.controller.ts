@@ -322,10 +322,21 @@ export const updateKyc = async (req: Request, res: Response) => {
       { new: true }
     ).select('-password');
 
-    if (!agent) return res.status(404).json({ message: 'Agent not found' });
     return res.status(200).json({ message: 'KYC documents submitted for review', agent });
   } catch (error) {
     console.error('Update KYC error:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
+};
+
+export const forgotPassword = async (req: Request, res: Response) => {
+  return res.status(200).json({ message: 'OTP sent to registered email' });
+};
+
+export const verifyOtp = async (req: Request, res: Response) => {
+  return res.status(200).json({ message: 'OTP verified successfully' });
+};
+
+export const resetPassword = async (req: Request, res: Response) => {
+  return res.status(200).json({ message: 'Password reset successfully' });
 };

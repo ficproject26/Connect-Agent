@@ -1,21 +1,31 @@
 import axios from 'axios';
 
 const getAgentBackendUrl = () => {
-  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
-  if (import.meta.env.NEXT_PUBLIC_API_URL) return import.meta.env.NEXT_PUBLIC_API_URL.endsWith('/api') ? import.meta.env.NEXT_PUBLIC_API_URL : `${import.meta.env.NEXT_PUBLIC_API_URL}/api`;
-  if (typeof window === 'undefined') return 'http://localhost:8001/api';
-  const hostname = window.location.hostname;
-  if (
-    !hostname || 
-    hostname === 'localhost' || 
-    hostname === '127.0.0.1' || 
-    hostname.startsWith('192.168.') || 
-    hostname.startsWith('10.') || 
-    hostname.startsWith('172.')
-  ) {
-    return `http://${hostname || 'localhost'}:8001/api`;
+  let url = import.meta.env.VITE_API_URL || import.meta.env.NEXT_PUBLIC_API_URL;
+  if (!url) {
+    if (typeof window === 'undefined') {
+      url = 'http://localhost:8001/api';
+    } else {
+      const hostname = window.location.hostname;
+      if (
+        !hostname || 
+        hostname === 'localhost' || 
+        hostname === '127.0.0.1' || 
+        hostname.startsWith('192.168.') || 
+        hostname.startsWith('10.') || 
+        hostname.startsWith('172.')
+      ) {
+        url = `http://${hostname || 'localhost'}:8001/api`;
+      } else {
+        url = 'https://connect-agent-oy0d.onrender.com/api';
+      }
+    }
   }
-  return 'https://connect-agent-oy0d.onrender.com/api';
+  url = url.trim();
+  if (!url.endsWith('/api')) {
+    url = url.endsWith('/') ? `${url}api` : `${url}/api`;
+  }
+  return url;
 };
 
 /**
