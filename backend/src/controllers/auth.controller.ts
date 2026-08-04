@@ -111,6 +111,7 @@ export const register = async (req: Request, res: Response) => {
               assignedArea: assignedAreaStr,
               registrationId,
               status: 'pending',
+              kycStatus: 'pending',
               isActive: false,
               kyc: {
                 aadhaarImage: validatedData.kycDocs?.aadhaarCard || '',
