@@ -137,20 +137,34 @@ const ROLE_SAMPLES = {
   }
 };
 
+const REGISTRATION_DRAFT_KEY = 'agent_registration_draft';
+
+const getInitialDraft = () => {
+  try {
+    const saved = sessionStorage.getItem(REGISTRATION_DRAFT_KEY);
+    if (saved) return JSON.parse(saved);
+  } catch (e) {
+    console.error('Error loading registration draft:', e);
+  }
+  return null;
+};
+
 export const RegisterWizard: React.FC = () => {
   const navigate = useNavigate();
   const { register } = useAuth();
 
+  const initialDraft = useMemo(() => getInitialDraft(), []);
+
   // Wizard state control
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState<number>(initialDraft?.currentStep || 1);
   const totalSteps = 4;
   const [formErrors, setFormErrors] = useState<string>('');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form Fields State
-  const [role, setRole] = useState<'state' | 'division' | 'district' | 'pincode'>('state');
-  const [personalInfo, setPersonalInfo] = useState({
+  const [role, setRole] = useState<'state' | 'division' | 'district' | 'pincode'>(initialDraft?.role || 'state');
+  const [personalInfo, setPersonalInfo] = useState(initialDraft?.personalInfo || {
     name: '',
     phone: '',
     email: '',
@@ -160,7 +174,7 @@ export const RegisterWizard: React.FC = () => {
     gender: 'male'
   });
 
-  const [address, setAddress] = useState({
+  const [address, setAddress] = useState(initialDraft?.address || {
     state: '',
     division: '',
     district: '',
@@ -194,13 +208,13 @@ export const RegisterWizard: React.FC = () => {
     setAddress(updatedAddress);
   };
 
-  const [professionalInfo, setProfessionalInfo] = useState({
+  const [professionalInfo, setProfessionalInfo] = useState(initialDraft?.professionalInfo || {
     qualification: '',
     experience: 'fresher',
     previousCompany: ''
   });
 
-  const [documents, setDocuments] = useState<Record<string, { fileName: string; dataUrl: string; size: number }>>({
+  const [documents, setDocuments] = useState<Record<string, { fileName: string; dataUrl: string; size: number }>>(initialDraft?.documents || {
     aadhaarCard: { fileName: '', dataUrl: '', size: 0 },
     panCard: { fileName: '', dataUrl: '', size: 0 },
     passportPhoto: { fileName: '', dataUrl: '', size: 0 },
@@ -209,11 +223,52 @@ export const RegisterWizard: React.FC = () => {
     bankProof: { fileName: '', dataUrl: '', size: 0 }
   });
 
-  const [declaration, setDeclaration] = useState({
+  const [declaration, setDeclaration] = useState(initialDraft?.declaration || {
     infoCorrect: false,
     acceptTerms: false,
     understandApproval: false
   });
+
+  // Save form draft to sessionStorage automatically on state changes
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(
+        REGISTRATION_DRAFT_KEY,
+        JSON.stringify({
+          currentStep,
+          role,
+          personalInfo,
+          address,
+          professionalInfo,
+          documents,
+          declaration
+        })
+      );
+    } catch (e) {
+      console.error('Error saving registration draft:', e);
+    }
+  }, [currentStep, role, personalInfo, address, professionalInfo, documents, declaration]);
+
+  const clearDraft = () => {
+    try {
+      sessionStorage.removeItem(REGISTRATION_DRAFT_KEY);
+    } catch (e) { }
+    setCurrentStep(1);
+    setRole('state');
+    setPersonalInfo({ name: '', phone: '', email: '', password: '', confirmPassword: '', dob: '', gender: 'male' });
+    setAddress({ state: '', division: '', district: '', pincode: '', postOffice: '', fullAddress: '' });
+    setProfessionalInfo({ qualification: '', experience: 'fresher', previousCompany: '' });
+    setDocuments({
+      aadhaarCard: { fileName: '', dataUrl: '', size: 0 },
+      panCard: { fileName: '', dataUrl: '', size: 0 },
+      passportPhoto: { fileName: '', dataUrl: '', size: 0 },
+      signature: { fileName: '', dataUrl: '', size: 0 },
+      educationalCertificate: { fileName: '', dataUrl: '', size: 0 },
+      bankProof: { fileName: '', dataUrl: '', size: 0 }
+    });
+    setDeclaration({ infoCorrect: false, acceptTerms: false, understandApproval: false });
+    setFormErrors('');
+  };
 
   // Success screen state
   const [successData, setSuccessData] = useState<{
@@ -428,6 +483,9 @@ export const RegisterWizard: React.FC = () => {
 
       const response = await register(payload);
       if (response && response.registrationId) {
+        try {
+          sessionStorage.removeItem(REGISTRATION_DRAFT_KEY);
+        } catch (e) { }
         setSuccessData({
           registrationId: response.registrationId,
           role: response.role,
@@ -523,9 +581,19 @@ export const RegisterWizard: React.FC = () => {
               <Link to="/" className="flex items-center text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors">
                 <ArrowLeft className="w-4 h-4 mr-1.5" /> Back to Login
               </Link>
-              <span className="text-xs font-black text-[#864f19] uppercase tracking-wider">
-                Agent Onboarding Portal
-              </span>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={clearDraft}
+                  className="text-[11px] font-bold text-slate-400 hover:text-red-500 transition-colors bg-slate-100 hover:bg-red-50 px-2.5 py-1 rounded-lg border border-slate-200 hover:border-red-200"
+                  title="Clear saved draft and start fresh"
+                >
+                  Clear Draft
+                </button>
+                <span className="text-xs font-black text-[#864f19] uppercase tracking-wider">
+                  Agent Onboarding Portal
+                </span>
+              </div>
             </div>
           </div>
 
