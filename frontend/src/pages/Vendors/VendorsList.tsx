@@ -28,6 +28,7 @@ interface Vendor {
   updatedAt: string;
   storeType: string;
   businessGst: string;
+  fullAddress?: string;
 }
 
 const TODAY_DATE = new Date().toISOString().slice(0, 10);
