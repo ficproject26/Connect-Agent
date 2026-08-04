@@ -28,9 +28,10 @@ interface Vendor {
   updatedAt: string;
   storeType: string;
   businessGst: string;
-  fullAddress?: string;
 }
-}
+
+const TODAY_DATE = new Date().toISOString().slice(0, 10);
+const YESTERDAY_DATE = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
 
 export const VendorsList: React.FC = () => {
   const { user, addNotification } = useAuth();
