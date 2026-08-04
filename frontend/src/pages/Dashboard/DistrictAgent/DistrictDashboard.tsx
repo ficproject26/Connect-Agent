@@ -70,12 +70,8 @@ export const DistrictDashboard: React.FC = () => {
     fetchSubordinates();
   }, []);
 
-  // Alerts Stack State (Stack behavior: newest items stack on top)
-  const [districtAlerts, setDistrictAlerts] = useState<any[]>([
-    { id: '3', type: 'New Ticket Alert', msg: 'New ticket #TK-9610: App checkout system failure logged at Pincode 635109 (Hosur).', time: '12m ago', alert: true },
-    { id: '2', type: 'Vendor Follow-up Reminder', msg: 'Document verification follow-up for Krishnagiri Supermarket is due today at 5:00 PM.', time: '1h ago', alert: false },
-    { id: '1', type: 'Daily Report Reminder', msg: 'Daily operations report has not been submitted yet.', time: '3h ago', alert: false }
-  ]);
+  // Alerts Stack State
+  const [districtAlerts, setDistrictAlerts] = useState<any[]>([]);
 
   const dismissAlert = (id: string) => {
     setDistrictAlerts(prev => prev.filter(item => item.id !== id));

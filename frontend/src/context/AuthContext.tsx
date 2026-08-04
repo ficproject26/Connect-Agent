@@ -79,46 +79,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<AgentProfile | null>(null);
   const [token, setToken] = useState<string | null>(localStorage.getItem('agent_token'));
   const [loading, setLoading] = useState<boolean>(true);
-  const DEFAULT_INITIAL_NOTIFICATIONS: NotificationItem[] = [
-    {
-      id: 'notif-101',
-      title: 'New Merchant Onboarding Request',
-      message: 'New vendor registration for "Krishnagiri Fresh Produce" is pending document verification audit.',
-      timestamp: new Date(Date.now() - 1000 * 60 * 12),
-      read: false,
-      priority: 'high',
-      category: 'announcement'
-    },
-    {
-      id: 'notif-102',
-      title: 'App Checkout System Alert',
-      message: 'Ticket ID #TK-9610: App checkout system failure logged at Pincode 635109 (Hosur).',
-      timestamp: new Date(Date.now() - 1000 * 60 * 45),
-      read: false,
-      priority: 'high',
-      category: 'system'
-    },
-    {
-      id: 'notif-103',
-      title: 'Supervisor Meeting Scheduled',
-      message: 'District supervisor sync scheduled for today at 5:00 PM.',
-      timestamp: new Date(Date.now() - 1000 * 60 * 180),
-      read: true,
-      priority: 'medium',
-      category: 'system'
-    },
-    {
-      id: 'notif-104',
-      title: 'Daily Operations Target Update',
-      message: 'Daily operations report has not been submitted yet for the current shift.',
-      timestamp: new Date(Date.now() - 1000 * 60 * 360),
-      read: true,
-      priority: 'low',
-      category: 'announcement'
-    }
-  ];
-
-  const [notifications, setNotifications] = useState<NotificationItem[]>(DEFAULT_INITIAL_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [soundProfile, setSoundProfile] = useState<'chirp' | 'melody' | 'siren'>('chirp');
   const [soundVolume, setSoundVolume] = useState<number>(0.5);
 
@@ -143,11 +104,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const refetchUser = async () => {
-    // Skip API call for sandbox tokens — user data is already set locally
-    const currentToken = localStorage.getItem('agent_token');
-    if (currentToken && currentToken.startsWith('sandbox_token_')) {
-      return;
-    }
     try {
       const response = await api.get('/auth/me');
       const agent = response.data.agent;
@@ -170,11 +126,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const initializeAuth = async () => {
       if (token) {
-        // For sandbox tokens, skip refetch if user is already set (just logged in)
-        if (token.startsWith('sandbox_token_') && user) {
-          setLoading(false);
-          return;
-        }
         try {
           await refetchUser();
         } catch (err) {
@@ -187,8 +138,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initializeAuth();
   }, [token]);
 
-  const login = async (email: string, password?: string): Promise<any> => {
-    const loginPayload = { email, password: password || 'password123' };
+  const login = async (email: string, password: string): Promise<any> => {
+    const loginPayload = { email, password };
 
     // Fire all backend login requests IN PARALLEL — fastest success wins
     const makeRequest = (url: string, useApi: boolean) =>
@@ -238,78 +189,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    // Agent exists but pending/rejected
+    // Agent exists but pending/rejected — surface the status message
     if (got403) throw got403;
 
     // Invalid credentials on all backends
-    if (got401) {
-      if (!email.endsWith('@forge.in') && !email.includes('sandbox')) {
-        throw got401;
-      }
-    }
+    if (got401) throw got401;
 
-    // Sandbox fallback for demo accounts
-    console.warn('Backend login fallback — activating Sandbox Agent account for:', email);
-    
-    let mockRole: UserRole = 'state';
-    let mockState = 'Karnataka';
-    let mockDistrict = 'Bengaluru Urban';
-    let mockDivision = 'Bengaluru South';
-    let mockPincode = '560001';
-    let mockName = 'Rajesh Kumar (State Agent)';
-
-    if (email.includes('tn') || email.includes('tamil') || email.includes('siddharth') || email.includes('dhanush')) {
-      mockState = 'Tamil Nadu';
-      mockDistrict = 'Krishnagiri District';
-      mockDivision = 'Hosur Division';
-      mockPincode = '635109';
-      mockName = email.includes('dhanush') ? 'Dhanush Agent' : 'Siddharth Menon (Tamil Nadu State Lead)';
-    }
-
-    if (email.includes('district')) {
-      mockRole = 'district';
-      mockName = mockState === 'Tamil Nadu' ? 'Karthik Raja (Tamil Nadu District Lead)' : 'Amit Gowda (Karnataka District Lead)';
-    } else if (email.includes('division')) {
-      mockRole = 'division';
-      mockName = mockState === 'Tamil Nadu' ? 'Suresh Patil (Hosur Division Manager)' : 'Suresh Patil (Bengaluru Division Manager)';
-    } else if (email.includes('pincode')) {
-      mockRole = 'pincode';
-      mockName = mockState === 'Tamil Nadu' ? 'Karthik Raja (Hosur Pincode Agent)' : 'Anil Mehta (Bengaluru Pincode Agent)';
-    } else {
-      mockRole = 'state';
-      mockName = email.includes('dhanush') ? 'Dhanush Agent (State Lead)' : (mockState === 'Tamil Nadu' ? 'Siddharth Menon (Tamil Nadu State Lead)' : 'Rajesh Kumar (State Agent)');
-    }
-
-    const mockKycStatus: 'approved' | 'pending' = 'approved';
-    const mockStatus: 'active' | 'pending_approval' = 'active';
-
-    const sandboxAgent: AgentProfile = {
-      _id: `sandbox_${Date.now()}`,
-      name: mockName,
-      email,
-      phone: '+91 98765 43210',
-      registrationId: `REG-SANDBOX-${Math.floor(1000 + Math.random() * 9000)}`,
-      role: mockRole,
-      territory: {
-        state: mockState,
-        district: mockDistrict,
-        division: mockDivision,
-        pincode: mockPincode
-      },
-      kycStatus: mockKycStatus,
-      status: mockStatus,
-      kycDocs: {},
-      registrationFeePaid: true,
-      performanceScore: 92,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-
-    const mockToken = `sandbox_token_${Date.now()}`;
-    localStorage.setItem('agent_token', mockToken);
-    setToken(mockToken);
-    setUser(sandboxAgent);
-    return sandboxAgent;
+    // All backends unreachable
+    throw new Error('Unable to connect to any server. Please check your network connection.');
   };
 
   const register = async (agentData: any): Promise<any> => {

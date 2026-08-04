@@ -17,33 +17,10 @@ interface FieldVisitRecord {
   photoAfterVisit?: string;
 }
 
-const MOCK_VISITS: FieldVisitRecord[] = [
-  {
-    _id: 'VIS-9011',
-    vendorId: 'VEND-101',
-    vendorName: 'Krishnagiri Supermarket General Store',
-    storeAddress: 'No. 45, Rayakottai Road, Krishnagiri (635001)',
-    visitDate: new Date().toISOString().slice(0, 10),
-    status: 'started',
-    latitude: 12.5266,
-    longitude: 78.2144,
-    remarks: 'KYC document verification & QR code deployment'
-  },
-  {
-    _id: 'VIS-8842',
-    vendorId: 'VEND-102',
-    vendorName: 'Hosur Fresh Fruits & Veggies',
-    storeAddress: 'NH 44 Highway Junction, Hosur (635109)',
-    visitDate: new Date(Date.now() - 86400000).toISOString().slice(0, 10),
-    status: 'completed',
-    latitude: 12.7409,
-    longitude: 77.8253,
-    remarks: 'Verified shop location and onboarded payment QR'
-  }
-];
+
 
 export const FieldVisitsModule: React.FC = () => {
-  const [visits, setVisits] = useState<FieldVisitRecord[]>(MOCK_VISITS);
+  const [visits, setVisits] = useState<FieldVisitRecord[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'started' | 'completed'>('all');
   

@@ -47,52 +47,32 @@ export const PincodeDashboard: React.FC = () => {
       const response = await api.get('/dashboard/stats');
       const backendStats = response.data.stats;
       
-      const defaultMockStats = {
-        targets: { total: 10, completed: 7, completionRate: 70 },
-        vendors: { total: 45, pending: 3 },
-        notifications: { unread: 5 },
-        tickets: { open: 1, resolved: 8 }
+      const defaultStats = {
+        targets: { total: 0, completed: 0, completionRate: 0 },
+        vendors: { total: 0, pending: 0 },
+        notifications: { unread: 0 },
+        tickets: { open: 0, resolved: 0 }
       };
 
-      const defaultMockVendors = [
-        { name: 'Sree Balaji Groceries', kycStatus: 'approved' },
-        { name: 'Venkateshwara Coffee Bar', kycStatus: 'pending' },
-        { name: 'Karthik Mobile Center', kycStatus: 'approved' }
-      ];
-
-      const defaultMockAssignments = [
-        { target: { title: 'Validate Aadhaar QR Scan', targetValue: 15 }, status: 'completed' },
-        { target: { title: 'Upload Signature Verification Sheet', targetValue: 20 }, status: 'pending' },
-        { target: { title: 'Perform Physical Auditing', targetValue: 10 }, status: 'completed' }
-      ];
-
       if (!backendStats || (backendStats.targets?.total === 0 && backendStats.vendors?.total === 0)) {
-        setStats(defaultMockStats);
-        setRecentVendors(defaultMockVendors);
-        setRecentAssignments(defaultMockAssignments);
+        setStats(defaultStats);
+        setRecentVendors([]);
+        setRecentAssignments([]);
       } else {
         setStats(backendStats);
-        setRecentVendors(response.data.recentVendors && response.data.recentVendors.length > 0 ? response.data.recentVendors : defaultMockVendors);
-        setRecentAssignments(response.data.recentAssignments && response.data.recentAssignments.length > 0 ? response.data.recentAssignments : defaultMockAssignments);
+        setRecentVendors(response.data.recentVendors && response.data.recentVendors.length > 0 ? response.data.recentVendors : []);
+        setRecentAssignments(response.data.recentAssignments && response.data.recentAssignments.length > 0 ? response.data.recentAssignments : []);
       }
     } catch (err) {
       console.error('Failed to fetch dashboard stats:', err);
       setStats({
-        targets: { total: 10, completed: 7, completionRate: 70 },
-        vendors: { total: 45, pending: 3 },
-        notifications: { unread: 5 },
-        tickets: { open: 1, resolved: 8 }
+        targets: { total: 0, completed: 0, completionRate: 0 },
+        vendors: { total: 0, pending: 0 },
+        notifications: { unread: 0 },
+        tickets: { open: 0, resolved: 0 }
       });
-      setRecentVendors([
-        { name: 'Sree Balaji Groceries', kycStatus: 'approved' },
-        { name: 'Venkateshwara Coffee Bar', kycStatus: 'pending' },
-        { name: 'Karthik Mobile Center', kycStatus: 'approved' }
-      ]);
-      setRecentAssignments([
-        { target: { title: 'Validate Aadhaar QR Scan', targetValue: 15 }, status: 'completed' },
-        { target: { title: 'Upload Signature Verification Sheet', targetValue: 20 }, status: 'pending' },
-        { target: { title: 'Perform Physical Auditing', targetValue: 10 }, status: 'completed' }
-      ]);
+      setRecentVendors([]);
+      setRecentAssignments([]);
     } finally {
       setIsLoading(false);
     }

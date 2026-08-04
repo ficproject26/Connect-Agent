@@ -5,7 +5,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { AppRoutes } from './routes/AppRoutes';
-import { DevRoleSwitcher } from './components/layout/DevRoleSwitcher';
+
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 const queryClient = new QueryClient({
@@ -26,7 +26,7 @@ function App() {
             <ErrorBoundary>
               <BrowserRouter>
                 <AppRoutes />
-                <DevRoleSwitcher />
+
               </BrowserRouter>
             </ErrorBoundary>
           </ToastProvider>

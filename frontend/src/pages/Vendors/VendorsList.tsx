@@ -30,202 +30,22 @@ interface Vendor {
   businessGst: string;
   fullAddress?: string;
 }
-
-const TODAY_DATE = '2026-07-23';
-const YESTERDAY_DATE = '2026-07-22';
-
-const MOCK_VENDORS: Vendor[] = [
-  // TAMIL NADU - KRISHNAGIRI DISTRICT - HOSUR DIVISION - 635109
-  {
-    id: "REG-8120",
-    name: "Krishnagiri Supermarket",
-    ownerName: "Venkatesh Murthy",
-    phone: "9876543210",
-    email: "krishnagiri.supermarket@example.com",
-    state: "Tamil Nadu",
-    division: "Hosur Division",
-    district: "Krishnagiri District",
-    pincode: "635109",
-    role: "Merchant Partner",
-    kycStatus: "pending",
-    status: "active",
-    assignedAgent: "Amit Gowda (District Lead)",
-    createdAt: TODAY_DATE,
-    updatedAt: TODAY_DATE,
-    storeType: "Supermarket & Retail",
-    businessGst: "33AABCK1234F1Z9",
-    fullAddress: "Plot No. 45, NH Road, Hosur, Krishnagiri, Tamil Nadu 635109"
-  },
-  {
-    id: "REG-5912",
-    name: "Hosur Fresh Fruits",
-    ownerName: "Subhash Chandra",
-    phone: "9123456780",
-    email: "hosur.fresh@example.com",
-    state: "Tamil Nadu",
-    division: "Hosur Division",
-    district: "Krishnagiri District",
-    pincode: "635109",
-    role: "Merchant Partner",
-    kycStatus: "approved",
-    status: "active",
-    assignedAgent: "Amit Gowda (District Lead)",
-    createdAt: TODAY_DATE,
-    updatedAt: TODAY_DATE,
-    storeType: "Fresh Produce Mart",
-    businessGst: "33AABCH5678F1Z2",
-    fullAddress: "Shop 12, Fruit Market Complex, Hosur 635109"
-  },
-
-  // TAMIL NADU - KRISHNAGIRI DISTRICT - BARGUR DIVISION - 635104
-  {
-    id: "REG-2309",
-    name: "Bargur Bakery Store",
-    ownerName: "Ramesh Babu",
-    phone: "9012345678",
-    email: "bargur.bakery@example.com",
-    state: "Tamil Nadu",
-    division: "Bargur Division",
-    district: "Krishnagiri District",
-    pincode: "635104",
-    role: "Merchant Partner",
-    kycStatus: "rejected",
-    status: "inactive",
-    assignedAgent: "Suresh Patil (Division Manager)",
-    rejectionReason: "Incomplete/blurred Aadhaar Card details submitted.",
-    createdAt: YESTERDAY_DATE,
-    updatedAt: YESTERDAY_DATE,
-    storeType: "Bakery & Confectionery",
-    businessGst: "33AABCB9012F1Z5",
-    fullAddress: "Main Road, Bargur, Krishnagiri 635104"
-  },
-
-  // TAMIL NADU - KRISHNAGIRI DISTRICT - DENKANIKOTTAI DIVISION - 635107
-  {
-    id: "REG-9081",
-    name: "Denkanikottai Organics",
-    ownerName: "Lakshmi Narayanan",
-    phone: "9988776655",
-    email: "denkanikottai.organics@example.com",
-    state: "Tamil Nadu",
-    division: "Denkanikottai Division",
-    district: "Krishnagiri District",
-    pincode: "635107",
-    role: "Merchant Partner",
-    kycStatus: "approved",
-    status: "active",
-    assignedAgent: "Anil Mehta (Pincode Agent)",
-    createdAt: "2026-07-20",
-    updatedAt: TODAY_DATE,
-    storeType: "Organic Food Store",
-    businessGst: "33AABCD3456F1Z8",
-    fullAddress: "Organic Hub, Denkanikottai 635107"
-  },
-
-  // TAMIL NADU - CHENNAI CENTRAL DISTRICT - CHENNAI DIVISION - 600001
-  {
-    id: "REG-3312",
-    name: "Chennai Mega Retail",
-    ownerName: "Karthik Sundaram",
-    phone: "98765 11223",
-    email: "chennai.mega@example.com",
-    state: "Tamil Nadu",
-    division: "Chennai Division",
-    district: "Chennai Central",
-    pincode: "600001",
-    role: "Merchant Partner",
-    kycStatus: "approved",
-    status: "active",
-    assignedAgent: "Karthik Raja (District Lead)",
-    createdAt: TODAY_DATE,
-    updatedAt: TODAY_DATE,
-    storeType: "Supermarket & Retail",
-    businessGst: "33AABCC7788F1Z3",
-    fullAddress: "Parrys Corner, Chennai Central 600001"
-  },
-
-  // KARNATAKA - BENGALURU URBAN - BENGALURU SOUTH - 560001
-  {
-    id: "REG-4410",
-    name: "Bengaluru South Electronics",
-    ownerName: "Mahesh Rao",
-    phone: "9765432109",
-    email: "bsouth.electronics@example.com",
-    state: "Karnataka",
-    division: "Bengaluru South",
-    district: "Bengaluru Urban",
-    pincode: "560001",
-    role: "Merchant Partner",
-    kycStatus: "approved",
-    status: "active",
-    assignedAgent: "Rajesh Kumar (State Lead)",
-    createdAt: "2026-07-19",
-    updatedAt: "2026-07-21",
-    storeType: "Electronics & Appliances",
-    businessGst: "29AABCB4321F1Z1",
-    fullAddress: "MG Road Plaza, Bengaluru 560001"
-  },
-
-  // KARNATAKA - BENGALURU URBAN - BENGALURU NORTH - 560004
-  {
-    id: "REG-6640",
-    name: "Malleshwaram Fresh Groceries",
-    ownerName: "Kavitha N",
-    phone: "93210 98765",
-    email: "malleshwaram.fresh@example.com",
-    state: "Karnataka",
-    division: "Bengaluru North",
-    district: "Bengaluru Urban",
-    pincode: "560004",
-    role: "Merchant Partner",
-    kycStatus: "pending",
-    status: "active",
-    assignedAgent: "Kavitha N (Pincode Agent)",
-    createdAt: TODAY_DATE,
-    updatedAt: TODAY_DATE,
-    storeType: "Fresh Produce Mart",
-    businessGst: "29AABCM5566F1Z7",
-    fullAddress: "8th Cross, Malleshwaram, Bengaluru 560004"
-  },
-
-  // KARNATAKA - MYSURU DISTRICT - MYSURU CITY - 570001
-  {
-    id: "REG-7721",
-    name: "Mysuru Heritage Spices",
-    ownerName: "Pradeep Gowda",
-    phone: "9543210987",
-    email: "mysuru.spices@example.com",
-    state: "Karnataka",
-    division: "Mysuru City",
-    district: "Mysuru District",
-    pincode: "570001",
-    role: "Merchant Partner",
-    kycStatus: "pending",
-    status: "active",
-    assignedAgent: "Deepak Gowda (Pincode Agent)",
-    createdAt: TODAY_DATE,
-    updatedAt: TODAY_DATE,
-    storeType: "Supermarket & Retail",
-    businessGst: "29AABCM9876F1Z4",
-    fullAddress: "Devaraja Market, Mysuru 570001"
-  }
-];
+}
 
 export const VendorsList: React.FC = () => {
   const { user, addNotification } = useAuth();
 
-  // Initialize vendors from localStorage + MOCK_VENDORS
+  // Initialize vendors from localStorage or API
   const [vendors, setVendors] = useState<Vendor[]>(() => {
     try {
       const saved = localStorage.getItem('connect_portal_custom_vendors');
       if (saved) {
-        const parsed = JSON.parse(saved);
-        return [...parsed, ...MOCK_VENDORS];
+        return JSON.parse(saved);
       }
     } catch (e) {
       console.error('Error loading custom vendors:', e);
     }
-    return MOCK_VENDORS;
+    return [];
   });
 
   // Fetch live backend vendors from API /api/vendors

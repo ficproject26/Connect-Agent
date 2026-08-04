@@ -23,7 +23,7 @@ export const Login: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const { register: formRegister, handleSubmit, formState: { errors }, setValue } = useForm<LoginFields>({
+  const { register: formRegister, handleSubmit, formState: { errors } } = useForm<LoginFields>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '' }
   });
@@ -183,29 +183,6 @@ export const Login: React.FC = () => {
             </button>
           </div>
 
-          {/* Sandbox Demo Accounts */}
-          <div className="space-y-3">
-            <p className="text-[9px] font-black text-[#847468] uppercase tracking-widest text-center">
-              Sandbox Demo Accounts
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { label: 'State Agent', email: 'state@forge.in' },
-                { label: 'Division Agent', email: 'division@forge.in' },
-                { label: 'District Agent', email: 'district@forge.in' },
-                { label: 'Pincode Agent', email: 'pincode@forge.in' },
-              ].map((acc) => (
-                <button
-                  key={acc.label}
-                  type="button"
-                  onClick={() => { setValue('email', acc.email); setValue('password', 'password123'); }}
-                  className="px-3 py-2.5 bg-white border border-[#d7c3b5]/70 text-[#52443a] rounded-xl text-[10px] font-bold hover:bg-[#ffdcc2] hover:border-[#864f19] hover:text-[#864f19] transition-all cursor-pointer"
-                >
-                  {acc.label}
-                </button>
-              ))}
-            </div>
-          </div>
 
         </div>
       </div>
