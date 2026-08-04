@@ -14,7 +14,7 @@ const getAgentBackendUrl = () => {
   ) {
     return `http://${hostname || 'localhost'}:8001/api`;
   }
-  return 'https://connect-admin-backend.onrender.com/api';
+  return 'https://connect-agent-oy0d.onrender.com/api';
 };
 
 const api = axios.create({

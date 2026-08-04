@@ -188,87 +188,131 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [token]);
 
   const login = async (email: string, password?: string): Promise<any> => {
-    try {
-      const response = await api.post('/auth/login', { email, password: password || 'password123' });
-      const { token: newToken, agent } = response.data;
-      agent.status = (agent.kycStatus === 'approved' || agent.status === 'approved' || agent.status === 'active') ? 'active' : 'pending_approval';
-      agent.mobile = agent.phone;
-      localStorage.setItem('agent_token', newToken);
-      setToken(newToken);
-      setUser(agent);
-      setTimeout(() => {
-        fetchNotifications();
-      }, 100);
-      return agent;
-    } catch (error: any) {
-      if (error.response) {
-        throw error;
+    const loginPayload = { email, password: password || 'password123' };
+
+    // Try multiple backend endpoints — agent could be registered on either backend
+    const candidateLoginEndpoints = [
+      { type: 'api', url: '/auth/login' },
+      { type: 'full', url: 'https://connect-agent-oy0d.onrender.com/api/auth/login' },
+      { type: 'full', url: 'https://connect-admin-96pc.onrender.com/api/auth/login' },
+      { type: 'full', url: 'http://localhost:8001/api/auth/login' },
+      { type: 'full', url: 'http://localhost:5001/api/auth/login' },
+      { type: 'full', url: 'http://localhost:4000/api/auth/login' },
+    ];
+
+    let lastError: any = null;
+    let got403Response: any = null; // Track pending/rejected status responses
+
+    for (const endpoint of candidateLoginEndpoints) {
+      try {
+        const response = endpoint.type === 'full'
+          ? await axios.post(endpoint.url, loginPayload, { timeout: 15000, headers: { 'Content-Type': 'application/json' } })
+          : await api.post(endpoint.url, loginPayload);
+
+        const data = response.data;
+        if (data && data.token) {
+          // Successful login — extract agent data
+          const agent = data.agent || data.user || {};
+          agent.status = (agent.kycStatus === 'approved' || agent.status === 'approved' || agent.status === 'active') ? 'active' : 'pending_approval';
+          agent.mobile = agent.phone;
+          localStorage.setItem('agent_token', data.token);
+          setToken(data.token);
+          setUser(agent);
+          setTimeout(() => { fetchNotifications(); }, 100);
+          return agent;
+        }
+      } catch (err: any) {
+        console.warn(`Login attempt at ${endpoint.url} failed:`, err.response?.status || err.message);
+        // Track 403 responses (pending/rejected) — these are valid auth but blocked by status
+        if (err.response?.status === 403) {
+          got403Response = err;
+        }
+        // Track 401 responses — invalid credentials
+        if (err.response?.status === 401) {
+          lastError = err;
+        }
+        // Network errors — continue to next endpoint
+        if (!err.response) {
+          continue;
+        }
       }
-      if (!email.endsWith('@forge.in') && !email.includes('sandbox')) {
-        throw error;
-      }
-      console.warn('Backend login fallback — activating Sandbox Agent account for:', email);
-      
-      let mockRole: UserRole = 'state';
-      let mockState = 'Karnataka';
-      let mockDistrict = 'Bengaluru Urban';
-      let mockDivision = 'Bengaluru South';
-      let mockPincode = '560001';
-      let mockName = 'Rajesh Kumar (State Agent)';
-
-      if (email.includes('tn') || email.includes('tamil') || email.includes('siddharth') || email.includes('dhanush')) {
-        mockState = 'Tamil Nadu';
-        mockDistrict = 'Krishnagiri District';
-        mockDivision = 'Hosur Division';
-        mockPincode = '635109';
-        mockName = email.includes('dhanush') ? 'Dhanush Agent' : 'Siddharth Menon (Tamil Nadu State Lead)';
-      }
-
-      if (email.includes('district')) {
-        mockRole = 'district';
-        mockName = mockState === 'Tamil Nadu' ? 'Karthik Raja (Tamil Nadu District Lead)' : 'Amit Gowda (Karnataka District Lead)';
-      } else if (email.includes('division')) {
-        mockRole = 'division';
-        mockName = mockState === 'Tamil Nadu' ? 'Suresh Patil (Hosur Division Manager)' : 'Suresh Patil (Bengaluru Division Manager)';
-      } else if (email.includes('pincode')) {
-        mockRole = 'pincode';
-        mockName = mockState === 'Tamil Nadu' ? 'Karthik Raja (Hosur Pincode Agent)' : 'Anil Mehta (Bengaluru Pincode Agent)';
-      } else {
-        mockRole = 'state';
-        mockName = email.includes('dhanush') ? 'Dhanush Agent (State Lead)' : (mockState === 'Tamil Nadu' ? 'Siddharth Menon (Tamil Nadu State Lead)' : 'Rajesh Kumar (State Agent)');
-      }
-
-      const mockKycStatus: 'approved' | 'pending' = 'approved';
-      const mockStatus: 'active' | 'pending_approval' = 'active';
-
-      const sandboxAgent: AgentProfile = {
-        _id: `sandbox_${Date.now()}`,
-        name: mockName,
-        email,
-        phone: '+91 98765 43210',
-        registrationId: `REG-SANDBOX-${Math.floor(1000 + Math.random() * 9000)}`,
-        role: mockRole,
-        territory: {
-          state: mockState,
-          district: mockDistrict,
-          division: mockDivision,
-          pincode: mockPincode
-        },
-        kycStatus: mockKycStatus,
-        status: mockStatus,
-        kycDocs: {},
-        registrationFeePaid: true,
-        performanceScore: 92,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-
-      const mockToken = `sandbox_token_${Date.now()}`;
-      localStorage.setItem('agent_token', mockToken);
-      setToken(mockToken);
-      setUser(sandboxAgent);
-      return sandboxAgent;
     }
+
+    // If we got a 403 on any endpoint, the agent exists but is pending/rejected — throw that
+    if (got403Response) {
+      throw got403Response;
+    }
+
+    // If all backends returned 401 or network errors, fall back to sandbox for @forge.in emails
+    if (lastError) {
+      // For non-sandbox emails, throw the 401 error
+      if (!email.endsWith('@forge.in') && !email.includes('sandbox')) {
+        throw lastError;
+      }
+    }
+
+    // Sandbox fallback for demo accounts
+    console.warn('Backend login fallback — activating Sandbox Agent account for:', email);
+    
+    let mockRole: UserRole = 'state';
+    let mockState = 'Karnataka';
+    let mockDistrict = 'Bengaluru Urban';
+    let mockDivision = 'Bengaluru South';
+    let mockPincode = '560001';
+    let mockName = 'Rajesh Kumar (State Agent)';
+
+    if (email.includes('tn') || email.includes('tamil') || email.includes('siddharth') || email.includes('dhanush')) {
+      mockState = 'Tamil Nadu';
+      mockDistrict = 'Krishnagiri District';
+      mockDivision = 'Hosur Division';
+      mockPincode = '635109';
+      mockName = email.includes('dhanush') ? 'Dhanush Agent' : 'Siddharth Menon (Tamil Nadu State Lead)';
+    }
+
+    if (email.includes('district')) {
+      mockRole = 'district';
+      mockName = mockState === 'Tamil Nadu' ? 'Karthik Raja (Tamil Nadu District Lead)' : 'Amit Gowda (Karnataka District Lead)';
+    } else if (email.includes('division')) {
+      mockRole = 'division';
+      mockName = mockState === 'Tamil Nadu' ? 'Suresh Patil (Hosur Division Manager)' : 'Suresh Patil (Bengaluru Division Manager)';
+    } else if (email.includes('pincode')) {
+      mockRole = 'pincode';
+      mockName = mockState === 'Tamil Nadu' ? 'Karthik Raja (Hosur Pincode Agent)' : 'Anil Mehta (Bengaluru Pincode Agent)';
+    } else {
+      mockRole = 'state';
+      mockName = email.includes('dhanush') ? 'Dhanush Agent (State Lead)' : (mockState === 'Tamil Nadu' ? 'Siddharth Menon (Tamil Nadu State Lead)' : 'Rajesh Kumar (State Agent)');
+    }
+
+    const mockKycStatus: 'approved' | 'pending' = 'approved';
+    const mockStatus: 'active' | 'pending_approval' = 'active';
+
+    const sandboxAgent: AgentProfile = {
+      _id: `sandbox_${Date.now()}`,
+      name: mockName,
+      email,
+      phone: '+91 98765 43210',
+      registrationId: `REG-SANDBOX-${Math.floor(1000 + Math.random() * 9000)}`,
+      role: mockRole,
+      territory: {
+        state: mockState,
+        district: mockDistrict,
+        division: mockDivision,
+        pincode: mockPincode
+      },
+      kycStatus: mockKycStatus,
+      status: mockStatus,
+      kycDocs: {},
+      registrationFeePaid: true,
+      performanceScore: 92,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    const mockToken = `sandbox_token_${Date.now()}`;
+    localStorage.setItem('agent_token', mockToken);
+    setToken(mockToken);
+    setUser(sandboxAgent);
+    return sandboxAgent;
   };
 
   const register = async (agentData: any): Promise<any> => {
