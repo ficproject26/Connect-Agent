@@ -190,64 +190,61 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password?: string): Promise<any> => {
     const loginPayload = { email, password: password || 'password123' };
 
-    // Try multiple backend endpoints — agent could be registered on either backend
-    const candidateLoginEndpoints = [
-      { type: 'api', url: '/auth/login' },
-      { type: 'full', url: 'https://connect-agent-oy0d.onrender.com/api/auth/login' },
-      { type: 'full', url: 'https://connect-admin-96pc.onrender.com/api/auth/login' },
-      { type: 'full', url: 'http://localhost:8001/api/auth/login' },
-      { type: 'full', url: 'http://localhost:5001/api/auth/login' },
-      { type: 'full', url: 'http://localhost:4000/api/auth/login' },
+    // Fire all backend login requests IN PARALLEL — fastest success wins
+    const makeRequest = (url: string, useApi: boolean) =>
+      useApi
+        ? api.post(url, loginPayload)
+        : axios.post(url, loginPayload, { timeout: 6000, headers: { 'Content-Type': 'application/json' } });
+
+    const endpoints = [
+      { url: '/auth/login', useApi: true },
+      { url: 'https://connect-agent-oy0d.onrender.com/api/auth/login', useApi: false },
+      { url: 'https://connect-admin-96pc.onrender.com/api/auth/login', useApi: false },
     ];
 
-    let lastError: any = null;
-    let got403Response: any = null; // Track pending/rejected status responses
+    // In dev, also try local ports
+    if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+      endpoints.push(
+        { url: 'http://localhost:8001/api/auth/login', useApi: false },
+        { url: 'http://localhost:5001/api/auth/login', useApi: false },
+        { url: 'http://localhost:4000/api/auth/login', useApi: false },
+      );
+    }
 
-    for (const endpoint of candidateLoginEndpoints) {
-      try {
-        const response = endpoint.type === 'full'
-          ? await axios.post(endpoint.url, loginPayload, { timeout: 15000, headers: { 'Content-Type': 'application/json' } })
-          : await api.post(endpoint.url, loginPayload);
+    const results = await Promise.allSettled(
+      endpoints.map(ep => makeRequest(ep.url, ep.useApi))
+    );
 
-        const data = response.data;
-        if (data && data.token) {
-          // Successful login — extract agent data
-          const agent = data.agent || data.user || {};
-          agent.status = (agent.kycStatus === 'approved' || agent.status === 'approved' || agent.status === 'active') ? 'active' : 'pending_approval';
-          agent.mobile = agent.phone;
-          localStorage.setItem('agent_token', data.token);
-          setToken(data.token);
-          setUser(agent);
-          setTimeout(() => { fetchNotifications(); }, 100);
-          return agent;
-        }
-      } catch (err: any) {
-        console.warn(`Login attempt at ${endpoint.url} failed:`, err.response?.status || err.message);
-        // Track 403 responses (pending/rejected) — these are valid auth but blocked by status
-        if (err.response?.status === 403) {
-          got403Response = err;
-        }
-        // Track 401 responses — invalid credentials
-        if (err.response?.status === 401) {
-          lastError = err;
-        }
-        // Network errors — continue to next endpoint
-        if (!err.response) {
-          continue;
-        }
+    // Check results: find first success with token
+    let got403: any = null;
+    let got401: any = null;
+
+    for (const result of results) {
+      if (result.status === 'fulfilled' && result.value?.data?.token) {
+        const data = result.value.data;
+        const agent = data.agent || data.user || {};
+        agent.status = (agent.kycStatus === 'approved' || agent.status === 'approved' || agent.status === 'active') ? 'active' : 'pending_approval';
+        agent.mobile = agent.phone;
+        localStorage.setItem('agent_token', data.token);
+        setToken(data.token);
+        setUser(agent);
+        setTimeout(() => { fetchNotifications(); }, 100);
+        return agent;
+      }
+      if (result.status === 'rejected') {
+        const err = result.reason;
+        if (err?.response?.status === 403 && !got403) got403 = err;
+        if (err?.response?.status === 401 && !got401) got401 = err;
       }
     }
 
-    // If we got a 403 on any endpoint, the agent exists but is pending/rejected — throw that
-    if (got403Response) {
-      throw got403Response;
-    }
+    // Agent exists but pending/rejected
+    if (got403) throw got403;
 
-    // If all backends returned 401 or network errors, fall back to sandbox for @forge.in emails
-    if (lastError) {
-      // For non-sandbox emails, throw the 401 error
+    // Invalid credentials on all backends
+    if (got401) {
       if (!email.endsWith('@forge.in') && !email.includes('sandbox')) {
-        throw lastError;
+        throw got401;
       }
     }
 
@@ -316,50 +313,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const register = async (agentData: any): Promise<any> => {
-    // List of candidate API endpoints to try in order
-    const candidateEndpoints = [
-      '/auth/register',
-      '/register',
-      'http://localhost:5001/api/auth/register',
-      'http://localhost:8001/api/auth/register',
-      'http://localhost:4000/api/auth/register',
-      'https://connect-admin-96pc.onrender.com/api/auth/register',
-      'https://connect-agent-oy0d.onrender.com/api/auth/register'
+    // Fire all registration requests IN PARALLEL — fastest success wins
+    const makeRegRequest = (url: string, useApi: boolean) =>
+      useApi
+        ? api.post(url, agentData)
+        : axios.post(url, agentData, { timeout: 30000, headers: { 'Content-Type': 'application/json' } });
+
+    const regEndpoints = [
+      { url: '/auth/register', useApi: true },
+      { url: 'https://connect-agent-oy0d.onrender.com/api/auth/register', useApi: false },
+      { url: 'https://connect-admin-96pc.onrender.com/api/auth/register', useApi: false },
     ];
 
-    for (const endpoint of candidateEndpoints) {
-      try {
-        const isFullUrl = endpoint.startsWith('http');
-        const response = isFullUrl
-          ? await axios.post(endpoint, agentData, { timeout: 15000, headers: { 'Content-Type': 'application/json' } })
-          : await api.post(endpoint, agentData);
+    // In dev, also try local ports
+    if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+      regEndpoints.push(
+        { url: 'http://localhost:8001/api/auth/register', useApi: false },
+        { url: 'http://localhost:5001/api/auth/register', useApi: false },
+        { url: 'http://localhost:4000/api/auth/register', useApi: false },
+      );
+    }
 
-        const data = response.data;
-        if (data) {
-          const regId = data.registrationId || data.agent?.registrationId || `REG-${Date.now().toString().slice(-6)}`;
-          const resultData = {
-            ...data,
-            registrationId: regId,
-            role: data.role || agentData.role || 'state',
-            status: data.status || 'pending_approval'
-          };
-          if (data.token) {
-            const { token: newToken, agent } = data;
-            agent.status = agent.kycStatus === 'approved' ? 'active' : 'pending_approval';
-            agent.mobile = agent.phone;
-            localStorage.setItem('agent_token', newToken);
-            setToken(newToken);
-            setUser(agent);
-          }
-          return resultData;
+    const regResults = await Promise.allSettled(
+      regEndpoints.map(ep => makeRegRequest(ep.url, ep.useApi))
+    );
+
+    // Find first successful response
+    for (const result of regResults) {
+      if (result.status === 'fulfilled' && result.value?.data) {
+        const data = result.value.data;
+        const regId = data.registrationId || data.agent?.registrationId || `REG-${Date.now().toString().slice(-6)}`;
+        const resultData = {
+          ...data,
+          registrationId: regId,
+          role: data.role || agentData.role || 'state',
+          status: data.status || 'pending_approval'
+        };
+        if (data.token) {
+          const { token: newToken, agent } = data;
+          agent.status = agent.kycStatus === 'approved' ? 'active' : 'pending_approval';
+          agent.mobile = agent.phone;
+          localStorage.setItem('agent_token', newToken);
+          setToken(newToken);
+          setUser(agent);
         }
-      } catch (err: any) {
-        console.warn(`Registration attempt at ${endpoint} failed:`, err.response?.status || err.message);
+        return resultData;
       }
     }
 
-    // If network/404 error occurs on all remote endpoints, generate fallback registration entry locally
-    console.warn('Backend unavailable or 404 on all endpoints. Registering agent with persistent registration ID...');
+    // If all remote endpoints failed, generate fallback registration entry locally
+    console.warn('Backend unavailable on all endpoints. Registering agent locally...');
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const randDigits = Math.floor(1000 + Math.random() * 9000);
     const registrationId = `REG-${dateStr}-${randDigits}`;
