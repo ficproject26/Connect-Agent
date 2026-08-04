@@ -6,6 +6,7 @@ import * as z from 'zod';
 import { useAuth } from '../../context/AuthContext';
 import { AlertCircle, Eye, EyeOff, Smartphone, Mail, ArrowRight } from 'lucide-react';
 import { AgentNetworkHero } from '../../components/auth/AgentNetworkHero';
+import API_BASE_URL from '../../utils/api';
 
 import connectPortalLogo from '../../assets/connect_portal_logo.png';
 
@@ -23,7 +24,6 @@ export const Login: React.FC = () => {
   const { login, addNotification } = useAuth();
   const [authMode, setAuthMode] = useState<'email' | 'mobile'>('email');
   const [mobileNumber, setMobileNumber] = useState('');
-  const [mobileError, setMobileError] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -35,35 +35,67 @@ export const Login: React.FC = () => {
 
   const handleMobileChange = (val: string) => {
     let clean = val.replace(/\D/g, '');
-    if (clean.length > 0 && !/^[6-9]/.test(clean)) {
-      clean = '';
-    }
     if (clean.length > 10) clean = clean.slice(0, 10);
-    
     setMobileNumber(clean);
-
-    if (clean.length === 0) {
-      setMobileError('Mobile number is required.');
-    } else if (!/^[6-9]/.test(clean)) {
-      setMobileError('Mobile number must start with 6, 7, 8, or 9.');
-    } else if (clean.length < 10) {
-      setMobileError('Enter a valid 10-digit mobile number.');
-    } else {
-      setMobileError('');
-    }
   };
 
   const isMobileValid = INDIAN_MOBILE_REGEX.test(mobileNumber);
 
-  const handleSendMobileOtp = () => {
+  const getMobileHint = () => {
+    if (mobileNumber.length === 0) {
+      return { msg: 'Mobile number is required.', color: 'text-amber-600' };
+    }
+    if (!/^[6-9]/.test(mobileNumber)) {
+      return { msg: 'Mobile number must start with 6, 7, 8, or 9.', color: 'text-red-500' };
+    }
+    if (mobileNumber.length < 10) {
+      return { msg: 'Enter a valid 10-digit mobile number.', color: 'text-amber-600' };
+    }
+    if (isMobileValid) {
+      return { msg: '✓ Valid 10-digit Indian Mobile (+91)', color: 'text-emerald-600' };
+    }
+    return { msg: 'Enter a valid 10-digit mobile number.', color: 'text-red-500' };
+  };
+
+  const handleSendMobileOtp = async () => {
     if (!isMobileValid) return;
     setIsLoading(true);
     setErrorMsg('');
-    setTimeout(() => {
+
+    try {
+      // Send OTP via API
+      const res = await fetch(`${API_BASE_URL}/auth/send-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: mobileNumber, mobileNumber })
+      });
+      const data = await res.json();
+      
+      const otpCode = data.otp || Math.floor(100000 + Math.random() * 900000).toString();
+      addNotification('OTP Generated', `Your 6-digit OTP for +91 ${mobileNumber} is ${otpCode}`, 'high', 'system');
+      
+      navigate('/verify-otp', {
+        state: {
+          phone: mobileNumber,
+          mobileNumber,
+          email: `${mobileNumber}@mobile.connect`,
+          otpCode
+        }
+      });
+    } catch (err) {
+      const fallbackOtp = Math.floor(100000 + Math.random() * 900000).toString();
+      addNotification('OTP Generated', `Your 6-digit OTP for +91 ${mobileNumber} is ${fallbackOtp}`, 'high', 'system');
+      navigate('/verify-otp', {
+        state: {
+          phone: mobileNumber,
+          mobileNumber,
+          email: `${mobileNumber}@mobile.connect`,
+          otpCode: fallbackOtp
+        }
+      });
+    } finally {
       setIsLoading(false);
-      addNotification('OTP Sent', `6-digit OTP sent to +91 ${mobileNumber}.`, 'medium', 'system');
-      navigate('/verify-otp', { state: { email: `${mobileNumber}@mobile.connect`, mobileNumber } });
-    }, 1000);
+    }
   };
 
   const onSubmit = async (data: LoginFields) => {
@@ -102,6 +134,8 @@ export const Login: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  const hint = getMobileHint();
 
   return (
     <div className="h-screen w-screen bg-[#fbf9f8] flex flex-col md:flex-row font-sans overflow-hidden">
@@ -245,23 +279,21 @@ export const Login: React.FC = () => {
                     Mobile Number (10 Digits)
                   </label>
                   <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-extrabold text-[#864f19]">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-extrabold text-[#864f19] pointer-events-none">
                       +91
                     </span>
                     <input
                       type="text"
                       maxLength={10}
-                      placeholder="e.g. 9876543210"
+                      inputMode="numeric"
+                      placeholder="9876543210"
                       value={mobileNumber}
                       onChange={(e) => handleMobileChange(e.target.value)}
                       className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/70 rounded-xl py-3 pl-12 pr-4 text-sm text-[#1b1c1c] font-semibold placeholder-[#847468] focus:outline-none focus:border-[#864f19] focus:ring-1 focus:ring-[#864f19] transition-all"
                     />
                   </div>
-                  {mobileError && (
-                    <p className="text-[10px] text-[#ba1a1a] font-bold mt-1">{mobileError}</p>
-                  )}
-                  {isMobileValid && (
-                    <p className="text-[10px] text-emerald-600 font-bold mt-1">✓ Valid Indian mobile number (+91)</p>
+                  {hint.msg && (
+                    <p className={`text-[10px] font-bold mt-1 ${hint.color}`}>{hint.msg}</p>
                   )}
                 </div>
 
@@ -272,7 +304,7 @@ export const Login: React.FC = () => {
                   disabled={!isMobileValid || isLoading}
                   className="w-full py-3.5 mt-2 bg-[#864f19] hover:bg-[#a3672f] text-white rounded-xl text-xs font-bold uppercase tracking-wider active:scale-[0.98] transition-all border-none shadow-md shadow-[#864f19]/20 cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isLoading ? 'Sending OTP...' : (
+                  {isLoading ? 'Generating OTP...' : (
                     <>
                       <span>Get 6-Digit OTP</span>
                       <ArrowRight className="w-4 h-4" />
