@@ -847,6 +847,19 @@ export const RegisterWizard: React.FC = () => {
                     onChange={(e) => setPersonalInfo({ ...personalInfo, dob: e.target.value })}
                   />
 
+                  {/* 3b. Gender Select Dropdown */}
+                  <Select
+                    label="• Gender (Required)"
+                    options={[
+                      { value: 'male', label: 'Male' },
+                      { value: 'female', label: 'Female' },
+                      { value: 'other', label: 'Other' },
+                      { value: 'prefer_not_to_say', label: 'Prefer Not to Say' }
+                    ]}
+                    value={personalInfo.gender || 'male'}
+                    onChange={(e) => setPersonalInfo({ ...personalInfo, gender: e.target.value })}
+                  />
+
                   {/* 4. Aadhaar Number */}
                   <Input
                     label="• Aadhaar Number (12 Digits - Required)"
