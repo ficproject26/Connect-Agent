@@ -24,16 +24,11 @@ interface SubordinateAgent {
   checkIn: string;
 }
 
-const DISTRICT_SUBORDINATES: SubordinateAgent[] = [
-  { id: 'sub_div_1', name: 'Suresh Patil', role: 'division', territory: 'Hosur Division', phone: '9876503344', email: 'suresh.patil@agent.com', assignedTargets: 45, completedTargets: 38, earnings: 24500, totalOnboardedShops: 58, status: 'present', checkIn: '08:55 AM' },
-  { id: 'sub_div_2', name: 'Muthukumar', role: 'division', territory: 'Bargur Division', phone: '9876504455', email: 'muthukumar@agent.com', assignedTargets: 35, completedTargets: 28, earnings: 19200, totalOnboardedShops: 42, status: 'present', checkIn: '09:10 AM' },
-  { id: 'sub_pin_1', name: 'Karthik Raja', role: 'pincode', territory: 'Hosur 635109 Area', phone: '9876505566', email: 'karthik.raja@agent.com', assignedTargets: 15, completedTargets: 12, earnings: 9400, totalOnboardedShops: 19, status: 'present', checkIn: '08:45 AM' },
-  { id: 'sub_pin_2', name: 'Srinivasan M', role: 'pincode', territory: 'Krishnagiri 635001 Area', phone: '9876507788', email: 'srinivasan.m@agent.com', assignedTargets: 15, completedTargets: 10, earnings: 7800, totalOnboardedShops: 14, status: 'on_leave', checkIn: '---' }
-];
+const DISTRICT_SUBORDINATES: SubordinateAgent[] = [];
 
 export const DistrictDashboard: React.FC = () => {
   const { user } = useAuth();
-  const [subordinatesList, setSubordinatesList] = useState<SubordinateAgent[]>(DISTRICT_SUBORDINATES);
+  const [subordinatesList, setSubordinatesList] = useState<SubordinateAgent[]>([]);
   const [targetAssigned, setTargetAssigned] = useState(false);
   const [pincode, setPincode] = useState('');
   const [dailyGoal, setDailyGoal] = useState('');
@@ -50,21 +45,21 @@ export const DistrictDashboard: React.FC = () => {
           const mapped: SubordinateAgent[] = res.data.subordinates.map((s: any) => ({
             id: s._id,
             name: s.name,
-            role: s.role,
-            territory: typeof s.territory === 'object' ? s.territory?.name || 'Assigned Territory' : (s.territory || 'Division Sector'),
+            role: s.role || 'pincode',
+            territory: typeof s.territory === 'object' ? s.territory?.name || s.territory?.state || 'Assigned Territory' : (s.territory || 'Division Sector'),
             phone: s.phone || 'N/A',
             email: s.email || 'N/A',
-            assignedTargets: 30,
-            completedTargets: 22,
-            earnings: 15000,
-            totalOnboardedShops: 25,
-            status: 'present',
-            checkIn: '09:00 AM'
+            assignedTargets: s.assignedTargets || s.targetValue || 0,
+            completedTargets: s.completedTargets || 0,
+            earnings: s.earnings || 0,
+            totalOnboardedShops: s.totalOnboardedShops || 0,
+            status: s.status === 'inactive' ? 'on_leave' : 'present',
+            checkIn: s.checkIn || '09:00 AM'
           }));
           setSubordinatesList(mapped);
         }
       } catch (err) {
-        // Fallback to static mock subordinates on network error
+        console.warn('Subordinates fetch fallback:', err);
       }
     };
     fetchSubordinates();
@@ -83,10 +78,9 @@ export const DistrictDashboard: React.FC = () => {
     if (!dailyGoal || isNaN(targetVal) || targetVal <= 0) return;
 
     setIsAllocating(true);
-    const divisionName = pincode.trim() || 'Hosur Division';
+    const divisionName = pincode.trim() || 'Division Sector';
 
     try {
-      // Find matching subordinate if any
       const matched = subordinatesList.find(
         s => s.territory.toLowerCase().includes(divisionName.toLowerCase()) || s.name.toLowerCase().includes(divisionName.toLowerCase())
       );
@@ -99,14 +93,12 @@ export const DistrictDashboard: React.FC = () => {
         title: `Daily Target: ${targetVal} visits for ${divisionName}`
       });
 
-      // Update local state dynamically so counts reflect immediately
       if (matched) {
         setSubordinatesList(prev => prev.map(sub => 
           sub.id === matched.id ? { ...sub, assignedTargets: sub.assignedTargets + targetVal } : sub
         ));
       }
 
-      // Append new notification alert
       setDistrictAlerts(prev => [
         {
           id: Date.now().toString(),
@@ -122,7 +114,6 @@ export const DistrictDashboard: React.FC = () => {
       setPincode('');
       setDailyGoal('');
     } catch (error) {
-      // Even on API fallback, update UI gracefully
       setTargetAssigned(true);
       setPincode('');
       setDailyGoal('');
@@ -134,6 +125,16 @@ export const DistrictDashboard: React.FC = () => {
     }
   };
 
+  // Dynamic calculations
+  const totalDivisions = subordinatesList.filter(s => s.role === 'division').length;
+  const totalPincodeAgents = subordinatesList.filter(s => s.role === 'pincode').length;
+  const activeSubordinatesCount = subordinatesList.filter(s => s.status === 'present').length;
+  const totalAssignedTargets = subordinatesList.reduce((sum, s) => sum + (s.assignedTargets || 0), 0);
+  const totalCompletedTargets = subordinatesList.reduce((sum, s) => sum + (s.completedTargets || 0), 0);
+  const totalShops = subordinatesList.reduce((sum, s) => sum + (s.totalOnboardedShops || 0), 0);
+  const districtPerformanceScore = totalAssignedTargets > 0
+    ? Math.min(100, Math.round((totalCompletedTargets / totalAssignedTargets) * 100))
+    : 0;
 
   return (
     <div className="space-y-6 animate-fade-in text-[#1b1c1c] font-sans">
@@ -150,10 +151,10 @@ export const DistrictDashboard: React.FC = () => {
         <div className="flex items-center gap-3 shrink-0">
           <div className="text-right">
             <span className="text-[9px] text-[#52443a] font-bold uppercase block">District Performance</span>
-            <span className="text-lg font-black text-[#864f19]">91.2</span>
+            <span className="text-lg font-black text-[#864f19]">{districtPerformanceScore}%</span>
           </div>
           <div className="h-10 w-10 rounded-full border-4 border-[#ffdcc2] border-t-[#864f19] flex items-center justify-center text-xs font-black">
-            91
+            {districtPerformanceScore}
           </div>
         </div>
       </div>
@@ -164,15 +165,15 @@ export const DistrictDashboard: React.FC = () => {
         {/* District Overview card */}
         <div className="bg-white p-6 rounded-[16px] border border-[#eae8e7] shadow-sm flex flex-col justify-between min-h-[120px] md:col-span-2">
           <div>
-            <p className="text-[10px] text-[#52443a] font-bold uppercase tracking-wider mb-1">District Overview (Krishnagiri District)</p>
+            <p className="text-[10px] text-[#52443a] font-bold uppercase tracking-wider mb-1">District Overview ({user?.territory?.district || 'Assigned District'})</p>
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-extrabold text-[#1b1c1c]">4 Active Divisions</span>
-              <span className="text-[#34647b] text-[10px] font-bold">14 Active Division Agents</span>
+              <span className="text-2xl font-extrabold text-[#1b1c1c]">{totalDivisions} Active Divisions</span>
+              <span className="text-[#34647b] text-[10px] font-bold">{totalDivisions} Active Division Agents</span>
             </div>
           </div>
           <div className="mt-3 flex justify-between text-[11px] text-[#52443a] font-bold">
-            <span>Pending Verifications: 18</span>
-            <span className="text-green-600">On Track</span>
+            <span>Pending Verifications: 0</span>
+            <span className="text-green-600">Active</span>
           </div>
         </div>
 
@@ -181,9 +182,9 @@ export const DistrictDashboard: React.FC = () => {
           <div>
             <p className="text-[10px] text-[#52443a] font-bold uppercase tracking-wider mb-2">Today's Target Progress</p>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold text-[#864f19]">145 / 200</span>
+              <span className="text-3xl font-extrabold text-[#864f19]">{totalCompletedTargets} / {totalAssignedTargets}</span>
               <span className="text-green-600 text-[10px] font-bold flex items-center gap-0.5">
-                <TrendingUp className="w-3 h-3" /> +12%
+                <TrendingUp className="w-3 h-3" /> {districtPerformanceScore}%
               </span>
             </div>
           </div>
@@ -194,7 +195,7 @@ export const DistrictDashboard: React.FC = () => {
           <div>
             <p className="text-[10px] text-[#52443a] font-bold uppercase tracking-wider mb-2">Vendors Visited Today</p>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold text-[#34647b]">145</span>
+              <span className="text-3xl font-extrabold text-[#34647b]">{totalCompletedTargets}</span>
               <span className="text-[#52443a] text-[10px] font-bold">Visits completed</span>
             </div>
           </div>
@@ -204,14 +205,14 @@ export const DistrictDashboard: React.FC = () => {
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Total Pincode Agents', val: '14 Agents', icon: <Users className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
-          { label: 'Active Pincode Agents', val: '14 Active', icon: <Users className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
-          { label: 'Assigned Vendors', val: '450 Shops', icon: <Users className="w-4 h-4 text-[#4f4635]" />, bg: 'bg-[#efe1ca]' },
-          { label: 'New Vendors Onboarded', val: '12 Today', icon: <Plus className="w-4 h-4 text-emerald-700" />, bg: 'bg-emerald-50' },
-          { label: 'Pending Verification', val: '18 shops', icon: <Clock className="w-4 h-4 text-[#4f4635]" />, bg: 'bg-[#efe1ca]' },
-          { label: 'Today\'s Targets', val: '200 visits goal', icon: <Target className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
-          { label: 'Pending Targets', val: '55 visits left', icon: <Clock className="w-4 h-4 text-[#4f4635]" />, bg: 'bg-[#efe1ca]' },
-          { label: 'Open Support Tickets', val: '15 Active', icon: <Ticket className="w-4 h-4 text-red-700" />, bg: 'bg-red-50' }
+          { label: 'Total Pincode Agents', val: `${totalPincodeAgents} Agents`, icon: <Users className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
+          { label: 'Active Pincode Agents', val: `${totalPincodeAgents} Active`, icon: <Users className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
+          { label: 'Assigned Vendors', val: `${totalShops} Shops`, icon: <Users className="w-4 h-4 text-[#4f4635]" />, bg: 'bg-[#efe1ca]' },
+          { label: 'New Vendors Onboarded', val: `${totalShops} Total`, icon: <Plus className="w-4 h-4 text-emerald-700" />, bg: 'bg-emerald-50' },
+          { label: 'Pending Verification', val: '0 shops', icon: <Clock className="w-4 h-4 text-[#4f4635]" />, bg: 'bg-[#efe1ca]' },
+          { label: 'Today\'s Targets', val: `${totalAssignedTargets} visits goal`, icon: <Target className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
+          { label: 'Pending Targets', val: `${Math.max(0, totalAssignedTargets - totalCompletedTargets)} visits left`, icon: <Clock className="w-4 h-4 text-[#4f4635]" />, bg: 'bg-[#efe1ca]' },
+          { label: 'Open Support Tickets', val: '0 Active', icon: <Ticket className="w-4 h-4 text-red-700" />, bg: 'bg-red-50' }
         ].map((card, idx) => (
           <div key={idx} className="bg-white p-5 rounded-[16px] border border-[#eae8e7] flex items-center justify-between shadow-sm relative overflow-hidden group">
             <div className="space-y-1">
@@ -273,59 +274,21 @@ export const DistrictDashboard: React.FC = () => {
               </>
             )}
             {activeTab === 'schedule' && (
-              <>
-                <div className="py-2.5 flex justify-between text-xs font-bold text-[#52443a]">
-                  <span>Shop Name</span>
-                  <span>Agent & Status</span>
-                </div>
-                {[
-                  { name: 'Krishnagiri Supermarket', desc: 'Agent Ravi Kumar • Pending documentation' },
-                  { name: 'Hosur Fresh Mart', desc: 'Agent Sarah Connor • Completed verification' },
-                  { name: 'Bargur Bakery Store', desc: 'Agent Ravi Kumar • Scheduled at 4:00 PM' }
-                ].map((item, i) => (
-                  <div key={i} className="py-3 flex justify-between text-xs font-semibold">
-                    <span className="text-[#1b1c1c]">{item.name}</span>
-                    <span className="text-[#52443a] text-right">{item.desc}</span>
-                  </div>
-                ))}
-              </>
+              <div className="py-8 text-center text-xs font-semibold text-[#847468]">
+                No visit schedules recorded for today.
+              </div>
             )}
 
             {activeTab === 'followups' && (
-              <>
-                <div className="py-2.5 flex justify-between text-xs font-bold text-[#52443a]">
-                  <span>Merchant Follow-up</span>
-                  <span>Due Time</span>
-                </div>
-                {[
-                  { name: 'Krishnagiri Supermarket (Verify cheque details)', time: 'Today 5:00 PM' },
-                  { name: 'Denkanikottai Groceries (Aadhaar validation)', time: 'Tomorrow 10:00 AM' }
-                ].map((item, i) => (
-                  <div key={i} className="py-3 flex justify-between text-xs font-semibold">
-                    <span className="text-[#1b1c1c]">{item.name}</span>
-                    <span className="text-[#ba1a1a] font-bold">{item.time}</span>
-                  </div>
-                ))}
-              </>
+              <div className="py-8 text-center text-xs font-semibold text-[#847468]">
+                No pending merchant follow-ups.
+              </div>
             )}
 
             {activeTab === 'visits' && (
-              <>
-                <div className="py-2.5 flex justify-between text-xs font-bold text-[#52443a]">
-                  <span>Visit Category</span>
-                  <span>Total Done Today</span>
-                </div>
-                {[
-                  { cat: 'Onboarding Registrations', count: '8 completed' },
-                  { cat: 'KYC Verification Checks', count: '14 completed' },
-                  { cat: 'Customer Support Visits', count: '4 completed' }
-                ].map((item, i) => (
-                  <div key={i} className="py-3 flex justify-between text-xs font-semibold">
-                    <span className="text-[#1b1c1c]">{item.cat}</span>
-                    <span className="text-[#34647b]">{item.count}</span>
-                  </div>
-                ))}
-              </>
+              <div className="py-8 text-center text-xs font-semibold text-[#847468]">
+                No visits completed today yet.
+              </div>
             )}
           </div>
         </div>
