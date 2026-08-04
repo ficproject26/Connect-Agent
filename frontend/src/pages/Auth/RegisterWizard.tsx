@@ -361,6 +361,16 @@ export const RegisterWizard: React.FC = () => {
     }
   };
 
+  const removeDocument = (docType: string) => {
+    setFormErrors('');
+    setDocuments(prev => ({
+      ...prev,
+      [docType]: { fileName: '', dataUrl: '', size: 0 }
+    }));
+    const inputEl = document.getElementById(`file-${docType}`) as HTMLInputElement;
+    if (inputEl) inputEl.value = '';
+  };
+
   const nextStep = () => {
     setFormErrors('');
 
@@ -1026,9 +1036,19 @@ export const RegisterWizard: React.FC = () => {
                           {documents[doc.key].fileName ? 'Change File' : 'Select File'}
                         </button>
                         {documents[doc.key].fileName && (
-                          <span className="text-[10px] text-emerald-600 font-bold truncate max-w-[150px]">
-                            ✓ {documents[doc.key].fileName}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-emerald-600 font-bold truncate max-w-[130px]" title={documents[doc.key].fileName}>
+                              ✓ {documents[doc.key].fileName}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => removeDocument(doc.key)}
+                              className="text-[10px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-1 rounded-lg border border-rose-200 transition-colors cursor-pointer shrink-0"
+                              title="Remove file"
+                            >
+                              Remove
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
