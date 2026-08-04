@@ -28,6 +28,8 @@ app.use('/api', apiRateLimiter);
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/auth', authRoutes);
+app.use('/api', authRoutes);
 app.use('/api/vendors', vendorRoutes);
 app.use('/api/targets', targetRoutes);
 app.use('/api/tickets', ticketRoutes);
