@@ -218,9 +218,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else if (email.includes('division')) {
         mockRole = 'division';
         mockName = mockState === 'Tamil Nadu' ? 'Suresh Patil (Hosur Division Manager)' : 'Suresh Patil (Bengaluru Division Manager)';
-      } else if (email.includes('pincode') || email.includes('dhanush')) {
+      } else if (email.includes('pincode')) {
         mockRole = 'pincode';
-        mockName = email.includes('dhanush') ? 'Dhanush Agent (Approved Pincode Agent)' : (mockState === 'Tamil Nadu' ? 'Karthik Raja (Hosur Pincode Agent)' : 'Anil Mehta (Bengaluru Pincode Agent)');
+        mockName = mockState === 'Tamil Nadu' ? 'Karthik Raja (Hosur Pincode Agent)' : 'Anil Mehta (Bengaluru Pincode Agent)';
+      } else {
+        mockRole = 'state';
+        mockName = email.includes('dhanush') ? 'Dhanush Agent (State Lead)' : (mockState === 'Tamil Nadu' ? 'Siddharth Menon (Tamil Nadu State Lead)' : 'Rajesh Kumar (State Agent)');
       }
 
       const mockKycStatus: 'approved' | 'pending' = 'approved';

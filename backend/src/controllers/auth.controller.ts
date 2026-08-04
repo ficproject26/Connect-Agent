@@ -81,7 +81,13 @@ export const register = async (req: Request, res: Response) => {
     try {
       const db = mongoose.connection.db;
       if (db) {
-        const assignedAreaStr = validatedData.territory?.state || validatedData.territory?.district || validatedData.territory?.division || validatedData.territory?.pincode || '';
+        const territoryParts = [
+          validatedData.territory?.state,
+          validatedData.territory?.district,
+          validatedData.territory?.division,
+          validatedData.territory?.pincode
+        ].filter(Boolean);
+        const assignedAreaStr = territoryParts.length > 0 ? territoryParts.join(' / ') : '';
         await db.collection('users').updateOne(
           { email: validatedData.email.toLowerCase() },
           {
