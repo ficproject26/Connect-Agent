@@ -396,8 +396,8 @@ export const RegisterWizard: React.FC = () => {
         setFormErrors('Please enter a valid 12-digit Aadhaar Number.');
         return;
       }
-      if (!personalInfo.panNumber || personalInfo.panNumber.length !== 10) {
-        setFormErrors('Please enter a valid 10-character PAN Number.');
+      if (!personalInfo.panNumber || !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(personalInfo.panNumber)) {
+        setFormErrors('Please enter a valid PAN Number in format ABCDE1234F.');
         return;
       }
       if (!address.state) {
@@ -685,22 +685,47 @@ export const RegisterWizard: React.FC = () => {
                     onChange={(e) => setPersonalInfo({ ...personalInfo, email: e.target.value })}
                   />
 
-                  <Input
-                    label="Password (Required)"
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="••••••••"
-                    value={personalInfo.password}
-                    onChange={(e) => setPersonalInfo({ ...personalInfo, password: e.target.value })}
-                    rightIcon={
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="focus:outline-none text-slate-400 hover:text-slate-600 cursor-pointer"
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    }
-                  />
+                  <div>
+                    <Input
+                      label="Password (Required)"
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="••••••••"
+                      value={personalInfo.password}
+                      onChange={(e) => setPersonalInfo({ ...personalInfo, password: e.target.value })}
+                      rightIcon={
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="focus:outline-none text-slate-400 hover:text-slate-600 cursor-pointer"
+                        >
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      }
+                    />
+                    {personalInfo.password && (
+                      <div className="space-y-1 mt-1.5 px-0.5">
+                        <div className="flex gap-1 h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                          <div className={`h-full transition-all ${
+                            personalInfo.password.length >= 6 ? (personalInfo.password.length >= 10 && /[0-9]/.test(personalInfo.password) ? 'bg-emerald-500' : 'bg-amber-500') : 'bg-red-500'
+                          } flex-1`} />
+                          <div className={`h-full transition-all ${
+                            personalInfo.password.length >= 8 && /[0-9]/.test(personalInfo.password) ? 'bg-emerald-500' : (personalInfo.password.length >= 6 ? 'bg-amber-500' : 'bg-slate-200')
+                          } flex-1`} />
+                          <div className={`h-full transition-all ${
+                            personalInfo.password.length >= 10 && /[A-Z]/.test(personalInfo.password) && /[0-9]/.test(personalInfo.password) ? 'bg-emerald-500' : 'bg-slate-200'
+                          } flex-1`} />
+                        </div>
+                        <div className="flex justify-between items-center text-[10px] font-extrabold">
+                          <span className={
+                            personalInfo.password.length < 6 ? 'text-red-500' : personalInfo.password.length < 9 ? 'text-amber-600' : 'text-emerald-600'
+                          }>
+                            Strength: {personalInfo.password.length < 6 ? 'Weak (Min 6 chars)' : personalInfo.password.length < 9 ? 'Medium' : 'Strong'}
+                          </span>
+                          <span className="text-slate-400 font-semibold">{personalInfo.password.length} chars</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
 
                   <Input
                     label="Confirm Password (Required)"
@@ -1038,7 +1063,7 @@ export const RegisterWizard: React.FC = () => {
                       onChange={(e) => setDeclaration({ ...declaration, infoCorrect: e.target.checked })}
                       className="mr-2.5 mt-0.5 rounded text-[#864f19] focus:ring-[#864f19] h-4 w-4 border-slate-300"
                     />
-                    I declare that all the information provided in this registration form is correct and true.
+                    I confirm that all submitted information is correct and true.
                   </label>
 
                   <label className="flex items-start text-xs font-bold text-slate-700 mt-2 cursor-pointer select-none">
@@ -1048,7 +1073,7 @@ export const RegisterWizard: React.FC = () => {
                       onChange={(e) => setDeclaration({ ...declaration, acceptTerms: e.target.checked })}
                       className="mr-2.5 mt-0.5 rounded text-[#864f19] focus:ring-[#864f19] h-4 w-4 border-slate-300"
                     />
-                    I accept the terms & conditions of Forge Connect Agent App.
+                    I agree to the Terms & Conditions and Privacy Policy of Forge India Connect Platform.
                   </label>
 
                   <label className="flex items-start text-xs font-bold text-slate-700 mt-2 cursor-pointer select-none">
