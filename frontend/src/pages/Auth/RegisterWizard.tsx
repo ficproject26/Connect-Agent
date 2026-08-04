@@ -683,6 +683,7 @@ export const RegisterWizard: React.FC = () => {
                     <Input
                       label="Primary Mobile Number (Required)"
                       maxLength={10}
+                      inputMode="numeric"
                       placeholder={`e.g. ${sample.phone}`}
                       value={personalInfo.phone}
                       onChange={(e) => {
@@ -692,11 +693,17 @@ export const RegisterWizard: React.FC = () => {
                         setPersonalInfo({ ...personalInfo, phone: val });
                       }}
                     />
+                    {personalInfo.phone.length === 0 && (
+                      <p className="text-[10px] text-amber-600 font-bold mt-1">Mobile number is required.</p>
+                    )}
                     {personalInfo.phone.length > 0 && personalInfo.phone.length < 10 && (
-                      <p className="text-[10px] text-red-500 font-bold mt-1">Enter a valid 10-digit mobile number starting with 6, 7, 8, or 9.</p>
+                      <p className="text-[10px] text-amber-600 font-bold mt-1">Enter a valid 10-digit mobile number.</p>
                     )}
                     {personalInfo.phone.length === 10 && !/^[6-9][0-9]{9}$/.test(personalInfo.phone) && (
                       <p className="text-[10px] text-red-500 font-bold mt-1">Mobile number must start with 6, 7, 8, or 9.</p>
+                    )}
+                    {personalInfo.phone.length === 10 && /^[6-9][0-9]{9}$/.test(personalInfo.phone) && (
+                      <p className="text-[10px] text-emerald-600 font-bold mt-1">✓ Valid 10-digit Indian Mobile Number</p>
                     )}
                   </div>
 
