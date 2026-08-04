@@ -66,8 +66,25 @@ export const register = async (req: Request, res: Response) => {
     const randDigits = Math.floor(1000 + Math.random() * 9000);
     const registrationId = `REG-${dateStr}-${randDigits}`;
 
+    const agentRole = validatedData.role;
+    const cleanTerritory = {
+      state: validatedData.territory?.state || '',
+      district: agentRole === 'state' ? '' : (validatedData.territory?.district || ''),
+      division: (agentRole === 'state' || agentRole === 'district') ? '' : (validatedData.territory?.division || ''),
+      pincode: agentRole === 'pincode' ? (validatedData.territory?.pincode || '') : ''
+    };
+
+    let territoryParts: string[] = [];
+    if (agentRole === 'state') territoryParts = [cleanTerritory.state].filter(Boolean);
+    else if (agentRole === 'district') territoryParts = [cleanTerritory.state, cleanTerritory.district].filter(Boolean);
+    else if (agentRole === 'division') territoryParts = [cleanTerritory.state, cleanTerritory.district, cleanTerritory.division].filter(Boolean);
+    else territoryParts = [cleanTerritory.state, cleanTerritory.district, cleanTerritory.division, cleanTerritory.pincode].filter(Boolean);
+
+    const assignedAreaStr = territoryParts.join(' / ');
+
     const newAgent = new Agent({
       ...validatedData,
+      territory: cleanTerritory,
       email: validatedData.email.toLowerCase(),
       dob: parsedDob,
       registrationId,
@@ -81,13 +98,6 @@ export const register = async (req: Request, res: Response) => {
     try {
       const db = mongoose.connection.db;
       if (db) {
-        const territoryParts = [
-          validatedData.territory?.state,
-          validatedData.territory?.district,
-          validatedData.territory?.division,
-          validatedData.territory?.pincode
-        ].filter(Boolean);
-        const assignedAreaStr = territoryParts.length > 0 ? territoryParts.join(' / ') : '';
         await db.collection('users').updateOne(
           { email: validatedData.email.toLowerCase() },
           {
@@ -105,7 +115,8 @@ export const register = async (req: Request, res: Response) => {
               kyc: {
                 aadhaarImage: validatedData.kycDocs?.aadhaarCard || '',
                 panImage: validatedData.kycDocs?.panCard || '',
-                selfie: validatedData.kycDocs?.passportPhoto || ''
+                selfie: validatedData.kycDocs?.passportPhoto || '',
+                businessProofImage: validatedData.kycDocs?.signature || ''
               },
               createdAt: new Date()
             }

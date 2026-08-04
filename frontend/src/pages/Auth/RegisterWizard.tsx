@@ -366,9 +366,9 @@ export const RegisterWizard: React.FC = () => {
         previousCompany: professionalInfo.previousCompany,
         territory: {
           state: address.state,
-          division: address.division,
-          district: address.district,
-          pincode: address.pincode
+          district: role === 'state' ? '' : address.district,
+          division: (role === 'state' || role === 'district') ? '' : address.division,
+          pincode: role === 'pincode' ? address.pincode : ''
         },
         kycDocs: {
           aadhaarCard: documents.aadhaarCard.dataUrl,
@@ -536,8 +536,17 @@ export const RegisterWizard: React.FC = () => {
                   ]}
                   value={role}
                   onChange={(e) => {
-                    setRole(e.target.value as any);
+                    const newRole = e.target.value as any;
+                    setRole(newRole);
                     setFormErrors('');
+                    setAddress(prev => ({
+                      state: prev.state,
+                      district: newRole === 'state' ? '' : prev.district,
+                      division: (newRole === 'state' || newRole === 'district') ? '' : prev.division,
+                      pincode: newRole === 'pincode' ? prev.pincode : '',
+                      postOffice: newRole === 'pincode' ? prev.postOffice : '',
+                      fullAddress: prev.fullAddress
+                    }));
                   }}
                 />
 
