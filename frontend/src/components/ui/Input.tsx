@@ -16,7 +16,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         {label && (
           <label
             htmlFor={inputId}
-            className={`block text-xs font-bold text-slate-600 dark:text-slate-400 uppercase mb-1.5 pl-1 ${
+            className={`block text-xs font-bold text-slate-600 uppercase mb-1.5 pl-1 ${
               error ? 'text-red-500' : ''
             }`}
           >
@@ -34,7 +34,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             id={inputId}
             ref={ref}
             placeholder={placeholder === ' ' ? '' : placeholder}
-            className={`block w-full px-4 py-2.5 text-sm rounded-2xl bg-white/80 dark:bg-slate-800/40 border border-slate-200/90 dark:border-slate-700/60 text-slate-900 dark:text-white shadow-[0_12px_30px_-18px_rgba(15,23,42,0.28)] placeholder:text-slate-400 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200 ${
+            className={`block w-full px-4 py-2.5 text-sm rounded-2xl bg-white/80 border border-slate-200/90 text-slate-900 shadow-[0_12px_30px_-18px_rgba(15,23,42,0.28)] placeholder:text-slate-400 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200 ${
               leftIcon ? 'pl-10' : ''
             } ${rightIcon ? 'pr-10' : ''} ${
               error ? 'border-red-400 focus:ring-red-400 focus:border-transparent' : ''

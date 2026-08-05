@@ -1,6 +1,5 @@
 @import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap');
-@custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
   --color-primary: #864f19;
@@ -21,16 +20,25 @@
   --color-background-cardDark: #f6f3f2;
 
   --color-forgeGray-50: #fbf9f8;
+  --color-forgeGray-55: #f8f5f3;
   --color-forgeGray-100: #f6f3f2;
   --color-forgeGray-200: #f0eded;
+  --color-forgeGray-250: #e5e2e0;
   --color-forgeGray-300: #eae8e7;
+  --color-forgeGray-350: #c4bfbb;
   --color-forgeGray-400: #dcd9d9;
   --color-forgeGray-450: #5c5045;
+  --color-forgeGray-455: #6b5f53;
   --color-forgeGray-500: #847468;
+  --color-forgeGray-550: #73655a;
   --color-forgeGray-600: #655b49;
+  --color-forgeGray-650: #574e3e;
   --color-forgeGray-700: #52443a;
+  --color-forgeGray-750: #3d3228;
   --color-forgeGray-800: #303030;
+  --color-forgeGray-850: #252525;
   --color-forgeGray-900: #1b1c1c;
+  --color-forgeGray-950: #111111;
 
   --border-radius-forge: 12px;
 
@@ -88,13 +96,7 @@
     background: rgba(52, 100, 123, 0.1);
   }
 
-  body.dark {
-    @apply bg-background-dark text-forgeGray-100;
-    background-image:
-      radial-gradient(circle at top left, rgba(134, 79, 25, 0.12), transparent 28%),
-      radial-gradient(circle at bottom right, rgba(52, 100, 123, 0.15), transparent 30%);
-    background-attachment: fixed;
-  }
+
 
   ::selection {
     background: rgba(134, 79, 25, 0.25);
@@ -111,13 +113,7 @@
   box-shadow: 0 20px 45px -24px rgba(15, 23, 42, 0.24);
 }
 
-.dark .glass-panel {
-  background: rgba(22, 31, 48, 0.76);
-  -webkit-backdrop-filter: blur(16px);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 20px 45px -24px rgba(0, 0, 0, 0.45);
-}
+
 
 .glass-panel-accent {
   background: rgba(254, 247, 209, 0.88);
@@ -127,13 +123,7 @@
   box-shadow: 0 18px 40px -24px rgba(244, 194, 13, 0.35);
 }
 
-.dark .glass-panel-accent {
-  background: rgba(244, 194, 13, 0.1);
-  -webkit-backdrop-filter: blur(16px);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(244, 194, 13, 0.2);
-  box-shadow: 0 18px 40px -24px rgba(244, 194, 13, 0.25);
-}
+
 
 .app-shell {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.86), rgba(248, 250, 252, 0.68));
@@ -141,9 +131,7 @@
   isolation: isolate;
 }
 
-.dark .app-shell {
-  background: linear-gradient(135deg, rgba(11, 15, 25, 0.96), rgba(22, 31, 48, 0.9));
-}
+
 
 .section-kicker {
   display: inline-flex;
@@ -159,10 +147,7 @@
   text-transform: uppercase;
 }
 
-.dark .section-kicker {
-  color: #fbdc6c;
-  background: rgba(244, 194, 13, 0.16);
-}
+
 
 .surface-card {
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.78));
@@ -170,11 +155,7 @@
   box-shadow: 0 20px 45px -24px rgba(15, 23, 42, 0.2);
 }
 
-.dark .surface-card {
-  background: linear-gradient(145deg, rgba(22, 31, 48, 0.95), rgba(13, 20, 35, 0.92));
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 20px 45px -24px rgba(0, 0, 0, 0.42);
-}
+
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
@@ -191,17 +172,13 @@
   border-radius: 10px;
 }
 
-.dark ::-webkit-scrollbar-thumb {
-  background: #374151;
-}
+
 
 ::-webkit-scrollbar-thumb:hover {
   background: #9CA3AF;
 }
 
-.dark ::-webkit-scrollbar-thumb:hover {
-  background: #4B5563;
-}
+
 
 /* Form floating label custom animations */
 .floating-label-input:focus~label,
@@ -211,10 +188,7 @@
   padding: 0 4px;
 }
 
-.dark .floating-label-input:focus~label,
-.dark .floating-label-input:not(:placeholder-shown)~label {
-  background-color: transparent;
-}
+
 
 /* Material Design ripple or button animations */
 .btn-ripple {

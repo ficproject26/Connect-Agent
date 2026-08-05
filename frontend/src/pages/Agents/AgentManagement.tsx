@@ -635,6 +635,27 @@ export const AgentManagement: React.FC = () => {
                 <option value="rejected">✕ Rejected Applications</option>
               </select>
             </div>
+
+            {/* Search Box */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#847468] pointer-events-none" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search by name, email, ID, territory..."
+                className="bg-[#fbf9f8] border border-[#d7c3b5]/70 text-[#1b1c1c] text-xs font-semibold rounded-xl py-2 pl-8 pr-3 w-64 focus:outline-none focus:ring-1 focus:ring-[#864f19] placeholder:text-[#847468]/60 shadow-2xs transition-all"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#847468] hover:text-[#1b1c1c] transition-colors cursor-pointer"
+                  title="Clear search"
+                >
+                  <XCircle className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Quick Expand / Collapse Workflow Buttons */}

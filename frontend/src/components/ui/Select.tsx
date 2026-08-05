@@ -71,7 +71,7 @@ export const Select: React.FC<SelectProps> = ({
   return (
     <div className={`relative w-full animate-fade-in ${isOpen ? 'z-40' : 'z-10'} ${className}`} ref={dropdownRef}>
       {label && (
-        <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 ml-1 uppercase">
+        <label className="block text-xs font-bold text-slate-600 mb-1.5 ml-1 uppercase">
           {label}
         </label>
       )}
@@ -79,15 +79,15 @@ export const Select: React.FC<SelectProps> = ({
       {/* Trigger Button / Input Display */}
       <div
         onClick={() => !disabled && setIsOpen((prev) => !prev)}
-        className={`relative flex items-center justify-between px-3.5 py-2.5 text-sm rounded-2xl bg-white dark:bg-slate-800 border ${
-          isOpen ? 'border-[#864f19] ring-2 ring-[#864f19]/20' : 'border-slate-200/90 dark:border-slate-700/60'
-        } text-slate-900 dark:text-white shadow-xs cursor-pointer transition-all ${
+        className={`relative flex items-center justify-between px-3.5 py-2.5 text-sm rounded-2xl bg-white border ${
+          isOpen ? 'border-[#864f19] ring-2 ring-[#864f19]/20' : 'border-slate-200/90'
+        } text-slate-900 shadow-xs cursor-pointer transition-all ${
           disabled ? 'opacity-50 cursor-not-allowed bg-slate-100' : 'hover:border-[#864f19]/60'
         }`}
       >
         <div className="flex items-center gap-2 truncate pr-4">
           {leftIcon && <span className="text-slate-400 shrink-0">{leftIcon}</span>}
-          <span className={`truncate font-medium text-xs ${!selectedOption ? 'text-slate-400' : 'text-slate-800 dark:text-slate-100'}`}>
+          <span className={`truncate font-medium text-xs ${!selectedOption ? 'text-slate-400' : 'text-slate-800'}`}>
             {selectedOption ? selectedOption.label : placeholder}
           </span>
         </div>
@@ -96,10 +96,10 @@ export const Select: React.FC<SelectProps> = ({
 
       {/* Dropdown Menu Popup */}
       {isOpen && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-1.5 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <div className="absolute left-0 right-0 top-full z-50 mt-1.5 w-full bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
           {/* Search Box inside Dropdown */}
           {isSearchable && options.length > 5 && (
-            <div className="p-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 flex items-center gap-2">
+            <div className="p-2 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
               <Search className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1" />
               <input
                 ref={searchInputRef}
@@ -107,13 +107,13 @@ export const Select: React.FC<SelectProps> = ({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Type to filter..."
-                className="w-full text-xs bg-transparent border-none focus:outline-none text-slate-800 dark:text-slate-100 placeholder-slate-400 font-medium"
+                className="w-full text-xs bg-transparent border-none focus:outline-none text-slate-800 placeholder-slate-400 font-medium"
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
-                  className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full text-slate-400"
+                  className="p-1 hover:bg-slate-200 rounded-full text-slate-400"
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -137,7 +137,7 @@ export const Select: React.FC<SelectProps> = ({
                     className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-colors ${
                       isSelected
                         ? 'bg-[#ffdcc2]/60 text-[#864f19]'
-                        : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        : 'text-slate-700 hover:bg-slate-100'
                     }`}
                   >
                     <span className="truncate">{opt.label}</span>

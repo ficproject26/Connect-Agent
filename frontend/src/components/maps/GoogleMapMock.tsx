@@ -143,7 +143,7 @@ export const GoogleMapMock: React.FC<GoogleMapMockProps> = ({
   const getTop = (lat: number) => 80 - ((lat - Math.min(pickup.lat, drop.lat) + 0.01) / 0.05) * 60;
 
   return (
-    <div className={`relative w-full overflow-hidden rounded-forge bg-[#F4F5F7] dark:bg-slate-900 border border-forgeGray-200 dark:border-forgeGray-800/80 shadow-sm map-container-${mapId}`}>
+    <div className={`relative w-full overflow-hidden rounded-forge bg-[#F4F5F7] border border-forgeGray-200 shadow-sm map-container-${mapId}`}>
       <style>{`
         .map-container-${mapId} { height: ${height}; }
         .pin-pickup-${mapId} { left: ${getLeft(pickup.lng)}%; top: ${getTop(pickup.lat)}%; transform: translate(-50%, -100%); }
@@ -156,7 +156,7 @@ export const GoogleMapMock: React.FC<GoogleMapMockProps> = ({
       `}</style>
       
       {/* Grid Pattern Background */}
-      <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] dark:bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:16px_16px] opacity-70" />
+      <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)](#334155_1px,transparent_1px)] [background-size:16px_16px] opacity-70" />
 
       {/* Simulated Roads/Lanes */}
       <svg className="absolute inset-0 w-full h-full opacity-40">
@@ -220,10 +220,10 @@ export const GoogleMapMock: React.FC<GoogleMapMockProps> = ({
             transform: 'translate(-50%, -50%)',
           }}
         >
-          <div className={`h-3 w-3 rounded-full border-2 border-white dark:border-slate-800 shadow-sm ${
+          <div className={`h-3 w-3 rounded-full border-2 border-white shadow-sm ${
             progressIndex >= Math.floor(path.length * (0.25 * (idx + 1)))
               ? 'bg-emerald-500'
-              : 'bg-slate-300 dark:bg-slate-600'
+              : 'bg-slate-300'
           }`} />
         </div>
       ))}
@@ -277,27 +277,27 @@ export const GoogleMapMock: React.FC<GoogleMapMockProps> = ({
       {minimal ? (
         <>
           {/* Top Right GPS Status pill */}
-          <div className="absolute top-3.5 right-3.5 bg-white dark:bg-slate-900 border border-forgeGray-200 dark:border-forgeGray-800 px-3 py-1.5 rounded-full shadow-sm flex items-center space-x-1.5 z-10">
+          <div className="absolute top-3.5 right-3.5 bg-white border border-forgeGray-200 px-3 py-1.5 rounded-full shadow-sm flex items-center space-x-1.5 z-10">
             <span className="w-2 h-2 rounded-full bg-emerald-500 block" />
-            <span className="text-[9px] font-black text-forgeGray-750 dark:text-white tracking-wider">GPS ACTIVE</span>
+            <span className="text-[9px] font-black text-forgeGray-750 tracking-wider">GPS ACTIVE</span>
           </div>
 
           {/* Top Left Zoom & Compass stacked control buttons */}
           <div className="absolute top-16 left-3.5 flex flex-col space-y-1.5 z-10">
-            <div className="flex flex-col bg-white dark:bg-slate-900 border border-forgeGray-200 dark:border-forgeGray-800 rounded-lg shadow-sm overflow-hidden">
-              <button title="Zoom In" className="h-7 w-7 flex items-center justify-center text-xs font-bold hover:bg-forgeGray-50 border-b border-forgeGray-100 dark:border-forgeGray-800 text-forgeGray-700 dark:text-white">+</button>
-              <button title="Zoom Out" className="h-7 w-7 flex items-center justify-center text-xs font-bold hover:bg-forgeGray-50 text-forgeGray-700 dark:text-white">-</button>
+            <div className="flex flex-col bg-white border border-forgeGray-200 rounded-lg shadow-sm overflow-hidden">
+              <button title="Zoom In" className="h-7 w-7 flex items-center justify-center text-xs font-bold hover:bg-forgeGray-50 border-b border-forgeGray-100 text-forgeGray-700">+</button>
+              <button title="Zoom Out" className="h-7 w-7 flex items-center justify-center text-xs font-bold hover:bg-forgeGray-50 text-forgeGray-700">-</button>
             </div>
-            <button title="Recenter Compass" className="h-7 w-7 bg-white dark:bg-slate-900 border border-forgeGray-200 dark:border-forgeGray-800 rounded-lg shadow-sm flex items-center justify-center hover:bg-forgeGray-50">
+            <button title="Recenter Compass" className="h-7 w-7 bg-white border border-forgeGray-200 rounded-lg shadow-sm flex items-center justify-center hover:bg-forgeGray-50">
               <Compass className="w-3.5 h-3.5 text-forgeGray-500" />
             </button>
           </div>
 
           {/* Bottom Center Guide strip */}
-          <div className="absolute bottom-3 left-3 right-3 bg-white dark:bg-slate-950 border border-forgeGray-200 dark:border-slate-800 px-4 py-2.5 rounded-xl shadow-md flex items-center space-x-2.5 z-10">
+          <div className="absolute bottom-3 left-3 right-3 bg-white border border-forgeGray-200 px-4 py-2.5 rounded-xl shadow-md flex items-center space-x-2.5 z-10">
             <Navigation className="w-3.5 h-3.5 text-blue-500 fill-blue-500 transform rotate-[45deg]" />
             <div className="flex items-center text-[10px] font-bold">
-              <span className="text-forgeGray-950 dark:text-white font-extrabold">HSR Main Road</span>
+              <span className="text-forgeGray-950 font-extrabold">HSR Main Road</span>
               <span className="text-forgeGray-450 ml-1.5">2.1 km to next turn</span>
             </div>
           </div>
@@ -307,7 +307,7 @@ export const GoogleMapMock: React.FC<GoogleMapMockProps> = ({
           {/* Top Floating Live Stats HUD */}
           <div className="absolute top-3 left-3 right-3 flex items-start justify-between pointer-events-none gap-2 z-20">
             {/* Left: Live Stats Cluster */}
-            <div className="pointer-events-auto bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-white/50 dark:border-slate-700/50 rounded-2xl p-3 shadow-xl">
+            <div className="pointer-events-auto bg-white/90 backdrop-blur-md border border-white/50 rounded-2xl p-3 shadow-xl">
               <div className="flex items-center space-x-4">
                 {/* ETA */}
                 <div className="flex items-center space-x-1.5">
@@ -316,13 +316,13 @@ export const GoogleMapMock: React.FC<GoogleMapMockProps> = ({
                   </div>
                   <div>
                     <p className="text-[8px] text-forgeGray-450 uppercase tracking-wider font-bold">ETA</p>
-                    <p className="text-sm font-black text-forgeGray-900 dark:text-white leading-none">
+                    <p className="text-sm font-black text-forgeGray-900 leading-none">
                       {etaRemaining}<span className="text-[9px] font-bold text-forgeGray-400 ml-0.5">min</span>
                     </p>
                   </div>
                 </div>
 
-                <div className="w-px h-8 bg-forgeGray-200/60 dark:bg-slate-700/60" />
+                <div className="w-px h-8 bg-forgeGray-200/60" />
 
                 {/* Distance */}
                 <div className="flex items-center space-x-1.5">
@@ -331,13 +331,13 @@ export const GoogleMapMock: React.FC<GoogleMapMockProps> = ({
                   </div>
                   <div>
                     <p className="text-[8px] text-forgeGray-450 uppercase tracking-wider font-bold">LEFT</p>
-                    <p className="text-sm font-black text-forgeGray-900 dark:text-white leading-none">
+                    <p className="text-sm font-black text-forgeGray-900 leading-none">
                       {distRemaining}<span className="text-[9px] font-bold text-forgeGray-400 ml-0.5">km</span>
                     </p>
                   </div>
                 </div>
 
-                <div className="w-px h-8 bg-forgeGray-200/60 dark:bg-slate-700/60" />
+                <div className="w-px h-8 bg-forgeGray-200/60" />
 
                 {/* Speed */}
                 <div className="flex items-center space-x-1.5">
@@ -346,7 +346,7 @@ export const GoogleMapMock: React.FC<GoogleMapMockProps> = ({
                   </div>
                   <div>
                     <p className="text-[8px] text-forgeGray-450 uppercase tracking-wider font-bold">SPEED</p>
-                    <p className="text-sm font-black text-forgeGray-900 dark:text-white leading-none">
+                    <p className="text-sm font-black text-forgeGray-900 leading-none">
                       {speed}<span className="text-[9px] font-bold text-forgeGray-400 ml-0.5">km/h</span>
                     </p>
                   </div>
@@ -355,8 +355,8 @@ export const GoogleMapMock: React.FC<GoogleMapMockProps> = ({
             </div>
 
             {/* Right: Map Utility Controls */}
-            <div className="pointer-events-auto flex flex-col space-y-1 bg-white/90 dark:bg-slate-800/90 backdrop-blur-md rounded-xl p-1 shadow-md border border-white/40 dark:border-slate-700/40">
-              <button title="Recenter Map" aria-label="Recenter map" className="p-1.5 hover:bg-forgeGray-100 dark:hover:bg-slate-700 text-forgeGray-700 dark:text-forgeGray-350 rounded-lg">
+            <div className="pointer-events-auto flex flex-col space-y-1 bg-white/90 backdrop-blur-md rounded-xl p-1 shadow-md border border-white/40">
+              <button title="Recenter Map" aria-label="Recenter map" className="p-1.5 hover:bg-forgeGray-100 text-forgeGray-700 rounded-lg">
                 <Compass className="w-4 h-4" />
               </button>
             </div>
@@ -369,10 +369,10 @@ export const GoogleMapMock: React.FC<GoogleMapMockProps> = ({
           </div>
 
           {/* Bottom Floating Playback Controls Overlay */}
-          <div className="absolute bottom-3 left-3 right-3 bg-white/90 dark:bg-slate-800/90 backdrop-blur-md rounded-2xl p-3 border border-white/40 dark:border-slate-700/40 shadow-xl z-20">
+          <div className="absolute bottom-3 left-3 right-3 bg-white/90 backdrop-blur-md rounded-2xl p-3 border border-white/40 shadow-xl z-20">
             {/* Progress bar */}
             <div className="mb-2.5">
-              <div className="h-1.5 bg-forgeGray-200/60 dark:bg-slate-700/60 rounded-full overflow-hidden">
+              <div className="h-1.5 bg-forgeGray-200/60 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-gradient-to-r from-emerald-500 via-blue-500 to-indigo-500 rounded-full transition-all duration-300"
                   style={{ width: `${progressPercent}%` }}
@@ -398,21 +398,21 @@ export const GoogleMapMock: React.FC<GoogleMapMockProps> = ({
                   onClick={resetPlayback}
                   title="Reset playback"
                   aria-label="Reset route playback"
-                  className="p-2 border border-forgeGray-200/60 dark:border-slate-700/60 hover:bg-forgeGray-100 dark:hover:bg-slate-700 text-forgeGray-600 dark:text-forgeGray-350 rounded-xl transition-colors"
+                  className="p-2 border border-forgeGray-200/60 hover:bg-forgeGray-100 text-forgeGray-600 rounded-xl transition-colors"
                 >
                   <RotateCcw className="w-4 h-4" />
                 </button>
 
                 {/* Speed Selector */}
-                <div className="flex items-center space-x-0.5 bg-forgeGray-100/60 dark:bg-slate-700/40 rounded-xl p-0.5">
+                <div className="flex items-center space-x-0.5 bg-forgeGray-100/60 rounded-xl p-0.5">
                   {[1, 2, 5].map((multiplier) => (
                     <button
                       key={multiplier}
                       onClick={() => setSpeedMultiplier(multiplier)}
                       className={`px-2 py-1 text-[10px] font-black rounded-lg transition-all duration-200 ${
                         speedMultiplier === multiplier
-                          ? 'bg-white dark:bg-slate-600 text-forgeGray-900 dark:text-white shadow-sm'
-                          : 'text-forgeGray-500 dark:text-forgeGray-400 hover:text-forgeGray-700'
+                          ? 'bg-white text-forgeGray-900 shadow-sm'
+                          : 'text-forgeGray-500 hover:text-forgeGray-700'
                       }`}
                     >
                       <div className="flex items-center space-x-0.5">
@@ -440,11 +440,11 @@ export const GoogleMapMock: React.FC<GoogleMapMockProps> = ({
                       onProgress(Math.round((idx / (path.length - 1)) * 100));
                     }
                   }}
-                  className="w-20 h-1 bg-forgeGray-200 dark:bg-forgeGray-700 rounded-full appearance-none cursor-pointer accent-blue-500 focus:outline-none"
+                  className="w-20 h-1 bg-forgeGray-200 rounded-full appearance-none cursor-pointer accent-blue-500 focus:outline-none"
                 />
 
                 {/* Progress Badge */}
-                <div className="bg-forgeGray-900 dark:bg-white text-white dark:text-forgeGray-900 px-2.5 py-1 rounded-lg">
+                <div className="bg-forgeGray-900 text-white px-2.5 py-1 rounded-lg">
                   <p className="text-[10px] font-black">{progressPercent}%</p>
                 </div>
               </div>

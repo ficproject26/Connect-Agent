@@ -19,13 +19,13 @@ export const Button: React.FC<ButtonProps> = ({
   disabled,
   ...props
 }) => {
-  const baseStyles = 'inline-flex items-center justify-center font-semibold rounded-forge transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-950 disabled:opacity-50 disabled:pointer-events-none active:scale-[0.98] shadow-[0_14px_30px_-16px_rgba(15,23,42,0.35)] hover:shadow-[0_18px_35px_-16px_rgba(15,23,42,0.28)] hover:-translate-y-0.5';
+  const baseStyles = 'inline-flex items-center justify-center font-semibold rounded-forge transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white:ring-offset-slate-950 disabled:opacity-50 disabled:pointer-events-none active:scale-[0.98] shadow-[0_14px_30px_-16px_rgba(15,23,42,0.35)] hover:shadow-[0_18px_35px_-16px_rgba(15,23,42,0.28)] hover:-translate-y-0.5';
 
   const variants = {
     primary: 'bg-gradient-to-r from-primary to-amber-400 text-forgeGray-950 hover:from-primary-hover hover:to-amber-500 focus:ring-primary',
     secondary: 'bg-gradient-to-r from-secondary to-blue-600 text-white hover:from-secondary-hover hover:to-blue-700 focus:ring-secondary',
-    outline: 'border border-forgeGray-300/80 dark:border-forgeGray-600/80 bg-white/80 dark:bg-forgeGray-900/40 text-forgeGray-700 dark:text-forgeGray-200 hover:bg-forgeGray-50 dark:hover:bg-forgeGray-800 focus:ring-forgeGray-500 shadow-[0_8px_22px_-16px_rgba(15,23,42,0.24)]',
-    ghost: 'bg-transparent text-forgeGray-600 dark:text-forgeGray-300 hover:bg-forgeGray-100 dark:hover:bg-forgeGray-800/60 focus:ring-forgeGray-500 shadow-none hover:shadow-none hover:-translate-y-0',
+    outline: 'border border-forgeGray-300/80 bg-white/80 text-forgeGray-700 hover:bg-forgeGray-50 focus:ring-forgeGray-500 shadow-[0_8px_22px_-16px_rgba(15,23,42,0.24)]',
+    ghost: 'bg-transparent text-forgeGray-600 hover:bg-forgeGray-100 focus:ring-forgeGray-500 shadow-none hover:shadow-none hover:-translate-y-0',
     danger: 'bg-gradient-to-r from-red-500 to-rose-600 text-white hover:from-red-600 hover:to-rose-700 focus:ring-red-500',
     success: 'bg-gradient-to-r from-emerald-500 to-green-600 text-white hover:from-emerald-600 hover:to-green-700 focus:ring-emerald-500',
   };

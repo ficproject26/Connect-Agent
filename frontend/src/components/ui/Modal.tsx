@@ -46,7 +46,7 @@ export const Modal: React.FC<ModalProps> = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-forgeGray-950/40 dark:bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 bg-forgeGray-950/40 backdrop-blur-sm"
           />
 
           {/* Modal Container */}
@@ -55,18 +55,18 @@ export const Modal: React.FC<ModalProps> = ({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
             transition={{ type: 'spring', duration: 0.4 }}
-            className={`relative w-full bg-white dark:bg-background-cardDark rounded-forge shadow-md3-3 overflow-hidden z-10 ${sizeClasses[size]}`}
+            className={`relative w-full bg-white rounded-forge shadow-md3-3 overflow-hidden z-10 ${sizeClasses[size]}`}
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-forgeGray-100 dark:border-forgeGray-800/80">
-              <h3 className="text-base font-bold text-forgeGray-900 dark:text-white font-sans">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-forgeGray-100">
+              <h3 className="text-base font-bold text-forgeGray-900 font-sans">
                 {title}
               </h3>
               <button
                 onClick={onClose}
                 aria-label="Close dialog"
                 title="Close"
-                className="text-forgeGray-400 hover:text-forgeGray-600 dark:hover:text-white transition-colors duration-200"
+                className="text-forgeGray-400 hover:text-forgeGray-600 transition-colors duration-200"
               >
                 <X className="w-5 h-5" />
               </button>

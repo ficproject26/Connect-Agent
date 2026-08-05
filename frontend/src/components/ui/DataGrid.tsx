@@ -121,7 +121,7 @@ export function DataGrid<T>({
   return (
     <Card variant="default" padding="none" className="w-full">
       {/* Search and Filters Header */}
-      <div className="flex flex-col sm:flex-row items-center justify-between p-4 border-b border-forgeGray-100 dark:border-forgeGray-800/80 gap-3">
+      <div className="flex flex-col sm:flex-row items-center justify-between p-4 border-b border-forgeGray-100 gap-3">
         <div className="relative w-full sm:max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-forgeGray-400" />
           <input
@@ -132,7 +132,7 @@ export function DataGrid<T>({
               setSearchQuery(e.target.value);
               setCurrentPage(1);
             }}
-            className="w-full pl-9 pr-4 py-2 text-sm bg-forgeGray-50 dark:bg-forgeGray-800/40 border border-forgeGray-200 dark:border-forgeGray-700/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary dark:text-white"
+            className="w-full pl-9 pr-4 py-2 text-sm bg-forgeGray-50 border border-forgeGray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
           />
         </div>
         <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
@@ -144,7 +144,7 @@ export function DataGrid<T>({
             className={`p-2 border rounded-xl transition-all duration-200 cursor-pointer ${
               showFilterPanel
                 ? 'bg-primary border-primary text-forgeGray-950 font-bold shadow-md3-1'
-                : 'border-forgeGray-250 dark:border-forgeGray-700 hover:bg-forgeGray-50 dark:hover:bg-forgeGray-800 text-forgeGray-500'
+                : 'border-forgeGray-250 hover:bg-forgeGray-50 text-forgeGray-500'
             }`}
           >
             <SlidersHorizontal className="w-4 h-4" />
@@ -154,16 +154,16 @@ export function DataGrid<T>({
 
       {/* Filter Panel */}
       {showFilterPanel && Object.keys(filterOptionsMap).length > 0 && (
-        <div className="flex flex-wrap items-center gap-3 p-4 bg-forgeGray-50/50 dark:bg-forgeGray-800/10 border-b border-forgeGray-100 dark:border-forgeGray-800/80">
-          <span className="text-xs font-bold text-forgeGray-450 dark:text-forgeGray-400 uppercase tracking-wider">
+        <div className="flex flex-wrap items-center gap-3 p-4 bg-forgeGray-50/50 border-b border-forgeGray-100">
+          <span className="text-xs font-bold text-forgeGray-450 uppercase tracking-wider">
             Filter by:
           </span>
           {Object.entries(filterOptionsMap).map(([key, options]) => {
             const col = columns.find((c) => c.accessor === key);
             if (!col) return null;
             return (
-              <div key={key} className="flex items-center space-x-1.5 bg-white dark:bg-slate-900 border border-forgeGray-200 dark:border-forgeGray-700/60 rounded-xl px-2.5 py-1 text-xs">
-                <span className="font-bold text-forgeGray-500 dark:text-forgeGray-400">
+              <div key={key} className="flex items-center space-x-1.5 bg-white border border-forgeGray-200 rounded-xl px-2.5 py-1 text-xs">
+                <span className="font-bold text-forgeGray-500">
                   {col.header}:
                 </span>
                 <select
@@ -182,7 +182,7 @@ export function DataGrid<T>({
                     });
                     setCurrentPage(1);
                   }}
-                  className="bg-transparent border-none focus:outline-none font-bold text-forgeGray-850 dark:text-white"
+                  className="bg-transparent border-none focus:outline-none font-bold text-forgeGray-850"
                 >
                   <option value="">All</option>
                   {options.map((opt) => (
@@ -200,7 +200,7 @@ export function DataGrid<T>({
                 setActiveFilters({});
                 setCurrentPage(1);
               }}
-              className="text-xs font-black text-rose-500 dark:text-rose-450 hover:underline cursor-pointer px-2"
+              className="text-xs font-black text-rose-500 hover:underline cursor-pointer px-2"
             >
               Clear Filters
             </button>
@@ -208,22 +208,22 @@ export function DataGrid<T>({
         </div>
       )}
       {showFilterPanel && Object.keys(filterOptionsMap).length === 0 && (
-        <div className="p-3 text-center text-xs text-forgeGray-450 dark:text-forgeGray-500 border-b border-forgeGray-100 dark:border-forgeGray-800/80">
+        <div className="p-3 text-center text-xs text-forgeGray-450 border-b border-forgeGray-100">
           No filterable columns found for these records.
         </div>
       )}
 
       {/* Table Area */}
       <div className="overflow-x-auto w-full">
-        <table className="w-full text-sm text-left text-forgeGray-500 dark:text-forgeGray-350">
-          <thead className="text-xs text-forgeGray-700 dark:text-forgeGray-400 uppercase bg-forgeGray-50/50 dark:bg-forgeGray-800/20 border-b border-forgeGray-100 dark:border-forgeGray-800/80">
+        <table className="w-full text-sm text-left text-forgeGray-500">
+          <thead className="text-xs text-forgeGray-700 uppercase bg-forgeGray-50/50 border-b border-forgeGray-100">
             <tr>
               {columns.map((col, idx) => (
                 <th
                   key={idx}
                   onClick={() => col.sortable && typeof col.accessor === 'string' && handleSort(col.accessor as string)}
                   className={`px-6 py-4 font-bold tracking-wider ${
-                    col.sortable ? 'cursor-pointer select-none hover:text-forgeGray-950 dark:hover:text-white' : ''
+                    col.sortable ? 'cursor-pointer select-none hover:text-forgeGray-950' : ''
                   } ${
                     col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : 'text-left'
                   }`}
@@ -238,10 +238,10 @@ export function DataGrid<T>({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-forgeGray-100 dark:divide-forgeGray-800/60">
+          <tbody className="divide-y divide-forgeGray-100">
             {paginatedData.length > 0 ? (
               paginatedData.map((row, rowIdx) => (
-                <tr key={rowIdx} className="hover:bg-forgeGray-50/30 dark:hover:bg-forgeGray-800/10 transition-colors">
+                <tr key={rowIdx} className="hover:bg-forgeGray-50/30 transition-colors">
                   {columns.map((col, colIdx) => {
                     let content: React.ReactNode;
                     if (typeof col.accessor === 'function') {
@@ -253,7 +253,7 @@ export function DataGrid<T>({
                     return (
                       <td
                         key={colIdx}
-                        className={`px-6 py-4 font-medium text-forgeGray-900 dark:text-forgeGray-200 whitespace-nowrap ${
+                        className={`px-6 py-4 font-medium text-forgeGray-900 whitespace-nowrap ${
                           col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : 'text-left'
                         }`}
                       >
@@ -265,7 +265,7 @@ export function DataGrid<T>({
               ))
             ) : (
               <tr>
-                <td colSpan={columns.length} className="px-6 py-12 text-center text-forgeGray-450 dark:text-forgeGray-500">
+                <td colSpan={columns.length} className="px-6 py-12 text-center text-forgeGray-450">
                   No records found
                 </td>
               </tr>
@@ -276,8 +276,8 @@ export function DataGrid<T>({
 
       {/* Pagination Controls */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between p-4 border-t border-forgeGray-100 dark:border-forgeGray-800/80 bg-forgeGray-50/20 dark:bg-forgeGray-800/5">
-          <span className="text-xs text-forgeGray-500 dark:text-forgeGray-450">
+        <div className="flex items-center justify-between p-4 border-t border-forgeGray-100 bg-forgeGray-50/20">
+          <span className="text-xs text-forgeGray-500">
             Page <strong>{currentPage}</strong> of <strong>{totalPages}</strong> (<strong>{sortedData.length}</strong> total records)
           </span>
           <div className="flex items-center space-x-1">
@@ -286,7 +286,7 @@ export function DataGrid<T>({
               disabled={currentPage === 1}
               title="First Page"
               aria-label="First page"
-              className="p-1.5 border border-forgeGray-200 dark:border-forgeGray-700/60 hover:bg-forgeGray-100 dark:hover:bg-forgeGray-800 rounded-lg text-forgeGray-500 disabled:opacity-40"
+              className="p-1.5 border border-forgeGray-200 hover:bg-forgeGray-100 rounded-lg text-forgeGray-500 disabled:opacity-40"
             >
               <ChevronsLeft className="w-4 h-4" />
             </button>
@@ -295,7 +295,7 @@ export function DataGrid<T>({
               disabled={currentPage === 1}
               title="Previous Page"
               aria-label="Previous page"
-              className="p-1.5 border border-forgeGray-200 dark:border-forgeGray-700/60 hover:bg-forgeGray-100 dark:hover:bg-forgeGray-800 rounded-lg text-forgeGray-500 disabled:opacity-40"
+              className="p-1.5 border border-forgeGray-200 hover:bg-forgeGray-100 rounded-lg text-forgeGray-500 disabled:opacity-40"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -304,7 +304,7 @@ export function DataGrid<T>({
               disabled={currentPage === totalPages}
               title="Next Page"
               aria-label="Next page"
-              className="p-1.5 border border-forgeGray-200 dark:border-forgeGray-700/60 hover:bg-forgeGray-100 dark:hover:bg-forgeGray-800 rounded-lg text-forgeGray-500 disabled:opacity-40"
+              className="p-1.5 border border-forgeGray-200 hover:bg-forgeGray-100 rounded-lg text-forgeGray-500 disabled:opacity-40"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -313,7 +313,7 @@ export function DataGrid<T>({
               disabled={currentPage === totalPages}
               title="Last Page"
               aria-label="Last page"
-              className="p-1.5 border border-forgeGray-200 dark:border-forgeGray-700/60 hover:bg-forgeGray-100 dark:hover:bg-forgeGray-800 rounded-lg text-forgeGray-500 disabled:opacity-40"
+              className="p-1.5 border border-forgeGray-200 hover:bg-forgeGray-100 rounded-lg text-forgeGray-500 disabled:opacity-40"
             >
               <ChevronsRight className="w-4 h-4" />
             </button>

@@ -23,19 +23,19 @@ export const StatusChip: React.FC<StatusChipProps> = ({ status, className = '' }
   const normalized = status.toLowerCase();
 
   const chipStyles: Record<string, string> = {
-    pending: 'bg-amber-100 text-amber-800 dark:bg-amber-500/10 dark:text-amber-400 border border-amber-200/50 dark:border-amber-500/20',
-    preparing: 'bg-blue-100 text-blue-800 dark:bg-blue-500/10 dark:text-blue-400 border border-blue-200/50 dark:border-blue-500/20',
-    'on-the-way': 'bg-primary-light text-primary-hover dark:bg-primary/10 dark:text-primary border border-primary/20',
-    delivered: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-500/20',
-    active: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-500/10 dark:text-cyan-400 border border-cyan-200/50 dark:border-cyan-500/20',
-    completed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-500/20',
-    cancelled: 'bg-red-100 text-red-800 dark:bg-red-500/10 dark:text-red-400 border border-red-200/50 dark:border-red-500/20',
+    pending: 'bg-amber-100 text-amber-800 border border-amber-200/50',
+    preparing: 'bg-blue-100 text-blue-800 border border-blue-200/50',
+    'on-the-way': 'bg-primary-light text-primary-hover border border-primary/20',
+    delivered: 'bg-emerald-100 text-emerald-800 border border-emerald-200/50',
+    active: 'bg-cyan-100 text-cyan-800 border border-cyan-200/50',
+    completed: 'bg-emerald-100 text-emerald-800 border border-emerald-200/50',
+    cancelled: 'bg-red-100 text-red-800 border border-red-200/50',
     
     // Shift States
-    online: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-500/20',
-    busy: 'bg-rose-100 text-rose-800 dark:bg-rose-500/10 dark:text-rose-400 border border-rose-200/50 dark:border-rose-500/20',
-    break: 'bg-amber-100 text-amber-800 dark:bg-amber-500/10 dark:text-amber-400 border border-amber-200/50 dark:border-amber-500/20',
-    offline: 'bg-forgeGray-200 text-forgeGray-700 dark:bg-forgeGray-800 dark:text-forgeGray-450 border border-forgeGray-300/40 dark:border-forgeGray-700/50',
+    online: 'bg-emerald-100 text-emerald-800 border border-emerald-200/50',
+    busy: 'bg-rose-100 text-rose-800 border border-rose-200/50',
+    break: 'bg-amber-100 text-amber-800 border border-amber-200/50',
+    offline: 'bg-forgeGray-200 text-forgeGray-700 border border-forgeGray-300/40',
   };
 
   const label: Record<string, string> = {
@@ -52,7 +52,7 @@ export const StatusChip: React.FC<StatusChipProps> = ({ status, className = '' }
     offline: 'Offline',
   };
 
-  const defaultStyle = 'bg-forgeGray-100 text-forgeGray-800 dark:bg-forgeGray-800 dark:text-forgeGray-300';
+  const defaultStyle = 'bg-forgeGray-100 text-forgeGray-800';
 
   return (
     <span

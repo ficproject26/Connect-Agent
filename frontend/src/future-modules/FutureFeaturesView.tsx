@@ -37,7 +37,7 @@ const futureSpecs: FutureFeature[] = [
   },
   {
     title: 'Leaderboards & Gamification',
-    icon: <Award className="w-6 h-6 text-amber-550 dark:text-primary" />,
+    icon: <Award className="w-6 h-6 text-amber-550" />,
     status: 'scaffolded',
     description: 'Boost workforce engagement with milestone badges, weekly top performer charts and cash bonuses.',
     specs: ['Fulfillment streaks tracking', 'Zone based performance ratings', 'Partner badges unlocks catalog'],
@@ -48,15 +48,15 @@ export const FutureFeaturesView: React.FC = () => {
   return (
     <div className="space-y-6">
       
-      <div className="flex justify-between items-center bg-white dark:bg-background-cardDark p-6 rounded-forge border border-forgeGray-200/40 dark:border-slate-800 shadow-sm">
+      <div className="flex justify-between items-center bg-white p-6 rounded-forge border border-forgeGray-200/40 shadow-sm">
         <div>
           <div className="flex items-center space-x-2">
-            <Sparkles className="w-5 h-5 text-secondary dark:text-primary" />
-            <h1 className="text-2xl font-black text-forgeGray-900 dark:text-white font-sans">
+            <Sparkles className="w-5 h-5 text-secondary" />
+            <h1 className="text-2xl font-black text-forgeGray-900 font-sans">
               Future Enterprise Enhancements
             </h1>
           </div>
-          <p className="text-xs font-semibold text-forgeGray-450 dark:text-forgeGray-400 mt-1 uppercase tracking-wider">
+          <p className="text-xs font-semibold text-forgeGray-450 mt-1 uppercase tracking-wider">
             Scaffolded placeholder configurations ready for Phase 2 API backend wiring
           </p>
         </div>
@@ -67,7 +67,7 @@ export const FutureFeaturesView: React.FC = () => {
           <Card key={idx} variant="default" className="border border-forgeGray-100 flex flex-col justify-between">
             <div className="space-y-3 text-xs font-semibold">
               <div className="flex justify-between items-start">
-                <div className="p-2.5 bg-forgeGray-50 dark:bg-slate-800 rounded-xl w-fit">
+                <div className="p-2.5 bg-forgeGray-50 rounded-xl w-fit">
                   {spec.icon}
                 </div>
                 <span className={`inline-block px-2.5 py-0.5 rounded text-[8px] font-extrabold uppercase ${
@@ -78,16 +78,16 @@ export const FutureFeaturesView: React.FC = () => {
                 </span>
               </div>
 
-              <h3 className="font-extrabold text-base text-forgeGray-950 dark:text-white mt-2">{spec.title}</h3>
-              <p className="text-forgeGray-550 dark:text-forgeGray-450 leading-relaxed font-medium">
+              <h3 className="font-extrabold text-base text-forgeGray-950 mt-2">{spec.title}</h3>
+              <p className="text-forgeGray-550 leading-relaxed font-medium">
                 {spec.description}
               </p>
 
-              <div className="border-t border-forgeGray-100 dark:border-slate-850 pt-3">
+              <div className="border-t border-forgeGray-100 pt-3">
                 <p className="text-[9px] text-forgeGray-400 uppercase font-bold mb-1.5">Scaffolded Integration Specs</p>
                 <div className="flex flex-wrap gap-1.5">
                   {spec.specs.map((item, iIdx) => (
-                    <span key={iIdx} className="px-2.5 py-1 bg-forgeGray-50 dark:bg-slate-800/60 rounded-lg text-[9px] text-forgeGray-600 dark:text-forgeGray-300">
+                    <span key={iIdx} className="px-2.5 py-1 bg-forgeGray-50 rounded-lg text-[9px] text-forgeGray-600">
                       {item}
                     </span>
                   ))}

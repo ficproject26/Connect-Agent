@@ -15,10 +15,10 @@ export const Card: React.FC<CardProps> = ({
   ...props
 }) => {
   const bgStyles = {
-    default: 'surface-card rounded-[24px] border border-white/70 dark:border-forgeGray-800/70',
-    glass: 'glass-panel rounded-[24px] border border-white/70 dark:border-white/10',
-    accent: 'glass-panel-accent rounded-[24px] border border-primary/25 dark:border-primary/20',
-    outlined: 'border border-forgeGray-200/80 dark:border-forgeGray-700/70 bg-white/80 dark:bg-forgeGray-900/30 rounded-[24px]',
+    default: 'surface-card rounded-[24px] border border-white/70',
+    glass: 'glass-panel rounded-[24px] border border-white/70',
+    accent: 'glass-panel-accent rounded-[24px] border border-primary/25',
+    outlined: 'border border-forgeGray-200/80 bg-white/80 rounded-[24px]',
   };
 
   const paddings = {
@@ -43,13 +43,13 @@ export const Card: React.FC<CardProps> = ({
 };
 
 export const CardHeader: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ children, className = '', ...props }) => (
-  <div className={`flex items-center justify-between border-b border-forgeGray-100 dark:border-forgeGray-800/80 pb-4 mb-4 ${className}`} {...props}>
+  <div className={`flex items-center justify-between border-b border-forgeGray-100 pb-4 mb-4 ${className}`} {...props}>
     {children}
   </div>
 );
 
 export const CardTitle: React.FC<React.HTMLAttributes<HTMLHeadingElement>> = ({ children, className = '', ...props }) => (
-  <h3 className={`text-base font-bold font-sans text-forgeGray-900 dark:text-white ${className}`} {...props}>
+  <h3 className={`text-base font-bold font-sans text-forgeGray-900 ${className}`} {...props}>
     {children}
   </h3>
 );
@@ -61,7 +61,7 @@ export const CardBody: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ child
 );
 
 export const CardFooter: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ children, className = '', ...props }) => (
-  <div className={`border-t border-forgeGray-100 dark:border-forgeGray-800/80 pt-4 mt-4 flex items-center justify-end space-x-2 ${className}`} {...props}>
+  <div className={`border-t border-forgeGray-100 pt-4 mt-4 flex items-center justify-end space-x-2 ${className}`} {...props}>
     {children}
   </div>
 );

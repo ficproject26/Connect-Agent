@@ -50,16 +50,16 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       return (
         <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center space-y-6">
           {/* Icon */}
-          <div className="p-4 bg-red-500/10 dark:bg-red-500/20 rounded-full">
+          <div className="p-4 bg-red-500/10 rounded-full">
             <AlertTriangle className="w-12 h-12 text-red-500" />
           </div>
 
           {/* Title */}
           <div className="space-y-2">
-            <h2 className="text-xl font-extrabold text-forgeGray-900 dark:text-white font-sans">
+            <h2 className="text-xl font-extrabold text-forgeGray-900 font-sans">
               {isChunkError ? 'Application Updated' : 'Something went wrong'}
             </h2>
-            <p className="text-sm font-semibold text-forgeGray-450 dark:text-forgeGray-400 max-w-md">
+            <p className="text-sm font-semibold text-forgeGray-450 max-w-md">
               {isChunkError
                 ? 'A new version of the application was deployed. Please reload the page to continue.'
                 : this.props.fallbackMessage ||
@@ -69,8 +69,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
           {/* Error detail */}
           {this.state.error && (
-            <div className="w-full max-w-lg bg-forgeGray-50 dark:bg-slate-900 border border-forgeGray-200 dark:border-slate-700 rounded-forge p-4 text-left">
-              <p className="text-xs font-mono text-red-600 dark:text-red-400 break-all">
+            <div className="w-full max-w-lg bg-forgeGray-50 border border-forgeGray-200 rounded-forge p-4 text-left">
+              <p className="text-xs font-mono text-red-600 break-all">
                 {this.state.error.message}
               </p>
             </div>

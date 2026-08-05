@@ -145,33 +145,23 @@ const translations: Record<Language, Record<string, string>> = {
 };
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [theme, setTheme] = useState<Theme>(() => {
-    // Always default to light — the app is designed for light mode
-    // Clear any previously auto-detected dark preference
+  const theme: Theme = 'light';
+
+  useEffect(() => {
+    // Ensure light mode is always active and dark classes are removed
+    const root = window.document.documentElement;
+    root.classList.remove('dark');
+    document.body.classList.remove('dark');
     localStorage.setItem('forge-theme', 'light');
-    return 'light';
-  });
+  }, []);
 
   const [language, setLanguageState] = useState<Language>(() => {
     const saved = localStorage.getItem('forge-lang');
     return (saved === 'en' || saved === 'hi' || saved === 'kn' || saved === 'ta') ? saved : 'en';
   });
 
-  useEffect(() => {
-    const root = window.document.documentElement;
-    if (theme === 'dark') {
-      root.classList.add('dark');
-      document.body.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-      document.body.classList.remove('dark');
-    }
-    localStorage.setItem('forge-theme', theme);
-  }, [theme]);
-
-  const toggleTheme = () => {
-    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
-  };
+  // No-op: dark mode is permanently disabled
+  const toggleTheme = () => {};
 
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);

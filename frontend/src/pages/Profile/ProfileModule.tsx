@@ -113,12 +113,12 @@ export const ProfileModule: React.FC = () => {
   return (
     <div className="space-y-6">
       
-      <div className="flex justify-between items-center bg-white dark:bg-background-cardDark p-6 rounded-forge border border-forgeGray-200/40 dark:border-slate-800 shadow-sm">
+      <div className="flex justify-between items-center bg-white p-6 rounded-forge border border-forgeGray-200/40 shadow-sm">
         <div>
-          <h1 className="text-2xl font-black text-forgeGray-900 dark:text-white font-sans">
+          <h1 className="text-2xl font-black text-forgeGray-900 font-sans">
             Profile Settings
           </h1>
-          <p className="text-xs font-semibold text-forgeGray-450 dark:text-forgeGray-400 mt-1 uppercase tracking-wider">
+          <p className="text-xs font-semibold text-forgeGray-450 mt-1 uppercase tracking-wider">
             Review linked verification credentials and modify operational details
           </p>
         </div>
@@ -140,7 +140,7 @@ export const ProfileModule: React.FC = () => {
               
               <label 
                 htmlFor="profile-pic-upload" 
-                className="absolute bottom-0 right-0 bg-blue-600 text-white p-2 rounded-full border border-white dark:border-slate-900 shadow cursor-pointer hover:bg-blue-700 transition z-20 flex items-center justify-center"
+                className="absolute bottom-0 right-0 bg-blue-600 text-white p-2 rounded-full border border-white shadow cursor-pointer hover:bg-blue-700 transition z-20 flex items-center justify-center"
               >
                 <Camera className="w-3.5 h-3.5" />
               </label>
@@ -153,7 +153,7 @@ export const ProfileModule: React.FC = () => {
               />
             </div>
 
-            <h3 className="font-extrabold text-base text-forgeGray-900 dark:text-white">{user?.name}</h3>
+            <h3 className="font-extrabold text-base text-forgeGray-900">{user?.name}</h3>
             <p className="text-[10px] text-forgeGray-450 font-semibold uppercase mt-0.5 tracking-wider">
               {role?.replace('_', ' ')} Portal
             </p>
@@ -161,13 +161,13 @@ export const ProfileModule: React.FC = () => {
               Account Active
             </p>
 
-            <div className="w-full border-t border-forgeGray-100 dark:border-slate-800/80 pt-6 mt-6 space-y-2">
-              <button onClick={() => navigate('/shared/settings')} className="w-full flex items-center justify-between p-2.5 hover:bg-forgeGray-50 dark:hover:bg-slate-800 text-xs font-semibold rounded-lg text-forgeGray-650">
+            <div className="w-full border-t border-forgeGray-100 pt-6 mt-6 space-y-2">
+              <button onClick={() => navigate('/shared/settings')} className="w-full flex items-center justify-between p-2.5 hover:bg-forgeGray-50 text-xs font-semibold rounded-lg text-forgeGray-650">
                 <span className="flex items-center"><Settings className="w-4 h-4 mr-2" /> App Preferences</span>
                 <ChevronRight className="w-4 h-4 text-forgeGray-400" />
               </button>
               
-              <button onClick={handleLogout} className="w-full flex items-center p-2.5 hover:bg-red-50 dark:hover:bg-red-950/20 text-xs font-semibold rounded-lg text-red-500">
+              <button onClick={handleLogout} className="w-full flex items-center p-2.5 hover:bg-red-50 text-xs font-semibold rounded-lg text-red-500">
                 <LogOut className="w-4 h-4 mr-2" /> Logout Session
               </button>
             </div>
@@ -180,7 +180,7 @@ export const ProfileModule: React.FC = () => {
             <Card variant="default">
               <CardHeader>
                 <div className="flex items-center space-x-2">
-                  <User className="w-5 h-5 text-secondary dark:text-primary" />
+                  <User className="w-5 h-5 text-secondary" />
                   <CardTitle>Personal Particulars</CardTitle>
                 </div>
               </CardHeader>
@@ -233,10 +233,10 @@ export const ProfileModule: React.FC = () => {
 
                 {/* Inline Vehicle Details Section */}
                 {(role === 'delivery_partner' || role === 'technician') && (
-                  <div className="pt-6 border-t border-forgeGray-100 dark:border-slate-800/80 space-y-4">
+                  <div className="pt-6 border-t border-forgeGray-100 space-y-4">
                     <div className="flex items-center space-x-2 pb-2">
-                      <Truck className="w-5 h-5 text-secondary dark:text-primary" />
-                      <h4 className="text-sm font-black text-forgeGray-900 dark:text-white font-sans">
+                      <Truck className="w-5 h-5 text-secondary" />
+                      <h4 className="text-sm font-black text-forgeGray-900 font-sans">
                         Registered Vehicles Details
                       </h4>
                     </div>
@@ -325,7 +325,7 @@ export const ProfileModule: React.FC = () => {
                         })()}
                       </div>
                     ) : (
-                      <div className="text-center py-6 text-forgeGray-455 dark:text-forgeGray-400 text-xs font-semibold">
+                      <div className="text-center py-6 text-forgeGray-455 text-xs font-semibold">
                         No registered vehicles found. Please contact administration.
                       </div>
                     )}

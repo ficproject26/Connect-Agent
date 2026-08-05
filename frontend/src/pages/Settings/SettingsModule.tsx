@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 
 export const SettingsModule: React.FC = () => {
-  const { theme, toggleTheme, language, setLanguage } = useTheme();
+  const { language, setLanguage } = useTheme();
   const { 
     user, 
     addNotification, 
@@ -31,10 +31,10 @@ export const SettingsModule: React.FC = () => {
   // Static Activity Heatmap data
   const heatmapRows = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const colors = [
-    'bg-forgeGray-100 dark:bg-slate-800/80',
-    'bg-secondary/20 dark:bg-secondary/15',
-    'bg-secondary/50 dark:bg-secondary/35',
-    'bg-secondary dark:bg-secondary-hover'
+    'bg-forgeGray-100',
+    'bg-secondary/20',
+    'bg-secondary/50',
+    'bg-secondary'
   ];
   
   const activityData = React.useMemo(() => {
@@ -54,22 +54,22 @@ export const SettingsModule: React.FC = () => {
     <div className="space-y-6 animate-fade-in">
       
       {/* Page Title & Subtabs */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-forgeGray-200/50 dark:border-slate-800 pb-6">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-forgeGray-200/50 pb-6">
         <div>
-          <h1 className="text-3xl font-black font-sans text-forgeGray-900 dark:text-white leading-tight">
+          <h1 className="text-3xl font-black font-sans text-forgeGray-900 leading-tight">
             Partner Settings
           </h1>
-          <p className="text-forgeGray-450 dark:text-forgeGray-400 mt-1 font-semibold text-sm">
+          <p className="text-forgeGray-450 mt-1 font-semibold text-sm">
             Manage your enterprise profile, operational alerts, and compliance standards.
           </p>
         </div>
-        <div className="flex gap-2 bg-forgeGray-100 dark:bg-slate-900 p-1 rounded-xl border border-forgeGray-200/50 dark:border-slate-800/80 shrink-0">
+        <div className="flex gap-2 bg-forgeGray-100 p-1 rounded-xl border border-forgeGray-200/50 shrink-0">
           <button 
             onClick={() => setActiveSubTab('notifications')}
             className={`px-4 py-2 shadow-sm rounded-lg font-bold flex items-center gap-2 text-xs transition-all ${
               activeSubTab === 'notifications'
-                ? 'bg-white dark:bg-slate-850 text-secondary dark:text-primary'
-                : 'text-forgeGray-450 hover:text-forgeGray-600 dark:hover:text-white'
+                ? 'bg-white text-secondary'
+                : 'text-forgeGray-450 hover:text-forgeGray-600'
             }`}
           >
             <Bell className="w-4 h-4" />
@@ -79,8 +79,8 @@ export const SettingsModule: React.FC = () => {
             onClick={() => setActiveSubTab('account')}
             className={`px-4 py-2 shadow-sm rounded-lg font-bold flex items-center gap-2 text-xs transition-all ${
               activeSubTab === 'account'
-                ? 'bg-white dark:bg-slate-850 text-secondary dark:text-primary'
-                : 'text-forgeGray-450 hover:text-forgeGray-600 dark:hover:text-white'
+                ? 'bg-white text-secondary'
+                : 'text-forgeGray-450 hover:text-forgeGray-600'
             }`}
           >
             <User className="w-4 h-4" />
@@ -97,27 +97,27 @@ export const SettingsModule: React.FC = () => {
             
             {/* Alert Priority Center */}
             <Card variant="default" className="overflow-hidden">
-              <CardHeader className="flex justify-between items-center border-b border-forgeGray-100 dark:border-slate-800/80 pb-4">
+              <CardHeader className="flex justify-between items-center border-b border-forgeGray-100 pb-4">
                 <CardTitle className="text-base font-bold">Alert Priority Center</CardTitle>
                 <button 
                   onClick={() => addNotification('All Read', 'All alerts have been marked as read.', 'low', 'system')}
-                  className="text-xs font-bold text-secondary dark:text-primary hover:underline"
+                  className="text-xs font-bold text-secondary hover:underline"
                 >
                   Mark all as read
                 </button>
               </CardHeader>
-              <CardBody className="divide-y divide-forgeGray-100 dark:divide-slate-800/60 p-0">
+              <CardBody className="divide-y divide-forgeGray-100 p-0">
                 {/* Urgent Alert */}
                 <div className="p-6 flex gap-4 bg-red-500/5 border-l-4 border-red-500">
-                  <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-950/40 flex items-center justify-center shrink-0 text-red-600 dark:text-red-400">
+                  <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0 text-red-600">
                     <AlertTriangle className="w-5 h-5" />
                   </div>
                   <div className="flex-1">
                     <div className="flex justify-between items-start mb-1">
-                      <h4 className="font-bold text-forgeGray-900 dark:text-white text-sm">Route Congestion: Northern Corridor</h4>
+                      <h4 className="font-bold text-forgeGray-900 text-sm">Route Congestion: Northern Corridor</h4>
                       <span className="text-[10px] text-red-500 font-extrabold uppercase tracking-wide">Urgent</span>
                     </div>
-                    <p className="text-xs text-forgeGray-550 dark:text-forgeGray-400 leading-relaxed mb-4">
+                    <p className="text-xs text-forgeGray-550 leading-relaxed mb-4">
                       Severe weather alert detected near Hub-22. 14 dispatches require immediate rerouting to avoid a 4-hour delay.
                     </p>
                     <div className="flex gap-2">
@@ -127,7 +127,7 @@ export const SettingsModule: React.FC = () => {
                       >
                         Reroute All
                       </button>
-                      <button className="px-4 py-2 border border-forgeGray-250 dark:border-slate-800 hover:bg-forgeGray-50 dark:hover:bg-slate-850 rounded-lg text-xs font-semibold text-forgeGray-650 dark:text-forgeGray-300 transition-all">
+                      <button className="px-4 py-2 border border-forgeGray-250 hover:bg-forgeGray-50 rounded-lg text-xs font-semibold text-forgeGray-650 transition-all">
                         Dismiss
                       </button>
                     </div>
@@ -136,16 +136,16 @@ export const SettingsModule: React.FC = () => {
                 </div>
 
                 {/* System Alert */}
-                <div className="p-6 flex gap-4 hover:bg-forgeGray-50/50 dark:hover:bg-slate-800/10 transition-colors">
-                  <div className="w-10 h-10 rounded-full bg-secondary-light/60 dark:bg-secondary/15 flex items-center justify-center shrink-0 text-secondary dark:text-primary">
+                <div className="p-6 flex gap-4 hover:bg-forgeGray-50/50 transition-colors">
+                  <div className="w-10 h-10 rounded-full bg-secondary-light/60 flex items-center justify-center shrink-0 text-secondary">
                     <RefreshCw className="w-5 h-5" />
                   </div>
                   <div className="flex-1">
                     <div className="flex justify-between items-start mb-1">
-                      <h4 className="font-bold text-forgeGray-900 dark:text-white text-sm">API Integration Synchronized</h4>
-                      <span className="text-[10px] text-secondary dark:text-primary font-extrabold uppercase tracking-wide">System</span>
+                      <h4 className="font-bold text-forgeGray-900 text-sm">API Integration Synchronized</h4>
+                      <span className="text-[10px] text-secondary font-extrabold uppercase tracking-wide">System</span>
                     </div>
-                    <p className="text-xs text-forgeGray-550 dark:text-forgeGray-400">
+                    <p className="text-xs text-forgeGray-550">
                       The billing data sync for Q3 has successfully completed. 1,240 records updated.
                     </p>
                   </div>
@@ -153,24 +153,24 @@ export const SettingsModule: React.FC = () => {
                 </div>
 
                 {/* Standard Alert */}
-                <div className="p-6 flex gap-4 hover:bg-forgeGray-50/50 dark:hover:bg-slate-800/10 transition-colors">
-                  <div className="w-10 h-10 rounded-full bg-forgeGray-100 dark:bg-slate-800 flex items-center justify-center shrink-0 text-forgeGray-500">
+                <div className="p-6 flex gap-4 hover:bg-forgeGray-50/50 transition-colors">
+                  <div className="w-10 h-10 rounded-full bg-forgeGray-100 flex items-center justify-center shrink-0 text-forgeGray-500">
                     <Info className="w-5 h-5" />
                   </div>
                   <div className="flex-1">
                     <div className="flex justify-between items-start mb-1">
-                      <h4 className="font-bold text-forgeGray-900 dark:text-white text-sm">Manifest Uploaded</h4>
+                      <h4 className="font-bold text-forgeGray-900 text-sm">Manifest Uploaded</h4>
                       <span className="text-[10px] text-forgeGray-450 font-extrabold uppercase tracking-wide">Standard</span>
                     </div>
-                    <p className="text-xs text-forgeGray-550 dark:text-forgeGray-400">
+                    <p className="text-xs text-forgeGray-550">
                       Partner ID: PX-992 has uploaded a new manifest for 'Direct Delivery' route.
                     </p>
                   </div>
                   <span className="text-[10px] text-forgeGray-400 font-bold">4h ago</span>
                 </div>
               </CardBody>
-              <div className="p-4 bg-forgeGray-50/50 dark:bg-slate-800/20 text-center border-t border-forgeGray-100 dark:border-slate-800/80">
-                <button className="text-xs font-bold text-secondary dark:text-primary hover:underline">
+              <div className="p-4 bg-forgeGray-50/50 text-center border-t border-forgeGray-100">
+                <button className="text-xs font-bold text-secondary hover:underline">
                   View full notification history
                 </button>
               </div>
@@ -181,12 +181,12 @@ export const SettingsModule: React.FC = () => {
               <CardHeader className="flex justify-between items-center mb-4">
                 <div>
                   <CardTitle className="text-base font-bold">Peak Operational Hours</CardTitle>
-                  <p className="text-xs text-forgeGray-450 dark:text-forgeGray-400">Fleet activity concentration over the last 7 days.</p>
+                  <p className="text-xs text-forgeGray-450">Fleet activity concentration over the last 7 days.</p>
                 </div>
                 <select 
                   title="Select time range"
                   aria-label="Select time range for operational hours"
-                  className="text-xs font-bold p-2 rounded-xl border border-forgeGray-250 dark:border-slate-800 bg-forgeGray-50 dark:bg-slate-800 cursor-pointer"
+                  className="text-xs font-bold p-2 rounded-xl border border-forgeGray-250 bg-forgeGray-50 cursor-pointer"
                 >
                   <option>Last 7 Days</option>
                   <option>Last 30 Days</option>
@@ -242,7 +242,7 @@ export const SettingsModule: React.FC = () => {
             {/* Compliance Widget */}
             <Card variant="default">
               <CardBody className="space-y-6">
-                <h3 className="font-bold text-forgeGray-900 dark:text-white text-base">Compliance Status</h3>
+                <h3 className="font-bold text-forgeGray-900 text-base">Compliance Status</h3>
                 
                 {/* Circular Progress Gauge */}
                 <div className="flex items-center justify-center">
@@ -250,7 +250,7 @@ export const SettingsModule: React.FC = () => {
                     <svg className="w-full h-full transform -rotate-90">
                       {/* Grey Track */}
                       <circle 
-                        className="text-forgeGray-100 dark:text-slate-800" 
+                        className="text-forgeGray-100" 
                         cx="64" 
                         cy="64" 
                         fill="transparent" 
@@ -273,14 +273,14 @@ export const SettingsModule: React.FC = () => {
                       />
                     </svg>
                     <div className="absolute flex flex-col items-center">
-                      <span className="text-2xl font-black text-forgeGray-950 dark:text-white font-sans">80%</span>
+                      <span className="text-2xl font-black text-forgeGray-950 font-sans">80%</span>
                       <span className="text-[9px] text-forgeGray-450 uppercase tracking-wider font-extrabold">Complete</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Compliance Checklist */}
-                <ul className="space-y-3 font-semibold text-xs text-forgeGray-750 dark:text-forgeGray-300">
+                <ul className="space-y-3 font-semibold text-xs text-forgeGray-750">
                   <li className="flex items-center gap-3">
                     <div className="w-6 h-6 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0">
                       <Check className="w-3.5 h-3.5 stroke-[3]" />
@@ -300,7 +300,7 @@ export const SettingsModule: React.FC = () => {
                     <span>DOT Safety Cert (Pending)</span>
                   </li>
                   <li className="flex items-center gap-3 opacity-40">
-                    <div className="w-6 h-6 rounded-full border border-forgeGray-250 dark:border-slate-800 flex items-center justify-center shrink-0">
+                    <div className="w-6 h-6 rounded-full border border-forgeGray-250 flex items-center justify-center shrink-0">
                       <div className="w-2 h-2" />
                     </div>
                     <span>Fleet Emission Report</span>
@@ -309,7 +309,7 @@ export const SettingsModule: React.FC = () => {
 
                 <button 
                   onClick={() => addNotification('Cert Refreshed', 'Resuming DOT safety certificate upload process.', 'medium', 'system')}
-                  className="w-full py-2.5 bg-forgeGray-100 hover:bg-forgeGray-200/60 dark:bg-slate-800 dark:hover:bg-slate-850 text-forgeGray-950 dark:text-white rounded-xl text-xs font-bold transition-colors"
+                  className="w-full py-2.5 bg-forgeGray-100 hover:bg-forgeGray-200/60 text-forgeGray-950 rounded-xl text-xs font-bold transition-colors"
                 >
                   Resume Certification
                 </button>
@@ -317,7 +317,7 @@ export const SettingsModule: React.FC = () => {
             </Card>
 
             {/* Quick Profile Card (FastTrack card style) */}
-            <div className="bg-secondary dark:bg-background-cardDark p-6 rounded-forge text-white relative overflow-hidden border border-white/5 shadow-lg">
+            <div className="bg-secondary p-6 rounded-forge text-white relative overflow-hidden border border-white/5 shadow-lg">
               {/* Background grid pattern */}
               <div className="absolute inset-0 opacity-5 pointer-events-none">
                 <svg height="100%" width="100%">
@@ -366,38 +366,25 @@ export const SettingsModule: React.FC = () => {
             <Card variant="default">
               <CardHeader>
                 <div className="flex items-center space-x-2">
-                  <Settings className="w-5 h-5 text-secondary dark:text-primary" />
+                  <Settings className="w-5 h-5 text-secondary" />
                   <CardTitle>System Preferences</CardTitle>
                 </div>
               </CardHeader>
               <CardBody className="space-y-4 text-xs font-semibold">
                 
-                <div className="flex items-center justify-between p-3 bg-forgeGray-55 dark:bg-slate-800/40 border border-forgeGray-100 rounded-xl">
-                  <div>
-                    <p className="text-xs font-bold">Dark Theme Switcher</p>
-                    <p className="text-[10px] text-forgeGray-450 dark:text-forgeGray-400">Toggle dark mode visual layout</p>
-                  </div>
-                  <button
-                    onClick={toggleTheme}
-                    className="px-4 py-2 border border-forgeGray-250 dark:border-slate-800 rounded-xl font-bold bg-white dark:bg-slate-900 transition-colors"
-                  >
-                    {theme === 'dark' ? 'Dark Mode' : 'Light Mode'}
-                  </button>
-                </div>
-
-                <div className="flex flex-col space-y-3 p-3 bg-forgeGray-55 dark:bg-slate-800/40 border border-forgeGray-100 rounded-xl">
+                <div className="flex flex-col space-y-3 p-3 bg-forgeGray-55 border border-forgeGray-100 rounded-xl">
                   <div className="flex justify-between items-center">
                     <div>
                       <p className="text-xs font-bold">Sound Alert System</p>
-                      <p className="text-[10px] text-forgeGray-455 dark:text-forgeGray-400">Play configured alert notifications</p>
+                      <p className="text-[10px] text-forgeGray-455">Play configured alert notifications</p>
                     </div>
-                    <Button variant="outline" size="sm" onClick={handleSoundTest} className="border-forgeGray-250 dark:border-slate-800">
+                    <Button variant="outline" size="sm" onClick={handleSoundTest} className="border-forgeGray-250">
                       Test Sound
                     </Button>
                   </div>
                   
                   {/* Alert Tone Selection */}
-                  <div className="grid grid-cols-3 gap-2 pt-2 border-t border-forgeGray-100 dark:border-slate-850">
+                  <div className="grid grid-cols-3 gap-2 pt-2 border-t border-forgeGray-100">
                     {(['chirp', 'melody', 'siren'] as const).map((tone) => (
                       <button
                         key={tone}
@@ -405,8 +392,8 @@ export const SettingsModule: React.FC = () => {
                         onClick={() => setSoundProfile(tone)}
                         className={`py-1.5 px-2.5 text-[10px] font-black rounded-lg border transition capitalize ${
                           soundProfile === tone
-                            ? 'bg-secondary dark:bg-primary border-transparent text-forgeGray-950 shadow-sm'
-                            : 'bg-white dark:bg-slate-900 border-forgeGray-200 dark:border-slate-800 text-forgeGray-750 dark:text-forgeGray-350 hover:bg-forgeGray-100 dark:hover:bg-slate-750'
+                            ? 'bg-secondary border-transparent text-forgeGray-950 shadow-sm'
+                            : 'bg-white border-forgeGray-200 text-forgeGray-750 hover:bg-forgeGray-100'
                         }`}
                       >
                         {tone}
@@ -426,9 +413,9 @@ export const SettingsModule: React.FC = () => {
                       title="Sound Volume"
                       aria-label="Sound Volume"
                       onChange={(e) => setSoundVolume(parseFloat(e.target.value))}
-                      className="flex-1 h-1 bg-forgeGray-200 dark:bg-forgeGray-700 rounded-full appearance-none cursor-pointer accent-secondary dark:accent-primary focus:outline-none"
+                      className="flex-1 h-1 bg-forgeGray-200 rounded-full appearance-none cursor-pointer accent-secondary focus:outline-none"
                     />
-                    <span className="text-[10px] font-black text-forgeGray-750 dark:text-white w-8 text-right font-sans">
+                    <span className="text-[10px] font-black text-forgeGray-750 w-8 text-right font-sans">
                       {Math.round(soundVolume * 100)}%
                     </span>
                   </div>
@@ -441,16 +428,16 @@ export const SettingsModule: React.FC = () => {
             <Card variant="default">
               <CardHeader>
                 <div className="flex items-center space-x-2">
-                  <BookOpen className="w-5 h-5 text-secondary dark:text-primary" />
+                  <BookOpen className="w-5 h-5 text-secondary" />
                   <CardTitle>Platform Legalities</CardTitle>
                 </div>
               </CardHeader>
               <CardBody className="space-y-3 text-xs font-semibold">
-                <a href="#privacy" className="flex items-center justify-between p-2.5 hover:bg-forgeGray-50 dark:hover:bg-slate-800/30 rounded-xl text-forgeGray-650 dark:text-forgeGray-300">
+                <a href="#privacy" className="flex items-center justify-between p-2.5 hover:bg-forgeGray-50 rounded-xl text-forgeGray-650">
                   <span>Privacy & Telemetry Policies</span>
                   <ChevronRight className="w-4 h-4 text-forgeGray-400" />
                 </a>
-                <a href="#terms" className="flex items-center justify-between p-2.5 hover:bg-forgeGray-50 dark:hover:bg-slate-800/30 rounded-xl text-forgeGray-650 dark:text-forgeGray-300">
+                <a href="#terms" className="flex items-center justify-between p-2.5 hover:bg-forgeGray-50 rounded-xl text-forgeGray-650">
                   <span>Partner Terms & Declaration Guidelines</span>
                   <ChevronRight className="w-4 h-4 text-forgeGray-400" />
                 </a>
@@ -463,33 +450,33 @@ export const SettingsModule: React.FC = () => {
             <Card variant="default" className="h-full">
               <CardHeader>
                 <div className="flex items-center space-x-2">
-                  <HelpCircle className="w-5 h-5 text-secondary dark:text-primary" />
+                  <HelpCircle className="w-5 h-5 text-secondary" />
                   <CardTitle>Helpline & Support Center</CardTitle>
                 </div>
               </CardHeader>
               <CardBody className="space-y-4 text-xs font-semibold">
-                <p className="text-forgeGray-550 dark:text-forgeGray-400 leading-relaxed font-medium">
+                <p className="text-forgeGray-550 leading-relaxed font-medium">
                   Need help with booking calculations, payouts, or active order navigations? Speak directly with our operational help desk.
                 </p>
 
                 <div className="space-y-3">
-                  <div className="flex items-center space-x-3 p-3 bg-forgeGray-50 dark:bg-slate-800/40 rounded-xl border border-forgeGray-100 dark:border-slate-800/60">
+                  <div className="flex items-center space-x-3 p-3 bg-forgeGray-50 rounded-xl border border-forgeGray-100">
                     <div className="p-2 bg-emerald-500/10 text-emerald-600 rounded-lg">
                       <Phone className="w-4 h-4" />
                     </div>
                     <div>
                       <p className="text-[10px] text-forgeGray-450 uppercase">Emergency hotline</p>
-                      <p className="font-extrabold text-forgeGray-950 dark:text-white">+91 1800 200 4545</p>
+                      <p className="font-extrabold text-forgeGray-950">+91 1800 200 4545</p>
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-3 p-3 bg-forgeGray-50 dark:bg-slate-800/40 rounded-xl border border-forgeGray-100 dark:border-slate-800/60">
+                  <div className="flex items-center space-x-3 p-3 bg-forgeGray-50 rounded-xl border border-forgeGray-100">
                     <div className="p-2 bg-secondary/10 text-secondary rounded-lg">
                       <Mail className="w-4 h-4" />
                     </div>
                     <div>
                       <p className="text-[10px] text-forgeGray-450 uppercase">Partner Support Email</p>
-                      <p className="font-extrabold text-forgeGray-950 dark:text-white">support@forgeindia.in</p>
+                      <p className="font-extrabold text-forgeGray-950">support@forgeindia.in</p>
                     </div>
                   </div>
                 </div>

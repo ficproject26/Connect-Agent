@@ -35,8 +35,8 @@ export const Heading: React.FC<HeadingProps> = ({
   };
 
   const gradientClass = gradient
-    ? 'bg-gradient-to-r from-secondary via-secondary/90 to-primary bg-clip-text text-transparent dark:from-white dark:via-forgeGray-200 dark:to-primary'
-    : 'text-forgeGray-900 dark:text-white';
+    ? 'bg-gradient-to-r from-secondary via-secondary/90 to-primary bg-clip-text text-transparent'
+    : 'text-forgeGray-900';
 
   return (
     <Tag
@@ -80,13 +80,13 @@ export const Text: React.FC<TextProps> = ({
   };
 
   const variants = {
-    default: 'text-forgeGray-800 dark:text-forgeGray-200',
-    muted:   'text-forgeGray-500 dark:text-forgeGray-400',
-    subtle:  'text-forgeGray-400 dark:text-forgeGray-500',
+    default: 'text-forgeGray-800',
+    muted:   'text-forgeGray-500',
+    subtle:  'text-forgeGray-400',
     inverse: 'text-white',
     primary: 'text-primary-hover',
-    danger:  'text-red-500 dark:text-red-400',
-    success: 'text-emerald-600 dark:text-emerald-400',
+    danger:  'text-red-500',
+    success: 'text-emerald-600',
   };
 
   // Cast to avoid TypeScript complaining about polymorphic event-handler unions
@@ -105,7 +105,7 @@ interface LabelProps extends React.LabelHTMLAttributes<HTMLLabelElement> {
 
 export const Label: React.FC<LabelProps> = ({ required, children, className = '', ...props }) => (
   <label
-    className={`block text-xs font-semibold text-forgeGray-600 dark:text-forgeGray-400 mb-1 ${className}`}
+    className={`block text-xs font-semibold text-forgeGray-600 mb-1 ${className}`}
     {...props}
   >
     {children}
@@ -120,7 +120,7 @@ export const Caption: React.FC<React.HTMLAttributes<HTMLSpanElement>> = ({
   ...props
 }) => (
   <span
-    className={`text-[10px] font-semibold uppercase tracking-widest text-forgeGray-450 dark:text-forgeGray-500 ${className}`}
+    className={`text-[10px] font-semibold uppercase tracking-widest text-forgeGray-450 ${className}`}
     {...props}
   >
     {children}
@@ -146,7 +146,7 @@ export const Code: React.FC<React.HTMLAttributes<HTMLElement>> = ({
   ...props
 }) => (
   <code
-    className={`px-1.5 py-0.5 rounded-md bg-forgeGray-100 dark:bg-forgeGray-800 text-forgeGray-900 dark:text-forgeGray-100 font-mono text-xs border border-forgeGray-200 dark:border-forgeGray-700 ${className}`}
+    className={`px-1.5 py-0.5 rounded-md bg-forgeGray-100 text-forgeGray-900 font-mono text-xs border border-forgeGray-200 ${className}`}
     {...props}
   >
     {children}
@@ -161,13 +161,13 @@ interface DividerProps {
 
 export const Divider: React.FC<DividerProps> = ({ label, className = '' }) => (
   <div className={`relative flex items-center my-4 ${className}`}>
-    <div className="flex-grow border-t border-forgeGray-200 dark:border-forgeGray-800" />
+    <div className="flex-grow border-t border-forgeGray-200" />
     {label && (
-      <span className="flex-shrink mx-4 text-xs font-semibold text-forgeGray-400 dark:text-forgeGray-500 uppercase tracking-wider">
+      <span className="flex-shrink mx-4 text-xs font-semibold text-forgeGray-400 uppercase tracking-wider">
         {label}
       </span>
     )}
-    {label && <div className="flex-grow border-t border-forgeGray-200 dark:border-forgeGray-800" />}
+    {label && <div className="flex-grow border-t border-forgeGray-200" />}
   </div>
 );
 
@@ -188,7 +188,7 @@ export const PageTitle: React.FC<PageTitleProps> = ({
   className = '',
 }) => (
   <div
-    className={`flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-forgeGray-200/50 dark:border-slate-800 pb-6 mb-6 ${className}`}
+    className={`flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-forgeGray-200/50 pb-6 mb-6 ${className}`}
   >
     <div>
       {kicker && <Kicker className="mb-2">{kicker}</Kicker>}

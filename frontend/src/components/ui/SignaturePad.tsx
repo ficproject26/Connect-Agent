@@ -126,10 +126,10 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, onClear, err
 
   return (
     <div className="w-full">
-      <label className="block text-xs font-semibold text-forgeGray-500 dark:text-forgeGray-450 mb-1.5 ml-1">
+      <label className="block text-xs font-semibold text-forgeGray-500 mb-1.5 ml-1">
         Customer Digital Signature
       </label>
-      <div className={`relative border rounded-xl overflow-hidden ${error ? 'border-red-400' : 'border-forgeGray-200 dark:border-forgeGray-700/60'}`}>
+      <div className={`relative border rounded-xl overflow-hidden ${error ? 'border-red-400' : 'border-forgeGray-200'}`}>
         <canvas
           ref={canvasRef}
           onMouseDown={startDrawing}

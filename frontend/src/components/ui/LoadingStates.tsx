@@ -24,7 +24,7 @@ export const Skeleton: React.FC<SkeletonProps> = ({
 
   return (
     <div
-      className={`animate-pulse bg-forgeGray-100 dark:bg-slate-800/70 ${radii[rounded]} ${width} ${height} ${className}`}
+      className={`animate-pulse bg-forgeGray-100 ${radii[rounded]} ${width} ${height} ${className}`}
     />
   );
 };
@@ -42,7 +42,7 @@ export const CardSkeleton: React.FC<CardSkeletonProps> = ({
   className = '',
 }) => (
   <div
-    className={`surface-card rounded-[24px] p-6 border border-white/70 dark:border-forgeGray-800/70 shadow-[0_20px_45px_-24px_rgba(15,23,42,0.18)] space-y-4 ${className}`}
+    className={`surface-card rounded-[24px] p-6 border border-white/70 shadow-[0_20px_45px_-24px_rgba(15,23,42,0.18)] space-y-4 ${className}`}
   >
     {showAvatar && (
       <div className="flex items-center gap-3 mb-4">
@@ -81,10 +81,10 @@ export const TableSkeleton: React.FC<TableSkeletonProps> = ({
   className = '',
 }) => (
   <div
-    className={`surface-card rounded-[24px] overflow-hidden border border-white/70 dark:border-forgeGray-800/70 ${className}`}
+    className={`surface-card rounded-[24px] overflow-hidden border border-white/70 ${className}`}
   >
     {/* Header */}
-    <div className="flex gap-4 px-6 py-4 bg-forgeGray-50/60 dark:bg-slate-800/30 border-b border-forgeGray-100 dark:border-slate-800">
+    <div className="flex gap-4 px-6 py-4 bg-forgeGray-50/60 border-b border-forgeGray-100">
       {Array.from({ length: cols }).map((_, i) => (
         <Skeleton key={i} width="flex-1" height="h-3" className="flex-1" />
       ))}
@@ -93,7 +93,7 @@ export const TableSkeleton: React.FC<TableSkeletonProps> = ({
     {Array.from({ length: rows }).map((_, rowIdx) => (
       <div
         key={rowIdx}
-        className="flex gap-4 items-center px-6 py-4 border-b border-forgeGray-100/70 dark:border-slate-800/50 last:border-none"
+        className="flex gap-4 items-center px-6 py-4 border-b border-forgeGray-100/70 last:border-none"
       >
         {Array.from({ length: cols }).map((_, colIdx) => (
           <Skeleton
@@ -111,7 +111,7 @@ export const TableSkeleton: React.FC<TableSkeletonProps> = ({
 // ─── Stat Card Skeleton ───────────────────────────────────────────────────────
 export const StatCardSkeleton: React.FC<{ className?: string }> = ({ className = '' }) => (
   <div
-    className={`surface-card rounded-[24px] p-6 border border-white/70 dark:border-forgeGray-800/70 shadow-[0_20px_45px_-24px_rgba(15,23,42,0.18)] ${className}`}
+    className={`surface-card rounded-[24px] p-6 border border-white/70 shadow-[0_20px_45px_-24px_rgba(15,23,42,0.18)] ${className}`}
   >
     <div className="flex items-center justify-between mb-4">
       <Skeleton width="w-10" height="h-10" rounded="xl" />
@@ -126,7 +126,7 @@ export const StatCardSkeleton: React.FC<{ className?: string }> = ({ className =
 export const PageSkeleton: React.FC = () => (
   <div className="space-y-6 animate-fade-in">
     {/* Page title area */}
-    <div className="pb-6 border-b border-forgeGray-200/50 dark:border-slate-800 space-y-2">
+    <div className="pb-6 border-b border-forgeGray-200/50 space-y-2">
       <Skeleton width="w-48" height="h-3" rounded="full" className="mb-3" />
       <Skeleton width="w-72" height="h-8" />
       <Skeleton width="w-96" height="h-3" />
@@ -174,7 +174,7 @@ export const Spinner: React.FC<SpinnerProps> = ({
     primary:   'border-primary/30 border-t-primary',
     secondary: 'border-secondary/30 border-t-secondary',
     white:     'border-white/30 border-t-white',
-    muted:     'border-forgeGray-200 dark:border-forgeGray-700 border-t-forgeGray-500 dark:border-t-forgeGray-400',
+    muted:     'border-forgeGray-200 border-t-forgeGray-500',
   };
 
   return (
@@ -199,19 +199,19 @@ export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({
   <div
     className={`fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 ${
       transparent
-        ? 'bg-white/60 dark:bg-slate-950/60 backdrop-blur-sm'
-        : 'bg-background dark:bg-background-dark'
+        ? 'bg-white/60 backdrop-blur-sm'
+        : 'bg-background'
     }`}
   >
     <div className="relative flex items-center justify-center">
       {/* Outer ring */}
-      <div className="w-14 h-14 rounded-full border-4 border-forgeGray-100 dark:border-slate-800 animate-spin border-t-primary" />
+      <div className="w-14 h-14 rounded-full border-4 border-forgeGray-100 animate-spin border-t-primary" />
       {/* Logo center */}
       <span className="absolute h-7 w-7 rounded-xl bg-gradient-to-br from-primary to-amber-500 flex items-center justify-center font-extrabold text-forgeGray-950 text-xs shadow-lg">
         F
       </span>
     </div>
-    <p className="text-xs font-bold text-forgeGray-500 dark:text-forgeGray-400 uppercase tracking-widest">
+    <p className="text-xs font-bold text-forgeGray-500 uppercase tracking-widest">
       {message}
     </p>
   </div>
@@ -229,7 +229,7 @@ export const InlineLoader: React.FC<InlineLoaderProps> = ({
 }) => (
   <div className={`flex items-center justify-center gap-3 py-12 ${className}`}>
     <Spinner size="sm" variant="secondary" />
-    <span className="text-sm font-semibold text-forgeGray-500 dark:text-forgeGray-400">
+    <span className="text-sm font-semibold text-forgeGray-500">
       {message}
     </span>
   </div>
@@ -265,16 +265,16 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
     <div className={`flex flex-col items-center justify-center text-center ${s.wrapper} ${className}`}>
       {icon && (
         <div
-          className={`flex items-center justify-center rounded-2xl bg-forgeGray-100 dark:bg-slate-800/60 text-forgeGray-400 dark:text-forgeGray-500 ${s.icon} p-3 mb-4`}
+          className={`flex items-center justify-center rounded-2xl bg-forgeGray-100 text-forgeGray-400 ${s.icon} p-3 mb-4`}
         >
           {icon}
         </div>
       )}
-      <p className={`font-bold text-forgeGray-700 dark:text-forgeGray-200 ${s.title}`}>
+      <p className={`font-bold text-forgeGray-700 ${s.title}`}>
         {title}
       </p>
       {description && (
-        <p className={`mt-1.5 text-forgeGray-450 dark:text-forgeGray-400 max-w-xs leading-relaxed ${s.desc}`}>
+        <p className={`mt-1.5 text-forgeGray-450 max-w-xs leading-relaxed ${s.desc}`}>
           {description}
         </p>
       )}
@@ -298,7 +298,7 @@ export const ErrorState: React.FC<ErrorStateProps> = ({
   className = '',
 }) => (
   <div className={`flex flex-col items-center justify-center text-center py-16 ${className}`}>
-    <div className="w-14 h-14 rounded-2xl bg-red-50 dark:bg-red-950/30 flex items-center justify-center mb-4">
+    <div className="w-14 h-14 rounded-2xl bg-red-50 flex items-center justify-center mb-4">
       <svg className="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path
           strokeLinecap="round"
@@ -308,14 +308,14 @@ export const ErrorState: React.FC<ErrorStateProps> = ({
         />
       </svg>
     </div>
-    <p className="font-bold text-forgeGray-900 dark:text-white text-base">{title}</p>
-    <p className="mt-1.5 text-sm text-forgeGray-450 dark:text-forgeGray-400 max-w-xs leading-relaxed">
+    <p className="font-bold text-forgeGray-900 text-base">{title}</p>
+    <p className="mt-1.5 text-sm text-forgeGray-450 max-w-xs leading-relaxed">
       {description}
     </p>
     {onRetry && (
       <button
         onClick={onRetry}
-        className="mt-5 px-5 py-2 text-xs font-bold rounded-xl border border-forgeGray-200 dark:border-forgeGray-700 bg-white dark:bg-slate-900 text-forgeGray-700 dark:text-forgeGray-300 hover:bg-forgeGray-50 dark:hover:bg-slate-800 transition-colors"
+        className="mt-5 px-5 py-2 text-xs font-bold rounded-xl border border-forgeGray-200 bg-white text-forgeGray-700 hover:bg-forgeGray-50 transition-colors"
       >
         Try again
       </button>
@@ -329,7 +329,7 @@ export const DotsLoader: React.FC<{ className?: string }> = ({ className = '' })
     {[0, 1, 2].map((i) => (
       <span
         key={i}
-        className="w-1.5 h-1.5 rounded-full bg-forgeGray-400 dark:bg-forgeGray-500 animate-bounce"
+        className="w-1.5 h-1.5 rounded-full bg-forgeGray-400 animate-bounce"
         style={{ animationDelay: `${i * 0.15}s` }}
       />
     ))}

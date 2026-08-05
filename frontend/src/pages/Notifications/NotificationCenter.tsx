@@ -24,12 +24,12 @@ export const NotificationCenter: React.FC = () => {
   return (
     <div className="space-y-6">
       
-      <div className="flex justify-between items-center bg-white dark:bg-background-cardDark p-6 rounded-forge border border-forgeGray-200/40 dark:border-slate-800 shadow-sm">
+      <div className="flex justify-between items-center bg-white p-6 rounded-forge border border-forgeGray-200/40 shadow-sm">
         <div>
-          <h1 className="text-2xl font-black text-forgeGray-900 dark:text-white font-sans">
+          <h1 className="text-2xl font-black text-forgeGray-900 font-sans">
             Notification Center
           </h1>
-          <p className="text-xs font-semibold text-forgeGray-450 dark:text-forgeGray-400 mt-1 uppercase tracking-wider">
+          <p className="text-xs font-semibold text-forgeGray-450 mt-1 uppercase tracking-wider">
             Review critical system dispatches and priority service alert records
           </p>
         </div>
@@ -51,12 +51,12 @@ export const NotificationCenter: React.FC = () => {
                   placeholder="Search dispatches..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 bg-forgeGray-50 dark:bg-slate-800 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary dark:text-white"
+                  className="w-full pl-9 pr-4 py-2 bg-forgeGray-50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
 
               <div className="space-y-2 pt-2">
-                <label className="block text-forgeGray-450 dark:text-forgeGray-400 uppercase text-[9px] font-bold ml-1">Priority Tags</label>
+                <label className="block text-forgeGray-450 uppercase text-[9px] font-bold ml-1">Priority Tags</label>
                 <div className="flex flex-col space-y-1.5">
                   {[
                     { id: 'all', label: 'All Alerts' },
@@ -70,7 +70,7 @@ export const NotificationCenter: React.FC = () => {
                       className={`text-left px-3 py-2 rounded-xl text-xs font-bold transition ${
                         priorityFilter === p.id 
                           ? 'bg-primary text-forgeGray-950 shadow-sm' 
-                          : 'hover:bg-forgeGray-50 dark:hover:bg-slate-800 text-forgeGray-650'
+                          : 'hover:bg-forgeGray-50 text-forgeGray-650'
                       }`}
                     >
                       {p.label}
@@ -108,23 +108,23 @@ export const NotificationCenter: React.FC = () => {
                     <span className={`inline-block h-2 w-2 rounded-full ${
                       notif.priority === 'high' ? 'bg-red-500 animate-ping' : 'bg-forgeGray-400'
                     }`} />
-                    <h3 className="font-extrabold text-sm text-forgeGray-900 dark:text-white leading-tight">
+                    <h3 className="font-extrabold text-sm text-forgeGray-900 leading-tight">
                       {notif.title}
                     </h3>
                   </div>
                   
-                  <span className="text-[10px] text-forgeGray-450 dark:text-forgeGray-400 font-semibold uppercase">
+                  <span className="text-[10px] text-forgeGray-450 font-semibold uppercase">
                     {new Date(notif.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
 
-                <p className="text-xs text-forgeGray-600 dark:text-forgeGray-400 leading-relaxed font-semibold">
+                <p className="text-xs text-forgeGray-600 leading-relaxed font-semibold">
                   {notif.message}
                 </p>
 
-                <div className="flex justify-between items-center border-t border-forgeGray-100 dark:border-slate-850/80 pt-3 mt-3 text-xs font-semibold">
+                <div className="flex justify-between items-center border-t border-forgeGray-100 pt-3 mt-3 text-xs font-semibold">
                   <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
-                    notif.priority === 'high' ? 'bg-red-100 text-red-750 dark:bg-red-950/20' : 'bg-forgeGray-100'
+                    notif.priority === 'high' ? 'bg-red-100 text-red-750' : 'bg-forgeGray-100'
                   }`}>
                     {notif.priority} Priority
                   </span>
@@ -132,7 +132,7 @@ export const NotificationCenter: React.FC = () => {
                   {!notif.read && (
                     <button
                       onClick={() => markNotificationRead(notif.id)}
-                      className="text-secondary dark:text-primary hover:underline flex items-center space-x-1.5"
+                      className="text-secondary hover:underline flex items-center space-x-1.5"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
                       <span>Mark Read</span>
