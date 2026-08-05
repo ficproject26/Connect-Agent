@@ -1059,43 +1059,48 @@ export const RegisterWizard: React.FC = () => {
                     { key: 'passportPhoto', label: 'Passport Photo (Required)' },
                     { key: 'educationalCertificate', label: 'Educational Certificate (Optional)' },
                     { key: 'bankProof', label: 'Bank Proof / Cancelled Cheque (Optional)' }
-                  ].map((doc) => (
-                    <div key={doc.key} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                      <label className="block text-xs font-bold text-slate-700">{doc.label}</label>
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="file"
-                          accept=".jpg,.jpeg,.png,.pdf"
-                          id={`file-${doc.key}`}
-                          className="hidden"
-                          onChange={(e) => handleFileUpload(e, doc.key)}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => document.getElementById(`file-${doc.key}`)?.click()}
-                          className="flex items-center gap-2 px-4 py-2 border border-[#864f19] text-[#864f19] rounded-xl text-xs font-bold bg-white hover:bg-slate-50 cursor-pointer"
-                        >
-                          <FileText className="w-4 h-4" />
-                          {documents[doc.key].fileName ? 'Change File' : 'Select File'}
-                        </button>
-                        {documents[doc.key].fileName && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-emerald-600 font-bold truncate max-w-[130px]" title={documents[doc.key].fileName}>
-                              ✓ {documents[doc.key].fileName}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => removeDocument(doc.key)}
-                              className="text-[10px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-1 rounded-lg border border-rose-200 transition-colors cursor-pointer shrink-0"
-                              title="Remove file"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        )}
+                  ].map((doc) => {
+                    const docInfo = documents[doc.key];
+                    const isUploaded = Boolean(docInfo?.fileName && docInfo?.dataUrl);
+
+                    return (
+                      <div key={doc.key} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                        <label className="block text-xs font-bold text-slate-700">{doc.label}</label>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="file"
+                            accept=".jpg,.jpeg,.png,.pdf"
+                            id={`file-${doc.key}`}
+                            className="hidden"
+                            onChange={(e) => handleFileUpload(e, doc.key)}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => document.getElementById(`file-${doc.key}`)?.click()}
+                            className="flex items-center gap-2 px-4 py-2 border border-[#864f19] text-[#864f19] rounded-xl text-xs font-bold bg-white hover:bg-slate-50 cursor-pointer"
+                          >
+                            <FileText className="w-4 h-4" />
+                            {isUploaded ? 'Change File' : 'Select File'}
+                          </button>
+                          {isUploaded && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] text-emerald-600 font-bold truncate max-w-[130px]" title={docInfo.fileName}>
+                                ✓ {docInfo.fileName}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => removeDocument(doc.key)}
+                                className="text-[10px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-1 rounded-lg border border-rose-200 transition-colors cursor-pointer shrink-0"
+                                title="Remove file"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 {/* Signature Pad */}
