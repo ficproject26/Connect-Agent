@@ -474,7 +474,7 @@ export const FieldVisitsModule: React.FC = () => {
           </div>
 
           <div className="space-y-1">
-            <label className="block text-[#52443a] uppercase text-[10px] font-bold">Visit Remarks / Purpose</label>
+            <label className="block text-[#52443a] uppercase text-[10px] font-bold">Visit Purpose</label>
             <input
               type="text"
               placeholder="e.g. KYC audit & QR code onboarding"

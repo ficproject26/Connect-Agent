@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardBody, Tabs, Select, Button, Charts, Input } from '../../components/ui';
-import { BarChart3, TrendingUp, Download, CheckCircle2, Ticket, Users, Upload, FileText, Loader2 } from 'lucide-react';
+import { BarChart3, TrendingUp, Download, CheckCircle2, Ticket, Users, Upload, FileText, Loader2, Calendar } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../utils/api';
 
@@ -8,6 +8,7 @@ export const ReportsModule: React.FC = () => {
   const { addNotification } = useAuth();
   const [activeTab, setActiveTab] = useState('merchants');
   const [timeframe, setTimeframe] = useState('monthly');
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [isExporting, setIsExporting] = useState(false);
 
   const defaultSubmittedReports = [
@@ -130,13 +131,71 @@ export const ReportsModule: React.FC = () => {
     { value: 'monthly', label: 'Monthly Breakdown' },
   ];
 
-  // Dynamic datasets based on timeframe selection (Agent Portal merchant growth)
-  const merchantData = {
+  // Dynamic datasets based on timeframe & selected calendar date
+  const getDateSeed = (dateStr: string) => {
+    let hash = 0;
+    for (let i = 0; i < dateStr.length; i++) {
+      hash = (hash << 5) - hash + dateStr.charCodeAt(i);
+      hash |= 0;
+    }
+    return Math.abs(hash);
+  };
+
+  const dateSeed = getDateSeed(selectedDate);
+  const baseReg = (dateSeed % 12) + 6;
+  const baseApp = Math.max(2, Math.floor(baseReg * 0.8));
+
+  const chosenDateMerchantData = {
+    labels: ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00'],
+    registrations: [
+      Math.max(1, Math.floor(baseReg * 0.25)),
+      Math.max(3, Math.floor(baseReg * 0.45)),
+      Math.max(5, Math.floor(baseReg * 0.65)),
+      Math.max(7, Math.floor(baseReg * 0.85)),
+      Math.max(9, baseReg),
+      Math.max(11, baseReg + 3),
+      Math.max(14, baseReg + 6)
+    ],
+    approved: [
+      Math.max(1, Math.floor(baseApp * 0.25)),
+      Math.max(2, Math.floor(baseApp * 0.45)),
+      Math.max(4, Math.floor(baseApp * 0.65)),
+      Math.max(6, Math.floor(baseApp * 0.85)),
+      Math.max(7, baseApp),
+      Math.max(9, baseApp + 2),
+      Math.max(11, baseApp + 4)
+    ],
+    shares: [45, 25, 20, 10],
+  };
+
+  const chosenDateOperationsData = {
+    labels: ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00'],
+    targetsCompleted: [
+      Math.max(1, Math.floor((baseReg + 4) * 0.2)),
+      Math.max(3, Math.floor((baseReg + 4) * 0.4)),
+      Math.max(6, Math.floor((baseReg + 4) * 0.6)),
+      Math.max(10, Math.floor((baseReg + 4) * 0.8)),
+      Math.max(14, baseReg + 4),
+      Math.max(18, baseReg + 7),
+      Math.max(22, baseReg + 10)
+    ],
+    ticketsResolved: [
+      Math.max(1, Math.floor(baseApp * 0.2)),
+      Math.max(2, Math.floor(baseApp * 0.4)),
+      Math.max(5, Math.floor(baseApp * 0.6)),
+      Math.max(8, Math.floor(baseApp * 0.8)),
+      Math.max(12, baseApp + 3),
+      Math.max(15, baseApp + 5),
+      Math.max(18, baseApp + 7)
+    ],
+  };
+
+  const merchantData = timeframe === 'date' ? chosenDateMerchantData : ({
     today: {
       labels: ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00'],
       registrations: [2, 4, 8, 12, 18, 22, 26],
       approved: [1, 3, 6, 9, 14, 18, 22],
-      shares: [50, 20, 20, 10], // Category shares
+      shares: [50, 20, 20, 10],
     },
     weekly: {
       labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5', 'Week 6', 'Week 7'],
@@ -150,14 +209,9 @@ export const ReportsModule: React.FC = () => {
       approved: [70, 130, 190, 270, 370, 500, 610],
       shares: [40, 30, 20, 10],
     },
-  }[timeframe as 'today' | 'weekly' | 'monthly'] || {
-    labels: [],
-    registrations: [],
-    approved: [],
-    shares: [25, 25, 25, 25],
-  };
+  }[timeframe as 'today' | 'weekly' | 'monthly'] || chosenDateMerchantData);
 
-  const operationsData = {
+  const operationsData = timeframe === 'date' ? chosenDateOperationsData : ({
     today: {
       labels: ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00'],
       targetsCompleted: [3, 8, 15, 24, 32, 40, 45],
@@ -173,11 +227,7 @@ export const ReportsModule: React.FC = () => {
       targetsCompleted: [120, 210, 320, 440, 580, 720, 850],
       ticketsResolved: [95, 160, 240, 330, 450, 560, 670],
     },
-  }[timeframe as 'today' | 'weekly' | 'monthly'] || {
-    labels: [],
-    targetsCompleted: [],
-    ticketsResolved: [],
-  };
+  }[timeframe as 'today' | 'weekly' | 'monthly'] || chosenDateOperationsData);
 
   const handleExport = () => {
     setIsExporting(true);
@@ -316,14 +366,33 @@ export const ReportsModule: React.FC = () => {
           </p>
         </div>
 
-        {/* Global Filter Bar */}
-        <div className="flex items-center space-x-3 w-full md:w-auto">
-          <div className="w-52">
+        {/* Global Filter Bar with Calendar View */}
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+          {/* Calendar View Date Picker */}
+          <div className="flex flex-col">
+            <label className="text-[10px] font-extrabold uppercase text-[#52443a] tracking-wider mb-1 flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5 text-[#864f19]" /> Select Date (Calendar View)
+            </label>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => {
+                setSelectedDate(e.target.value);
+                setTimeframe('date');
+              }}
+              className="bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl px-3 py-2 text-xs font-bold text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19] cursor-pointer shadow-sm"
+            />
+          </div>
+
+          <div className="w-48">
             <Select
               label="Select Timeframe"
               value={timeframe}
               onChange={(e) => setTimeframe(e.target.value)}
-              options={timeframeOptions}
+              options={[
+                { value: 'date', label: `Chosen Date (${selectedDate})` },
+                ...timeframeOptions
+              ]}
             />
           </div>
           <div className="pt-5 shrink-0">
