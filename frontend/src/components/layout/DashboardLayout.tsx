@@ -56,7 +56,6 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
     { label: 'Support Tickets', path: '/tickets', icon: <Ticket className="w-5 h-5" /> },
     { label: 'Wallet', path: '/wallet', icon: <Wallet className="w-5 h-5" /> },
     { label: 'Reports', path: '/reports', icon: <FileText className="w-5 h-5" /> },
-    { label: 'Attendance', path: '/shared/attendance', icon: <Calendar className="w-5 h-5" /> },
     { label: 'Notifications', path: '/shared/notifications', icon: <Bell className="w-5 h-5" /> },
     { label: 'Leaderboard', path: '/leaderboard', icon: <Trophy className="w-5 h-5 text-amber-500" /> },
     { label: 'Profile', path: '/shared/profile', icon: <User className="w-5 h-5" /> },
