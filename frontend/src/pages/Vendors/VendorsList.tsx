@@ -672,133 +672,212 @@ export const VendorsList: React.FC = () => {
 
       {/* ADVANCED MULTI-ATTRIBUTE SEARCH & MULTI-DIMENSIONAL FILTERS */}
       <div className="bg-white p-5 rounded-2xl border border-[#d7c3b5]/40 shadow-sm space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
-          {/* Advanced Search */}
-          <div className="sm:col-span-2 md:col-span-2">
-            <Input
-              label="Advanced Search (Name, Reg ID, Phone, GSTIN, Owner)"
-              placeholder="Search by Vendor Name, Reg ID, Phone, GSTIN, Owner..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              leftIcon={<Search className="w-4 h-4 text-slate-400" />}
-            />
-          </div>
+        {activeRole === 'pincode' ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+            {/* Date Filter */}
+            <div>
+              <Select
+                label="Date Range Period"
+                options={[
+                  { value: 'all', label: 'All Time' },
+                  { value: 'today', label: 'Today' },
+                  { value: 'yesterday', label: 'Yesterday' },
+                  { value: '7days', label: 'Last 7 Days' },
+                  { value: 'this_month', label: 'This Month' },
+                  { value: 'last_month', label: 'Last Month' },
+                  { value: 'this_year', label: 'This Year' }
+                ]}
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+              />
+            </div>
 
-          {/* Date Filter */}
-          <div>
-            <Select
-              label="Date Range Period"
-              options={[
-                { value: 'all', label: 'All Time' },
-                { value: 'today', label: 'Today' },
-                { value: 'yesterday', label: 'Yesterday' },
-                { value: '7days', label: 'Last 7 Days' },
-                { value: 'this_month', label: 'This Month' },
-                { value: 'last_month', label: 'Last Month' },
-                { value: 'this_year', label: 'This Year' }
-              ]}
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value)}
-            />
-          </div>
+            {/* Category Filter */}
+            <div>
+              <Select
+                label="Vendor Category"
+                options={[
+                  { value: 'all', label: 'All Categories' },
+                  ...categories.map(c => ({ value: c, label: c }))
+                ]}
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+              />
+            </div>
 
-          {/* Category Filter */}
-          <div>
-            <Select
-              label="Vendor Category"
-              options={[
-                { value: 'all', label: 'All Categories' },
-                ...categories.map(c => ({ value: c, label: c }))
-              ]}
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-            />
-          </div>
-        </div>
+            {/* Assigned Agent */}
+            <div>
+              <Select
+                label="Assigned Agent"
+                options={[
+                  { value: 'all', label: 'All Agents' },
+                  ...agents.map(a => ({ value: a, label: a }))
+                ]}
+                value={agentFilter}
+                onChange={(e) => setAgentFilter(e.target.value)}
+              />
+            </div>
 
-        {/* Secondary Filters Row */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-2 border-t border-[#d7c3b5]/30 items-end">
-          <div>
-            <Select
-              label="District"
-              options={
-                activeRole === 'state'
-                  ? [{ value: 'all', label: 'All State Districts' }, ...districts.map(d => ({ value: d, label: d }))]
-                  : [{ value: userDistrict, label: `${userDistrict}` }]
-              }
-              value={activeRole === 'state' ? districtFilter : userDistrict}
-              onChange={(e) => setDistrictFilter(e.target.value)}
-              disabled={activeRole !== 'state'}
-            />
-          </div>
+            {/* Vendor Status */}
+            <div>
+              <Select
+                label="Vendor Status"
+                options={[
+                  { value: 'all', label: 'All Statuses' },
+                  { value: 'active', label: 'Active' },
+                  { value: 'inactive', label: 'Inactive' }
+                ]}
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              />
+            </div>
 
-          <div>
-            <Select
-              label="Division"
-              options={
-                activeRole === 'state' || activeRole === 'district'
-                  ? [{ value: 'all', label: activeRole === 'district' ? 'All Divisions in District' : 'All Divisions' }, ...divisions.map(d => ({ value: d, label: d }))]
-                  : [{ value: userDivision, label: `${userDivision}` }]
-              }
-              value={activeRole === 'state' || activeRole === 'district' ? divisionFilter : userDivision}
-              onChange={(e) => setDivisionFilter(e.target.value)}
-              disabled={activeRole === 'division' || activeRole === 'pincode'}
-            />
+            {/* KYC Status (Read-Only) */}
+            <div>
+              <Select
+                label="KYC Status (Read-Only)"
+                options={[
+                  { value: 'all', label: 'All KYC Statuses' },
+                  { value: 'pending', label: 'Pending KYC' },
+                  { value: 'approved', label: 'Approved' },
+                  { value: 'rejected', label: 'Rejected' }
+                ]}
+                value={kycFilter}
+                onChange={(e) => setKycFilter(e.target.value)}
+              />
+            </div>
           </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
+              {/* Advanced Search */}
+              <div className="sm:col-span-2 md:col-span-2">
+                <Input
+                  label="Advanced Search (Name, Reg ID, Phone, GSTIN, Owner)"
+                  placeholder="Search by Vendor Name, Reg ID, Phone, GSTIN, Owner..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  leftIcon={<Search className="w-4 h-4 text-slate-400" />}
+                />
+              </div>
 
-          <div>
-            <Select
-              label="Pincode"
-              options={
-                activeRole !== 'pincode'
-                  ? [{ value: 'all', label: 'All Pincodes' }, ...pincodes.map(p => ({ value: p, label: `PIN ${p}` }))]
-                  : [{ value: userPincode, label: `PIN ${userPincode}` }]
-              }
-              value={activeRole !== 'pincode' ? pincodeFilter : userPincode}
-              onChange={(e) => setPincodeFilter(e.target.value)}
-              disabled={activeRole === 'pincode'}
-            />
-          </div>
+              {/* Date Filter */}
+              <div>
+                <Select
+                  label="Date Range Period"
+                  options={[
+                    { value: 'all', label: 'All Time' },
+                    { value: 'today', label: 'Today' },
+                    { value: 'yesterday', label: 'Yesterday' },
+                    { value: '7days', label: 'Last 7 Days' },
+                    { value: 'this_month', label: 'This Month' },
+                    { value: 'last_month', label: 'Last Month' },
+                    { value: 'this_year', label: 'This Year' }
+                  ]}
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value)}
+                />
+              </div>
 
-          <div>
-            <Select
-              label="Assigned Agent"
-              options={[
-                { value: 'all', label: 'All Agents' },
-                ...agents.map(a => ({ value: a, label: a }))
-              ]}
-              value={agentFilter}
-              onChange={(e) => setAgentFilter(e.target.value)}
-            />
-          </div>
+              {/* Category Filter */}
+              <div>
+                <Select
+                  label="Vendor Category"
+                  options={[
+                    { value: 'all', label: 'All Categories' },
+                    ...categories.map(c => ({ value: c, label: c }))
+                  ]}
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                />
+              </div>
+            </div>
 
-          <div>
-            <Select
-              label="Vendor Status"
-              options={[
-                { value: 'all', label: 'All Statuses' },
-                { value: 'active', label: 'Active' },
-                { value: 'inactive', label: 'Inactive' }
-              ]}
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-            />
-          </div>
+            {/* Secondary Filters Row */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-2 border-t border-[#d7c3b5]/30 items-end">
+              <div>
+                <Select
+                  label="District"
+                  options={
+                    activeRole === 'state'
+                      ? [{ value: 'all', label: 'All State Districts' }, ...districts.map(d => ({ value: d, label: d }))]
+                      : [{ value: userDistrict, label: `${userDistrict}` }]
+                  }
+                  value={activeRole === 'state' ? districtFilter : userDistrict}
+                  onChange={(e) => setDistrictFilter(e.target.value)}
+                  disabled={activeRole !== 'state'}
+                />
+              </div>
 
-          <div>
-            <Select
-              label="KYC Status (Read-Only)"
-              options={[
-                { value: 'all', label: 'All KYC Statuses' },
-                { value: 'pending', label: 'Pending KYC' },
-                { value: 'approved', label: 'Approved' },
-                { value: 'rejected', label: 'Rejected' }
-              ]}
-              value={kycFilter}
-              onChange={(e) => setKycFilter(e.target.value)}
-            />
-          </div>
-        </div>
+              <div>
+                <Select
+                  label="Division"
+                  options={
+                    activeRole === 'state' || activeRole === 'district'
+                      ? [{ value: 'all', label: activeRole === 'district' ? 'All Divisions in District' : 'All Divisions' }, ...divisions.map(d => ({ value: d, label: d }))]
+                      : [{ value: userDivision, label: `${userDivision}` }]
+                  }
+                  value={activeRole === 'state' || activeRole === 'district' ? divisionFilter : userDivision}
+                  onChange={(e) => setDivisionFilter(e.target.value)}
+                  disabled={activeRole === 'division' || activeRole === 'pincode'}
+                />
+              </div>
+
+              <div>
+                <Select
+                  label="Pincode"
+                  options={
+                    activeRole !== 'pincode'
+                      ? [{ value: 'all', label: 'All Pincodes' }, ...pincodes.map(p => ({ value: p, label: `PIN ${p}` }))]
+                      : [{ value: userPincode, label: `PIN ${userPincode}` }]
+                  }
+                  value={activeRole !== 'pincode' ? pincodeFilter : userPincode}
+                  onChange={(e) => setPincodeFilter(e.target.value)}
+                  disabled={activeRole === 'pincode'}
+                />
+              </div>
+
+              <div>
+                <Select
+                  label="Assigned Agent"
+                  options={[
+                    { value: 'all', label: 'All Agents' },
+                    ...agents.map(a => ({ value: a, label: a }))
+                  ]}
+                  value={agentFilter}
+                  onChange={(e) => setAgentFilter(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <Select
+                  label="Vendor Status"
+                  options={[
+                    { value: 'all', label: 'All Statuses' },
+                    { value: 'active', label: 'Active' },
+                    { value: 'inactive', label: 'Inactive' }
+                  ]}
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <Select
+                  label="KYC Status (Read-Only)"
+                  options={[
+                    { value: 'all', label: 'All KYC Statuses' },
+                    { value: 'pending', label: 'Pending KYC' },
+                    { value: 'approved', label: 'Approved' },
+                    { value: 'rejected', label: 'Rejected' }
+                  ]}
+                  value={kycFilter}
+                  onChange={(e) => setKycFilter(e.target.value)}
+                />
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Action Export Controls */}
         <div className="flex justify-between items-center pt-2 border-t border-[#d7c3b5]/30">
