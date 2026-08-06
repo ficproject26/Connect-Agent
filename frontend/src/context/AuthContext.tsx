@@ -103,6 +103,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const applySavedProfileOverrides = (agentData: AgentProfile): AgentProfile => {
+    try {
+      const savedStr = localStorage.getItem('connect_portal_agent_saved_profile');
+      if (savedStr) {
+        const saved = JSON.parse(savedStr);
+        return { ...agentData, ...saved };
+      }
+    } catch (e) {
+      console.error('Error parsing saved agent profile:', e);
+    }
+    return agentData;
+  };
+
   const refetchUser = async () => {
     try {
       const response = await api.get('/auth/me');
@@ -115,7 +128,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Map kycStatus to status for compatibility
       agent.status = (agent.kycStatus === 'approved' || agent.status === 'approved' || agent.status === 'active') ? 'active' : 'pending_approval';
       agent.mobile = agent.phone;
-      setUser(agent);
+      setUser(applySavedProfileOverrides(agent));
       await fetchNotifications();
     } catch (err) {
       console.error('Refetch user failed:', err);
@@ -178,9 +191,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         agent.mobile = agent.phone;
         localStorage.setItem('agent_token', data.token);
         setToken(data.token);
-        setUser(agent);
+        const finalAgent = applySavedProfileOverrides(agent);
+        setUser(finalAgent);
         setTimeout(() => { fetchNotifications(); }, 100);
-        return agent;
+        return finalAgent;
       }
       if (result.status === 'rejected') {
         const err = result.reason;
@@ -289,7 +303,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateAgent = (data: Partial<AgentProfile>) => {
     if (user) {
-      setUser((prev) => (prev ? { ...prev, ...data } : null));
+      setUser((prev) => {
+        if (!prev) return null;
+        const updated = { ...prev, ...data };
+        try {
+          const existingSaved = JSON.parse(localStorage.getItem('connect_portal_agent_saved_profile') || '{}');
+          localStorage.setItem('connect_portal_agent_saved_profile', JSON.stringify({ ...existingSaved, ...data }));
+        } catch (e) {
+          console.error('Failed to save profile changes to localStorage:', e);
+        }
+        return updated;
+      });
     }
   };
 

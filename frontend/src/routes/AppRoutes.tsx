@@ -104,7 +104,6 @@ export const AppRoutes: React.FC = () => {
                   <Route path="shared/profile" element={<ProfileModule />} />
                   <Route path="shared/settings" element={<SettingsModule />} />
                   <Route path="shared/notifications" element={<NotificationCenter />} />
-                  <Route path="shared/attendance" element={<AttendanceLogs />} />
                   <Route path="field-visits" element={<FieldVisitsModule />} />
 
                   {/* Fallback to dashboard */}

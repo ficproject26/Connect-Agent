@@ -19,7 +19,39 @@ export const TargetsList: React.FC = () => {
   const { user } = useAuth();
   const isManager = user?.role === 'state' || user?.role === 'district' || user?.role === 'division';
 
-  const [allocations, setAllocations] = useState<Allocation[]>([]);
+  const defaultInitialTargets: Allocation[] = [
+    {
+      _id: "TSK-0911",
+      vendorName: "Hosur Onboarding Quota",
+      location: "Krishnagiri District (635109 Hosur)",
+      dueDate: "Today, 5:00 PM",
+      status: "assigned",
+      priority: "high",
+      taskDescription: "Onboard 10 verified Kirana merchant shops in territory.",
+      targetValue: 10
+    },
+    {
+      _id: "TSK-3342",
+      vendorName: "KYC Verification Goal",
+      location: "Krishnagiri Central (635001)",
+      dueDate: "Today, 7:00 PM",
+      status: "completed",
+      priority: "medium",
+      taskDescription: "Complete physical document audits for 5 regional partners.",
+      targetValue: 5
+    }
+  ];
+
+  const [allocations, setAllocations] = useState<Allocation[]>(() => {
+    try {
+      const saved = localStorage.getItem('connect_portal_target_allocations');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return defaultInitialTargets;
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
   const [activeTab, setActiveTab] = useState<'today' | 'upcoming' | 'completed'>('today');
@@ -58,34 +90,19 @@ export const TargetsList: React.FC = () => {
           taskDescription: a.target?.description || 'Achieve merchant onboarding quota target goal.',
           targetValue: a.target?.targetValue || 10
         }));
-        setAllocations(mapped);
-      } else {
-        throw new Error('No assignments returned');
+
+        setAllocations(prev => {
+          const apiIds = new Set(mapped.map(m => m._id));
+          const localOnly = prev.filter(p => !apiIds.has(p._id));
+          const combined = [...localOnly, ...mapped];
+          try {
+            localStorage.setItem('connect_portal_target_allocations', JSON.stringify(combined));
+          } catch (e) {}
+          return combined;
+        });
       }
     } catch (err: any) {
       console.log('Using local targets allocations');
-      setAllocations([
-        {
-          _id: "TSK-0911",
-          vendorName: "Hosur Onboarding Quota",
-          location: "Krishnagiri District (635109 Hosur)",
-          dueDate: "Today, 5:00 PM",
-          status: "assigned",
-          priority: "high",
-          taskDescription: "Onboard 10 verified Kirana merchant shops in territory.",
-          targetValue: 10
-        },
-        {
-          _id: "TSK-3342",
-          vendorName: "KYC Verification Goal",
-          location: "Krishnagiri Central (635001)",
-          dueDate: "Today, 7:00 PM",
-          status: "completed",
-          priority: "medium",
-          taskDescription: "Complete physical document audits for 5 regional partners.",
-          targetValue: 5
-        }
-      ]);
     } finally {
       setIsLoading(false);
     }
@@ -98,10 +115,16 @@ export const TargetsList: React.FC = () => {
   const handleMarkCompleted = async (id: string) => {
     try {
       await api.patch(`/targets/assignments/${id}/status`, { status: 'completed' });
-    } catch (err) {
-      console.log('Local target completed update');
+    } catch (e) {
+      console.log('Simulated status update locally');
     }
-    setAllocations(prev => prev.map(a => a._id === id ? { ...a, status: 'completed' } : a));
+    setAllocations(prev => {
+      const updated = prev.map(a => a._id === id ? { ...a, status: 'completed' as const } : a);
+      try {
+        localStorage.setItem('connect_portal_target_allocations', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
   };
 
   const handleCreateTargetSubmit = async (e: React.FormEvent) => {
@@ -131,7 +154,13 @@ export const TargetsList: React.FC = () => {
       console.log('Simulated local target creation');
     }
 
-    setAllocations(prev => [newAlloc, ...prev]);
+    setAllocations(prev => {
+      const updated = [newAlloc, ...prev];
+      try {
+        localStorage.setItem('connect_portal_target_allocations', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
     setIsCreateModalOpen(false);
     setIsSubmitting(false);
     

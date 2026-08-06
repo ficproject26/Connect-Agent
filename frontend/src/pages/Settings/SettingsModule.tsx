@@ -21,7 +21,7 @@ export const SettingsModule: React.FC = () => {
     setSoundVolume,
     triggerSound
   } = useAuth();
-  const [activeSubTab, setActiveSubTab] = useState<'notifications' | 'account'>('notifications');
+  const [activeSubTab, setActiveSubTab] = useState<'notifications' | 'account'>('account');
 
   const handleSoundTest = () => {
     triggerSound();
@@ -53,7 +53,7 @@ export const SettingsModule: React.FC = () => {
   return (
     <div className="space-y-6 animate-fade-in">
       
-      {/* Page Title & Subtabs */}
+      {/* Page Title */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-forgeGray-200/50 pb-6">
         <div>
           <h1 className="text-3xl font-black font-sans text-forgeGray-900 leading-tight">
@@ -62,30 +62,6 @@ export const SettingsModule: React.FC = () => {
           <p className="text-forgeGray-450 mt-1 font-semibold text-sm">
             Manage your enterprise profile, operational alerts, and compliance standards.
           </p>
-        </div>
-        <div className="flex gap-2 bg-forgeGray-100 p-1 rounded-xl border border-forgeGray-200/50 shrink-0">
-          <button 
-            onClick={() => setActiveSubTab('notifications')}
-            className={`px-4 py-2 shadow-sm rounded-lg font-bold flex items-center gap-2 text-xs transition-all ${
-              activeSubTab === 'notifications'
-                ? 'bg-white text-secondary'
-                : 'text-forgeGray-450 hover:text-forgeGray-600'
-            }`}
-          >
-            <Bell className="w-4 h-4" />
-            Notifications
-          </button>
-          <button 
-            onClick={() => setActiveSubTab('account')}
-            className={`px-4 py-2 shadow-sm rounded-lg font-bold flex items-center gap-2 text-xs transition-all ${
-              activeSubTab === 'account'
-                ? 'bg-white text-secondary'
-                : 'text-forgeGray-450 hover:text-forgeGray-600'
-            }`}
-          >
-            <User className="w-4 h-4" />
-            Account Settings
-          </button>
         </div>
       </div>
 
