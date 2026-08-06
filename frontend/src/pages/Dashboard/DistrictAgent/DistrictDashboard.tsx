@@ -153,8 +153,26 @@ export const DistrictDashboard: React.FC = () => {
             <span className="text-[9px] text-[#52443a] font-bold uppercase block">District Performance</span>
             <span className="text-lg font-black text-[#864f19]">{districtPerformanceScore}%</span>
           </div>
-          <div className="h-10 w-10 rounded-full border-4 border-[#ffdcc2] border-t-[#864f19] flex items-center justify-center text-xs font-black">
-            {districtPerformanceScore}
+          <div className="relative w-10 h-10 flex items-center justify-center shrink-0">
+            <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+              <path
+                className="text-[#ffdcc2]"
+                strokeWidth="3.5"
+                stroke="currentColor"
+                fill="none"
+                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+              />
+              <path
+                className="text-[#864f19] transition-all duration-500 ease-out"
+                strokeDasharray={`${districtPerformanceScore}, 100`}
+                strokeWidth="3.5"
+                strokeLinecap="round"
+                stroke="currentColor"
+                fill="none"
+                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+              />
+            </svg>
+            <span className="absolute text-[10px] font-black text-slate-800">{districtPerformanceScore}%</span>
           </div>
         </div>
       </div>

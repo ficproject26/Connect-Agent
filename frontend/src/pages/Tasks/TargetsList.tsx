@@ -205,8 +205,26 @@ export const TargetsList: React.FC = () => {
                 <span className="text-slate-400 text-xs font-semibold">({progressPercent}%)</span>
               </div>
             </div>
-            <div className="w-10 h-10 rounded-full border-4 border-[#ffdcc2] border-t-[#864f19] flex items-center justify-center text-xs font-black text-slate-800">
-              {progressPercent}
+            <div className="relative w-10 h-10 flex items-center justify-center shrink-0">
+              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                <path
+                  className="text-[#ffdcc2]"
+                  strokeWidth="3.5"
+                  stroke="currentColor"
+                  fill="none"
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                />
+                <path
+                  className="text-[#864f19] transition-all duration-500 ease-out"
+                  strokeDasharray={`${progressPercent}, 100`}
+                  strokeWidth="3.5"
+                  strokeLinecap="round"
+                  stroke="currentColor"
+                  fill="none"
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                />
+              </svg>
+              <span className="absolute text-[10px] font-black text-slate-800">{progressPercent}</span>
             </div>
           </div>
 
