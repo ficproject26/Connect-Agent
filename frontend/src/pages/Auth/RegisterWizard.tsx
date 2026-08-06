@@ -162,6 +162,12 @@ export const RegisterWizard: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const maxDobDate = useMemo(() => {
+    const today = new Date();
+    const maxDate = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate());
+    return maxDate.toISOString().split('T')[0];
+  }, []);
+
   // Form Fields State
   const [role, setRole] = useState<'state' | 'division' | 'district' | 'pincode'>(initialDraft?.role || 'state');
   const [personalInfo, setPersonalInfo] = useState(initialDraft?.personalInfo || {
@@ -396,6 +402,10 @@ export const RegisterWizard: React.FC = () => {
     if (currentStep === 2) {
       if (!personalInfo.dob) {
         setFormErrors('Please select your Date of Birth.');
+        return;
+      }
+      if (personalInfo.dob > maxDobDate) {
+        setFormErrors('You must be at least 18 years old to register as an agent.');
         return;
       }
       if (personalInfo.altPhone && !/^[6-9][0-9]{9}$/.test(personalInfo.altPhone)) {
@@ -840,12 +850,27 @@ export const RegisterWizard: React.FC = () => {
                   </div>
 
                   {/* 3. Date of Birth */}
-                  <Input
-                    label="• Date of Birth (Required)"
-                    type="date"
-                    value={personalInfo.dob}
-                    onChange={(e) => setPersonalInfo({ ...personalInfo, dob: e.target.value })}
-                  />
+                  <div>
+                    <Input
+                      label="• Date of Birth (Required - Must be 18+ years old)"
+                      type="date"
+                      max={maxDobDate}
+                      value={personalInfo.dob}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val && val > maxDobDate) {
+                          setFormErrors('Must be at least 18 years old to register.');
+                          setPersonalInfo({ ...personalInfo, dob: '' });
+                        } else {
+                          setFormErrors('');
+                          setPersonalInfo({ ...personalInfo, dob: val });
+                        }
+                      }}
+                    />
+                    {personalInfo.dob && personalInfo.dob > maxDobDate && (
+                      <p className="text-[10px] text-red-500 font-bold mt-1">Under 18 years old dates are disabled. Must be 18+ years old.</p>
+                    )}
+                  </div>
 
                   {/* 3b. Gender Select Dropdown */}
                   <Select

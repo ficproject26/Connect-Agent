@@ -426,8 +426,15 @@ export const VendorsList: React.FC = () => {
     e.preventDefault();
     setOnboardError('');
 
-    if (!newVendor.name || !newVendor.phone || !newVendor.pincode) {
+    const cleanedPhone = newVendor.phone.replace(/\D/g, '');
+
+    if (!newVendor.name || !cleanedPhone || !newVendor.pincode) {
       setOnboardError('Please fill in Store Name, Phone Number, and Pincode.');
+      return;
+    }
+
+    if (cleanedPhone.length !== 10) {
+      setOnboardError('Phone number must be exactly 10 digits.');
       return;
     }
 
@@ -1034,10 +1041,15 @@ export const VendorsList: React.FC = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
-              label="Phone Number"
-              placeholder="10-digit mobile"
+              label="Phone Number (10 Digits)"
+              placeholder="10-digit mobile number"
               value={newVendor.phone}
-              onChange={(e) => setNewVendor({ ...newVendor, phone: e.target.value })}
+              onChange={(e) => {
+                const cleaned = e.target.value.replace(/\D/g, '').slice(0, 10);
+                setNewVendor({ ...newVendor, phone: cleaned });
+              }}
+              maxLength={10}
+              inputMode="numeric"
               required
             />
             <Input

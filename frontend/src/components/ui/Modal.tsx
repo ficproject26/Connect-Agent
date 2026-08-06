@@ -55,25 +55,27 @@ export const Modal: React.FC<ModalProps> = ({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
             transition={{ type: 'spring', duration: 0.4 }}
-            className={`relative w-full bg-white rounded-forge shadow-md3-3 overflow-hidden z-10 ${sizeClasses[size]}`}
+            className={`relative w-full bg-white rounded-2xl shadow-2xl overflow-hidden z-10 my-auto flex flex-col max-h-[90vh] border border-[#eae8e7] ${sizeClasses[size]}`}
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-forgeGray-100">
-              <h3 className="text-base font-bold text-forgeGray-900 font-sans">
-                {title}
-              </h3>
-              <button
-                onClick={onClose}
-                aria-label="Close dialog"
-                title="Close"
-                className="text-forgeGray-400 hover:text-forgeGray-600 transition-colors duration-200"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+            {title && (
+              <div className="flex items-center justify-between px-6 py-4 border-b border-[#eae8e7] bg-[#fbf9f8] shrink-0">
+                <h3 className="text-base font-black text-[#1b1c1c] font-sans flex items-center gap-2">
+                  {title}
+                </h3>
+                <button
+                  onClick={onClose}
+                  aria-label="Close dialog"
+                  title="Close"
+                  className="text-slate-400 hover:text-slate-600 transition-colors duration-200 p-1 rounded-lg hover:bg-slate-100 cursor-pointer border-none bg-transparent text-lg font-bold"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            )}
 
             {/* Content Body */}
-            <div className="px-6 py-6 max-h-[80vh] overflow-y-auto">
+            <div className="p-6 sm:p-7 overflow-y-auto flex-1 space-y-4">
               {children}
             </div>
           </motion.div>

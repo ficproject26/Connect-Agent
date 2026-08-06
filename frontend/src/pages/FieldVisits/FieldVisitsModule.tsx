@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardHeader, CardTitle, CardBody, Button } from '../../components/ui';
+import { Card, CardHeader, CardTitle, CardBody, Button, Modal } from '../../components/ui';
 import { MapPin, Navigation, Camera, CheckCircle2, Clock, Plus, Search, Store, AlertCircle, ArrowRight } from 'lucide-react';
 import api from '../../utils/api';
 
@@ -17,10 +17,33 @@ interface FieldVisitRecord {
   photoAfterVisit?: string;
 }
 
-
-
 export const FieldVisitsModule: React.FC = () => {
-  const [visits, setVisits] = useState<FieldVisitRecord[]>([]);
+  const [visits, setVisits] = useState<FieldVisitRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem('connect_portal_field_visits');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.error('Error loading custom field visits:', e);
+    }
+    return [
+      {
+        _id: 'VIS-9801',
+        vendorId: 'VEND-501',
+        vendorName: 'Metro Supermarket',
+        storeAddress: 'Shop #12, MG Road, Hosur, TN 635109',
+        visitDate: new Date().toISOString().slice(0, 10),
+        status: 'completed',
+        latitude: 12.9716,
+        longitude: 77.5946,
+        remarks: 'QR Code onboarded and active merchant'
+      }
+    ];
+  });
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'started' | 'completed'>('all');
   
@@ -59,7 +82,16 @@ export const FieldVisitsModule: React.FC = () => {
           longitude: v.checkInLocation?.longitude || 77.5946,
           remarks: v.remarks
         }));
-        setVisits(mapped);
+
+        setVisits(prev => {
+          const apiIds = new Set(mapped.map(m => m._id));
+          const localOnly = prev.filter(p => !apiIds.has(p._id));
+          const combined = [...mapped, ...localOnly];
+          try {
+            localStorage.setItem('connect_portal_field_visits', JSON.stringify(combined));
+          } catch (e) {}
+          return combined;
+        });
       }
     } catch (e) {
       console.log('Using local field visits state');
@@ -123,13 +155,22 @@ export const FieldVisitsModule: React.FC = () => {
         vendorId: newVisit.vendorId,
         latitude: newVisit.latitude,
         longitude: newVisit.longitude,
-        photoBeforeVisit: 'https://via.placeholder.com/300'
+        photoBeforeVisit: gpsPhoto || 'https://via.placeholder.com/300'
       });
     } catch (e) {
       console.log('Simulated local visit creation');
     }
 
-    setVisits(prev => [newVisit, ...prev]);
+    setVisits(prev => {
+      const updated = [newVisit, ...prev];
+      try {
+        localStorage.setItem('connect_portal_field_visits', JSON.stringify(updated));
+      } catch (e) {
+        console.error('Error saving field visit:', e);
+      }
+      return updated;
+    });
+
     setIsStartModalOpen(false);
     setIsSubmitting(false);
     
@@ -155,11 +196,17 @@ export const FieldVisitsModule: React.FC = () => {
       console.log('Simulated visit completion');
     }
 
-    setVisits(prev => prev.map(v => 
-      v._id === selectedVisitToComplete._id 
-        ? { ...v, status: 'completed', remarks: completeRemarks || v.remarks }
-        : v
-    ));
+    setVisits(prev => {
+      const updated = prev.map(v => 
+        v._id === selectedVisitToComplete._id 
+          ? { ...v, status: 'completed' as const, remarks: completeRemarks || v.remarks }
+          : v
+      );
+      try {
+        localStorage.setItem('connect_portal_field_visits', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
 
     setSelectedVisitToComplete(null);
     setCompleteRemarks('');
@@ -336,166 +383,156 @@ export const FieldVisitsModule: React.FC = () => {
       </Card>
 
       {/* MODAL: Start New Field Visit */}
-      {isStartModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-[#eae8e7] space-y-5">
-            <div className="flex justify-between items-center border-b border-[#eae8e7] pb-3">
-              <h3 className="text-base font-black text-[#1b1c1c] flex items-center gap-2">
-                <Navigation className="w-5 h-5 text-[#864f19]" /> Start New Store Visit
-              </h3>
-              <button onClick={() => setIsStartModalOpen(false)} className="text-slate-400 hover:text-slate-600 font-bold text-lg cursor-pointer">×</button>
+      <Modal
+        isOpen={isStartModalOpen}
+        onClose={() => setIsStartModalOpen(false)}
+        title="Start New Store Visit"
+        size="md"
+      >
+        <form onSubmit={handleStartVisitSubmit} className="space-y-4 text-xs font-semibold">
+          <div className="space-y-1">
+            <label className="block text-[#52443a] uppercase text-[10px] font-bold">Merchant Store Name *</label>
+            <input
+              type="text"
+              required
+              placeholder="e.g. Metro Mart & Groceries"
+              value={vendorName}
+              onChange={(e) => setVendorName(e.target.value)}
+              className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="block text-[#52443a] uppercase text-[10px] font-bold">Full Store Address *</label>
+            <textarea
+              required
+              rows={2}
+              placeholder="Shop number, street, landmark, area pincode..."
+              value={storeAddress}
+              onChange={(e) => setStoreAddress(e.target.value)}
+              className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19] resize-none"
+            />
+          </div>
+
+          {/* Geotagged Store Front Photo & GPS Map Card */}
+          <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#eae8e7] space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-[#52443a] uppercase tracking-wider flex items-center gap-1">
+                <Camera className="w-3.5 h-3.5 text-[#864f19]" /> Geotagged Store Photo & GPS *
+              </span>
+              <button
+                type="button"
+                onClick={handleFetchLocation}
+                disabled={isLocating}
+                className="text-[#864f19] font-bold hover:underline text-[10px] flex items-center gap-1 cursor-pointer bg-transparent border-none"
+              >
+                <Navigation className={`w-3.5 h-3.5 ${isLocating ? 'animate-spin' : ''}`} />
+                {isLocating ? 'Locating...' : 'Refresh GPS'}
+              </button>
             </div>
 
-            <form onSubmit={handleStartVisitSubmit} className="space-y-4 text-xs font-semibold">
-              <div className="space-y-1">
-                <label className="block text-[#52443a] uppercase text-[10px] font-bold">Merchant Store Name *</label>
+            {/* Geotagged Image Container with Map Pin Overlay */}
+            <div className="relative rounded-xl overflow-hidden border border-[#d7c3b5]/60 bg-slate-900 group h-32">
+              <img
+                src={gpsPhoto}
+                alt="Geotagged Store Front"
+                className="w-full h-full object-cover opacity-85 group-hover:scale-105 transition-transform duration-300"
+              />
+              
+              {/* Map Pin Badge Overlay */}
+              <div className="absolute top-2 left-2 bg-black/75 backdrop-blur-sm text-white px-2 py-1 rounded-lg text-[9px] font-extrabold flex items-center gap-1 border border-white/20">
+                <MapPin className="w-3 h-3 text-amber-400" />
+                <span>Lat: {latitude || '12.9716'}, Lng: {longitude || '77.5946'}</span>
+              </div>
+
+              {/* Live Status Badge */}
+              <div className="absolute bottom-2 left-2 bg-emerald-600/90 text-white px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow">
+                <CheckCircle2 className="w-3 h-3" /> Geotagged Photo Captured
+              </div>
+
+              {/* Photo Upload / Camera Overlay Button */}
+              <label className="absolute bottom-2 right-2 bg-white/90 hover:bg-white text-slate-800 px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer border border-slate-200 flex items-center gap-1 shadow transition">
+                <Camera className="w-3 h-3 text-[#864f19]" />
+                <span>Upload Photo</span>
                 <input
-                  type="text"
-                  required
-                  placeholder="e.g. Metro Mart & Groceries"
-                  value={vendorName}
-                  onChange={(e) => setVendorName(e.target.value)}
-                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = (ev) => {
+                        if (ev.target?.result) setGpsPhoto(ev.target.result as string);
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
                 />
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-[#52443a] uppercase text-[10px] font-bold">Full Store Address *</label>
-                <textarea
-                  required
-                  rows={2}
-                  placeholder="Shop number, street, landmark, area pincode..."
-                  value={storeAddress}
-                  onChange={(e) => setStoreAddress(e.target.value)}
-                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19] resize-none"
-                />
-              </div>
-
-              {/* Geotagged Store Front Photo & GPS Map Card */}
-              <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#eae8e7] space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-[#52443a] uppercase tracking-wider flex items-center gap-1">
-                    <Camera className="w-3.5 h-3.5 text-[#864f19]" /> Geotagged Store Photo & GPS *
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleFetchLocation}
-                    disabled={isLocating}
-                    className="text-[#864f19] font-bold hover:underline text-[10px] flex items-center gap-1 cursor-pointer"
-                  >
-                    <Navigation className={`w-3.5 h-3.5 ${isLocating ? 'animate-spin' : ''}`} />
-                    {isLocating ? 'Locating...' : 'Refresh GPS'}
-                  </button>
-                </div>
-
-                {/* Geotagged Image Container with Map Pin Overlay */}
-                <div className="relative rounded-xl overflow-hidden border border-[#d7c3b5]/60 bg-slate-900 group h-32">
-                  <img
-                    src={gpsPhoto}
-                    alt="Geotagged Store Front"
-                    className="w-full h-full object-cover opacity-85 group-hover:scale-105 transition-transform duration-300"
-                  />
-                  
-                  {/* Map Pin Badge Overlay */}
-                  <div className="absolute top-2 left-2 bg-black/75 backdrop-blur-sm text-white px-2 py-1 rounded-lg text-[9px] font-extrabold flex items-center gap-1 border border-white/20">
-                    <MapPin className="w-3 h-3 text-amber-400" />
-                    <span>Lat: {latitude || '12.9716'}, Lng: {longitude || '77.5946'}</span>
-                  </div>
-
-                  {/* Live Status Badge */}
-                  <div className="absolute bottom-2 left-2 bg-emerald-600/90 text-white px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow">
-                    <CheckCircle2 className="w-3 h-3" /> Geotagged Photo Captured
-                  </div>
-
-                  {/* Photo Upload / Camera Overlay Button */}
-                  <label className="absolute bottom-2 right-2 bg-white/90 hover:bg-white text-slate-800 px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer border border-slate-200 flex items-center gap-1 shadow transition">
-                    <Camera className="w-3 h-3 text-[#864f19]" />
-                    <span>Upload Photo</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onload = (ev) => {
-                            if (ev.target?.result) setGpsPhoto(ev.target.result as string);
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                    />
-                  </label>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-[#52443a] uppercase text-[10px] font-bold">Visit Remarks / Purpose</label>
-                <input
-                  type="text"
-                  placeholder="e.g. KYC audit & QR code onboarding"
-                  value={remarks}
-                  onChange={(e) => setRemarks(e.target.value)}
-                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2 border-t border-[#eae8e7]">
-                <Button variant="outline" type="button" onClick={() => setIsStartModalOpen(false)}>
-                  Cancel
-                </Button>
-                <Button variant="primary" type="submit" disabled={isSubmitting} className="bg-[#864f19] text-white font-bold">
-                  {isSubmitting ? 'Starting...' : 'Check-In & Start Visit'}
-                </Button>
-              </div>
-            </form>
+              </label>
+            </div>
           </div>
-        </div>
-      )}
+
+          <div className="space-y-1">
+            <label className="block text-[#52443a] uppercase text-[10px] font-bold">Visit Remarks / Purpose</label>
+            <input
+              type="text"
+              placeholder="e.g. KYC audit & QR code onboarding"
+              value={remarks}
+              onChange={(e) => setRemarks(e.target.value)}
+              className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-[#eae8e7]">
+            <Button variant="outline" type="button" onClick={() => setIsStartModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" type="submit" disabled={isSubmitting} className="bg-[#864f19] text-white font-bold">
+              {isSubmitting ? 'Starting...' : 'Check-In & Start Visit'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
       {/* MODAL: Complete Field Visit */}
-      {selectedVisitToComplete && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-[#eae8e7] space-y-5">
-            <div className="flex justify-between items-center border-b border-[#eae8e7] pb-3">
-              <h3 className="text-base font-black text-[#1b1c1c] flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600" /> Complete Field Visit
-              </h3>
-              <button onClick={() => setSelectedVisitToComplete(null)} className="text-slate-400 hover:text-slate-600 font-bold text-lg cursor-pointer">×</button>
+      <Modal
+        isOpen={!!selectedVisitToComplete}
+        onClose={() => setSelectedVisitToComplete(null)}
+        title="Complete Field Visit"
+        size="md"
+      >
+        {selectedVisitToComplete && (
+          <form onSubmit={handleCompleteVisitSubmit} className="space-y-4 text-xs font-semibold">
+            <div className="p-3 bg-slate-50 rounded-xl space-y-1 border border-slate-100">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Target Merchant</span>
+              <p className="font-bold text-slate-800 text-sm">{selectedVisitToComplete.vendorName}</p>
+              <p className="text-slate-500 text-[11px]">{selectedVisitToComplete.storeAddress}</p>
             </div>
 
-            <form onSubmit={handleCompleteVisitSubmit} className="space-y-4 text-xs font-semibold">
-              <div className="p-3 bg-slate-50 rounded-xl space-y-1 border border-slate-100">
-                <span className="text-[10px] font-bold text-slate-400 uppercase">Target Merchant</span>
-                <p className="font-bold text-slate-800 text-sm">{selectedVisitToComplete.vendorName}</p>
-                <p className="text-slate-500 text-[11px]">{selectedVisitToComplete.storeAddress}</p>
-              </div>
+            <div className="space-y-1">
+              <label className="block text-[#52443a] uppercase text-[10px] font-bold">Completion Notes & Findings *</label>
+              <textarea
+                required
+                rows={3}
+                placeholder="Record outcome of audit, merchant feedback, or onboarding status..."
+                value={completeRemarks}
+                onChange={(e) => setCompleteRemarks(e.target.value)}
+                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19] resize-none"
+              />
+            </div>
 
-              <div className="space-y-1">
-                <label className="block text-[#52443a] uppercase text-[10px] font-bold">Completion Notes & Findings *</label>
-                <textarea
-                  required
-                  rows={3}
-                  placeholder="Record outcome of audit, merchant feedback, or onboarding status..."
-                  value={completeRemarks}
-                  onChange={(e) => setCompleteRemarks(e.target.value)}
-                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19] resize-none"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2 border-t border-[#eae8e7]">
-                <Button variant="outline" type="button" onClick={() => setSelectedVisitToComplete(null)}>
-                  Cancel
-                </Button>
-                <Button variant="primary" type="submit" disabled={isSubmitting} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold border-none">
-                  {isSubmitting ? 'Saving...' : 'Finalize Visit'}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            <div className="flex justify-end gap-2 pt-3 border-t border-[#eae8e7]">
+              <Button variant="outline" type="button" onClick={() => setSelectedVisitToComplete(null)}>
+                Cancel
+              </Button>
+              <Button variant="primary" type="submit" disabled={isSubmitting} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold border-none">
+                {isSubmitting ? 'Saving...' : 'Finalize Visit'}
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
 
     </div>
   );
