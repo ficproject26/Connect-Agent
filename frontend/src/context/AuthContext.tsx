@@ -76,7 +76,14 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<AgentProfile | null>(null);
+  const [user, setUser] = useState<AgentProfile | null>(() => {
+    try {
+      const savedUser = localStorage.getItem('agent_user');
+      return savedUser ? JSON.parse(savedUser) : null;
+    } catch (e) {
+      return null;
+    }
+  });
   const [token, setToken] = useState<string | null>(localStorage.getItem('agent_token'));
   const [loading, setLoading] = useState<boolean>(true);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -120,19 +127,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const response = await api.get('/auth/me');
       const agent = response.data.agent;
-      if (agent.kycStatus && agent.kycStatus !== 'approved' && agent.status !== 'approved' && agent.status !== 'active') {
-        console.warn('Agent account is pending Admin approval. Logging out.');
+      if (!agent) {
+        throw new Error('No agent profile returned');
+      }
+      if (agent.kycStatus === 'rejected') {
+        console.warn('Agent account is rejected. Logging out.');
         logout();
         return;
       }
       // Map kycStatus to status for compatibility
       agent.status = (agent.kycStatus === 'approved' || agent.status === 'approved' || agent.status === 'active') ? 'active' : 'pending_approval';
       agent.mobile = agent.phone;
-      setUser(applySavedProfileOverrides(agent));
+      const finalAgent = applySavedProfileOverrides(agent);
+      setUser(finalAgent);
+      try {
+        localStorage.setItem('agent_user', JSON.stringify(finalAgent));
+      } catch (e) {}
       await fetchNotifications();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Refetch user failed:', err);
-      logout();
+      // Only logout if explicitly 401 Unauthorized from auth/me (invalid token)
+      if (err?.response?.status === 401) {
+        logout();
+      }
     }
   };
 
@@ -192,6 +209,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem('agent_token', data.token);
         setToken(data.token);
         const finalAgent = applySavedProfileOverrides(agent);
+        try {
+          localStorage.setItem('agent_user', JSON.stringify(finalAgent));
+        } catch (e) {}
         setUser(finalAgent);
         setTimeout(() => { fetchNotifications(); }, 100);
         return finalAgent;
@@ -297,6 +317,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     localStorage.removeItem('agent_token');
+    localStorage.removeItem('agent_user');
     setToken(null);
     setUser(null);
   };
