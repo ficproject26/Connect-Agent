@@ -6,6 +6,9 @@ import {
   Clock, CheckCircle2, ChevronRight, Users, Target, Ticket, FileText, Plus, Landmark, Megaphone, Send, BarChart2, Briefcase, ListCollapse
 } from 'lucide-react';
 
+import { useQuery } from '@tanstack/react-query';
+import api from '../../../utils/api';
+
 export const StateDashboard: React.FC = () => {
   const { user } = useAuth();
   const [announcementText, setAnnouncementText] = useState('');
@@ -13,35 +16,76 @@ export const StateDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'districts' | 'divisions' | 'rankings'>('districts');
 
   const userState = user?.territory?.state || 'Karnataka';
-  const isKarnataka = userState.toLowerCase().includes('karnataka');
 
-  const districtsList = isKarnataka
-    ? [
-        { name: 'Bengaluru Urban', val: '96% Completed', divs: '8 Divisions active' },
-        { name: 'Mysuru District', val: '91% Completed', divs: '5 Divisions active' },
-        { name: 'Dakshina Kannada', val: '84% Completed', divs: '6 Divisions active' },
-        { name: 'Belagavi District', val: '72% Completed', divs: '4 Divisions active' }
-      ]
-    : [
-        { name: 'Krishnagiri District', val: '98% Completed', divs: '6 Divisions active' },
-        { name: 'Chennai District', val: '94% Completed', divs: '8 Divisions active' },
-        { name: 'Madurai District', val: '88% Completed', divs: '5 Divisions active' },
-        { name: 'Coimbatore District', val: '82% Completed', divs: '7 Divisions active' }
-      ];
+  // Fetch live agent hierarchy from backend
+  const { data: hierarchyRes } = useQuery({
+    queryKey: ['stateDashboardHierarchy'],
+    queryFn: async () => {
+      try {
+        const res = await api.get('/admin/hierarchy');
+        return res.data;
+      } catch (e) {
+        return null;
+      }
+    }
+  });
 
-  const divisionsList = isKarnataka
-    ? [
-        { name: 'Bengaluru North Division', score: '95.4%', pins: '24 Pincodes assigned' },
-        { name: 'Bengaluru South Division', score: '92.1%', pins: '30 Pincodes assigned' },
-        { name: 'Mysuru City Division', score: '88.5%', pins: '16 Pincodes assigned' },
-        { name: 'Mangaluru Sector Division', score: '79.3%', pins: '12 Pincodes assigned' }
-      ]
-    : [
-        { name: 'Hosur Industrial Division', score: '96.2%', pins: '32 Pincodes assigned' },
-        { name: 'T. Nagar Commercial Division', score: '94.0%', pins: '28 Pincodes assigned' },
-        { name: 'Bargur Sector Division', score: '82.5%', pins: '18 Pincodes assigned' },
-        { name: 'Madurai Central Division', score: '78.2%', pins: '14 Pincodes assigned' }
-      ];
+  // Fetch live vendor partners from backend
+  const { data: vendorsRes } = useQuery({
+    queryKey: ['stateDashboardVendors'],
+    queryFn: async () => {
+      try {
+        const res = await api.get('/vendors');
+        return res.data;
+      } catch (e) {
+        return null;
+      }
+    }
+  });
+
+  // Compute live metrics from API data
+  const metrics = React.useMemo(() => {
+    const districts = hierarchyRes?.districts || [];
+    const divisions = hierarchyRes?.divisions || [];
+    const pincodes = hierarchyRes?.pincodes || [];
+    const vendors = vendorsRes?.vendors || [];
+
+    const activeVendors = vendors.filter((v: any) => v.status === 'active' || v.status === 'approved').length;
+    const inactiveVendors = vendors.filter((v: any) => v.status === 'inactive').length;
+    const pendingVendors = vendors.filter((v: any) => v.kycStatus === 'pending' || v.status === 'pending').length;
+
+    return {
+      totalDistricts: districts.length,
+      totalDivisions: divisions.length,
+      totalPincodes: pincodes.length,
+      totalVendors: vendors.length,
+      activeVendors,
+      inactiveVendors,
+      pendingVendors
+    };
+  }, [hierarchyRes, vendorsRes]);
+
+  const districtsList = React.useMemo(() => {
+    if (hierarchyRes?.districts && hierarchyRes.districts.length > 0) {
+      return hierarchyRes.districts.map((d: any) => ({
+        name: d.name || d.territory?.district || 'District Area',
+        val: `${d.performanceScore || 100}% Score`,
+        divs: `${d.divisions?.length || 0} Divisions active`
+      }));
+    }
+    return [];
+  }, [hierarchyRes]);
+
+  const divisionsList = React.useMemo(() => {
+    if (hierarchyRes?.divisions && hierarchyRes.divisions.length > 0) {
+      return hierarchyRes.divisions.map((div: any) => ({
+        name: div.name || div.territory?.division || 'Division Sector',
+        score: `${div.performanceScore || 100}%`,
+        pins: `${div.pincodes?.length || 0} Pincodes assigned`
+      }));
+    }
+    return [];
+  }, [hierarchyRes]);
 
   const handleBroadcast = (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,8 +111,8 @@ export const StateDashboard: React.FC = () => {
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <div className="text-right">
-            <span className="text-[9px] text-[#52443a] font-bold uppercase block">Overall Completion</span>
-            <span className="text-lg font-black text-[#864f19]">84.4%</span>
+            <span className="text-[9px] text-[#52443a] font-bold uppercase block">State Coverage</span>
+            <span className="text-lg font-black text-[#864f19]">{userState}</span>
           </div>
           <div className="relative w-10 h-10 flex items-center justify-center shrink-0">
             <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
@@ -81,7 +125,7 @@ export const StateDashboard: React.FC = () => {
               />
               <path
                 className="text-[#864f19] transition-all duration-500 ease-out"
-                strokeDasharray="84.4, 100"
+                strokeDasharray="100, 100"
                 strokeWidth="3.5"
                 strokeLinecap="round"
                 stroke="currentColor"
@@ -89,7 +133,7 @@ export const StateDashboard: React.FC = () => {
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
               />
             </svg>
-            <span className="absolute text-[10px] font-black text-slate-800">84%</span>
+            <span className="absolute text-[10px] font-black text-slate-800">100%</span>
           </div>
         </div>
       </div>
@@ -104,12 +148,12 @@ export const StateDashboard: React.FC = () => {
             <div className="flex items-baseline gap-2">
               <span className="text-2xl font-extrabold text-[#1b1c1c]">Active Coverage</span>
               <span className="text-green-600 text-xs font-bold flex items-center gap-0.5">
-                <TrendingUp className="w-3.5 h-3.5" /> 96.8%
+                <TrendingUp className="w-3.5 h-3.5" /> Live
               </span>
             </div>
           </div>
           <div className="mt-3 w-full bg-[#f6f3f2] h-1.5 rounded-full overflow-hidden">
-            <div className="bg-[#864f19] h-full w-[96.8%] rounded-full"></div>
+            <div className="bg-[#864f19] h-full w-full rounded-full"></div>
           </div>
         </div>
 
@@ -118,8 +162,8 @@ export const StateDashboard: React.FC = () => {
           <div>
             <p className="text-[10px] text-[#52443a] font-bold uppercase tracking-wider mb-2">State Performance Score</p>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold text-[#864f19]">94.8</span>
-              <span className="text-[#34647b] text-[10px] font-bold">Grade Excellent</span>
+              <span className="text-3xl font-extrabold text-[#864f19]">{user?.performanceScore || 100}%</span>
+              <span className="text-[#34647b] text-[10px] font-bold">Active Status</span>
             </div>
           </div>
         </div>
@@ -127,10 +171,9 @@ export const StateDashboard: React.FC = () => {
         {/* Overall Completion Percentage */}
         <div className="bg-white p-6 rounded-[16px] border border-[#eae8e7] shadow-sm flex flex-col justify-between min-h-[120px]">
           <div>
-            <p className="text-[10px] text-[#52443a] font-bold uppercase tracking-wider mb-2">Overall Target Completion %</p>
+            <p className="text-[10px] text-[#52443a] font-bold uppercase tracking-wider mb-2">Assigned Territory</p>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold text-[#34647b]">84.4%</span>
-              <span className="text-green-600 text-[10px] font-bold">+1.2%</span>
+              <span className="text-xl font-extrabold text-[#34647b]">{userState}</span>
             </div>
           </div>
         </div>
@@ -139,18 +182,12 @@ export const StateDashboard: React.FC = () => {
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
         {[
-          { label: 'Total Districts', val: isKarnataka ? '31' : '38', icon: <Landmark className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
-          { label: 'Total Divisions', val: '12', icon: <Users className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
-          { label: 'Total Pincode Agents', val: '480', icon: <Users className="w-4 h-4 text-[#4f4635]" />, bg: 'bg-[#efe1ca]' },
-          { label: 'Total Registered Vendors', val: isKarnataka ? '14,210' : '12,840', icon: <Users className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
-          { label: 'Active Vendors', val: isKarnataka ? '10,850' : '9,450', icon: <CheckCircle2 className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
-          { label: 'Inactive Vendors', val: '3,106', icon: <Clock className="w-4 h-4 text-[#4f4635]" />, bg: 'bg-[#efe1ca]' },
-          { label: 'Pending Vendor Approvals', val: '284', icon: <Plus className="w-4 h-4 text-emerald-700" />, bg: 'bg-emerald-50' },
-          { label: 'Total Assigned Targets', val: '450', icon: <Target className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
-          { label: 'Completed Targets', val: '380', icon: <CheckCircle2 className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
-          { label: 'Pending Targets', val: '58', icon: <Clock className="w-4 h-4 text-[#4f4635]" />, bg: 'bg-[#efe1ca]' },
-          { label: 'Overdue Targets', val: '12', icon: <ShieldAlert className="w-4 h-4 text-red-700" />, bg: 'bg-red-50' },
-          { label: 'Open Tickets', val: '156', icon: <Ticket className="w-4 h-4 text-red-700" />, bg: 'bg-red-50' }
+          { label: 'Total District Leads', val: metrics.totalDistricts.toString(), icon: <Landmark className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
+          { label: 'Total Division Managers', val: metrics.totalDivisions.toString(), icon: <Users className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
+          { label: 'Total Pincode Agents', val: metrics.totalPincodes.toString(), icon: <Users className="w-4 h-4 text-[#4f4635]" />, bg: 'bg-[#efe1ca]' },
+          { label: 'Total Registered Vendors', val: metrics.totalVendors.toString(), icon: <Users className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
+          { label: 'Active Vendors', val: metrics.activeVendors.toString(), icon: <CheckCircle2 className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
+          { label: 'Pending Vendor Approvals', val: metrics.pendingVendors.toString(), icon: <Plus className="w-4 h-4 text-emerald-700" />, bg: 'bg-emerald-50' },
         ].map((card, idx) => (
           <div key={idx} className="bg-white p-4 rounded-xl border border-[#eae8e7] flex items-center justify-between shadow-sm relative overflow-hidden group">
             <div className="space-y-1">

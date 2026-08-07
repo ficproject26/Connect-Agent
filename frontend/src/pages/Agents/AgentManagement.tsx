@@ -80,60 +80,135 @@ export const AgentManagement: React.FC = () => {
     }
   });
 
-  // Dynamic Root Node Scoping based on logged-in agent role (Strict Territory Isolation: Tamil Nadu vs Karnataka/Bangalore)
+  // Dynamic Root Node Scoping based on logged-in agent profile (Strict Self & Downstream Isolation)
   const rootNodes: AgentNode[] = useMemo(() => {
-    let baseList = DEMO_HIERARCHY;
-    
-    // If backend returns data, merge unique backend state entries that aren't already represented
-    if (hierarchyData?.states && hierarchyData.states.length > 0) {
-      const apiStates = hierarchyData.states;
-      // Filter out duplicate state IDs or duplicate state names
-      const existingStateNames = new Set(baseList.map(s => (s.territory?.state || '').toLowerCase()));
-      const uniqueNewApiStates = apiStates.filter((s: any) => {
-        const sName = (s.territory?.state || '').toLowerCase();
-        return !existingStateNames.has(sName) && !baseList.some(b => b._id === s._id);
+    const apiStates: AgentNode[] = hierarchyData?.states || hierarchyData?.tree || [];
+    const userId = user?._id ? String(user._id) : '';
+    const userEmail = (user?.email || '').toLowerCase();
+    const userRegId = (user?.registrationId || '').toLowerCase();
+    const userName = (user?.name || '').toLowerCase();
+
+    const isUserMatch = (agent: AgentNode) => {
+      if (!agent) return false;
+      if (agent._id && String(agent._id) === userId) return true;
+      if (agent.email && agent.email.toLowerCase() === userEmail) return true;
+      if (agent.registrationId && agent.registrationId.toLowerCase() === userRegId) return true;
+      if (agent.name && agent.name.toLowerCase() === userName) return true;
+      return false;
+    };
+
+    // System Admins and Executives see full cross-state network tree
+    if ((activeRole as string) === 'admin' || activeRole === 'executive') {
+      return apiStates;
+    }
+
+    // STATE AGENT: Show ONLY logged-in State Agent's own hierarchy tree
+    if (activeRole === 'state') {
+      const myState = apiStates.find(isUserMatch);
+      if (myState) {
+        return [myState];
+      }
+
+      // If exact ID/email isn't matched in API array, filter by user state territory
+      const userStateTerritory = (user?.territory?.state || '').toLowerCase();
+      const territoryMatches = apiStates.filter(s => {
+        const sState = (s.territory?.state || '').toLowerCase();
+        return sState && (sState.includes(userStateTerritory) || userStateTerritory.includes(sState));
       });
-      if (uniqueNewApiStates.length > 0) {
-        baseList = [...uniqueNewApiStates, ...baseList];
+      
+      if (territoryMatches.length > 0) {
+        const matchedInTerritory = territoryMatches.find(isUserMatch);
+        return [matchedInTerritory || territoryMatches[0]];
       }
+
+      // Self fallback node constructed from live logged-in user state
+      const selfNode: AgentNode = {
+        _id: user?._id || 'user-self-state',
+        name: user?.name || 'State Agent',
+        email: user?.email || '',
+        phone: user?.phone || user?.mobile || '',
+        registrationId: user?.registrationId || 'REG-STATE',
+        role: 'state',
+        kycStatus: user?.kycStatus || 'approved',
+        registrationFeePaid: user?.registrationFeePaid ?? true,
+        performanceScore: user?.performanceScore || 100,
+        earnings: user?.earnings || 0,
+        tieupsToday: 0,
+        tieupsYesterday: 0,
+        totalTieups: 0,
+        territory: user?.territory || { state: 'Karnataka' },
+        plusPoints: ['KYC Verified', 'State Lead'],
+        minusPoints: [],
+        districts: []
+      };
+      return [selfNode];
     }
 
-    const userState = (user?.territory?.state || 'Karnataka').toLowerCase();
-    const userDistrict = (user?.territory?.district || '').toLowerCase();
-
-    // Filter state nodes strictly based on logged in user's assigned state territory
-    const scopedStateNodes = baseList.filter(s => {
-      const stateName = (s.territory?.state || '').toLowerCase();
-      return stateName.includes(userState) || userState.includes(stateName);
-    });
-
-    const activeStateNodes = scopedStateNodes.length > 0 ? scopedStateNodes : baseList;
-
-    if (activeRole === 'state' || activeRole === 'executive' || (activeRole as any) === 'admin') {
-      return activeStateNodes;
-    }
-
+    // DISTRICT AGENT: Show ONLY logged-in District Agent's tree
     if (activeRole === 'district') {
-      const dists = activeStateNodes.flatMap(s => s.districts || []);
-      if (userDistrict) {
-        const filteredDists = dists.filter(d => {
-          const dName = (d.territory?.district || '').toLowerCase();
-          return dName.includes(userDistrict) || userDistrict.includes(dName);
-        });
-        return filteredDists.length > 0 ? filteredDists : dists;
-      }
-      return dists;
+      const allDistricts = apiStates.flatMap(s => s.districts || []);
+      const myDist = allDistricts.find(isUserMatch);
+      if (myDist) return [myDist];
+
+      const userDistName = (user?.territory?.district || '').toLowerCase();
+      const distMatches = allDistricts.filter(d => (d.territory?.district || '').toLowerCase().includes(userDistName));
+      if (distMatches.length > 0) return [distMatches[0]];
+
+      const selfDist: AgentNode = {
+        _id: user?._id || 'user-self-dist',
+        name: user?.name || 'District Agent',
+        email: user?.email || '',
+        phone: user?.phone || user?.mobile || '',
+        registrationId: user?.registrationId || 'REG-DIST',
+        role: 'district',
+        kycStatus: user?.kycStatus || 'approved',
+        registrationFeePaid: user?.registrationFeePaid ?? true,
+        performanceScore: user?.performanceScore || 100,
+        earnings: user?.earnings || 0,
+        tieupsToday: 0,
+        tieupsYesterday: 0,
+        totalTieups: 0,
+        territory: user?.territory || {},
+        plusPoints: ['KYC Verified'],
+        minusPoints: [],
+        divisions: []
+      };
+      return [selfDist];
     }
 
+    // DIVISION AGENT: Show ONLY logged-in Division Agent's tree
     if (activeRole === 'division') {
-      return activeStateNodes.flatMap(s => s.districts?.flatMap(d => d.divisions || []) || []);
+      const allDivisions = apiStates.flatMap(s => s.districts?.flatMap(d => d.divisions || []) || []);
+      const myDiv = allDivisions.find(isUserMatch);
+      if (myDiv) return [myDiv];
+
+      const userDivName = (user?.territory?.division || '').toLowerCase();
+      const divMatches = allDivisions.filter(d => (d.territory?.division || '').toLowerCase().includes(userDivName));
+      if (divMatches.length > 0) return [divMatches[0]];
+
+      const selfDiv: AgentNode = {
+        _id: user?._id || 'user-self-div',
+        name: user?.name || 'Division Agent',
+        email: user?.email || '',
+        phone: user?.phone || user?.mobile || '',
+        registrationId: user?.registrationId || 'REG-DIV',
+        role: 'division',
+        kycStatus: user?.kycStatus || 'approved',
+        registrationFeePaid: user?.registrationFeePaid ?? true,
+        performanceScore: user?.performanceScore || 100,
+        earnings: user?.earnings || 0,
+        tieupsToday: 0,
+        tieupsYesterday: 0,
+        totalTieups: 0,
+        territory: user?.territory || {},
+        plusPoints: ['KYC Verified'],
+        minusPoints: [],
+        pincodes: []
+      };
+      return [selfDiv];
     }
 
-    if ((activeRole as string) === 'pincode') {
-      return activeStateNodes.flatMap(s => s.districts?.flatMap(d => d.divisions?.flatMap(p => p.pincodes || []) || []) || []);
-    }
-
-    return activeStateNodes;
+    return apiStates;
   }, [hierarchyData, activeRole, user]);
 
   // Expand / Collapse helper handlers for hierarchy tree workflow
@@ -217,7 +292,7 @@ export const AgentManagement: React.FC = () => {
     };
 
     rootNodes.forEach(root => {
-      totalEarnings += root.teamEarnings || root.earnings;
+      totalEarnings += root.teamEarnings || root.earnings || 0;
       countNode(root);
     });
 
@@ -273,7 +348,7 @@ export const AgentManagement: React.FC = () => {
     }
   };
 
-  // Dynamic Metric Aggregator for Node Tie-ups & Downstream Counts
+  // Dynamic Metric Aggregator for Node Tie-ups & Downstream Counts (Using Real Live Data)
   const getNodeTierCounts = (node: AgentNode) => {
     let distCount = 0;
     let divCount = 0;
@@ -291,23 +366,22 @@ export const AgentManagement: React.FC = () => {
 
     traverse(node);
 
-    // Fallbacks if node is root or children are partially populated
     if (node.role === 'state') {
-      if (distCount === 0) distCount = node.districts?.length || 4;
-      if (divCount === 0) divCount = node.districts?.reduce((acc, d) => acc + (d.divisions?.length || 2), 0) || 8;
-      if (pinCount === 0) pinCount = node.districts?.reduce((acc, d) => acc + (d.divisions?.reduce((a2, div) => a2 + (div.pincodes?.length || 3), 0) || 4), 0) || 16;
+      if (distCount === 0) distCount = node.districts?.length || 0;
+      if (divCount === 0) divCount = node.districts?.reduce((acc, d) => acc + (d.divisions?.length || 0), 0) || (node.divisions?.length || 0);
+      if (pinCount === 0) pinCount = node.districts?.reduce((acc, d) => acc + (d.divisions?.reduce((a2, div) => a2 + (div.pincodes?.length || 0), 0) || 0), 0) || node.divisions?.reduce((acc, div) => acc + (div.pincodes?.length || 0), 0) || (node.pincodes?.length || 0);
     } else if (node.role === 'district') {
-      if (divCount === 0) divCount = node.divisions?.length || 3;
-      if (pinCount === 0) pinCount = node.divisions?.reduce((acc, div) => acc + (div.pincodes?.length || 3), 0) || 9;
+      if (divCount === 0) divCount = node.divisions?.length || 0;
+      if (pinCount === 0) pinCount = node.divisions?.reduce((acc, div) => acc + (div.pincodes?.length || 0), 0) || 0;
     } else if (node.role === 'division') {
-      if (pinCount === 0) pinCount = node.pincodes?.length || 3;
+      if (pinCount === 0) pinCount = node.pincodes?.length || 0;
     }
 
-    const perf = node.performanceScore || 85;
-    const tieupsToday = node.tieupsToday || (node.role === 'state' ? 24 : node.role === 'district' ? 12 : node.role === 'division' ? 5 : 2);
-    const tieupsYesterday = node.tieupsYesterday || (node.role === 'state' ? 31 : node.role === 'district' ? 15 : node.role === 'division' ? 7 : 3);
-    const totalTieups = node.totalTieups || (node.role === 'state' ? 340 : node.role === 'district' ? 180 : node.role === 'division' ? 85 : 32);
-    const totalRevenue = node.teamEarnings || node.earnings || (node.role === 'state' ? 245000 : node.role === 'district' ? 158000 : node.role === 'division' ? 68000 : 16500);
+    const perf = node.performanceScore ?? 100;
+    const tieupsToday = node.tieupsToday ?? 0;
+    const tieupsYesterday = node.tieupsYesterday ?? 0;
+    const totalTieups = node.totalTieups ?? 0;
+    const totalRevenue = node.teamEarnings ?? node.earnings ?? 0;
 
     return {
       distCount,
