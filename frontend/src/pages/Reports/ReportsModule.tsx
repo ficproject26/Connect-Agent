@@ -670,25 +670,38 @@ export const ReportsModule: React.FC = () => {
                     <tbody className="divide-y divide-slate-50 font-semibold text-slate-700">
                       {reports.map((rep) => {
                         const content = rep.content || {};
+                        const periodStr = rep.period || (content.month && content.year ? `${content.month} ${content.year}` : 'Monthly Audit');
+                        const fileNameStr = rep.fileName || content.fileName || 'Submitted_Report.pdf';
+                        const rawDate = rep.submittedAt || rep.createdAt || rep.updatedAt;
+                        let displayDate = 'Today';
+                        if (rawDate) {
+                          const parsed = new Date(rawDate);
+                          if (!isNaN(parsed.getTime())) {
+                            displayDate = parsed.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+                          } else {
+                            displayDate = String(rawDate);
+                          }
+                        }
+
                         return (
-                          <tr key={rep._id} className="hover:bg-[#fbf9f8] transition-colors">
+                          <tr key={rep._id || Math.random()} className="hover:bg-[#fbf9f8] transition-colors">
                             <td className="py-3 px-4 font-bold text-slate-800">
-                              {content.month} {content.year}
+                              {periodStr}
                             </td>
                             <td className="py-3 px-4 flex items-center gap-1.5 text-slate-650">
                               <FileText className="w-3.5 h-3.5 text-[#864f19]" />
-                              <span>{content.fileName}</span>
+                              <span>{fileNameStr}</span>
                             </td>
-                            <td className="py-3 px-4 text-slate-450">
-                              {new Date(rep.createdAt).toLocaleDateString()}
+                            <td className="py-3 px-4 text-slate-500 font-semibold text-xs">
+                              {displayDate}
                             </td>
                             <td className="py-3 px-4">
                               <span className={`inline-block px-2.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase border ${
-                                rep.reviewedBy 
+                                rep.status === 'Reviewed' || rep.reviewedBy 
                                   ? 'bg-green-50 text-green-700 border-green-200' 
                                   : 'bg-yellow-50 text-yellow-700 border-yellow-200'
                               }`}>
-                                {rep.reviewedBy ? 'Reviewed' : 'Pending Review'}
+                                {rep.status === 'Reviewed' || rep.reviewedBy ? 'Reviewed' : 'Pending Review'}
                               </span>
                             </td>
                             <td className="py-3 px-4 text-slate-500 font-medium">

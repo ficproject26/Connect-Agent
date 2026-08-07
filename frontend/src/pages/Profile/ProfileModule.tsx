@@ -222,9 +222,13 @@ export const ProfileModule: React.FC = () => {
                     label="Blood Group"
                     options={[
                       { value: 'A+', label: 'A+' },
+                      { value: 'A-', label: 'A-' },
                       { value: 'B+', label: 'B+' },
+                      { value: 'B-', label: 'B-' },
                       { value: 'O+', label: 'O+' },
+                      { value: 'O-', label: 'O-' },
                       { value: 'AB+', label: 'AB+' },
+                      { value: 'AB-', label: 'AB-' },
                     ]}
                     value={blood}
                     onChange={(e) => setBlood(e.target.value)}

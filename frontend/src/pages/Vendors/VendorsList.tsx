@@ -83,9 +83,9 @@ export const VendorsList: React.FC = () => {
         assignedAgent: v.assignedAgent?.name || 'Pincode Agent',
         createdAt: TODAY_DATE,
         updatedAt: TODAY_DATE,
-        storeType: v.category?.name || v.storeType || 'Supermarket & Retail',
-        businessGst: v.gst || '33AABCK1234F1Z9',
-        fullAddress: v.location?.address || 'Main Street, Market Area'
+        storeType: v.category?.name || v.storeType || 'General Store',
+        businessGst: v.gst || v.businessGst || '',
+        fullAddress: v.location?.address || ''
       }));
 
       setVendors(prev => {
@@ -459,7 +459,7 @@ export const VendorsList: React.FC = () => {
       createdAt: TODAY_DATE,
       updatedAt: TODAY_DATE,
       storeType: finalStoreType,
-      businessGst: newVendor.businessGst || `33AABC${Math.floor(1000 + Math.random() * 9000)}F1Z9`,
+      businessGst: newVendor.businessGst || '',
       fullAddress: newVendor.fullAddress
         ? `${newVendor.fullAddress}${newVendor.landmark ? ` (Landmark: ${newVendor.landmark})` : ''}, ${newVendor.district}, ${newVendor.state} ${newVendor.pincode}`
         : `${newVendor.postOffice || 'Main Market'}, ${newVendor.district}, ${newVendor.state} ${newVendor.pincode}`

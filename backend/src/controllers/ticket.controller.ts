@@ -16,19 +16,22 @@ const createTicketSchema = z.object({
 export const getTickets = async (req: Request, res: Response) => {
   try {
     const agentId = (req as any).agent?.agentId;
+    const agentRole = (req as any).agent?.role;
     if (!agentId) return res.status(401).json({ message: 'Unauthorized' });
 
     const { page = '1', limit = '20', status, priority, mine } = req.query;
     const pageNum = parseInt(page as string, 10);
     const limitNum = parseInt(limit as string, 10);
 
-    // If mine=true, show only tickets created by this agent
     const filter: Record<string, unknown> = {};
+    const isAdminOrExecutive = agentRole === 'admin' || agentRole === 'executive';
+
     if (mine === 'true') {
       filter.creator = agentId;
-    } else {
+    } else if (!isAdminOrExecutive) {
       filter.$or = [{ creator: agentId }, { assignedTo: agentId }];
     }
+
     if (status) filter.status = status;
     if (priority) filter.priority = priority;
 
@@ -54,12 +57,16 @@ export const getTickets = async (req: Request, res: Response) => {
 export const getTicketById = async (req: Request, res: Response) => {
   try {
     const agentId = (req as any).agent?.agentId;
+    const agentRole = (req as any).agent?.role;
     if (!agentId) return res.status(401).json({ message: 'Unauthorized' });
 
-    const ticket = await Ticket.findOne({
-      _id: req.params.id,
-      $or: [{ creator: agentId }, { assignedTo: agentId }]
-    })
+    const isAdminOrExecutive = agentRole === 'admin' || agentRole === 'executive';
+    const filter: any = { _id: req.params.id };
+    if (!isAdminOrExecutive) {
+      filter.$or = [{ creator: agentId }, { assignedTo: agentId }];
+    }
+
+    const ticket = await Ticket.findOne(filter)
       .populate('creator', 'name email role phone')
       .populate('assignedTo', 'name email role phone');
 
@@ -104,6 +111,7 @@ export const createTicket = async (req: Request, res: Response) => {
 export const updateTicketStatus = async (req: Request, res: Response) => {
   try {
     const agentId = (req as any).agent?.agentId;
+    const agentRole = (req as any).agent?.role;
     if (!agentId) return res.status(401).json({ message: 'Unauthorized' });
 
     const { status, resolutionDetails } = req.body;
@@ -112,10 +120,13 @@ export const updateTicketStatus = async (req: Request, res: Response) => {
       return res.status(400).json({ message: `Status must be one of: ${validStatuses.join(', ')}` });
     }
 
-    const ticket = await Ticket.findOne({
-      _id: req.params.id,
-      $or: [{ creator: agentId }, { assignedTo: agentId }]
-    });
+    const isAdminOrExecutive = agentRole === 'admin' || agentRole === 'executive';
+    const filter: any = { _id: req.params.id };
+    if (!isAdminOrExecutive) {
+      filter.$or = [{ creator: agentId }, { assignedTo: agentId }];
+    }
+
+    const ticket = await Ticket.findOne(filter);
 
     if (!ticket) return res.status(404).json({ message: 'Ticket not found or access denied' });
 

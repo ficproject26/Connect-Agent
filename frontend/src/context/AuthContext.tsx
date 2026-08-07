@@ -381,8 +381,71 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const triggerSound = (profileOverride?: 'chirp' | 'melody' | 'siren') => {
-    // Sound fallback
-    console.log('Chirp sound played:', profileOverride || soundProfile);
+    try {
+      const selected = profileOverride || soundProfile;
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const ctx = new AudioContextClass();
+      const masterGain = ctx.createGain();
+      masterGain.gain.setValueAtTime(soundVolume, ctx.currentTime);
+      masterGain.connect(ctx.destination);
+
+      if (selected === 'chirp') {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(800, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1400, ctx.currentTime + 0.12);
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+        osc.connect(gain);
+        gain.connect(masterGain);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.15);
+
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(1000, ctx.currentTime + 0.15);
+        osc2.frequency.exponentialRampToValueAtTime(1600, ctx.currentTime + 0.27);
+        gain2.gain.setValueAtTime(0.3, ctx.currentTime + 0.15);
+        gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+        osc2.connect(gain2);
+        gain2.connect(masterGain);
+        osc2.start(ctx.currentTime + 0.15);
+        osc2.stop(ctx.currentTime + 0.3);
+      } else if (selected === 'siren') {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(600, ctx.currentTime);
+        osc.frequency.linearRampToValueAtTime(950, ctx.currentTime + 0.25);
+        osc.frequency.linearRampToValueAtTime(600, ctx.currentTime + 0.5);
+        gain.gain.setValueAtTime(0.2, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.55);
+        osc.connect(gain);
+        gain.connect(masterGain);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.55);
+      } else {
+        const freqs = [523.25, 659.25, 783.99, 1046.50];
+        freqs.forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          const startTime = ctx.currentTime + (idx * 0.08);
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, startTime);
+          gain.gain.setValueAtTime(0.25, startTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.25);
+          osc.connect(gain);
+          gain.connect(masterGain);
+          osc.start(startTime);
+          osc.stop(startTime + 0.25);
+        });
+      }
+    } catch (e) {
+      console.error('Audio play error:', e);
+    }
   };
 
   return (
