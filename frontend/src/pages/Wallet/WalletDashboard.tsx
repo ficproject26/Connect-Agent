@@ -63,26 +63,9 @@ export const WalletDashboard: React.FC = () => {
       setTransactions(mappedTx);
     } catch (err: any) {
       console.error(err);
-      setErrorMsg('Failed to sync wallet data. Displaying cached records.');
-      setBalance(5000);
-      setTransactions([
-        {
-          transactionId: "TXN-BLQBWCPHG",
-          amount: 3000,
-          type: 'credit',
-          description: 'Weekly merchant onboarding target completion bonus',
-          status: 'completed',
-          createdAt: '7/17/2026 11:42 AM'
-        },
-        {
-          transactionId: "TXN-LRMXMI8GQ",
-          amount: 2000,
-          type: 'credit',
-          description: 'Onboarding reward bonus',
-          status: 'completed',
-          createdAt: '7/15/2026 11:42 AM'
-        }
-      ]);
+      setErrorMsg('Failed to sync wallet data.');
+      setBalance(0);
+      setTransactions([]);
     } finally {
       setIsLoading(false);
     }

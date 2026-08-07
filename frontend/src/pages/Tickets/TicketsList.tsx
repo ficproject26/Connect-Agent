@@ -59,27 +59,8 @@ export const TicketsList: React.FC = () => {
       setTickets(mapped);
     } catch (err: any) {
       console.error(err);
-      setErrorMsg('Failed to load tickets from server. Showing local mock logs.');
-      setTickets([
-        {
-          _id: "TK-9812",
-          ticketId: "TKT-9812",
-          category: "KYC Document Issue",
-          description: "Aadhaar verification issue - OCR failed to recognize the card photo format.",
-          status: "in_progress",
-          createdAt: "2026-07-19",
-          remarks: "Sent to the regional document verification desk for manual audit."
-        },
-        {
-          _id: "TK-9742",
-          ticketId: "TKT-9742",
-          category: "Vendor Query",
-          description: "Merchant sign-up blocked due to existing duplicate shop registration error.",
-          status: "resolved",
-          createdAt: "2026-07-17",
-          remarks: "Resolved by merging duplicate profile accounts after manual verification."
-        }
-      ]);
+      setErrorMsg('Failed to load tickets from server.');
+      setTickets([]);
     } finally {
       setIsLoading(false);
     }
