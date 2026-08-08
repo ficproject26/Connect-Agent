@@ -175,7 +175,7 @@ export const WalletDashboard: React.FC = () => {
           <span className="text-[10px] text-[#864f19] font-bold uppercase tracking-widest block">Agent Revenue Hub</span>
           <h2 className="text-2xl font-black tracking-tight text-[#1b1c1c]">E-Wallet & Earnings</h2>
           <p className="text-xs text-[#52443a] max-w-xl font-medium">
-            Monitor accumulated state/district/pincode agent bonus earnings, review linked settlement bank accounts, and submit instant cashouts.
+            Track your earnings, bonuses, payouts, and linked bank account for settlement.
           </p>
         </div>
       </div>

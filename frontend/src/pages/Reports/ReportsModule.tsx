@@ -32,9 +32,13 @@ export const ReportsModule: React.FC = () => {
     } catch (e) {}
     return defaultSubmittedReports;
   });
+  const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const currentMonth = MONTH_NAMES[new Date().getMonth()];
+  const currentYear = new Date().getFullYear().toString();
+
   const [isFetchingReports, setIsFetchingReports] = useState(false);
-  const [reportMonth, setReportMonth] = useState('June');
-  const [reportYear, setReportYear] = useState('2026');
+  const [reportMonth, setReportMonth] = useState(currentMonth);
+  const [reportYear, setReportYear] = useState(currentYear);
   const [reportRemarks, setReportRemarks] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSubmittingReport, setIsSubmittingReport] = useState(false);

@@ -95,19 +95,24 @@ export const completeFieldVisit = async (req: Request, res: Response) => {
 export const getFieldVisits = async (req: Request, res: Response) => {
   try {
     const agentId = (req as any).agent?.agentId;
+    const agentRole = (req as any).agent?.role;
     if (!agentId) return res.status(401).json({ message: 'Unauthorized' });
 
     const { page = '1', limit = '20', status, vendorId } = req.query;
     const pageNum = parseInt(page as string, 10);
     const limitNum = parseInt(limit as string, 10);
 
-    const filter: Record<string, unknown> = { agent: agentId };
+    const filter: Record<string, unknown> = {};
+    if (agentRole === 'pincode' || agentRole === 'delivery_partner' || agentRole === 'technician') {
+      filter.agent = agentId;
+    }
     if (status) filter.status = status;
     if (vendorId) filter.vendor = vendorId;
 
     const total = await FieldVisit.countDocuments(filter);
     const visits = await FieldVisit.find(filter)
-      .populate('vendor', 'storeName contactPerson phone pincode')
+      .populate('agent', 'name email role phone territory')
+      .populate('vendor', 'storeName contactPerson phone pincode address district division state')
       .sort({ createdAt: -1 })
       .skip((pageNum - 1) * limitNum)
       .limit(limitNum);
