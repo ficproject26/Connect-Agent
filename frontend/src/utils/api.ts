@@ -1,20 +1,24 @@
 import axios from 'axios';
 
 const getAgentBackendUrl = () => {
-  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
-  if (typeof window === 'undefined') return 'http://localhost:8001/api';
-  const hostname = window.location.hostname;
-  if (
-    !hostname || 
-    hostname === 'localhost' || 
-    hostname === '127.0.0.1' || 
-    hostname.startsWith('192.168.') || 
-    hostname.startsWith('10.') || 
-    hostname.startsWith('172.')
-  ) {
-    return `http://${hostname || 'localhost'}:8001/api`;
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    const isLocal = !hostname || 
+      hostname === 'localhost' || 
+      hostname === '127.0.0.1' || 
+      hostname.startsWith('192.168.') || 
+      hostname.startsWith('10.') || 
+      hostname.startsWith('172.');
+      
+    if (!isLocal) {
+      if (import.meta.env.VITE_API_URL && !import.meta.env.VITE_API_URL.includes('localhost')) {
+        return import.meta.env.VITE_API_URL;
+      }
+      return 'https://connect-agent-oy0d.onrender.com/api';
+    }
   }
-  return 'https://connect-agent-oy0d.onrender.com/api';
+  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+  return 'http://localhost:8001/api';
 };
 
 const api = axios.create({
