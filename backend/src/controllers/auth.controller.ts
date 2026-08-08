@@ -61,18 +61,26 @@ export const register = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Phone number is already registered. Please use another phone number.' });
     }
 
-    // Generate unique Registration ID: REG-YYYYMMDD-XXXX
-    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const randDigits = Math.floor(1000 + Math.random() * 9000);
-    const registrationId = `REG-${dateStr}-${randDigits}`;
-
     const agentRole = validatedData.role;
     const cleanTerritory = {
       state: validatedData.territory?.state || '',
       district: agentRole === 'state' ? '' : (validatedData.territory?.district || ''),
       division: (agentRole === 'state' || agentRole === 'district') ? '' : (validatedData.territory?.division || ''),
-      pincode: agentRole === 'pincode' ? (validatedData.territory?.pincode || '') : ''
+      pincode: agentRole === 'pincode' ? (validatedData.territory?.pincode || '') : (validatedData.territory?.pincode || '')
     };
+
+    // Enforce strictly 1 agent per pincode rule
+    if (agentRole === 'pincode' && cleanTerritory.pincode) {
+      const existingPincodeAgent = await Agent.findOne({
+        role: 'pincode',
+        'territory.pincode': cleanTerritory.pincode
+      });
+      if (existingPincodeAgent) {
+        return res.status(400).json({
+          message: `Pincode ${cleanTerritory.pincode} is already assigned to agent "${existingPincodeAgent.name}". Only 1 agent per pincode is allowed.`
+        });
+      }
+    }
 
     let territoryParts: string[] = [];
     if (agentRole === 'state') territoryParts = [cleanTerritory.state].filter(Boolean);

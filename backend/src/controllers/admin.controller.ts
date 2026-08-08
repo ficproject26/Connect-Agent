@@ -192,11 +192,20 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
           const divTerritory = div.territory?.division || (div as any).division || 'Division Territory';
           const enrichedDiv = enrichAgentData(div);
 
-          // Find child pincode agents under this division
+          // Find child pincode agents under this division (strictly 1 agent per pincode)
+          const seenPincodes = new Set<string>();
           const matchingPincodes = pincodeAgents
             .filter(pin => {
               const pinDiv = pin.territory?.division || (pin as any).division;
-              return !pinDiv || pinDiv === divTerritory || divisionAgents.length === 1;
+              const pinCode = pin.territory?.pincode || (pin as any).pincode;
+              if (pinCode && seenPincodes.has(pinCode)) {
+                return false; // Exclude duplicate agent on same pincode
+              }
+              const isMatch = !pinDiv || pinDiv === divTerritory || divisionAgents.length === 1;
+              if (isMatch && pinCode) {
+                seenPincodes.add(pinCode);
+              }
+              return isMatch;
             })
             .map(pin => enrichAgentData(pin));
 
