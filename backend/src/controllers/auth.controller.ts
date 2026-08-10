@@ -201,16 +201,7 @@ export const login = async (req: Request, res: Response) => {
       console.error('Error syncing status from admin collection:', statusSyncErr);
     }
 
-    // Workflow validation: Approved (Login Enabled) / Pending Approval / Rejected (Show Reason)
-    if (agent.kycStatus === 'pending') {
-      return res.status(403).json({
-        message: 'Your registration has been submitted successfully. You can log in only after Admin approval.',
-        status: 'pending',
-        registrationId: agent.registrationId || 'N/A',
-        role: agent.role
-      });
-    }
-
+    // Workflow validation: Rejected agents blocked with reason, pending/approved agents log in seamlessly
     if (agent.kycStatus === 'rejected') {
       return res.status(403).json({
         message: `Your registration application was rejected. Reason: ${agent.rejectionReason || 'No reason provided.'}`,
@@ -233,7 +224,10 @@ export const login = async (req: Request, res: Response) => {
     return res.status(200).json({
       message: 'Login successful',
       token,
-      agent: agentData
+      agent: {
+        ...agentData,
+        status: (agent.kycStatus === 'approved' || agent.status === 'approved' || agent.status === 'active') ? 'active' : 'pending_approval'
+      }
     });
   } catch (error: any) {
     if (error instanceof z.ZodError) {

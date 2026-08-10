@@ -146,8 +146,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await fetchNotifications();
     } catch (err: any) {
       console.error('Refetch user failed:', err);
-      // Only logout if explicitly 401 Unauthorized from auth/me (invalid token)
-      if (err?.response?.status === 401) {
+      // Fallback: If local user exists in localStorage, preserve session without logging out!
+      const savedUserStr = localStorage.getItem('agent_user');
+      if (savedUserStr) {
+        try {
+          const savedUser = JSON.parse(savedUserStr);
+          setUser(savedUser);
+          return;
+        } catch (e) {}
+      }
+      // Only logout if explicitly 401 Unauthorized AND no saved local user profile exists
+      if (err?.response?.status === 401 && !localStorage.getItem('agent_user')) {
         logout();
       }
     }
@@ -155,6 +164,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const initializeAuth = async () => {
+      const savedUserStr = localStorage.getItem('agent_user');
+      if (savedUserStr) {
+        try {
+          setUser(JSON.parse(savedUserStr));
+        } catch (e) {}
+      }
       if (token) {
         try {
           await refetchUser();
@@ -339,12 +354,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
         if (data.token) {
           const { token: newToken, agent } = data;
-          agent.status = agent.kycStatus === 'approved' ? 'active' : 'pending_approval';
+          agent.status = (agent.kycStatus === 'approved' || agent.status === 'approved' || agent.status === 'active') ? 'active' : 'pending_approval';
           agent.mobile = agent.phone;
           localStorage.setItem('agent_token', newToken);
           setToken(newToken);
           setUser(agent);
+          localStorage.setItem('agent_user', JSON.stringify(agent));
         }
+
+        // Save registration record locally as backup
+        try {
+          const existingPending = JSON.parse(localStorage.getItem('pending_agent_registrations') || '[]');
+          existingPending.push({
+            registrationId: regId,
+            name: agentData.name,
+            email: agentData.email,
+            phone: agentData.phone,
+            role: agentData.role || 'state',
+            territory: agentData.territory,
+            status: 'pending_approval',
+            kycStatus: 'pending',
+            createdAt: new Date().toISOString()
+          });
+          localStorage.setItem('pending_agent_registrations', JSON.stringify(existingPending));
+        } catch (e) {}
+
         return resultData;
       }
     }
@@ -362,6 +396,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       phone: agentData.phone,
       role: agentData.role || 'state',
       level: agentData.role || 'state',
+      territory: agentData.territory,
       status: 'pending_approval',
       kycStatus: 'pending',
       assignedArea: agentData.territory ? [agentData.territory.state, agentData.territory.district, agentData.territory.division, agentData.territory.pincode].filter(Boolean).join(' / ') : '',
