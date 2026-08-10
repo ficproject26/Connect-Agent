@@ -8,6 +8,7 @@ import {
   RefreshCw, ChevronRight, Shield, ArrowUpRight, Store, GitFork, Layers, Landmark, Building2
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { OnboardVendorWizardModal } from './OnboardVendorWizardModal';
 
 interface Vendor {
   id: string;
@@ -1088,149 +1089,66 @@ export const VendorsList: React.FC = () => {
         </Modal>
       )}
 
-      {/* ONBOARD NEW VENDOR WIZARD MODAL */}
-      <Modal
+      {/* 5-STEP ONBOARD NEW MERCHANT VENDOR WIZARD MODAL */}
+      <OnboardVendorWizardModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        title="Onboard New Merchant Vendor"
-      >
-        <form onSubmit={handleOnboardSubmit} className="space-y-4">
-          {onboardError && (
-            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl">
-              {onboardError}
-            </div>
-          )}
+        onSuccess={(wizardData) => {
+          const createdVendor: Vendor = {
+            id: `REG-${Math.floor(1000 + Math.random() * 9000)}`,
+            name: wizardData.name,
+            ownerName: wizardData.ownerName || 'Merchant Owner',
+            phone: wizardData.phone,
+            email: wizardData.email,
+            state: wizardData.state || userState,
+            division: wizardData.division || userDivision,
+            district: wizardData.district || userDistrict,
+            pincode: wizardData.pincode || userPincode,
+            role: 'Merchant Partner',
+            kycStatus: 'pending',
+            status: 'active',
+            assignedAgent: `${user?.name || 'Logged Agent'} (${activeRole.charAt(0).toUpperCase() + activeRole.slice(1)} Agent)`,
+            createdAt: TODAY_DATE,
+            updatedAt: TODAY_DATE,
+            storeType: wizardData.storeType,
+            businessGst: wizardData.businessGst || '',
+            fullAddress: wizardData.fullAddress
+          };
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Input
-              label="Merchant Store Name"
-              placeholder="e.g. Hosur Supermarket"
-              value={newVendor.name}
-              onChange={(e) => setNewVendor({ ...newVendor, name: e.target.value })}
-              required
-            />
-            <Input
-              label="Owner Full Name"
-              placeholder="e.g. Ramesh Kumar"
-              value={newVendor.ownerName}
-              onChange={(e) => setNewVendor({ ...newVendor, ownerName: e.target.value })}
-              required
-            />
-          </div>
+          setVendors(prev => {
+            const updated = [createdVendor, ...prev];
+            try {
+              const customOnly = updated.filter(v => v.id.startsWith('REG-'));
+              localStorage.setItem('connect_portal_custom_vendors', JSON.stringify(customOnly));
+            } catch (e) {
+              console.error('Failed to save custom vendor to localStorage:', e);
+            }
+            return updated;
+          });
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Input
-              label="Phone Number (10 Digits)"
-              placeholder="10-digit mobile number"
-              value={newVendor.phone}
-              onChange={(e) => {
-                const cleaned = e.target.value.replace(/\D/g, '').slice(0, 10);
-                setNewVendor({ ...newVendor, phone: cleaned });
-              }}
-              maxLength={10}
-              inputMode="numeric"
-              required
-            />
-            <Input
-              label="Email Address"
-              type="email"
-              placeholder="vendor@example.com"
-              value={newVendor.email}
-              onChange={(e) => setNewVendor({ ...newVendor, email: e.target.value })}
-            />
-          </div>
+          // Sync live with Backend API
+          api.post('/vendors', {
+            businessName: createdVendor.name,
+            ownerName: createdVendor.ownerName,
+            phone: createdVendor.phone,
+            email: createdVendor.email,
+            storeType: createdVendor.storeType,
+            gst: createdVendor.businessGst,
+            pincode: createdVendor.pincode,
+            district: createdVendor.district,
+            division: createdVendor.division,
+            state: createdVendor.state,
+            fullAddress: createdVendor.fullAddress
+          }).catch(err => console.warn('Vendor API sync error:', err));
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Select
-              label="Store Category"
-              options={[
-                { value: 'Supermarket & Retail', label: 'Supermarket & Retail' },
-                { value: 'Fresh Produce Mart', label: 'Fresh Produce Mart' },
-                { value: 'Bakery & Confectionery', label: 'Bakery & Confectionery' },
-                { value: 'Organic Food Store', label: 'Organic Food Store' },
-                { value: 'Electronics & Appliances', label: 'Electronics & Appliances' },
-                { value: 'Other', label: 'Other (Specify Custom Category)' }
-              ]}
-              value={newVendor.storeType}
-              onChange={(e) => setNewVendor({ ...newVendor, storeType: e.target.value })}
-            />
-            <Input
-              label="GSTIN Number (Optional)"
-              placeholder="e.g. 33AABCK1234F1Z9"
-              value={newVendor.businessGst}
-              onChange={(e) => setNewVendor({ ...newVendor, businessGst: e.target.value })}
-            />
-          </div>
-
-          {newVendor.storeType === 'Other' && (
-            <div>
-              <Input
-                label="Specify Custom Store Category *"
-                placeholder="e.g. Hardware & Tools, Pharmacy, Boutique"
-                value={newVendor.customCategory}
-                onChange={(e) => setNewVendor({ ...newVendor, customCategory: e.target.value })}
-                required
-              />
-            </div>
-          )}
-
-          <div>
-            <Input
-              label="Pincode (Auto-fills Territory)"
-              placeholder="e.g. 635109"
-              value={newVendor.pincode}
-              onChange={(e) => handlePincodeOnboardChange(e.target.value)}
-              required
-            />
-          </div>
-
-          {/* Full Business Address & Location Section */}
-          <div className="space-y-3 pt-2 border-t border-[#d7c3b5]/30">
-            <p className="text-[10px] uppercase font-black text-[#864f19]">Merchant Business Address Details</p>
-
-            <Input
-              label="Full Business Address (Door No, Shop No, Building, Street)"
-              placeholder="e.g. Shop #14, Commercial Plaza, Main Market Road"
-              value={newVendor.fullAddress}
-              onChange={(e) => setNewVendor({ ...newVendor, fullAddress: e.target.value })}
-              required
-            />
-
-            <Input
-              label="Nearby Landmark (Optional)"
-              placeholder="e.g. Opposite City Bus Stand / Next to SBI Bank"
-              value={newVendor.landmark}
-              onChange={(e) => setNewVendor({ ...newVendor, landmark: e.target.value })}
-            />
-          </div>
-
-          {newVendor.state && (
-            <div className="p-3 bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl text-xs space-y-1 font-bold text-[#52443a]">
-              <p className="text-[10px] uppercase font-black text-[#864f19]">Auto-Detected Territory</p>
-              <p>State: {newVendor.state} • District: {newVendor.district}</p>
-              <p>Division: {newVendor.division} • Post Office: {newVendor.postOffice}</p>
-            </div>
-          )}
-
-          <div className="pt-2 flex justify-end gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setIsAddModalOpen(false)}
-              className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold py-2 px-4 rounded-xl border-none cursor-pointer"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              className="bg-[#864f19] hover:bg-[#a3672f] text-white text-xs font-bold py-2 px-5 rounded-xl border-none cursor-pointer"
-            >
-              Submit Onboarding
-            </Button>
-          </div>
-        </form>
-      </Modal>
+          addNotification(
+            'Merchant Onboarded Successfully!',
+            `${createdVendor.name} onboarded with 5-Step verification details under PIN ${createdVendor.pincode}.`,
+            'high',
+            'system'
+          );
+        }}
+      />
     </div>
   );
 };
