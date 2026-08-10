@@ -88,7 +88,9 @@ export const register = async (req: Request, res: Response) => {
     else if (agentRole === 'division') territoryParts = [cleanTerritory.state, cleanTerritory.district, cleanTerritory.division].filter(Boolean);
     else territoryParts = [cleanTerritory.state, cleanTerritory.district, cleanTerritory.division, cleanTerritory.pincode].filter(Boolean);
 
-    const assignedAreaStr = territoryParts.join(' / ');
+    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const randDigits = Math.floor(1000 + Math.random() * 9000);
+    const registrationId = `REG-${dateStr}-${randDigits}`;
 
     const newAgent = new Agent({
       ...validatedData,
@@ -226,7 +228,7 @@ export const login = async (req: Request, res: Response) => {
       token,
       agent: {
         ...agentData,
-        status: (agent.kycStatus === 'approved' || agent.status === 'approved' || agent.status === 'active') ? 'active' : 'pending_approval'
+        status: (agent.kycStatus === 'approved' || (agent as any).status === 'approved' || (agent as any).status === 'active') ? 'active' : 'pending_approval'
       }
     });
   } catch (error: any) {
