@@ -129,6 +129,7 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
     setErrorMsg('');
 
     const reader = new FileReader();
+    reader.onerror = (err) => console.warn('Logo file reader error:', err);
     reader.onload = (ev) => {
       if (ev.target?.result) {
         setFormData(prev => ({
@@ -155,6 +156,7 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
     files.forEach(file => {
       if (file.size > 5 * 1024 * 1024) return;
       const reader = new FileReader();
+      reader.onerror = (err) => console.warn('Business image file reader error:', err);
       reader.onload = (ev) => {
         if (ev.target?.result) {
           setFormData(prev => ({
