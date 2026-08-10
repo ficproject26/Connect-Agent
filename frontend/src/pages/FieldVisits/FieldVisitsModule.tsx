@@ -21,6 +21,7 @@ interface FieldVisitRecord {
   remarks?: string;
   visitedBy: string;
   visitedByRole: string;
+  state: string;
   territoryDistrict: string;
   territoryPincode: string;
   photoBeforeVisit?: string;
@@ -31,112 +32,10 @@ interface FieldVisitRecord {
 export const FieldVisitsModule: React.FC = () => {
   const { user } = useAuth();
   const activeRole = (user?.role as string) || 'state';
-  const userState = user?.territory?.state || 'Karnataka';
-
-  const defaultVisits: FieldVisitRecord[] = [
-    {
-      _id: 'VIS-5321',
-      vendorId: 'VEND-501',
-      vendorName: 'cxghjk',
-      storeAddress: 'cxvghjkl;kghfd',
-      visitDate: '06 Aug 2026',
-      visitTime: '11:45 AM',
-      status: 'completed',
-      latitude: 12.9716,
-      longitude: 77.5946,
-      visitedBy: 'Dhanu',
-      visitedByRole: 'Pincode Agent',
-      territoryDistrict: 'Bengaluru Urban',
-      territoryPincode: '560096',
-      remarks: 'KYC Audit & QR Code Onboarding completed successfully',
-      visitPurpose: 'KYC Audit & QR Code Onboarding'
-    },
-    {
-      _id: 'VIS-5319',
-      vendorId: 'VEND-502',
-      vendorName: 'Shree Provisions',
-      storeAddress: 'Shop #4, Main Market, Bengaluru Urban, TN 560045',
-      visitDate: '06 Aug 2026',
-      visitTime: '10:30 AM',
-      status: 'completed',
-      latitude: 12.9508,
-      longitude: 77.6101,
-      visitedBy: 'Mano',
-      visitedByRole: 'Pincode Agent',
-      territoryDistrict: 'Bengaluru Urban',
-      territoryPincode: '560045',
-      remarks: 'Merchant agreement signed and store poster installed',
-      visitPurpose: 'Merchant Agreement & Branding'
-    },
-    {
-      _id: 'VIS-5318',
-      vendorId: 'VEND-503',
-      vendorName: 'Daily Needs Mart',
-      storeAddress: 'Plot #18, High Street, Tumakuru 572101',
-      visitDate: '06 Aug 2026',
-      visitTime: '10:05 AM',
-      status: 'in_progress',
-      latitude: 13.3389,
-      longitude: 77.1017,
-      visitedBy: 'Arun',
-      visitedByRole: 'District Agent',
-      territoryDistrict: 'Tumakuru',
-      territoryPincode: '572101',
-      remarks: 'Stock verification and POS terminal installation in progress',
-      visitPurpose: 'POS Terminal Setup'
-    },
-    {
-      _id: 'VIS-5317',
-      vendorId: 'VEND-504',
-      vendorName: 'Krishna Stores',
-      storeAddress: 'Near Bus Stand, Mysuru 570017',
-      visitDate: '06 Aug 2026',
-      visitTime: '09:20 AM',
-      status: 'in_progress',
-      latitude: 12.2958,
-      longitude: 76.6394,
-      visitedBy: 'Priya',
-      visitedByRole: 'Pincode Agent',
-      territoryDistrict: 'Mysuru',
-      territoryPincode: '570017',
-      remarks: 'Aadhaar document OCR re-verification',
-      visitPurpose: 'Document Dispute Audit'
-    },
-    {
-      _id: 'VIS-5316',
-      vendorId: 'VEND-505',
-      vendorName: 'Ramesh Traders',
-      storeAddress: 'Station Road, Dharwad 580001',
-      visitDate: '06 Aug 2026',
-      visitTime: '09:10 AM',
-      status: 'overdue',
-      latitude: 15.4589,
-      longitude: 75.0078,
-      visitedBy: 'Savitha',
-      visitedByRole: 'District Agent',
-      territoryDistrict: 'Dharwad',
-      territoryPincode: '580001',
-      remarks: 'Follow up pending for merchant bank account update',
-      visitPurpose: 'Bank Details Verification'
-    },
-    {
-      _id: 'VIS-5315',
-      vendorId: 'VEND-506',
-      vendorName: 'Lakshmi Supermart',
-      storeAddress: 'Nehru Chowk, Belagavi 590001',
-      visitDate: '06 Aug 2026',
-      visitTime: '08:50 AM',
-      status: 'completed',
-      latitude: 15.8497,
-      longitude: 74.4977,
-      visitedBy: 'Rakesh',
-      visitedByRole: 'Pincode Agent',
-      territoryDistrict: 'Belagavi',
-      territoryPincode: '590001',
-      remarks: 'Store verification completed and active status enabled',
-      visitPurpose: 'Store Verification'
-    }
-  ];
+  const userState = user?.territory?.state || 'Tamil Nadu';
+  const userDistrict = user?.territory?.district || 'Krishnagiri District';
+  const userPincode = user?.territory?.pincode || '635109';
+  const userName = user?.name || 'Logged Agent';
 
   const [visits, setVisits] = useState<FieldVisitRecord[]>(() => {
     try {
@@ -150,7 +49,7 @@ export const FieldVisitsModule: React.FC = () => {
     } catch (e) {
       console.error('Error loading custom field visits:', e);
     }
-    return defaultVisits;
+    return [];
   });
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -179,33 +78,53 @@ export const FieldVisitsModule: React.FC = () => {
   const [completeRemarks, setCompleteRemarks] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Load visits from API or merge
+  // Fetch real visits from API or sync
   const fetchVisits = async () => {
     try {
       const res = await api.get('/field-visits');
       const backendVisits = res.data.visits || [];
       if (backendVisits.length > 0) {
-        const mapped: FieldVisitRecord[] = backendVisits.map((v: any) => ({
-          _id: v._id,
-          vendorId: v.vendor?._id || 'VEND-REF',
-          vendorName: v.vendor?.storeName || 'Merchant Store',
-          storeAddress: v.vendor?.address || 'Territory Address',
-          visitDate: new Date(v.visitDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-          visitTime: new Date(v.visitDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          status: v.status === 'started' ? 'in_progress' : v.status,
-          latitude: v.checkInLocation?.latitude || 12.9716,
-          longitude: v.checkInLocation?.longitude || 77.5946,
-          remarks: v.remarks || 'Field audit visit',
-          visitedBy: v.agent?.name || 'Pincode Agent',
-          visitedByRole: v.agent?.role ? `${v.agent.role.charAt(0).toUpperCase() + v.agent.role.slice(1)} Agent` : 'Agent',
-          territoryDistrict: v.vendor?.district || 'Bengaluru Urban',
-          territoryPincode: v.vendor?.pincode || '560096',
-          visitPurpose: 'Store KYC Audit & QR Onboarding'
-        }));
+        const mapped: FieldVisitRecord[] = backendVisits.map((v: any) => {
+          const agentName = v.agent?.name || v.visitedBy || userName;
+          const agentRoleStr = v.agent?.role
+            ? `${v.agent.role.charAt(0).toUpperCase() + v.agent.role.slice(1)} Agent`
+            : v.visitedByRole || `${activeRole.charAt(0).toUpperCase() + activeRole.slice(1)} Agent`;
+          const vStoreName = v.vendor?.storeName || v.vendor?.businessName || v.vendorName || 'Merchant Store';
+          const vState = v.vendor?.state || v.state || userState;
+          const vDistrict = v.vendor?.district || v.territoryDistrict || userDistrict;
+          const vPincode = v.vendor?.pincode || v.territoryPincode || userPincode;
+          const vAddress = v.vendor?.address || v.vendor?.fullAddress || v.storeAddress || 'Store Address';
+
+          return {
+            _id: v._id || `VIS-${Math.floor(1000 + Math.random() * 9000)}`,
+            vendorId: v.vendor?._id || 'VEND-REF',
+            vendorName: vStoreName,
+            storeAddress: vAddress,
+            visitDate: v.visitDate ? new Date(v.visitDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+            visitTime: v.visitDate ? new Date(v.visitDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '11:45 AM',
+            status: v.status === 'started' ? 'in_progress' : (v.status || 'completed'),
+            latitude: v.checkInLocation?.latitude || v.latitude || 12.9716,
+            longitude: v.checkInLocation?.longitude || v.longitude || 77.5946,
+            remarks: v.remarks || 'Field audit visit',
+            visitedBy: agentName,
+            visitedByRole: agentRoleStr,
+            state: vState,
+            territoryDistrict: vDistrict,
+            territoryPincode: vPincode,
+            visitPurpose: v.visitPurpose || v.remarks || 'KYC Audit & QR Code Onboarding'
+          };
+        });
 
         setVisits(prev => {
           const apiIds = new Set(mapped.map(m => m._id));
-          const localOnly = prev.filter(p => !apiIds.has(p._id));
+          const localOnly = prev.filter(p => !apiIds.has(p._id)).map(p => ({
+            ...p,
+            visitedBy: p.visitedBy || userName,
+            visitedByRole: p.visitedByRole || `${activeRole.charAt(0).toUpperCase() + activeRole.slice(1)} Agent`,
+            state: p.state || userState,
+            territoryDistrict: p.territoryDistrict || userDistrict,
+            territoryPincode: p.territoryPincode || userPincode
+          }));
           const combined = [...mapped, ...localOnly];
           try {
             localStorage.setItem('connect_portal_field_visits', JSON.stringify(combined));
@@ -262,10 +181,11 @@ export const FieldVisitsModule: React.FC = () => {
       latitude: typeof latitude === 'number' ? latitude : 12.9716,
       longitude: typeof longitude === 'number' ? longitude : 77.5946,
       remarks: remarks || 'Store audit & KYC visit check-in',
-      visitedBy: user?.name || 'Logged Agent',
+      visitedBy: userName,
       visitedByRole: `${activeRole.charAt(0).toUpperCase() + activeRole.slice(1)} Agent`,
-      territoryDistrict: user?.territory?.district || 'Bengaluru Urban',
-      territoryPincode: user?.territory?.pincode || '560096',
+      state: userState,
+      territoryDistrict: userDistrict,
+      territoryPincode: userPincode,
       visitPurpose: remarks || 'KYC Audit & QR Code Onboarding'
     };
 
@@ -332,12 +252,12 @@ export const FieldVisitsModule: React.FC = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
-    const rowsHtml = filteredVisits.map((v, i) => `
+    const rowsHtml = filteredVisits.map((v) => `
       <tr>
         <td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold; color: #864f19;">${v._id}</td>
         <td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>${v.vendorName}</strong><br><small style="color: #666;">${v.storeAddress}</small></td>
-        <td style="padding: 8px; border-bottom: 1px solid #eee;">${v.visitedBy} (${v.visitedByRole})</td>
-        <td style="padding: 8px; border-bottom: 1px solid #eee;">${v.territoryDistrict} • ${v.territoryPincode}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #eee;">${v.visitedBy || userName} (${v.visitedByRole})</td>
+        <td style="padding: 8px; border-bottom: 1px solid #eee;">${v.state || userState} • ${v.territoryDistrict || userDistrict} • ${v.territoryPincode || userPincode}</td>
         <td style="padding: 8px; border-bottom: 1px solid #eee;">${v.latitude}, ${v.longitude}</td>
         <td style="padding: 8px; border-bottom: 1px solid #eee;">${v.visitDate} ${v.visitTime || ''}</td>
         <td style="padding: 8px; border-bottom: 1px solid #eee; text-transform: uppercase; font-weight: bold;">${v.status}</td>
@@ -385,7 +305,7 @@ export const FieldVisitsModule: React.FC = () => {
               ${rowsHtml}
             </tbody>
           </table>
-          <div class="footer">Confidential Field Visit Audit Document • Generated by ${user?.name || 'Agent'}</div>
+          <div class="footer">Confidential Field Visit Audit Document • Generated by ${userName}</div>
           <script>
             window.onload = function() { window.print(); };
           </script>
@@ -408,21 +328,19 @@ export const FieldVisitsModule: React.FC = () => {
                             v._id.toLowerCase().includes(searchTerm.toLowerCase()) ||
                             v.visitedBy.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = statusFilter === 'all' || v.status === statusFilter;
-      const matchesDistrict = districtFilter === 'all' || v.territoryDistrict === districtFilter;
-      const matchesPincode = pincodeFilter === 'all' || v.territoryPincode === pincodeFilter;
-      const matchesAgent = agentFilter === 'all' || v.visitedBy === agentFilter;
+      const matchesDistrict = activeRole === 'pincode' || districtFilter === 'all' || v.territoryDistrict === districtFilter;
+      const matchesPincode = activeRole === 'pincode' || pincodeFilter === 'all' || v.territoryPincode === pincodeFilter;
+      const matchesAgent = activeRole === 'pincode' || agentFilter === 'all' || v.visitedBy === agentFilter;
       return matchesSearch && matchesStatus && matchesDistrict && matchesPincode && matchesAgent;
     });
-  }, [visits, searchTerm, statusFilter, districtFilter, pincodeFilter, agentFilter]);
+  }, [visits, searchTerm, statusFilter, districtFilter, pincodeFilter, agentFilter, activeRole]);
 
   // KPI Metrics Calculation
   const totalVisitsCount = visits.length;
   const completedCount = visits.filter(v => v.status === 'completed').length;
   const inProgressCount = visits.filter(v => v.status === 'in_progress' || v.status === 'started').length;
   const overdueCount = visits.filter(v => v.status === 'overdue').length;
-  const complianceRate = totalVisitsCount > 0 ? Math.round((completedCount / totalVisitsCount) * 100) : 86;
-
-  const activeVisit = visits.find(v => v.status === 'started' || v.status === 'in_progress');
+  const complianceRate = totalVisitsCount > 0 ? Math.round((completedCount / totalVisitsCount) * 100) : 100;
 
   return (
     <div className="space-y-6 animate-fade-in text-[#1b1c1c] font-sans">
@@ -465,7 +383,7 @@ export const FieldVisitsModule: React.FC = () => {
         </div>
       </div>
 
-      {/* KPI Cards Summary Grid (Matching Screenshot 10) */}
+      {/* KPI Cards Summary Grid */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {/* KPI 1: Visits Today */}
         <div className="bg-white p-4 rounded-xl border border-[#eae8e7] shadow-sm flex items-center justify-between">
@@ -536,8 +454,8 @@ export const FieldVisitsModule: React.FC = () => {
 
           {/* Search & Filter Controls Bar */}
           <div className="bg-white p-4 rounded-[16px] border border-[#eae8e7] shadow-sm space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
-              <div className="md:col-span-2 relative">
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <div className="flex-1 relative w-full">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
                   type="text"
@@ -548,40 +466,45 @@ export const FieldVisitsModule: React.FC = () => {
                 />
               </div>
 
-              <div>
-                <select
-                  value={districtFilter}
-                  onChange={(e) => setDistrictFilter(e.target.value)}
-                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                >
-                  <option value="all">All Districts</option>
-                  {districts.map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
-              </div>
+              {/* Hide District, Pincode, and Agent filters for Pincode Agent */}
+              {activeRole !== 'pincode' && (
+                <>
+                  <div className="w-full sm:w-40">
+                    <select
+                      value={districtFilter}
+                      onChange={(e) => setDistrictFilter(e.target.value)}
+                      className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                    >
+                      <option value="all">All Districts</option>
+                      {districts.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  </div>
 
-              <div>
-                <select
-                  value={pincodeFilter}
-                  onChange={(e) => setPincodeFilter(e.target.value)}
-                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                >
-                  <option value="all">All Pincodes</option>
-                  {pincodes.map(p => <option key={p} value={p}>PIN {p}</option>)}
-                </select>
-              </div>
+                  <div className="w-full sm:w-40">
+                    <select
+                      value={pincodeFilter}
+                      onChange={(e) => setPincodeFilter(e.target.value)}
+                      className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                    >
+                      <option value="all">All Pincodes</option>
+                      {pincodes.map(p => <option key={p} value={p}>PIN {p}</option>)}
+                    </select>
+                  </div>
 
-              <div>
-                <select
-                  value={agentFilter}
-                  onChange={(e) => setAgentFilter(e.target.value)}
-                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                >
-                  <option value="all">All Agents</option>
-                  {agents.map(a => <option key={a} value={a}>{a}</option>)}
-                </select>
-              </div>
+                  <div className="w-full sm:w-40">
+                    <select
+                      value={agentFilter}
+                      onChange={(e) => setAgentFilter(e.target.value)}
+                      className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                    >
+                      <option value="all">All Agents</option>
+                      {agents.map(a => <option key={a} value={a}>{a}</option>)}
+                    </select>
+                  </div>
+                </>
+              )}
 
-              <div>
+              <div className="w-full sm:w-40">
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
@@ -614,7 +537,7 @@ export const FieldVisitsModule: React.FC = () => {
             </div>
           </div>
 
-          {/* Field Visits History Ledger Table */}
+          {/* Field Visits History Ledger Table with Proper Alignments */}
           <Card>
             <CardHeader className="border-b border-[#eae8e7] pb-3">
               <CardTitle className="text-sm font-extrabold text-[#1b1c1c] flex items-center gap-2">
@@ -622,16 +545,16 @@ export const FieldVisitsModule: React.FC = () => {
               </CardTitle>
             </CardHeader>
             <CardBody className="p-0 overflow-x-auto">
-              <table className="w-full border-collapse text-left">
+              <table className="w-full border-collapse text-left align-middle">
                 <thead>
                   <tr className="bg-slate-50 text-[10px] font-bold text-[#52443a] uppercase tracking-wider border-b border-slate-100">
-                    <th className="py-3.5 px-4">Visit ID</th>
-                    <th className="py-3.5 px-4">Vendor</th>
-                    <th className="py-3.5 px-4">Visited By</th>
-                    <th className="py-3.5 px-4">Territory</th>
-                    <th className="py-3.5 px-4">GPS</th>
-                    <th className="py-3.5 px-4">Visit Date</th>
-                    <th className="py-3.5 px-4">Status</th>
+                    <th className="py-3.5 px-4 text-left">Visit ID</th>
+                    <th className="py-3.5 px-4 text-left">Vendor</th>
+                    <th className="py-3.5 px-4 text-left">Visited By</th>
+                    <th className="py-3.5 px-4 text-left">Territory</th>
+                    <th className="py-3.5 px-4 text-left">GPS</th>
+                    <th className="py-3.5 px-4 text-left">Visit Date</th>
+                    <th className="py-3.5 px-4 text-left">Status</th>
                     <th className="py-3.5 px-4 text-center">Action</th>
                   </tr>
                 </thead>
@@ -645,24 +568,27 @@ export const FieldVisitsModule: React.FC = () => {
                   ) : (
                     filteredVisits.map((v) => (
                       <tr key={v._id} className="hover:bg-[#fbf9f8] transition-colors">
-                        <td className="py-3.5 px-4 font-bold text-[#864f19]">{v._id}</td>
-                        <td className="py-3.5 px-4 font-bold text-[#1b1c1c]">{v.vendorName}</td>
-                        <td className="py-3.5 px-4">
-                          <p className="font-extrabold text-[#1b1c1c]">{v.visitedBy}</p>
-                          <p className="text-[10px] text-slate-400 font-bold">{v.visitedByRole}</p>
+                        <td className="py-3.5 px-4 font-bold text-[#864f19] align-middle">{v._id}</td>
+                        <td className="py-3.5 px-4 align-middle">
+                          <p className="font-extrabold text-[#1b1c1c]">{v.vendorName}</p>
+                          <p className="text-[10px] text-slate-400 font-normal truncate max-w-[150px]">{v.storeAddress}</p>
                         </td>
-                        <td className="py-3.5 px-4 text-slate-600">
-                          <p className="font-bold text-slate-800">{v.territoryDistrict}</p>
-                          <p className="text-[10px] text-slate-400 font-medium">{v.territoryPincode}</p>
+                        <td className="py-3.5 px-4 align-middle">
+                          <p className="font-extrabold text-[#1b1c1c]">{v.visitedBy || userName}</p>
+                          <p className="text-[10px] text-slate-400 font-bold">{v.visitedByRole || `${activeRole.charAt(0).toUpperCase() + activeRole.slice(1)} Agent`}</p>
                         </td>
-                        <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px]">
+                        <td className="py-3.5 px-4 align-middle text-slate-600">
+                          <p className="font-bold text-slate-800">{v.territoryDistrict || userDistrict}</p>
+                          <p className="text-[10px] text-slate-400 font-medium">PIN: {v.territoryPincode || userPincode}</p>
+                        </td>
+                        <td className="py-3.5 px-4 align-middle text-slate-500 font-mono text-[11px]">
                           {v.latitude}, {v.longitude}
                         </td>
-                        <td className="py-3.5 px-4 text-slate-600">
+                        <td className="py-3.5 px-4 align-middle text-slate-600">
                           <p>{v.visitDate}</p>
                           {v.visitTime && <p className="text-[10px] text-slate-400 font-semibold">{v.visitTime}</p>}
                         </td>
-                        <td className="py-3.5 px-4">
+                        <td className="py-3.5 px-4 align-middle">
                           <span className={`inline-block px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase border ${
                             v.status === 'completed'
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
@@ -673,7 +599,7 @@ export const FieldVisitsModule: React.FC = () => {
                             {v.status === 'in_progress' ? 'In Progress' : v.status}
                           </span>
                         </td>
-                        <td className="py-3.5 px-4 text-center">
+                        <td className="py-3.5 px-4 text-center align-middle">
                           <button
                             onClick={() => setSelectedVisitDetails(v)}
                             className="px-3 py-1.5 bg-slate-100 hover:bg-[#864f19] hover:text-white text-slate-700 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 mx-auto cursor-pointer border-none"
@@ -690,7 +616,7 @@ export const FieldVisitsModule: React.FC = () => {
           </Card>
         </div>
 
-        {/* Right Column: Field Visit Details Side Drawer (Matching Screenshot 10) */}
+        {/* Right Column: Field Visit Details Side Drawer */}
         {selectedVisitDetails && (
           <div className="lg:col-span-4 bg-white rounded-[16px] border border-[#eae8e7] shadow-lg p-5 space-y-5 animate-fade-in relative sticky top-6">
             
@@ -717,36 +643,41 @@ export const FieldVisitsModule: React.FC = () => {
               </div>
             </div>
 
-            {/* Vendor & Visited By Details */}
-            <div className="space-y-3 text-xs font-semibold">
-              <div className="flex items-start gap-2">
-                <Store className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+            {/* Vendor, Visited By, and Territory Details Panel */}
+            <div className="space-y-3.5 text-xs font-semibold">
+              {/* Vendor Name */}
+              <div className="flex items-start gap-2.5 p-2.5 bg-[#fbf9f8] rounded-xl border border-slate-100">
+                <Store className="w-4 h-4 text-[#864f19] shrink-0 mt-0.5" />
                 <div>
                   <span className="text-[10px] text-slate-400 font-bold uppercase block">VENDOR</span>
-                  <span className="font-extrabold text-slate-800 text-sm">{selectedVisitDetails.vendorName}</span>
+                  <span className="font-extrabold text-[#1b1c1c] text-sm">{selectedVisitDetails.vendorName || 'Merchant Store'}</span>
                 </div>
               </div>
 
-              <div className="flex items-start gap-2">
-                <User className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+              {/* Visited By */}
+              <div className="flex items-start gap-2.5 p-2.5 bg-[#fbf9f8] rounded-xl border border-slate-100">
+                <User className="w-4 h-4 text-[#864f19] shrink-0 mt-0.5" />
                 <div>
                   <span className="text-[10px] text-slate-400 font-bold uppercase block">VISITED BY</span>
-                  <span className="font-extrabold text-slate-800">{selectedVisitDetails.visitedBy}</span>
-                  <span className="text-[10px] text-slate-400 font-bold block">{selectedVisitDetails.visitedByRole}</span>
+                  <span className="font-extrabold text-[#1b1c1c] text-sm block">{selectedVisitDetails.visitedBy || userName}</span>
+                  <span className="text-[10px] text-[#864f19] font-black uppercase tracking-wider block mt-0.5">
+                    {selectedVisitDetails.visitedByRole || `${activeRole.charAt(0).toUpperCase() + activeRole.slice(1)} Agent`}
+                  </span>
                 </div>
               </div>
 
-              <div className="flex items-start gap-2">
-                <Building className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
-                <div>
+              {/* Territory: State, District, Pincode */}
+              <div className="flex items-start gap-2.5 p-2.5 bg-[#fbf9f8] rounded-xl border border-slate-100">
+                <Building className="w-4 h-4 text-[#864f19] shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
                   <span className="text-[10px] text-slate-400 font-bold uppercase block">TERRITORY</span>
-                  <span className="text-slate-600 block">State: {userState}</span>
-                  <span className="text-slate-600 block">District: {selectedVisitDetails.territoryDistrict}</span>
-                  <span className="text-slate-600 block">Pincode: {selectedVisitDetails.territoryPincode}</span>
+                  <p className="text-slate-800">State: <strong className="text-[#1b1c1c]">{selectedVisitDetails.state || userState}</strong></p>
+                  <p className="text-slate-800">District: <strong className="text-[#1b1c1c]">{selectedVisitDetails.territoryDistrict || userDistrict}</strong></p>
+                  <p className="text-slate-800">Pincode: <strong className="text-[#1b1c1c]">{selectedVisitDetails.territoryPincode || userPincode}</strong></p>
                 </div>
               </div>
 
-              <div className="flex items-start gap-2">
+              <div className="flex items-start gap-2.5">
                 <Calendar className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
                 <div>
                   <span className="text-[10px] text-slate-400 font-bold uppercase block">VISIT DATE & TIME</span>
@@ -754,7 +685,7 @@ export const FieldVisitsModule: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex items-start gap-2">
+              <div className="flex items-start gap-2.5">
                 <ShieldCheck className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
                 <div>
                   <span className="text-[10px] text-slate-400 font-bold uppercase block">VISIT PURPOSE</span>
@@ -762,7 +693,7 @@ export const FieldVisitsModule: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex items-start gap-2">
+              <div className="flex items-start gap-2.5">
                 <MapPin className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
                 <div className="w-full">
                   <span className="text-[10px] text-slate-400 font-bold uppercase block">GPS LOCATION</span>

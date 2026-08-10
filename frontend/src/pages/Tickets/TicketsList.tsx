@@ -21,6 +21,9 @@ export const TicketsList: React.FC = () => {
   const [category, setCategory] = useState('Vendor Query');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high' | 'critical'>('medium');
+  const [vendorName, setVendorName] = useState('');
+  const [vendorShopName, setVendorShopName] = useState('');
+  const [vendorAddress, setVendorAddress] = useState('');
   const [ticketRaised, setTicketRaised] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
   const [resolutionRemarks, setResolutionRemarks] = useState('');
@@ -72,16 +75,24 @@ export const TicketsList: React.FC = () => {
 
   const handleRaiseTicket = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (category === 'Vendor Query' && (!vendorName.trim() || !vendorShopName.trim() || !vendorAddress.trim())) {
+      setErrorMsg('Please fill in Vendor Contact Name, Shop Name, and Address.');
+      return;
+    }
     if (description.length < 10) {
       setErrorMsg('Description must be at least 10 characters.');
       return;
     }
     
     setErrorMsg('');
+    const finalDescription = category === 'Vendor Query'
+      ? `[VENDOR QUERY]\nVendor Name: ${vendorName}\nShop Name: ${vendorShopName}\nAddress: ${vendorAddress}\n\nDetails: ${description}`
+      : description;
+
     try {
       const response = await api.post('/tickets', {
         category,
-        description,
+        description: finalDescription,
         priority
       });
       const t = response.data.ticket;
@@ -98,6 +109,9 @@ export const TicketsList: React.FC = () => {
       setTickets([newTicket, ...tickets]);
       setTicketRaised(true);
       setDescription('');
+      setVendorName('');
+      setVendorShopName('');
+      setVendorAddress('');
       
       setTimeout(() => {
         setTicketRaised(false);
@@ -109,13 +123,16 @@ export const TicketsList: React.FC = () => {
         _id: `TK-LOC-${Math.floor(1000 + Math.random() * 9000)}`,
         ticketId: `TKT-LOCAL`,
         category,
-        description,
+        description: finalDescription,
         status: 'open',
         createdAt: new Date().toLocaleDateString()
       };
       setTickets([local, ...tickets]);
       setTicketRaised(true);
       setDescription('');
+      setVendorName('');
+      setVendorShopName('');
+      setVendorAddress('');
       setTimeout(() => setTicketRaised(false), 3000);
     }
   };
@@ -274,6 +291,48 @@ export const TicketsList: React.FC = () => {
                 <option>Portal Account Block</option>
               </select>
             </div>
+
+            {category === 'Vendor Query' && (
+              <div className="space-y-3 p-3 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60">
+                <p className="text-[9px] font-black text-[#864f19] uppercase tracking-wider">Vendor Business Information</p>
+
+                <div className="space-y-1">
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Vendor Contact Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Ramesh Kumar"
+                    value={vendorName}
+                    onChange={(e) => setVendorName(e.target.value)}
+                    className="w-full bg-white border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Vendor Shop / Business Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Hosur Supermarket"
+                    value={vendorShopName}
+                    onChange={(e) => setVendorShopName(e.target.value)}
+                    className="w-full bg-white border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Vendor Full Address *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Shop #14, Main Market, Hosur 635109"
+                    value={vendorAddress}
+                    onChange={(e) => setVendorAddress(e.target.value)}
+                    className="w-full bg-white border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                  />
+                </div>
+              </div>
+            )}
 
             <div className="space-y-1">
               <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Select Priority</label>

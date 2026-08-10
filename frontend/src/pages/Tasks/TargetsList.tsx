@@ -19,29 +19,6 @@ export const TargetsList: React.FC = () => {
   const { user } = useAuth();
   const isManager = user?.role === 'state' || user?.role === 'district' || user?.role === 'division';
 
-  const defaultInitialTargets: Allocation[] = [
-    {
-      _id: "TSK-0911",
-      vendorName: "Hosur Onboarding Quota",
-      location: "Krishnagiri District (635109 Hosur)",
-      dueDate: "Today, 5:00 PM",
-      status: "assigned",
-      priority: "high",
-      taskDescription: "Onboard 10 verified Kirana merchant shops in territory.",
-      targetValue: 10
-    },
-    {
-      _id: "TSK-3342",
-      vendorName: "KYC Verification Goal",
-      location: "Krishnagiri Central (635001)",
-      dueDate: "Today, 7:00 PM",
-      status: "completed",
-      priority: "medium",
-      taskDescription: "Complete physical document audits for 5 regional partners.",
-      targetValue: 5
-    }
-  ];
-
   const [allocations, setAllocations] = useState<Allocation[]>(() => {
     try {
       const saved = localStorage.getItem('connect_portal_target_allocations');
@@ -50,7 +27,7 @@ export const TargetsList: React.FC = () => {
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch (e) {}
-    return defaultInitialTargets;
+    return [];
   });
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
