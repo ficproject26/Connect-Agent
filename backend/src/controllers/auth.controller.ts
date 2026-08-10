@@ -85,8 +85,8 @@ export const register = async (req: Request, res: Response) => {
     let territoryParts: string[] = [];
     if (agentRole === 'state') territoryParts = [cleanTerritory.state].filter(Boolean);
     else if (agentRole === 'district') territoryParts = [cleanTerritory.state, cleanTerritory.district].filter(Boolean);
-    else if (agentRole === 'division') territoryParts = [cleanTerritory.state, cleanTerritory.district, cleanTerritory.division].filter(Boolean);
     else territoryParts = [cleanTerritory.state, cleanTerritory.district, cleanTerritory.division, cleanTerritory.pincode].filter(Boolean);
+    const assignedAreaStr = territoryParts.join(' / ');
 
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const randDigits = Math.floor(1000 + Math.random() * 9000);
