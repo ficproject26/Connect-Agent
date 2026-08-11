@@ -205,11 +205,11 @@ export const AgentManagement: React.FC = () => {
       role: 'pincode' as const,
       kycStatus: user?.kycStatus || 'approved',
       registrationFeePaid: true,
-      performanceScore: 90,
-      earnings: 14000,
-      tieupsToday: 4,
-      tieupsYesterday: 3,
-      totalTieups: 40,
+      performanceScore: user?.performanceScore || 0,
+      earnings: user?.earnings || 0,
+      tieupsToday: 0,
+      tieupsYesterday: 0,
+      totalTieups: 0,
       territory: { state: userState, district: userDistrict, division: userDivision, pincode: userPincode },
       plusPoints: ['KYC Verified', 'Assigned Pincode Agent'],
       minusPoints: []
@@ -261,10 +261,28 @@ export const AgentManagement: React.FC = () => {
       if (pinCount === 0) pinCount = node.pincodes?.length || 0;
     }
 
-    const tieupsToday = node.tieupsToday ?? 0;
-    const tieupsYesterday = node.tieupsYesterday ?? 0;
-    const totalTieups = node.totalTieups ?? 0;
-    const totalRevenue = node.teamEarnings ?? node.earnings ?? 0;
+    let tieupsToday = node.tieupsToday ?? 0;
+    let tieupsYesterday = node.tieupsYesterday ?? 0;
+    let totalTieups = node.totalTieups ?? 0;
+    let totalRevenue = node.teamEarnings ?? node.earnings ?? 0;
+
+    if (node.role === 'district' && node.divisions && node.divisions.length > 0) {
+      const subToday = node.divisions.reduce((a, div) => a + (div.tieupsToday || 0) + (div.pincodes?.reduce((pA, p) => pA + (p.tieupsToday || 0), 0) || 0), 0);
+      const subYest = node.divisions.reduce((a, div) => a + (div.tieupsYesterday || 0) + (div.pincodes?.reduce((pA, p) => pA + (p.tieupsYesterday || 0), 0) || 0), 0);
+      const subTotal = node.divisions.reduce((a, div) => a + (div.totalTieups || 0) + (div.pincodes?.reduce((pA, p) => pA + (p.totalTieups || 0), 0) || 0), 0);
+
+      tieupsToday += subToday;
+      tieupsYesterday += subYest;
+      totalTieups += subTotal;
+    } else if (node.role === 'division' && node.pincodes && node.pincodes.length > 0) {
+      const subToday = node.pincodes.reduce((a, p) => a + (p.tieupsToday || 0), 0);
+      const subYest = node.pincodes.reduce((a, p) => a + (p.tieupsYesterday || 0), 0);
+      const subTotal = node.pincodes.reduce((a, p) => a + (p.totalTieups || 0), 0);
+
+      tieupsToday += subToday;
+      tieupsYesterday += subYest;
+      totalTieups += subTotal;
+    }
 
     return {
       distCount,

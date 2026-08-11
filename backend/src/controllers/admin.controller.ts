@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import Agent from '../models/Agent';
 import AuditLog from '../models/AuditLog';
+import Vendor from '../models/Vendor';
 
 // GET /api/admin/registrations
 export const getRegistrations = async (req: Request, res: Response) => {
@@ -125,6 +126,10 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
     }
     
     const agents = await Agent.find(filter).select('-password').sort({ createdAt: -1 });
+    const allVendors = await Vendor.find({});
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const yesterdayStr = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
 
     // Group agents into multi-tier hierarchy
     const stateAgents = agents.filter(a => a.role === 'state');
@@ -132,12 +137,38 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
     const divisionAgents = agents.filter(a => a.role === 'division');
     const pincodeAgents = agents.filter(a => a.role === 'pincode');
 
-    // Helper function to build detailed metrics for an agent
+    // Helper function to build detailed metrics for an agent based on REAL vendor data
     const enrichAgentData = (agent: any) => {
-      const perf = agent.performanceScore || 85;
-      const feePaid = agent.registrationFeePaid ?? true;
+      const perf = agent.performanceScore || 0;
+      const feePaid = agent.registrationFeePaid ?? false;
       const kyc = agent.kycStatus || 'pending';
-      const earnings = Math.floor((perf * 450) + (feePaid ? 5000 : 0));
+
+      const agentIdStr = String(agent._id);
+      const agentDistrictLower = (agent.territory?.district || (agent as any).district || '').toLowerCase();
+      const agentDivisionLower = (agent.territory?.division || (agent as any).division || '').toLowerCase();
+      const agentPincode = agent.territory?.pincode || (agent as any).pincode;
+
+      // Filter real vendors belonging to this agent or territory
+      const assignedVendors = allVendors.filter((v: any) => {
+        if (v.assignedAgent && String(v.assignedAgent) === agentIdStr) return true;
+        if (agent.role === 'pincode' && agentPincode && v.pincode === agentPincode) return true;
+        if (agent.role === 'division' && agentDivisionLower && v.division && v.division.toLowerCase().includes(agentDivisionLower)) return true;
+        if (agent.role === 'district' && agentDistrictLower && v.district && v.district.toLowerCase().includes(agentDistrictLower)) return true;
+        return false;
+      });
+
+      const tieupsToday = assignedVendors.filter((v: any) => {
+        const dStr = v.createdAt ? new Date(v.createdAt).toISOString().slice(0, 10) : '';
+        return dStr === todayStr;
+      }).length;
+
+      const tieupsYesterday = assignedVendors.filter((v: any) => {
+        const dStr = v.createdAt ? new Date(v.createdAt).toISOString().slice(0, 10) : '';
+        return dStr === yesterdayStr;
+      }).length;
+
+      const totalTieups = assignedVendors.length;
+      const earnings = (totalTieups * 1250) + (feePaid ? 5000 : 0);
 
       const plusPoints = [];
       const minusPoints = [];
@@ -148,14 +179,7 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
       if (feePaid) plusPoints.push('Registration Fee Paid');
       else minusPoints.push('Registration Fee Unpaid');
 
-      if (perf >= 75) plusPoints.push(`High Performance (${perf}%)`);
-      else minusPoints.push(`Low Performance (${perf}%)`);
-
-      if (earnings > 10000) plusPoints.push(`High Earnings (₹${earnings.toLocaleString()})`);
-
-      const tieupsToday = Math.floor((perf * 0.25) + 3);
-      const tieupsYesterday = Math.floor((perf * 0.3) + 4);
-      const totalTieups = Math.floor((perf * 3.5) + (feePaid ? 40 : 10));
+      if (totalTieups > 0) plusPoints.push(`Onboarded ${totalTieups} Merchant Vendors`);
 
       return {
         _id: agent._id,

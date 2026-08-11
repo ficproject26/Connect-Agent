@@ -197,60 +197,17 @@ export const PincodeDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Primary KPI Metrics Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        
-        {/* Today's Work Summary card */}
-        <div className="bg-white p-6 rounded-[16px] border border-[#eae8e7] shadow-sm flex flex-col justify-between min-h-[120px] md:col-span-2">
-          <div>
-            <p className="text-[10px] text-[#52443a] font-bold uppercase tracking-wider mb-1">Today's Work Summary (Pincode Sector)</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-extrabold text-[#1b1c1c]">{stats?.targets?.completed || 0} Tasks Completed</span>
-              <span className="text-[#34647b] text-[10px] font-bold">{remainingTasks} Tasks Remaining</span>
-            </div>
-          </div>
-          <div className="mt-3 flex justify-between text-[11px] text-[#52443a] font-bold">
-            <span>Today's Assigned Target: {stats?.targets?.total || 0} visits</span>
-            <span className="text-green-600">On Track</span>
-          </div>
-        </div>
-
-        {/* Completed Targets */}
-        <div className="bg-white p-6 rounded-[16px] border border-[#eae8e7] shadow-sm flex flex-col justify-between min-h-[120px]">
-          <div>
-            <p className="text-[10px] text-[#52443a] font-bold uppercase tracking-wider mb-2">Completed Tasks</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold text-[#864f19]">{stats?.targets?.completed || 0} Done</span>
-              <span className="text-green-600 text-[10px] font-bold flex items-center gap-0.5">
-                <TrendingUp className="w-3 h-3" /> +2.1%
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Pending Targets */}
-        <div className="bg-white p-6 rounded-[16px] border border-[#eae8e7] shadow-sm flex flex-col justify-between min-h-[120px]">
-          <div>
-            <p className="text-[10px] text-[#52443a] font-bold uppercase tracking-wider mb-2">Pending Tasks</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold text-[#34647b]">{remainingTasks} Remaining</span>
-              <span className="text-[#52443a] text-[10px] font-bold">Due today</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* KPI Cards Grid */}
+      {/* Clean KPI Cards Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Assigned Vendors', val: `${stats?.vendors?.total || 0} Shops`, icon: <Users className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
-          { label: 'New Vendor Registration', val: `${stats?.vendors?.pending || 0} Pending`, icon: <Plus className="w-4 h-4 text-emerald-700" />, bg: 'bg-emerald-50' },
-          { label: 'Unread Dispatches', val: `${stats?.notifications?.unread || 0} Alerts`, icon: <Clock className="w-4 h-4 text-[#4f4635]" />, bg: 'bg-[#efe1ca]' },
+          { label: 'Field Visits', val: `${stats?.targets?.total || 0} Visits`, icon: <Target className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
+          { label: 'Completed Visits', val: `${stats?.targets?.completed || 0} Done`, icon: <CheckCircle2 className="w-4 h-4 text-emerald-700" />, bg: 'bg-emerald-50' },
+          { label: 'Pending Verifications', val: `${stats?.vendors?.pending || 0} Pending`, icon: <Clock className="w-4 h-4 text-[#4f4635]" />, bg: 'bg-[#efe1ca]' },
+          { label: 'Assigned Vendors', val: `${stats?.vendors?.total || 0} Shops`, icon: <Users className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
+          { label: 'New Registrations', val: `${stats?.vendors?.pending || 0} New`, icon: <Plus className="w-4 h-4 text-emerald-700" />, bg: 'bg-emerald-50' },
           { label: 'Open Tickets', val: `${stats?.tickets?.open || 0} Active`, icon: <Ticket className="w-4 h-4 text-red-700" />, bg: 'bg-red-50' },
           { label: 'Resolved Tickets', val: `${stats?.tickets?.resolved || 0} Resolved`, icon: <CheckCircle2 className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
-          { label: 'Daily Performance', val: 'Grade A', icon: <Target className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
-          { label: 'Remaining Tasks', val: `${remainingTasks} Left`, icon: <Clock className="w-4 h-4 text-[#4f4635]" />, bg: 'bg-[#efe1ca]' },
-          { label: 'My Targets Progress', val: `${stats?.targets?.completionRate || 0}% Done`, icon: <Target className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' }
+          { label: 'My Targets Progress', val: `${stats?.targets?.completionRate || 0}% Done`, icon: <TrendingUp className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' }
         ].map((card, idx) => (
           <div key={idx} className="bg-white p-5 rounded-[16px] border border-[#eae8e7] flex items-center justify-between shadow-sm relative overflow-hidden group">
             <div className="space-y-1">

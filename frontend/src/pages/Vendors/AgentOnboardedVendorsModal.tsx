@@ -79,14 +79,14 @@ export const AgentOnboardedVendorsModal: React.FC<AgentOnboardedVendorsModalProp
           ownerName: v.ownerName || 'Merchant Owner',
           phone: v.phone || '',
           email: v.email || '',
-          state: v.state || 'Tamil Nadu',
-          district: v.district || 'Krishnagiri District',
-          division: v.division || 'Hosur Division',
-          pincode: v.pincode || '635109',
+          state: v.state || '',
+          district: v.district || '',
+          division: v.division || '',
+          pincode: v.pincode || '',
           role: 'Merchant Partner',
           kycStatus: v.kycStatus || 'pending',
           status: v.status || 'active',
-          assignedAgent: v.assignedAgent?.name ? `${v.assignedAgent.name} (${v.assignedAgent.role || 'Agent'})` : 'Field Agent',
+          assignedAgent: v.assignedAgent?.name ? `${v.assignedAgent.name} (${v.assignedAgent.role || 'Agent'})` : (typeof v.assignedAgent === 'string' ? v.assignedAgent : 'Field Agent'),
           createdAt: v.createdAt ? new Date(v.createdAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
           updatedAt: v.updatedAt ? new Date(v.updatedAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
           storeType: v.category?.name || v.storeType || 'General Store',
@@ -302,22 +302,9 @@ export const AgentOnboardedVendorsModal: React.FC<AgentOnboardedVendorsModalProp
                   {/* Actions */}
                   <div className="flex items-center gap-2 shrink-0">
                     {vendor.kycStatus === 'pending' && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => handleApprove(vendor.id)}
-                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl transition cursor-pointer flex items-center gap-1 border-none shadow-xs"
-                        >
-                          <Check className="w-3.5 h-3.5" /> Approve
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleReject(vendor.id)}
-                          className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-extrabold text-xs rounded-xl transition cursor-pointer flex items-center gap-1"
-                        >
-                          <X className="w-3.5 h-3.5" /> Reject
-                        </button>
-                      </>
+                      <span className="text-[11px] font-extrabold text-amber-800 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200 flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 text-amber-600" /> Pending Admin Approval
+                      </span>
                     )}
                     {vendor.kycStatus === 'approved' && (
                       <span className="text-xs font-black text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">

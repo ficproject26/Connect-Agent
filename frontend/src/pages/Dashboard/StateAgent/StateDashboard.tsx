@@ -279,7 +279,7 @@ export const StateDashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Territory management sub lists */}
-        <div className="lg:col-span-2 bg-white rounded-[16px] border border-[#eae8e7] shadow-sm overflow-hidden flex flex-col justify-between">
+        <div className="lg:col-span-2 bg-white rounded-[16px] border border-[#eae8e7] shadow-sm overflow-hidden flex flex-col justify-start">
           <div className="px-6 py-4 border-b border-[#eae8e7] flex justify-between items-center bg-white">
             <div className="flex gap-4">
               <button onClick={() => setActiveTab('districts')} className={`text-xs font-extrabold uppercase pb-1 border-b-2 transition-all ${activeTab === 'districts' ? 'border-[#864f19] text-[#1b1c1c]' : 'border-transparent text-[#52443a]'}`}>District List</button>
@@ -288,7 +288,7 @@ export const StateDashboard: React.FC = () => {
             </div>
           </div>
           
-          <div className="p-6 divide-y divide-[#eae8e7]">
+          <div className="p-6 pt-3 divide-y divide-[#eae8e7]">
             {activeTab === 'districts' && (
               <>
                 <div className="py-2.5 flex justify-between text-xs font-bold text-[#52443a]">

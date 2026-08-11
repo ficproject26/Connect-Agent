@@ -99,26 +99,34 @@ export const VendorsList: React.FC = () => {
   // Sync API backend vendors into state
   useEffect(() => {
     if (apiVendorsData && apiVendorsData.length > 0) {
-      const mappedApiVendors: Vendor[] = apiVendorsData.map((v: any) => ({
-        id: v.registrationId || v._id || `REG-${Math.floor(1000 + Math.random() * 9000)}`,
-        name: v.businessName || v.name || '',
-        ownerName: v.ownerName || '',
-        phone: v.phone || '',
-        email: v.email || '',
-        state: v.state || userState,
-        division: v.division || userDivision,
-        district: v.district || userDistrict,
-        pincode: v.pincode || userPincode,
-        role: 'Merchant Partner',
-        kycStatus: v.kycStatus || 'pending',
-        status: v.status || 'active',
-        assignedAgent: v.assignedAgent?.name || user?.name || '',
-        createdAt: TODAY_DATE,
-        updatedAt: TODAY_DATE,
-        storeType: v.category?.name || v.storeType || '',
-        businessGst: v.gst || v.businessGst || '',
-        fullAddress: v.location?.address || ''
-      }));
+      const mappedApiVendors: Vendor[] = apiVendorsData.map((v: any) => {
+        const assignedAgentName = typeof v.assignedAgent === 'object' && v.assignedAgent?.name
+          ? `${v.assignedAgent.name}${v.assignedAgent.role ? ` (${v.assignedAgent.role.charAt(0).toUpperCase() + v.assignedAgent.role.slice(1)} Agent)` : ''}`
+          : (typeof v.assignedAgent === 'string' && v.assignedAgent ? v.assignedAgent : (user?.name ? `${user.name} (Field Agent)` : 'Field Agent'));
+
+        const regDate = v.createdAt ? new Date(v.createdAt).toISOString().slice(0, 10) : TODAY_DATE;
+
+        return {
+          id: v.registrationId || v.id || v._id || `REG-${Math.floor(1000 + Math.random() * 9000)}`,
+          name: v.businessName || v.name || 'Merchant Store',
+          ownerName: v.ownerName || 'Merchant Owner',
+          phone: v.phone || '',
+          email: v.email || '',
+          state: v.state || '',
+          division: v.division || '',
+          district: v.district || '',
+          pincode: v.pincode || '',
+          role: 'Merchant Partner',
+          kycStatus: v.kycStatus || 'pending',
+          status: v.status === 'inactive' ? 'inactive' : 'active',
+          assignedAgent: assignedAgentName,
+          createdAt: regDate,
+          updatedAt: v.updatedAt ? new Date(v.updatedAt).toISOString().slice(0, 10) : regDate,
+          storeType: v.category?.name || (typeof v.category === 'string' ? v.category : '') || v.storeType || 'Supermarket & Retail',
+          businessGst: v.gst || v.businessGst || '',
+          fullAddress: v.location?.address || v.fullAddress || ''
+        };
+      });
 
       setVendors(prev => {
         const existingIds = new Set(prev.map(item => item.id));
@@ -126,7 +134,7 @@ export const VendorsList: React.FC = () => {
         return [...newFromApi, ...prev];
       });
     }
-  }, [apiVendorsData, userState, userDistrict, userDivision, userPincode, user?.name]);
+  }, [apiVendorsData, user?.name]);
 
   // Search and Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -721,7 +729,7 @@ export const VendorsList: React.FC = () => {
       {/* ADVANCED MULTI-ATTRIBUTE SEARCH & MULTI-DIMENSIONAL FILTERS */}
       <div className="bg-white p-5 rounded-2xl border border-[#d7c3b5]/40 shadow-sm space-y-4">
         {activeRole === 'pincode' ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
             {/* Date Filter */}
             <div>
               <Select
@@ -750,19 +758,6 @@ export const VendorsList: React.FC = () => {
                 ]}
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value)}
-              />
-            </div>
-
-            {/* Assigned Agent */}
-            <div>
-              <Select
-                label="Assigned Agent"
-                options={[
-                  { value: 'all', label: 'All Agents' },
-                  ...agents.map(a => ({ value: a, label: a }))
-                ]}
-                value={agentFilter}
-                onChange={(e) => setAgentFilter(e.target.value)}
               />
             </div>
 
@@ -1090,7 +1085,13 @@ export const VendorsList: React.FC = () => {
 
               <div className="space-y-1">
                 <p className="text-[10px] uppercase font-black text-slate-400">Territory Location</p>
-                <p className="font-bold text-slate-800">{selectedVendor.district} ({selectedVendor.division})</p>
+                <p className="font-bold text-slate-800">
+                  {[
+                    selectedVendor.district,
+                    selectedVendor.division ? `(${selectedVendor.division})` : '',
+                    selectedVendor.state
+                  ].filter(Boolean).join(' ') || 'Unassigned Territory'}
+                </p>
               </div>
 
               <div className="space-y-1">

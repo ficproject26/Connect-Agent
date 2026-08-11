@@ -129,60 +129,17 @@ export const DivisionDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Division KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        
-        {/* Division Overview summary */}
-        <div className="bg-white p-6 rounded-[16px] border border-[#eae8e7] shadow-sm flex flex-col justify-between min-h-[120px] md:col-span-2">
-          <div>
-            <p className="text-[10px] text-[#52443a] font-bold uppercase tracking-wider mb-1">Division Overview (Hosur Sector - Krishnagiri)</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-extrabold text-[#1b1c1c]">24 Pincode Areas</span>
-              <span className="text-[#34647b] text-[10px] font-bold">120 Active Pincode Agents</span>
-            </div>
-          </div>
-          <div className="mt-3 flex justify-between text-[11px] text-[#52443a] font-bold">
-            <span>Active Pincode Agents: 120</span>
-            <span className="text-green-600">Optimal coverage</span>
-          </div>
-        </div>
-
-        {/* Division Performance Score */}
-        <div className="bg-white p-6 rounded-[16px] border border-[#eae8e7] shadow-sm flex flex-col justify-between min-h-[120px]">
-          <div>
-            <p className="text-[10px] text-[#52443a] font-bold uppercase tracking-wider mb-2">Performance Score</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold text-[#864f19]">88.5</span>
-              <span className="text-green-600 text-[10px] font-bold flex items-center gap-0.5">
-                <TrendingUp className="w-3 h-3" /> +1.8%
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Vendor Growth */}
-        <div className="bg-white p-6 rounded-[16px] border border-[#eae8e7] shadow-sm flex flex-col justify-between min-h-[120px]">
-          <div>
-            <p className="text-[10px] text-[#52443a] font-bold uppercase tracking-wider mb-2">Vendor Growth</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold text-[#34647b]">+142</span>
-              <span className="text-[#52443a] text-[10px] font-bold">New this month</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* KPI Cards Grid */}
+      {/* Simplified Division KPI Cards Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Assigned Pincodes', val: '24 Pincodes', icon: <Users className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
-          { label: 'Active Pincode Agents', val: '120 active', icon: <Users className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
+          { label: 'Assigned Pincodes', val: `${pincodeAgentsList.length > 0 ? pincodeAgentsList.length * 2 : 24} Pincodes`, icon: <MapPin className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
+          { label: 'Active Pincode Agents', val: `${pincodeAgentsList.length || 120} active`, icon: <Users className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
           { label: 'Total Vendors', val: '4,280 registered', icon: <Users className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
           { label: 'Active Vendors', val: '3,120 active', icon: <CheckCircle2 className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
-          { label: 'Assigned Targets', val: '144 targets', icon: <Target className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
-          { label: 'Completed Targets', val: '120 completed', icon: <CheckCircle2 className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
+          { label: "Today's Targets", val: '144 targets', icon: <Target className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
           { label: 'Pending Targets', val: '24 remaining', icon: <Clock className="w-4 h-4 text-[#4f4635]" />, bg: 'bg-[#efe1ca]' },
-          { label: 'Open Tickets', val: '38 unresolved', icon: <Ticket className="w-4 h-4 text-red-700" />, bg: 'bg-red-50' }
+          { label: 'Open Tickets', val: '38 unresolved', icon: <Ticket className="w-4 h-4 text-red-700" />, bg: 'bg-red-50' },
+          { label: 'Division Performance', val: '88.5%', icon: <TrendingUp className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' }
         ].map((card, idx) => (
           <div key={idx} className="bg-white p-5 rounded-[16px] border border-[#eae8e7] flex items-center justify-between shadow-sm relative overflow-hidden group">
             <div className="space-y-1">
