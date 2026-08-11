@@ -6,8 +6,9 @@ import {
   Users, Search, Filter, ChevronRight, ChevronDown, Award, TrendingUp,
   AlertTriangle, CheckCircle, Clock, XCircle, DollarSign, ShieldAlert,
   Building2, MapPin, Phone, Mail, ArrowUpRight, ArrowDownRight, User, Eye, RefreshCw, GitFork, Shield,
-  ArrowLeft, Layers, Compass
+  ArrowLeft, Layers, Compass, UserCheck
 } from 'lucide-react';
+import { AgentOnboardedVendorsModal } from '../Vendors/AgentOnboardedVendorsModal';
 
 export interface AgentNode {
   _id: string;
@@ -60,6 +61,7 @@ export const AgentManagement: React.FC = () => {
     return activeRole === 'state' ? 'district' : activeRole === 'district' ? 'division' : 'pincode';
   });
   const [selectedAgent, setSelectedAgent] = useState<AgentNode | null>(null);
+  const [isAgentVendorsModalOpen, setIsAgentVendorsModalOpen] = useState(false);
 
   // Drill-down selection states
   const [selectedDistrictId, setSelectedDistrictId] = useState<string | null>(null);
@@ -344,12 +346,20 @@ export const AgentManagement: React.FC = () => {
             </div>
           </div>
 
-          <button
-            onClick={() => refetchHierarchy()}
-            className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-[#864f19] bg-[#864f19]/10 hover:bg-[#864f19]/20 rounded-xl transition border-none cursor-pointer shrink-0 self-start md:self-auto"
-          >
-            <RefreshCw className={`w-4 h-4 ${isHierarchyLoading ? 'animate-spin' : ''}`} /> Refresh Directory
-          </button>
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0 self-start md:self-auto">
+            <button
+              onClick={() => setIsAgentVendorsModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl transition cursor-pointer shadow-2xs"
+            >
+              <UserCheck className="w-4 h-4" /> Agent Onboarded Vendors
+            </button>
+            <button
+              onClick={() => refetchHierarchy()}
+              className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-[#864f19] bg-[#864f19]/10 hover:bg-[#864f19]/20 rounded-xl transition border-none cursor-pointer"
+            >
+              <RefreshCw className={`w-4 h-4 ${isHierarchyLoading ? 'animate-spin' : ''}`} /> Refresh Directory
+            </button>
+          </div>
         </div>
 
         {/* Territory Drill-Down Breadcrumb Trail */}
@@ -1240,6 +1250,12 @@ export const AgentManagement: React.FC = () => {
           </div>
         );
       })()}
+
+      {/* AGENT ONBOARDED VENDORS MODAL */}
+      <AgentOnboardedVendorsModal
+        isOpen={isAgentVendorsModalOpen}
+        onClose={() => setIsAgentVendorsModalOpen(false)}
+      />
     </div>
   );
 };

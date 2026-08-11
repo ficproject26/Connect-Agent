@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { OnboardVendorWizardModal } from './OnboardVendorWizardModal';
+import { AgentOnboardedVendorsModal } from './AgentOnboardedVendorsModal';
 
 interface Vendor {
   id: string;
@@ -37,6 +38,7 @@ const YESTERDAY_DATE = new Date(Date.now() - 86400000).toISOString().slice(0, 10
 
 export const VendorsList: React.FC = () => {
   const { user, addNotification } = useAuth();
+  const [isAgentVendorsModalOpen, setIsAgentVendorsModalOpen] = useState(false);
 
   const userVendorsKey = useMemo(() => {
     return user?._id || user?.email ? `connect_portal_custom_vendors_${user._id || user.email?.toLowerCase()}` : 'connect_portal_custom_vendors';
@@ -607,14 +609,23 @@ export const VendorsList: React.FC = () => {
           </div>
         </div>
 
-        <Button
-          variant="primary"
-          onClick={() => setIsAddModalOpen(true)}
-          leftIcon={<span className="material-symbols-outlined text-sm">person_add</span>}
-          className="py-2.5 px-4 font-bold rounded-xl cursor-pointer border-none text-xs uppercase tracking-wider shadow-sm transition-all shrink-0 self-start md:self-auto"
-        >
-          Onboard New Vendor
-        </Button>
+        <div className="flex flex-wrap items-center gap-3 shrink-0 self-start md:self-auto">
+          <button
+            type="button"
+            onClick={() => setIsAgentVendorsModalOpen(true)}
+            className="py-2.5 px-4 font-bold rounded-xl cursor-pointer text-xs uppercase tracking-wider bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 transition-all flex items-center gap-1.5 shadow-2xs"
+          >
+            <UserCheck className="w-4 h-4" /> Agent Onboarded Vendors
+          </button>
+          <Button
+            variant="primary"
+            onClick={() => setIsAddModalOpen(true)}
+            leftIcon={<span className="material-symbols-outlined text-sm">person_add</span>}
+            className="py-2.5 px-4 font-bold rounded-xl cursor-pointer border-none text-xs uppercase tracking-wider shadow-sm transition-all"
+          >
+            Onboard New Vendor
+          </Button>
+        </div>
       </div>
 
       {/* 6 EXECUTIVE KPI METRIC CARDS (SCOPED TO ACTIVE ROLE HIERARCHY) */}
@@ -1200,6 +1211,13 @@ export const VendorsList: React.FC = () => {
             'system'
           );
         }}
+      />
+
+      {/* AGENT ONBOARDED VENDORS DIRECTORY MODAL */}
+      <AgentOnboardedVendorsModal
+        isOpen={isAgentVendorsModalOpen}
+        onClose={() => setIsAgentVendorsModalOpen(false)}
+        userVendorsKey={userVendorsKey}
       />
     </div>
   );
