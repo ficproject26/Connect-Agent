@@ -72,7 +72,7 @@ export const FieldVisitsModule: React.FC = () => {
   const [longitude, setLongitude] = useState<number | ''>('');
   const [remarks, setRemarks] = useState('');
   const [isLocating, setIsLocating] = useState(false);
-  const [gpsPhoto, setGpsPhoto] = useState<string>('https://images.unsplash.com/photo-1578916171728-46686eac8d58?auto=format&fit=crop&w=400&q=80');
+  const [gpsPhoto, setGpsPhoto] = useState<string>('');
 
   // Complete Form State
   const [completeRemarks, setCompleteRemarks] = useState('');
@@ -101,17 +101,17 @@ export const FieldVisitsModule: React.FC = () => {
             vendorName: vStoreName,
             storeAddress: vAddress,
             visitDate: v.visitDate ? new Date(v.visitDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-            visitTime: v.visitDate ? new Date(v.visitDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '11:45 AM',
+            visitTime: v.visitDate ? new Date(v.visitDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
             status: v.status === 'started' ? 'in_progress' : (v.status || 'completed'),
-            latitude: v.checkInLocation?.latitude || v.latitude || 12.9716,
-            longitude: v.checkInLocation?.longitude || v.longitude || 77.5946,
-            remarks: v.remarks || 'Field audit visit',
+            latitude: v.checkInLocation?.latitude || v.latitude || 0,
+            longitude: v.checkInLocation?.longitude || v.longitude || 0,
+            remarks: v.remarks || '',
             visitedBy: agentName,
             visitedByRole: agentRoleStr,
             state: vState,
             territoryDistrict: vDistrict,
             territoryPincode: vPincode,
-            visitPurpose: v.visitPurpose || v.remarks || 'KYC Audit & QR Code Onboarding'
+            visitPurpose: v.visitPurpose || v.remarks || ''
           };
         });
 
@@ -152,15 +152,15 @@ export const FieldVisitsModule: React.FC = () => {
           setIsLocating(false);
         },
         () => {
-          setLatitude(12.9716);
-          setLongitude(77.5946);
+          setLatitude('');
+          setLongitude('');
           setIsLocating(false);
         },
         { timeout: 8000 }
       );
     } else {
-      setLatitude(12.9716);
-      setLongitude(77.5946);
+      setLatitude('');
+      setLongitude('');
       setIsLocating(false);
     }
   };
@@ -178,15 +178,15 @@ export const FieldVisitsModule: React.FC = () => {
       visitDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
       visitTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       status: 'in_progress',
-      latitude: typeof latitude === 'number' ? latitude : 12.9716,
-      longitude: typeof longitude === 'number' ? longitude : 77.5946,
-      remarks: remarks || 'Store audit & KYC visit check-in',
+      latitude: typeof latitude === 'number' ? latitude : 0,
+      longitude: typeof longitude === 'number' ? longitude : 0,
+      remarks: remarks || '',
       visitedBy: userName,
       visitedByRole: `${activeRole.charAt(0).toUpperCase() + activeRole.slice(1)} Agent`,
       state: userState,
       territoryDistrict: userDistrict,
       territoryPincode: userPincode,
-      visitPurpose: remarks || 'KYC Audit & QR Code Onboarding'
+      visitPurpose: remarks || ''
     };
 
     try {
@@ -194,7 +194,7 @@ export const FieldVisitsModule: React.FC = () => {
         vendorId: newVisit.vendorId,
         latitude: newVisit.latitude,
         longitude: newVisit.longitude,
-        photoBeforeVisit: gpsPhoto || 'https://via.placeholder.com/300'
+        photoBeforeVisit: gpsPhoto || ''
       });
     } catch (e) {
       console.log('Simulated local visit creation');
@@ -769,7 +769,7 @@ export const FieldVisitsModule: React.FC = () => {
         isOpen={isStartModalOpen}
         onClose={() => setIsStartModalOpen(false)}
         title="Start New Store Visit"
-        size="md"
+        size="full"
       >
         <form onSubmit={handleStartVisitSubmit} className="space-y-4 text-xs font-semibold">
           <div className="space-y-1">
@@ -813,18 +813,27 @@ export const FieldVisitsModule: React.FC = () => {
             </div>
 
             <div className="relative rounded-xl overflow-hidden border border-[#d7c3b5]/60 bg-slate-900 group h-32">
-              <img
-                src={gpsPhoto}
-                alt="Geotagged Store Front"
-                className="w-full h-full object-cover opacity-85 group-hover:scale-105 transition-transform duration-300"
-              />
+              {gpsPhoto ? (
+                <img
+                  src={gpsPhoto}
+                  alt="Geotagged Store Front"
+                  className="w-full h-full object-cover opacity-85 group-hover:scale-105 transition-transform duration-300"
+                />
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-slate-400">
+                  <Camera className="w-8 h-8 opacity-40" />
+                  <span className="text-[10px]">No photo uploaded</span>
+                </div>
+              )}
               <div className="absolute top-2 left-2 bg-black/75 backdrop-blur-sm text-white px-2 py-1 rounded-lg text-[9px] font-extrabold flex items-center gap-1 border border-white/20">
                 <MapPin className="w-3 h-3 text-amber-400" />
-                <span>Lat: {latitude || '12.9716'}, Lng: {longitude || '77.5946'}</span>
+                <span>{latitude && longitude ? `Lat: ${latitude}, Lng: ${longitude}` : 'GPS not yet captured'}</span>
               </div>
-              <div className="absolute bottom-2 left-2 bg-emerald-600/90 text-white px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow">
-                <CheckCircle2 className="w-3 h-3" /> Geotagged Photo Captured
-              </div>
+              {gpsPhoto && (
+                <div className="absolute bottom-2 left-2 bg-emerald-600/90 text-white px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow">
+                  <CheckCircle2 className="w-3 h-3" /> Geotagged Photo Captured
+                </div>
+              )}
               <label className="absolute bottom-2 right-2 bg-white/90 hover:bg-white text-slate-800 px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer border border-slate-200 flex items-center gap-1 shadow transition">
                 <Camera className="w-3 h-3 text-[#864f19]" />
                 <span>Upload Photo</span>

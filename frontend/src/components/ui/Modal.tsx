@@ -33,13 +33,15 @@ export const Modal: React.FC<ModalProps> = ({
     md: 'max-w-lg',
     lg: 'max-w-2xl',
     xl: 'max-w-4xl',
-    full: 'max-w-full h-full m-0 rounded-none',
+    full: 'w-full h-full m-0 rounded-none max-w-none',
   };
+
+  const isFullPage = size === 'full';
 
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+        <div className={`fixed inset-0 z-50 flex items-center justify-center ${isFullPage ? 'p-0' : 'p-4 sm:p-6 overflow-y-auto'}`}>
           {/* Backdrop Overlay */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -55,7 +57,7 @@ export const Modal: React.FC<ModalProps> = ({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
             transition={{ type: 'spring', duration: 0.4 }}
-            className={`relative w-full bg-white rounded-2xl shadow-2xl overflow-hidden z-10 my-auto flex flex-col max-h-[90vh] border border-[#eae8e7] ${sizeClasses[size]}`}
+            className={`relative w-full bg-white shadow-2xl overflow-hidden z-10 flex flex-col border border-[#eae8e7] ${isFullPage ? 'h-full max-h-full rounded-none' : 'rounded-2xl my-auto max-h-[90vh]'} ${sizeClasses[size]}`}
           >
             {/* Header */}
             {title && (
