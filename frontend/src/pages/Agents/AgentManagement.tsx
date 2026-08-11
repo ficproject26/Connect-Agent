@@ -73,10 +73,16 @@ export const AgentManagement: React.FC = () => {
       try {
         const res = await api.get(`/admin/hierarchy?status=${kycFilter}`);
         return res.data;
-      } catch (err) {
-        console.warn('Hierarchy fetch fallback to demo structure:', err);
+      } catch (err: any) {
+        if (err?.response?.status !== 401) {
+          console.warn('Hierarchy fetch fallback to demo structure:', err);
+        }
         return null;
       }
+    },
+    retry: (failureCount, error: any) => {
+      if (error?.response?.status === 401) return false;
+      return failureCount < 1;
     }
   });
 

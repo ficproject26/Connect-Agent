@@ -63,8 +63,10 @@ export const PincodeDashboard: React.FC = () => {
         setRecentVendors(response.data.recentVendors && response.data.recentVendors.length > 0 ? response.data.recentVendors : []);
         setRecentAssignments(response.data.recentAssignments && response.data.recentAssignments.length > 0 ? response.data.recentAssignments : []);
       }
-    } catch (err) {
-      console.error('Failed to fetch dashboard stats:', err);
+    } catch (err: any) {
+      if (err?.response?.status !== 401) {
+        console.error('Failed to fetch dashboard stats:', err);
+      }
       setStats({
         targets: { total: 0, completed: 0, completionRate: 0 },
         vendors: { total: 0, pending: 0 },

@@ -105,8 +105,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }));
         setNotifications(mapped);
       }
-    } catch (err) {
-      console.error('Failed to fetch backend notifications, using live state fallback:', err);
+    } catch (err: any) {
+      if (err?.response?.status !== 401) {
+        console.warn('Failed to fetch backend notifications, using live state fallback:', err);
+      }
     }
   };
 
@@ -145,7 +147,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (e) {}
       await fetchNotifications();
     } catch (err: any) {
-      console.error('Refetch user failed:', err);
+      if (err?.response?.status === 401) {
+        console.warn('Refetch user unauthorized on backend API, using local profile session.');
+      } else {
+        console.error('Refetch user failed:', err);
+      }
       // Fallback: If local user exists in localStorage, preserve session without logging out!
       const savedUserStr = localStorage.getItem('agent_user');
       if (savedUserStr) {

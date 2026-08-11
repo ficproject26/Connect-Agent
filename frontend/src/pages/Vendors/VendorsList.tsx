@@ -58,10 +58,16 @@ export const VendorsList: React.FC = () => {
       try {
         const res = await api.get('/vendors');
         return res.data?.vendors || [];
-      } catch (err) {
-        console.warn('Backend API /vendors call fallback:', err);
+      } catch (err: any) {
+        if (err?.response?.status !== 401) {
+          console.warn('Backend API /vendors call fallback:', err);
+        }
         return [];
       }
+    },
+    retry: (failureCount, error: any) => {
+      if (error?.response?.status === 401) return false;
+      return failureCount < 1;
     }
   });
 

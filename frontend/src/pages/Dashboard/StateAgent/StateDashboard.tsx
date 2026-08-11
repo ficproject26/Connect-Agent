@@ -27,6 +27,10 @@ export const StateDashboard: React.FC = () => {
       } catch (e) {
         return null;
       }
+    },
+    retry: (failureCount, error: any) => {
+      if (error?.response?.status === 401) return false;
+      return failureCount < 1;
     }
   });
 
@@ -40,6 +44,10 @@ export const StateDashboard: React.FC = () => {
       } catch (e) {
         return null;
       }
+    },
+    retry: (failureCount, error: any) => {
+      if (error?.response?.status === 401) return false;
+      return failureCount < 1;
     }
   });
 

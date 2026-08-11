@@ -51,10 +51,16 @@ export const LeaderboardModule: React.FC = () => {
         const roleQuery = tierTab === 'overall' ? 'all' : tierTab;
         const res = await api.get(`/admin/leaderboard?role=${roleQuery}&timeframe=${timeframe}&sortBy=${sortBy}`);
         return res.data;
-      } catch (err) {
-        console.warn('Leaderboard API fallback to demo data:', err);
+      } catch (err: any) {
+        if (err?.response?.status !== 401) {
+          console.warn('Leaderboard API fallback to demo data:', err);
+        }
         return null;
       }
+    },
+    retry: (failureCount, error: any) => {
+      if (error?.response?.status === 401) return false;
+      return failureCount < 1;
     }
   });
 
