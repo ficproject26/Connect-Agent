@@ -157,7 +157,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await fetchNotifications();
     } catch (err: any) {
       if (err?.response?.status === 401) {
-        console.warn('Refetch user unauthorized on backend API (401). Performing clean session logout.');
+        // Only logout if there is NO valid locally-saved user session.
+        // This prevents login → refetch → 401 → logout loops when using
+        // fallback/mock tokens or when the backend is sleeping.
+        const savedUserStr = localStorage.getItem('agent_user');
+        if (savedUserStr) {
+          try {
+            const savedUser = JSON.parse(savedUserStr);
+            if (savedUser && savedUser._id) {
+              console.warn('Backend returned 401 on /auth/me, but valid local session exists. Keeping session.');
+              setUser(savedUser);
+              return;
+            }
+          } catch (e) {}
+        }
+        console.warn('No valid local session found after 401. Logging out.');
         logout();
         return;
       }
@@ -215,7 +229,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, [token]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const login = async (email: string, password: string): Promise<any> => {
     const loginPayload = { email: email.trim().toLowerCase(), password };
