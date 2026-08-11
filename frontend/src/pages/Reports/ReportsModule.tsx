@@ -7,35 +7,24 @@ import api from '../../utils/api';
 export const ReportsModule: React.FC = () => {
   const { user, addNotification } = useAuth();
   const [activeTab, setActiveTab] = useState('merchants');
-  const [timeframe, setTimeframe] = useState('monthly');
+  const [timeframe, setTimeframe] = useState<'today' | 'weekly' | 'monthly' | 'date'>('today');
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [isExporting, setIsExporting] = useState(false);
 
-  const defaultSubmittedReports = [
-    {
-      _id: 'REP-1001',
-      period: 'May 2025',
-      fileName: 'Daily_Work_Report.docx',
-      submittedAt: '05/08/2026',
-      status: 'Pending Review',
-      remarks: 'gkjhl;k:/l.kfhfn'
-    }
-  ];
-
   const userReportsKey = useMemo(() => {
-    return user?._id || user?.email ? `connect_portal_submitted_reports_${user._id || user.email?.toLowerCase()}` : 'connect_portal_submitted_reports';
+    return user?._id || user?.email ? `connect_portal_pincode_reports_${user._id || user.email?.toLowerCase()}` : 'connect_portal_pincode_reports';
   }, [user]);
 
   const [reports, setReports] = useState<any[]>(() => {
     try {
-      const userKey = user?._id || user?.email ? `connect_portal_submitted_reports_${user._id || user.email?.toLowerCase()}` : 'connect_portal_submitted_reports';
+      const userKey = user?._id || user?.email ? `connect_portal_pincode_reports_${user._id || user.email?.toLowerCase()}` : 'connect_portal_pincode_reports';
       const saved = localStorage.getItem(userKey);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch (e) {}
-    return defaultSubmittedReports;
+    return [];
   });
 
   useEffect(() => {
@@ -45,18 +34,13 @@ export const ReportsModule: React.FC = () => {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) setReports(parsed);
       } else {
-        setReports(defaultSubmittedReports);
+        setReports([]);
       }
     } catch (e) {}
   }, [userReportsKey]);
 
-  const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  const currentMonth = MONTH_NAMES[new Date().getMonth()];
-  const currentYear = new Date().getFullYear().toString();
-
   const [isFetchingReports, setIsFetchingReports] = useState(false);
-  const [reportMonth, setReportMonth] = useState(currentMonth);
-  const [reportYear, setReportYear] = useState(currentYear);
+  const [reportType, setReportType] = useState('Daily Field Report');
   const [reportRemarks, setReportRemarks] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSubmittingReport, setIsSubmittingReport] = useState(false);
@@ -100,11 +84,16 @@ export const ReportsModule: React.FC = () => {
 
     const newReport = {
       _id: `REP-${Math.floor(1000 + Math.random() * 9000)}`,
-      period: `${reportMonth} ${reportYear}`,
+      reportType,
       fileName: selectedFile.name,
-      submittedAt: new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
-      status: 'Pending Review',
-      remarks: reportRemarks || 'Monthly operational audit log'
+      submittedAt: new Date().toLocaleDateString('en-GB') + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      status: 'Submitted',
+      remarks: reportRemarks || 'Pincode territory field report submission',
+      state: user?.territory?.state || 'Andhra Pradesh',
+      district: user?.territory?.district || 'Visakhapatnam',
+      division: user?.territory?.division || 'Vizag City',
+      pincode: user?.territory?.pincode || '530001',
+      agentName: user?.name || 'Logged Agent'
     };
 
     setReports(prev => {
@@ -117,18 +106,16 @@ export const ReportsModule: React.FC = () => {
 
     try {
       await api.post('/reports', {
-        type: 'monthly',
+        type: reportType,
         content: {
           fileName: selectedFile.name,
-          fileSize: `${(selectedFile.size / 1024).toFixed(1)} KB`,
-          month: reportMonth,
-          year: reportYear
+          fileSize: `${(selectedFile.size / 1024).toFixed(1)} KB`
         },
         remarks: reportRemarks
       });
       addNotification(
-        'Monthly Report Submitted',
-        `Successfully submitted operations summary report for ${reportMonth} ${reportYear}.`,
+        'Pincode Agent Report Submitted',
+        `Successfully submitted ${reportType} report for PIN ${user?.territory?.pincode || '530001'}.`,
         'medium',
         'system'
       );
@@ -144,7 +131,7 @@ export const ReportsModule: React.FC = () => {
   const tabs = [
     { id: 'merchants', label: 'Merchant Onboarding' },
     { id: 'operations', label: 'Operations & Tickets' },
-    { id: 'submissions', label: 'Report Submissions' },
+    { id: 'submissions', label: 'Pincode Agent Reports' },
   ];
 
   const timeframeOptions = [
@@ -410,7 +397,7 @@ export const ReportsModule: React.FC = () => {
             <Select
               label="Select Timeframe"
               value={timeframe}
-              onChange={(e) => setTimeframe(e.target.value)}
+              onChange={(e) => setTimeframe(e.target.value as any)}
               options={[
                 { value: 'date', label: `Chosen Date (${selectedDate})` },
                 ...timeframeOptions
@@ -555,55 +542,50 @@ export const ReportsModule: React.FC = () => {
       {activeTab === 'submissions' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in text-xs text-slate-800">
           
-          {/* Submit/Upload Monthly Report Card */}
+          {/* Submit/Upload Pincode Field Report Card */}
           <div className="lg:col-span-1 bg-white rounded-[16px] border border-[#eae8e7] p-6 shadow-sm h-fit space-y-4">
             <div className="border-b border-[#eae8e7] pb-3">
               <h3 className="font-extrabold text-sm text-[#1b1c1c] flex items-center gap-1.5">
-                <Upload className="w-4 h-4 text-[#864f19]" /> Upload Monthly Summary
+                <Upload className="w-4 h-4 text-[#864f19]" /> Submit Pincode Agent Report
               </h3>
-              <p className="text-[10px] text-slate-500 mt-0.5 font-medium">Submit your signed territory audit sheets and vendor registration counts.</p>
+              <p className="text-[10px] text-slate-500 mt-0.5 font-medium">Upload signed daily field reports, visit logs, or target performance summaries.</p>
             </div>
 
             {submitError && (
-              <div className="p-3 bg-red-50 text-red-700 font-semibold border border-red-200 rounded-xl">
+              <div className="p-3 bg-rose-50 text-rose-700 font-semibold border border-rose-200 rounded-xl">
                 {submitError}
               </div>
             )}
 
             <form onSubmit={handleReportSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Target Month</label>
-                  <select
-                    value={reportMonth}
-                    onChange={(e) => setReportMonth(e.target.value)}
-                    className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                  >
-                    {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map(m => (
-                      <option key={m} value={m}>{m}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Report Year</label>
-                  <select
-                    value={reportYear}
-                    onChange={(e) => setReportYear(e.target.value)}
-                    className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                  >
-                    {['2025', '2026', '2027'].map(y => (
-                      <option key={y} value={y}>{y}</option>
-                    ))}
-                  </select>
-                </div>
+              <div className="space-y-1">
+                <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Select Report Type *</label>
+                <select
+                  value={reportType}
+                  onChange={(e) => setReportType(e.target.value)}
+                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                >
+                  <option value="Daily Field Report">Daily Field Report</option>
+                  <option value="Visit Report">Visit Report</option>
+                  <option value="Target / Activity Report">Target / Activity Report</option>
+                </select>
+              </div>
+
+              {/* Read-Only Auto-Filled Agent Territory Scope */}
+              <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 space-y-1.5 text-[11px] font-semibold">
+                <span className="text-[9px] font-black text-[#864f19] uppercase tracking-wider block">Assigned Territory (Auto-Filled)</span>
+                <p className="text-slate-800">State: <strong>{user?.territory?.state || 'Andhra Pradesh'}</strong></p>
+                <p className="text-slate-800">District: <strong>{user?.territory?.district || 'Visakhapatnam'}</strong></p>
+                <p className="text-slate-800">Division: <strong>{user?.territory?.division || 'Vizag City'}</strong> • PIN: <strong>{user?.territory?.pincode || '530001'}</strong></p>
+                <p className="text-slate-600 text-[10px]">Submitted By: <strong>{user?.name || 'Logged Agent'}</strong></p>
               </div>
 
               <div className="space-y-1">
-                <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Remarks / Summary Details</label>
+                <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Report Remarks / Notes</label>
                 <textarea
                   value={reportRemarks}
                   onChange={(e) => setReportRemarks(e.target.value)}
-                  placeholder="Summarize key metrics, approvals, or operational hurdles..."
+                  placeholder="Summarize daily visits, onboardings completed, or key field findings..."
                   rows={3}
                   className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19] resize-none"
                 />
@@ -611,7 +593,7 @@ export const ReportsModule: React.FC = () => {
 
               {/* Styled File Upload Input Area */}
               <div className="space-y-1">
-                <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Attach PDF Document *</label>
+                <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Attach Document File * (PDF/DOCX)</label>
                 <div className="border border-dashed border-[#d7c3b5] hover:border-[#864f19] transition-all rounded-xl p-4 flex flex-col items-center justify-center bg-[#fbf9f8] cursor-pointer relative">
                   <input
                     type="file"
@@ -633,7 +615,7 @@ export const ReportsModule: React.FC = () => {
                     <div className="flex flex-col items-center text-center">
                       <Upload className="w-8 h-8 text-slate-400 mb-1" />
                       <span className="font-bold text-[#52443a]">Choose Document File</span>
-                      <span className="text-[9px] text-slate-450 mt-0.5">Supports PDF or DOC up to 5MB</span>
+                      <span className="text-[9px] text-slate-450 mt-0.5">Supports PDF or DOCX up to 5MB</span>
                     </div>
                   )}
                 </div>
@@ -662,7 +644,7 @@ export const ReportsModule: React.FC = () => {
             <CardHeader className="pb-2 border-b border-slate-50 flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-sm font-extrabold text-slate-800">Submitted Reports Ledger</CardTitle>
-                <p className="text-[10px] text-slate-450 font-semibold mt-0.5 uppercase tracking-wider">Logs of submitted monthly audits and approval review history</p>
+                <p className="text-[10px] text-slate-450 font-semibold mt-0.5 uppercase tracking-wider">Logs of submitted field reports and review status</p>
               </div>
             </CardHeader>
             <CardBody className="p-0">
@@ -675,63 +657,43 @@ export const ReportsModule: React.FC = () => {
                 <div className="flex flex-col items-center justify-center py-12 text-slate-400 gap-1.5">
                   <FileText className="w-8 h-8 text-slate-300" />
                   <span className="font-bold">No reports submitted yet</span>
-                  <span className="text-[10px] text-slate-450">Select a timeframe to upload your first summary document</span>
+                  <span className="text-[10px] text-slate-450">Upload your first field report using the form on the left</span>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full border-collapse">
                     <thead>
                       <tr className="bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-left border-b border-slate-100">
-                        <th className="py-3 px-4">Period</th>
+                        <th className="py-3 px-4">Report Type</th>
                         <th className="py-3 px-4">Filename</th>
                         <th className="py-3 px-4">Submitted At</th>
-                        <th className="py-3 px-4">Review Status</th>
-                        <th className="py-3 px-4">Review Remarks</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4">Remarks</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-50 font-semibold text-slate-700">
-                      {reports.map((rep) => {
-                        const content = rep.content || {};
-                        const periodStr = rep.period || (content.month && content.year ? `${content.month} ${content.year}` : 'Monthly Audit');
-                        const fileNameStr = rep.fileName || content.fileName || 'Submitted_Report.pdf';
-                        const rawDate = rep.submittedAt || rep.createdAt || rep.updatedAt;
-                        let displayDate = 'Today';
-                        if (rawDate) {
-                          const parsed = new Date(rawDate);
-                          if (!isNaN(parsed.getTime())) {
-                            displayDate = parsed.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-                          } else {
-                            displayDate = String(rawDate);
-                          }
-                        }
-
-                        return (
-                          <tr key={rep._id || Math.random()} className="hover:bg-[#fbf9f8] transition-colors">
-                            <td className="py-3 px-4 font-bold text-slate-800">
-                              {periodStr}
-                            </td>
-                            <td className="py-3 px-4 flex items-center gap-1.5 text-slate-650">
-                              <FileText className="w-3.5 h-3.5 text-[#864f19]" />
-                              <span>{fileNameStr}</span>
-                            </td>
-                            <td className="py-3 px-4 text-slate-500 font-semibold text-xs">
-                              {displayDate}
-                            </td>
-                            <td className="py-3 px-4">
-                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase border ${
-                                rep.status === 'Reviewed' || rep.reviewedBy 
-                                  ? 'bg-green-50 text-green-700 border-green-200' 
-                                  : 'bg-yellow-50 text-yellow-700 border-yellow-200'
-                              }`}>
-                                {rep.status === 'Reviewed' || rep.reviewedBy ? 'Reviewed' : 'Pending Review'}
-                              </span>
-                            </td>
-                            <td className="py-3 px-4 text-slate-500 font-medium">
-                              {rep.remarks ? rep.remarks : <span className="text-slate-350 italic">No feedback remarks</span>}
-                            </td>
-                          </tr>
-                        );
-                      })}
+                    <tbody className="divide-y divide-slate-50 font-semibold text-slate-700 text-xs">
+                      {reports.map((rep) => (
+                        <tr key={rep._id || Math.random()} className="hover:bg-[#fbf9f8] transition-colors">
+                          <td className="py-3 px-4 font-bold text-[#864f19]">
+                            {rep.reportType || rep.type || 'Field Report'}
+                          </td>
+                          <td className="py-3 px-4 flex items-center gap-1.5 text-slate-700">
+                            <FileText className="w-3.5 h-3.5 text-[#864f19]" />
+                            <span>{rep.fileName || 'Report_Doc.pdf'}</span>
+                          </td>
+                          <td className="py-3 px-4 text-slate-500 font-semibold text-[11px]">
+                            {rep.submittedAt || new Date().toLocaleDateString('en-GB')}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="inline-block px-2.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase border bg-emerald-50 text-emerald-700 border-emerald-200">
+                              {rep.status || 'Submitted'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-slate-500 font-medium">
+                            {rep.remarks || 'No remarks'}
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>

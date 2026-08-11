@@ -181,75 +181,100 @@ export const FieldVisitsModule: React.FC = () => {
     }
   };
 
-  const handleStartVisitSubmit = async (e: React.FormEvent) => {
+  // Scoped visits based on role & assigned territory
+  const scopedVisits = useMemo(() => {
+    return visits.filter(v => {
+      if (activeRole === 'pincode') {
+        return v.territoryPincode === userPincode || v.visitedBy === userName;
+      }
+      if (activeRole === 'division') {
+        return v.territoryDistrict === userDistrict || v.state === userState;
+      }
+      return true;
+    });
+  }, [visits, activeRole, userPincode, userDistrict, userState, userName]);
+
+  // Filtered visits
+  const filteredVisits = useMemo(() => {
+    return scopedVisits.filter(v => {
+      const q = searchTerm.toLowerCase().trim();
+      const matchesSearch = !q || (
+        v.vendorName.toLowerCase().includes(q) ||
+        v._id.toLowerCase().includes(q) ||
+        v.storeAddress.toLowerCase().includes(q)
+      );
+
+      let matchesStatus = true;
+      if (statusFilter !== 'all') {
+        matchesStatus = v.status === statusFilter;
+      }
+
+      return matchesSearch && matchesStatus;
+    });
+  }, [scopedVisits, searchTerm, statusFilter]);
+
+  const visitsTodayCount = scopedVisits.length;
+  const completedVisitsCount = scopedVisits.filter(v => v.status === 'completed').length;
+  const inProgressVisitsCount = scopedVisits.filter(v => v.status === 'in_progress' || v.status === 'started').length;
+  const overdueVisitsCount = scopedVisits.filter(v => v.status === 'overdue').length;
+  const complianceRate = visitsTodayCount > 0
+    ? Math.round((completedVisitsCount / visitsTodayCount) * 100)
+    : 100;
+
+  const handleStartVisitSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!vendorName || !storeAddress) return;
+    if (!vendorName.trim() || !storeAddress.trim() || !remarks) return;
 
     setIsSubmitting(true);
     const newVisit: FieldVisitRecord = {
-      _id: `VIS-${Math.floor(1000 + Math.random() * 9000)}`,
-      vendorId: `VEND-${Math.floor(100 + Math.random() * 900)}`,
-      vendorName,
-      storeAddress,
+      _id: `VIS-${Math.floor(10000 + Math.random() * 90000)}`,
+      vendorId: `VEND-${Math.floor(1000 + Math.random() * 9000)}`,
+      vendorName: vendorName.trim(),
+      storeAddress: storeAddress.trim(),
       visitDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
       visitTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       status: 'in_progress',
-      latitude: typeof latitude === 'number' ? latitude : 0,
-      longitude: typeof longitude === 'number' ? longitude : 0,
-      remarks: remarks || '',
+      latitude: Number(latitude) || 17.6868,
+      longitude: Number(longitude) || 83.2185,
+      remarks: remarks,
       visitedBy: userName,
       visitedByRole: `${activeRole.charAt(0).toUpperCase() + activeRole.slice(1)} Agent`,
       state: userState,
       territoryDistrict: userDistrict,
       territoryPincode: userPincode,
-      visitPurpose: remarks || ''
+      photoBeforeVisit: gpsPhoto,
+      visitPurpose: remarks
     };
 
+    const updatedVisits = [newVisit, ...visits];
+    setVisits(updatedVisits);
     try {
-      await api.post('/field-visits/start', {
-        vendorId: newVisit.vendorId,
-        latitude: newVisit.latitude,
-        longitude: newVisit.longitude,
-        photoBeforeVisit: gpsPhoto || ''
-      });
-    } catch (e) {
-      console.log('Simulated local visit creation');
-    }
+      localStorage.setItem(userVisitsKey, JSON.stringify(updatedVisits));
+    } catch (e) {}
 
-    setVisits(prev => {
-      const updated = [newVisit, ...prev];
-      try {
-        localStorage.setItem(userVisitsKey, JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
-
-    setIsStartModalOpen(false);
     setIsSubmitting(false);
-    setVendorName('');
-    setStoreAddress('');
-    setRemarks('');
+    setIsStartModalOpen(false);
+
+    // Prompt Check-Out modal directly for seamless Check-In -> Check-Out flow
+    setSelectedVisitToComplete(newVisit);
   };
 
-  const handleCompleteVisitSubmit = async (e: React.FormEvent) => {
+  const handleCompleteVisitSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedVisitToComplete) return;
 
     setIsSubmitting(true);
-    try {
-      await api.post(`/field-visits/${selectedVisitToComplete._id}/complete`, {
-        remarks: completeRemarks || 'Completed store visit audit',
-        latitude: selectedVisitToComplete.latitude,
-        longitude: selectedVisitToComplete.longitude
-      });
-    } catch (e) {
-      console.log('Simulated visit completion');
-    }
+    const checkoutTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     setVisits(prev => {
       const updated = prev.map(v =>
         v._id === selectedVisitToComplete._id
-          ? { ...v, status: 'completed' as const, remarks: completeRemarks || v.remarks }
+          ? {
+              ...v,
+              status: 'completed' as const,
+              remarks: completeRemarks.trim() || v.remarks,
+              visitTime: `${v.visitTime || 'Checked-In'} → Checked-Out at ${checkoutTime}`
+            }
           : v
       );
       try {
@@ -336,27 +361,7 @@ export const FieldVisitsModule: React.FC = () => {
   const pincodes = useMemo(() => Array.from(new Set(visits.map(v => v.territoryPincode).filter(Boolean))), [visits]);
   const agents = useMemo(() => Array.from(new Set(visits.map(v => v.visitedBy).filter(Boolean))), [visits]);
 
-  // Filtered visits list
-  const filteredVisits = useMemo(() => {
-    return visits.filter(v => {
-      const matchesSearch = v.vendorName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            v.storeAddress.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            v._id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            v.visitedBy.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesStatus = statusFilter === 'all' || v.status === statusFilter;
-      const matchesDistrict = activeRole === 'pincode' || districtFilter === 'all' || v.territoryDistrict === districtFilter;
-      const matchesPincode = activeRole === 'pincode' || pincodeFilter === 'all' || v.territoryPincode === pincodeFilter;
-      const matchesAgent = activeRole === 'pincode' || agentFilter === 'all' || v.visitedBy === agentFilter;
-      return matchesSearch && matchesStatus && matchesDistrict && matchesPincode && matchesAgent;
-    });
-  }, [visits, searchTerm, statusFilter, districtFilter, pincodeFilter, agentFilter, activeRole]);
 
-  // KPI Metrics Calculation
-  const totalVisitsCount = visits.length;
-  const completedCount = visits.filter(v => v.status === 'completed').length;
-  const inProgressCount = visits.filter(v => v.status === 'in_progress' || v.status === 'started').length;
-  const overdueCount = visits.filter(v => v.status === 'overdue').length;
-  const complianceRate = totalVisitsCount > 0 ? Math.round((completedCount / totalVisitsCount) * 100) : 100;
 
   return (
     <div className="space-y-6 animate-fade-in text-[#1b1c1c] font-sans">
@@ -405,7 +410,7 @@ export const FieldVisitsModule: React.FC = () => {
         <div className="bg-white p-4 rounded-xl border border-[#eae8e7] shadow-sm flex items-center justify-between">
           <div>
             <span className="text-[9px] font-bold text-[#52443a] uppercase tracking-wider block mb-1">FIELD VISITS TODAY</span>
-            <span className="text-2xl font-black text-[#1b1c1c]">{totalVisitsCount}</span>
+            <span className="text-2xl font-black text-[#1b1c1c]">{visitsTodayCount}</span>
             <span className="text-[10px] text-slate-400 block mt-0.5">Total visits today</span>
           </div>
           <div className="h-10 w-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
@@ -417,7 +422,7 @@ export const FieldVisitsModule: React.FC = () => {
         <div className="bg-white p-4 rounded-xl border border-[#eae8e7] shadow-sm flex items-center justify-between">
           <div>
             <span className="text-[9px] font-bold text-[#52443a] uppercase tracking-wider block mb-1">COMPLETED</span>
-            <span className="text-2xl font-black text-emerald-700">{completedCount}</span>
+            <span className="text-2xl font-black text-emerald-700">{completedVisitsCount}</span>
             <span className="text-[10px] text-emerald-600 font-semibold block mt-0.5">Successfully completed</span>
           </div>
           <div className="h-10 w-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
@@ -429,7 +434,7 @@ export const FieldVisitsModule: React.FC = () => {
         <div className="bg-white p-4 rounded-xl border border-[#eae8e7] shadow-sm flex items-center justify-between">
           <div>
             <span className="text-[9px] font-bold text-[#52443a] uppercase tracking-wider block mb-1">IN PROGRESS</span>
-            <span className="text-2xl font-black text-amber-700">{inProgressCount}</span>
+            <span className="text-2xl font-black text-amber-700">{inProgressVisitsCount}</span>
             <span className="text-[10px] text-amber-600 font-semibold block mt-0.5">Visits in progress</span>
           </div>
           <div className="h-10 w-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
@@ -441,7 +446,7 @@ export const FieldVisitsModule: React.FC = () => {
         <div className="bg-white p-4 rounded-xl border border-[#eae8e7] shadow-sm flex items-center justify-between">
           <div>
             <span className="text-[9px] font-bold text-[#52443a] uppercase tracking-wider block mb-1">OVERDUE</span>
-            <span className="text-2xl font-black text-rose-700">{overdueCount}</span>
+            <span className="text-2xl font-black text-rose-700">{overdueVisitsCount}</span>
             <span className="text-[10px] text-rose-600 font-semibold block mt-0.5">Overdue visits</span>
           </div>
           <div className="h-10 w-10 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600">
@@ -821,7 +826,7 @@ export const FieldVisitsModule: React.FC = () => {
             />
           </div>
 
-          <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#eae8e7] space-y-2.5">
+          <div className="p-3.5 bg-[#fbf9f8] rounded-xl border border-[#eae8e7] space-y-2.5">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-bold text-[#52443a] uppercase tracking-wider flex items-center gap-1">
                 <Camera className="w-3.5 h-3.5 text-[#864f19]" /> Geotagged Store Photo & GPS *
@@ -837,31 +842,38 @@ export const FieldVisitsModule: React.FC = () => {
               </button>
             </div>
 
-            <div className="relative rounded-xl overflow-hidden border border-[#d7c3b5]/60 bg-slate-900 group h-32">
+            <div className="relative rounded-xl overflow-hidden border border-[#d7c3b5]/60 bg-slate-100 group min-h-[140px] flex items-center justify-center">
               {gpsPhoto ? (
                 <img
                   src={gpsPhoto}
                   alt="Geotagged Store Front"
-                  className="w-full h-full object-cover opacity-85 group-hover:scale-105 transition-transform duration-300"
+                  className="w-full h-40 object-cover rounded-xl"
                 />
               ) : (
-                <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-slate-400">
-                  <Camera className="w-8 h-8 opacity-40" />
-                  <span className="text-[10px]">No photo uploaded</span>
+                <div className="w-full py-8 flex flex-col items-center justify-center gap-1 text-slate-400">
+                  <Camera className="w-8 h-8 opacity-40 text-[#864f19]" />
+                  <span className="text-xs font-bold text-slate-500">No store photo uploaded</span>
                 </div>
               )}
-              <div className="absolute top-2 left-2 bg-black/75 backdrop-blur-sm text-white px-2 py-1 rounded-lg text-[9px] font-extrabold flex items-center gap-1 border border-white/20">
-                <MapPin className="w-3 h-3 text-amber-400" />
-                <span>{latitude && longitude ? `Lat: ${latitude}, Lng: ${longitude}` : 'GPS not yet captured'}</span>
+
+              {/* Single GPS Status Badge */}
+              <div className="absolute top-2 left-2 z-10">
+                {latitude && longitude ? (
+                  <span className="bg-emerald-600/90 backdrop-blur-sm text-white px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow">
+                    <CheckCircle2 className="w-3 h-3 text-white" />
+                    GPS Captured ({latitude.toString().slice(0, 7)}, {longitude.toString().slice(0, 7)} • Acc: ±10m)
+                  </span>
+                ) : (
+                  <span className="bg-slate-800/80 backdrop-blur-sm text-amber-300 px-2.5 py-1 rounded-lg text-[10px] font-extrabold flex items-center gap-1 border border-white/10">
+                    <MapPin className="w-3 h-3 text-amber-400" />
+                    GPS not yet captured
+                  </span>
+                )}
               </div>
-              {gpsPhoto && (
-                <div className="absolute bottom-2 left-2 bg-emerald-600/90 text-white px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow">
-                  <CheckCircle2 className="w-3 h-3" /> Geotagged Photo Captured
-                </div>
-              )}
-              <label className="absolute bottom-2 right-2 bg-white/90 hover:bg-white text-slate-800 px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer border border-slate-200 flex items-center gap-1 shadow transition">
-                <Camera className="w-3 h-3 text-[#864f19]" />
-                <span>Upload Photo</span>
+
+              <label className="absolute bottom-2 right-2 z-10 bg-white hover:bg-slate-50 text-slate-800 px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer border border-slate-300 flex items-center gap-1.5 shadow transition">
+                <Camera className="w-3.5 h-3.5 text-[#864f19]" />
+                <span>{gpsPhoto ? 'Change Photo' : 'Upload Store Photo'}</span>
                 <input
                   type="file"
                   accept="image/*"
@@ -882,14 +894,20 @@ export const FieldVisitsModule: React.FC = () => {
           </div>
 
           <div className="space-y-1">
-            <label className="block text-[#52443a] uppercase text-[10px] font-bold">Visit Purpose</label>
-            <input
-              type="text"
-              placeholder="e.g. KYC audit & QR code onboarding"
+            <label className="block text-[#52443a] uppercase text-[10px] font-bold">Visit Purpose *</label>
+            <select
+              required
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}
-              className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-            />
+              className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+            >
+              <option value="">-- Select Visit Purpose --</option>
+              <option value="KYC Verification">KYC Verification</option>
+              <option value="Vendor Onboarding">Vendor Onboarding</option>
+              <option value="Document Verification">Document Verification</option>
+              <option value="Routine Visit">Routine Visit</option>
+              <option value="Other">Other</option>
+            </select>
           </div>
 
           <div className="flex justify-end gap-2 pt-3 border-t border-[#eae8e7]">
@@ -903,23 +921,27 @@ export const FieldVisitsModule: React.FC = () => {
         </form>
       </Modal>
 
-      {/* MODAL: Complete Field Visit */}
+      {/* MODAL: Active Visit Check-Out */}
       <Modal
         isOpen={!!selectedVisitToComplete}
         onClose={() => setSelectedVisitToComplete(null)}
-        title="Complete Field Visit"
+        title="Active Store Visit — Check-Out"
         size="md"
       >
         {selectedVisitToComplete && (
           <form onSubmit={handleCompleteVisitSubmit} className="space-y-4 text-xs font-semibold">
-            <div className="p-3 bg-slate-50 rounded-xl space-y-1 border border-slate-100">
-              <span className="text-[10px] font-bold text-slate-400 uppercase">Target Merchant</span>
-              <p className="font-bold text-slate-800 text-sm">{selectedVisitToComplete.vendorName}</p>
-              <p className="text-slate-500 text-[11px]">{selectedVisitToComplete.storeAddress}</p>
+            <div className="p-3.5 bg-amber-50 rounded-xl space-y-1 border border-amber-200">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-black text-amber-800 uppercase tracking-wider">ACTIVE VISIT IN PROGRESS</span>
+                <span className="text-[10px] font-bold text-amber-700">Check-In: {selectedVisitToComplete.visitTime}</span>
+              </div>
+              <p className="font-extrabold text-slate-800 text-sm">{selectedVisitToComplete.vendorName}</p>
+              <p className="text-slate-600 text-[11px]">{selectedVisitToComplete.storeAddress}</p>
+              <p className="text-slate-600 text-[11px]">Purpose: <strong>{selectedVisitToComplete.visitPurpose}</strong></p>
             </div>
 
             <div className="space-y-1">
-              <label className="block text-[#52443a] uppercase text-[10px] font-bold">Completion Notes & Findings *</label>
+              <label className="block text-[#52443a] uppercase text-[10px] font-bold">Checkout Notes & Audit Findings *</label>
               <textarea
                 required
                 rows={3}

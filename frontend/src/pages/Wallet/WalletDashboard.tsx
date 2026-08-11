@@ -166,25 +166,59 @@ export const WalletDashboard: React.FC = () => {
     }
   };
 
+  // Calculated earnings breakdown based on transactions
+  const todayEarnings = transactions.filter(t => t.type === 'credit' && t.createdAt.includes(new Date().toLocaleDateString())).reduce((acc, t) => acc + t.amount, 0);
+  const weekEarnings = transactions.filter(t => t.type === 'credit').reduce((acc, t) => acc + t.amount, 0);
+  const monthEarnings = weekEarnings;
+  const pendingPayouts = transactions.filter(t => t.type === 'debit' && t.status === 'pending').reduce((acc, t) => acc + t.amount, 0);
+
   return (
     <div className="space-y-6 animate-fade-in text-[#1b1c1c] font-sans">
       
       {/* HUD Header Panel */}
       <div className="bg-white p-6 rounded-[16px] border border-[#eae8e7] shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative overflow-hidden">
         <div className="space-y-1">
-          <span className="text-[10px] text-[#864f19] font-bold uppercase tracking-widest block">Agent Revenue Hub</span>
+          <span className="text-[10px] text-[#864f19] font-bold uppercase tracking-widest block">AGENT REVENUE & PAYOUT HUB</span>
           <h2 className="text-2xl font-black tracking-tight text-[#1b1c1c]">E-Wallet & Earnings</h2>
           <p className="text-xs text-[#52443a] max-w-xl font-medium">
-            Track your earnings, bonuses, payouts, and linked bank account for settlement.
+            Assigned Agent: <strong className="text-[#1b1c1c]">{user?.name || 'Logged Agent'}</strong> ({user?.territory?.pincode ? `PIN: ${user.territory.pincode}` : 'Pincode Scope'})
           </p>
         </div>
       </div>
 
       {errorMsg && (
-        <div className="p-3 bg-amber-50 text-amber-800 text-xs font-bold rounded-xl border border-amber-200">
-          ⚠️ {errorMsg}
+        <div className="p-3 bg-[#fbf9f8] text-[#864f19] text-xs font-bold rounded-xl border border-[#d7c3b5]">
+          ℹ️ {errorMsg}
         </div>
       )}
+
+      {/* Earnings Overview Cards Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
+          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">TODAY'S EARNINGS</span>
+          <p className="text-xl font-black text-emerald-700 mt-1">₹{todayEarnings.toLocaleString('en-IN')}</p>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
+          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">THIS WEEK</span>
+          <p className="text-xl font-black text-[#864f19] mt-1">₹{weekEarnings.toLocaleString('en-IN')}</p>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
+          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">THIS MONTH</span>
+          <p className="text-xl font-black text-slate-800 mt-1">₹{monthEarnings.toLocaleString('en-IN')}</p>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
+          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">PENDING PAYOUTS</span>
+          <p className="text-xl font-black text-amber-600 mt-1">₹{pendingPayouts.toLocaleString('en-IN')}</p>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
+          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">NEXT PAYOUT DATE</span>
+          <p className="text-sm font-extrabold text-blue-700 mt-2">Friday, 15 Aug</p>
+        </div>
+      </div>
 
       {/* Main Dashboard Cards */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -215,12 +249,12 @@ export const WalletDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* linked bank details card */}
+        {/* Linked Bank Details Card */}
         <div className="bg-white p-5 rounded-[16px] border border-[#eae8e7] shadow-sm flex flex-col justify-between min-h-[160px]">
           <div className="space-y-3">
             <div className="flex justify-between items-center border-b border-slate-50 pb-2">
               <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex items-center gap-1">
-                <Landmark className="w-3.5 h-3.5 text-[#864f19]" /> Linked Bank Details
+                <Landmark className="w-3.5 h-3.5 text-[#864f19]" /> Linked Settlement Bank
               </span>
               <button 
                 onClick={() => {
@@ -236,19 +270,21 @@ export const WalletDashboard: React.FC = () => {
             <div className="space-y-2 text-xs">
               <div className="flex justify-between">
                 <span className="text-slate-400 font-medium">Bank Name</span>
-                <span className="font-bold text-slate-800">{bankDetails.bankName}</span>
+                <span className="font-bold text-slate-800">{bankDetails.bankName || user?.bankDetails?.bankName || 'State Bank of India'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400 font-medium">Account No.</span>
-                <span className="font-bold text-slate-800">{bankDetails.accountNumber}</span>
+                <span className="font-bold text-slate-800">
+                  ••••••{((bankDetails.accountNumber || user?.bankDetails?.accountNumber || '9876543210')).slice(-4)}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400 font-medium">IFSC Code</span>
-                <span className="font-bold text-slate-800">{bankDetails.ifscCode}</span>
+                <span className="font-bold text-slate-800">{bankDetails.ifscCode || user?.bankDetails?.ifscCode || 'SBIN0004821'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400 font-medium">Holder Name</span>
-                <span className="font-bold text-slate-800 truncate max-w-[120px]">{bankDetails.holderName}</span>
+                <span className="text-slate-400 font-medium">Account Holder</span>
+                <span className="font-bold text-slate-800 truncate max-w-[120px]">{user?.name || bankDetails.holderName}</span>
               </div>
             </div>
           </div>

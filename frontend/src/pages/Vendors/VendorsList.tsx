@@ -675,56 +675,7 @@ export const VendorsList: React.FC = () => {
         </div>
       </div>
 
-      {/* QUICK FILTER CHIPS */}
-      <div className="bg-white p-4 rounded-2xl border border-[#d7c3b5]/40 shadow-sm space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-extrabold text-[#52443a] uppercase tracking-wider flex items-center gap-1.5">
-            <Filter className="w-3.5 h-3.5 text-[#864f19]" /> Quick Filter Chips
-          </span>
-          <button
-            onClick={() => {
-              setQuickChip('all');
-              setSearchTerm('');
-              setDateFilter('all');
-              setCategoryFilter('all');
-              setDistrictFilter('all');
-              setDivisionFilter('all');
-              setPincodeFilter('all');
-              setAgentFilter('all');
-              setStatusFilter('all');
-              setKycFilter('all');
-            }}
-            className="text-[11px] font-bold text-[#864f19] hover:underline bg-transparent border-none cursor-pointer"
-          >
-            Reset All Filters
-          </button>
-        </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {[
-            { key: 'all', label: 'All Scoped Vendors' },
-            { key: 'today', label: 'Today' },
-            { key: 'yesterday', label: 'Yesterday' },
-            { key: '7days', label: 'Last 7 Days' },
-            { key: '30days', label: 'Last 30 Days' },
-            { key: 'pending', label: 'Pending KYC' },
-            { key: 'verified', label: 'Verified' },
-            { key: 'active', label: 'Active' },
-            { key: 'inactive', label: 'Inactive' }
-          ].map(chip => (
-            <button
-              key={chip.key}
-              onClick={() => setQuickChip(chip.key)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all border-none cursor-pointer ${quickChip === chip.key
-                  ? 'bg-[#864f19] text-white shadow-sm'
-                  : 'bg-[#f6f3f2] text-[#52443a] hover:bg-[#eae8e7]'
-                }`}
-            >
-              {chip.label}
-            </button>
-          ))}
-        </div>
-      </div>
 
       {/* ADVANCED MULTI-ATTRIBUTE SEARCH & MULTI-DIMENSIONAL FILTERS */}
       <div className="bg-white p-5 rounded-2xl border border-[#d7c3b5]/40 shadow-sm space-y-4">

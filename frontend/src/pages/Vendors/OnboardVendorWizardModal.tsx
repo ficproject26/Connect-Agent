@@ -263,8 +263,10 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
   const validateStep4 = () => {
     if (!formData.accountHolderName.trim()) return 'Account Holder Name is required.';
     if (!formData.branch.trim()) return 'Bank Branch Name is required.';
-    if (!formData.bankStreetAddress.trim() || !formData.bankCity.trim()) return 'Bank Address and City are required.';
-    if (!formData.accountNumber || formData.accountNumber.length < 8) return 'Valid Account Number is required.';
+    if (!formData.bankCity.trim()) return 'Bank City is required.';
+    if (!formData.accountNumber || formData.accountNumber.length < 8 || formData.accountNumber.length > 18) {
+      return 'Valid 8 to 18-digit Bank Account Number is required.';
+    }
     const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
     if (!formData.ifscCode || !ifscRegex.test(formData.ifscCode.toUpperCase())) {
       return 'Valid 11-character IFSC Code (e.g. SBIN0004821) is required.';
@@ -821,12 +823,50 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Input
-                  label="Account Holder Name *"
-                  placeholder="e.g. Ramesh Kumar / Hosur Supermarket"
-                  value={formData.accountHolderName}
-                  onChange={(e) => setFormData({ ...formData, accountHolderName: e.target.value })}
+                  label="Account Number (8 to 18 Digits) *"
+                  placeholder="Enter 8-18 digit bank account number"
+                  value={formData.accountNumber}
+                  onChange={(e) => setFormData({ ...formData, accountNumber: e.target.value.replace(/\D/g, '').slice(0, 18) })}
+                  maxLength={18}
+                  inputMode="numeric"
                   required
                 />
+                <Input
+                  label="IFSC Code (11 Characters) *"
+                  placeholder="e.g. SBIN0004821"
+                  value={formData.ifscCode}
+                  onChange={(e) => {
+                    const ifsc = e.target.value.toUpperCase().slice(0, 11);
+                    let bankName = formData.bankName;
+                    let branch = formData.branch;
+                    let bankCity = formData.bankCity;
+
+                    if (ifsc.length >= 4) {
+                      const prefix = ifsc.slice(0, 4);
+                      if (prefix === 'SBIN') { bankName = 'State Bank of India'; branch = 'Hosur Main Branch'; bankCity = 'Hosur / Salem'; }
+                      else if (prefix === 'HDFC') { bankName = 'HDFC Bank'; branch = 'Vizag City Branch'; bankCity = 'Visakhapatnam'; }
+                      else if (prefix === 'ICIC') { bankName = 'ICICI Bank'; branch = 'Central Commercial Branch'; bankCity = 'Chennai'; }
+                      else if (prefix === 'UTIB' || prefix === 'AXIS') { bankName = 'Axis Bank'; branch = 'MG Road Branch'; bankCity = 'Bengaluru'; }
+                      else if (prefix === 'PUNB') { bankName = 'Punjab National Bank'; branch = 'GT Road Branch'; bankCity = 'Delhi'; }
+                      else if (prefix === 'CNRB') { bankName = 'Canara Bank'; branch = 'Town Market Branch'; bankCity = 'Coimbatore'; }
+                      else if (prefix === 'BARB') { bankName = 'Bank of Baroda'; branch = 'Station Road Branch'; bankCity = 'Mumbai'; }
+                      else if (prefix === 'KKBK') { bankName = 'Kotak Mahindra Bank'; branch = 'Financial District Branch'; bankCity = 'Hyderabad'; }
+                    }
+
+                    setFormData({
+                      ...formData,
+                      ifscCode: ifsc,
+                      bankName,
+                      branch,
+                      bankCity
+                    });
+                  }}
+                  maxLength={11}
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Select
                   label="Bank Name *"
                   isSearchable={true}
@@ -868,6 +908,13 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                   value={formData.bankName}
                   onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
                 />
+                <Input
+                  label="Account Holder Name *"
+                  placeholder="e.g. Ramesh Kumar / Hosur Supermarket"
+                  value={formData.accountHolderName}
+                  onChange={(e) => setFormData({ ...formData, accountHolderName: e.target.value })}
+                  required
+                />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -883,33 +930,6 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                   placeholder="e.g. Hosur / Salem"
                   value={formData.bankCity}
                   onChange={(e) => setFormData({ ...formData, bankCity: e.target.value })}
-                  required
-                />
-              </div>
-
-              <Input
-                label="Bank Street Address *"
-                placeholder="e.g. #45 Station Road, Hosur"
-                value={formData.bankStreetAddress}
-                onChange={(e) => setFormData({ ...formData, bankStreetAddress: e.target.value })}
-                required
-              />
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Input
-                  label="Account Number *"
-                  placeholder="Enter bank account number"
-                  value={formData.accountNumber}
-                  onChange={(e) => setFormData({ ...formData, accountNumber: e.target.value.replace(/\D/g, '') })}
-                  inputMode="numeric"
-                  required
-                />
-                <Input
-                  label="IFSC Code (11 Characters) *"
-                  placeholder="e.g. SBIN0004821"
-                  value={formData.ifscCode}
-                  onChange={(e) => setFormData({ ...formData, ifscCode: e.target.value.toUpperCase().slice(0, 11) })}
-                  maxLength={11}
                   required
                 />
               </div>
@@ -933,7 +953,7 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                   </div>
                   <p className="font-extrabold text-[#1b1c1c] text-sm">{formData.businessName}</p>
                   <p className="text-slate-600">{formData.category} • {formData.operatingHours}</p>
-                  <p className="text-slate-600">📞 {formData.phone} | ✉️ {formData.email}</p>
+                  <p className="text-slate-600">📞 ••••••{formData.phone.slice(-4)} | ✉️ {formData.email}</p>
                   <p className="text-slate-500 text-[11px]">{formData.fullAddress}, {formData.district} {formData.pincode}</p>
                 </div>
 
@@ -954,7 +974,7 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                     <button type="button" onClick={() => setCurrentStep(3)} className="text-[10px] font-bold text-blue-700 hover:underline bg-transparent border-none cursor-pointer">Edit</button>
                   </div>
                   <p className="text-slate-700">PAN: <strong>{formData.panNumber.toUpperCase()}</strong></p>
-                  <p className="text-slate-700">Aadhaar: <strong>{formData.aadhaarNumber}</strong></p>
+                  <p className="text-slate-700">Aadhaar: <strong>•••• •••• {formData.aadhaarNumber.slice(-4)}</strong></p>
                   {formData.fssaiNumber && <p className="text-slate-700">FSSAI License: <strong>{formData.fssaiNumber}</strong></p>}
                   <p className="text-slate-700">GST Status: <strong>{formData.gstStatus}</strong> {formData.gstNumber && `(${formData.gstNumber.toUpperCase()})`}</p>
                   <p className="text-slate-700">MSME: <strong>{formData.msmeStatus}</strong></p>
