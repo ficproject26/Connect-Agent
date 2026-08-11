@@ -25,12 +25,12 @@ export const WalletDashboard: React.FC = () => {
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  // Bank details state (mock defaults, editable)
+  // Bank details state (User profile / real dynamic data)
   const [bankDetails, setBankDetails] = useState({
-    bankName: 'State Bank of India',
-    accountNumber: '•••• •••• •••• 4829',
-    ifscCode: 'SBIN0004821',
-    holderName: user?.name || 'Agent Partner'
+    bankName: user?.bankDetails?.bankName || '',
+    accountNumber: user?.bankDetails?.accountNumber || '',
+    ifscCode: user?.bankDetails?.ifscCode || '',
+    holderName: user?.name || ''
   });
 
   const [isEditBankOpen, setIsEditBankOpen] = useState(false);

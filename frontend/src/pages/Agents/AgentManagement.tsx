@@ -43,280 +43,6 @@ export interface AgentNode {
   pincodes?: AgentNode[];
 }
 
-// Comprehensive Demo Hierarchy Tree covering Tamil Nadu and Karnataka
-const DEMO_HIERARCHY: AgentNode[] = [
-  {
-    _id: 'state-tn',
-    name: 'Siddharth (TN State Lead)',
-    email: 'tn_state@forge.in',
-    phone: '+91 98765 00001',
-    registrationId: 'REG-TN-STATE',
-    role: 'state',
-    kycStatus: 'approved',
-    registrationFeePaid: true,
-    performanceScore: 96,
-    earnings: 85000,
-    tieupsToday: 42,
-    tieupsYesterday: 38,
-    totalTieups: 420,
-    territory: { state: 'Tamil Nadu' },
-    plusPoints: ['KYC Verified', 'Top State Lead', 'High Growth Territory'],
-    minusPoints: [],
-    districts: [
-      {
-        _id: 'dist-tn-krishnagiri',
-        name: 'Muthuswamy (District Lead)',
-        email: 'muthuswamy@connect.in',
-        phone: '+91 90123 45678',
-        registrationId: 'REG-DIST-TN01',
-        role: 'district',
-        kycStatus: 'approved',
-        registrationFeePaid: true,
-        performanceScore: 92,
-        earnings: 48000,
-        tieupsToday: 22,
-        tieupsYesterday: 19,
-        totalTieups: 215,
-        territory: { state: 'Tamil Nadu', district: 'Krishnagiri District' },
-        plusPoints: ['KYC Verified', '100% Target Rate'],
-        minusPoints: [],
-        divisions: [
-          {
-            _id: 'div-tn-hosur',
-            name: 'Priya Sharma (Hosur Division Lead)',
-            email: 'hosur.div@connect.in',
-            phone: '+91 91234 56780',
-            registrationId: 'REG-DIV-TN101',
-            role: 'division',
-            kycStatus: 'approved',
-            registrationFeePaid: true,
-            performanceScore: 88,
-            earnings: 28000,
-            tieupsToday: 12,
-            tieupsYesterday: 10,
-            totalTieups: 120,
-            territory: { state: 'Tamil Nadu', district: 'Krishnagiri District', division: 'Hosur Division' },
-            plusPoints: ['KYC Verified', 'Active Subordinates'],
-            minusPoints: [],
-            pincodes: [
-              {
-                _id: 'pin-tn-635109',
-                name: 'Anil Kumar (Pincode Agent 635109)',
-                email: 'anil.635109@connect.in',
-                phone: '+91 99887 76655',
-                registrationId: 'REG-PIN-635109',
-                role: 'pincode',
-                kycStatus: 'approved',
-                registrationFeePaid: true,
-                performanceScore: 94,
-                earnings: 14500,
-                tieupsToday: 6,
-                tieupsYesterday: 5,
-                totalTieups: 62,
-                territory: { state: 'Tamil Nadu', district: 'Krishnagiri District', division: 'Hosur Division', pincode: '635109' },
-                plusPoints: ['KYC Verified', 'Top Merchant Converter'],
-                minusPoints: []
-              },
-              {
-                _id: 'pin-tn-635126',
-                name: 'Ramesh V (Pincode Agent 635126)',
-                email: 'ramesh.635126@connect.in',
-                phone: '+91 99887 76677',
-                registrationId: 'REG-PIN-635126',
-                role: 'pincode',
-                kycStatus: 'approved',
-                registrationFeePaid: true,
-                performanceScore: 85,
-                earnings: 11200,
-                tieupsToday: 4,
-                tieupsYesterday: 4,
-                totalTieups: 48,
-                territory: { state: 'Tamil Nadu', district: 'Krishnagiri District', division: 'Hosur Division', pincode: '635126' },
-                plusPoints: ['KYC Verified'],
-                minusPoints: []
-              }
-            ]
-          },
-          {
-            _id: 'div-tn-bargur',
-            name: 'Karthik Raja (Bargur Division Lead)',
-            email: 'bargur.div@connect.in',
-            phone: '+91 98765 05566',
-            registrationId: 'REG-DIV-TN102',
-            role: 'division',
-            kycStatus: 'approved',
-            registrationFeePaid: true,
-            performanceScore: 82,
-            earnings: 22000,
-            tieupsToday: 8,
-            tieupsYesterday: 7,
-            totalTieups: 85,
-            territory: { state: 'Tamil Nadu', district: 'Krishnagiri District', division: 'Bargur Division' },
-            plusPoints: ['KYC Verified'],
-            minusPoints: [],
-            pincodes: [
-              {
-                _id: 'pin-tn-635104',
-                name: 'Senthil M (Pincode Agent 635104)',
-                email: 'senthil.635104@connect.in',
-                phone: '+91 97654 32109',
-                registrationId: 'REG-PIN-635104',
-                role: 'pincode',
-                kycStatus: 'approved',
-                registrationFeePaid: true,
-                performanceScore: 80,
-                earnings: 9800,
-                tieupsToday: 3,
-                tieupsYesterday: 4,
-                totalTieups: 41,
-                territory: { state: 'Tamil Nadu', district: 'Krishnagiri District', division: 'Bargur Division', pincode: '635104' },
-                plusPoints: ['KYC Verified'],
-                minusPoints: []
-              }
-            ]
-          }
-        ]
-      },
-      {
-        _id: 'dist-tn-dharmapuri',
-        name: 'Venkatesh (Dharmapuri District Lead)',
-        email: 'dharmapuri.dist@connect.in',
-        phone: '+91 91234 99887',
-        registrationId: 'REG-DIST-TN02',
-        role: 'district',
-        kycStatus: 'approved',
-        registrationFeePaid: true,
-        performanceScore: 86,
-        earnings: 36000,
-        tieupsToday: 14,
-        tieupsYesterday: 12,
-        totalTieups: 155,
-        territory: { state: 'Tamil Nadu', district: 'Dharmapuri District' },
-        plusPoints: ['KYC Verified'],
-        minusPoints: [],
-        divisions: [
-          {
-            _id: 'div-tn-dharmapuri-sec',
-            name: 'Manjunath (Dharmapuri Division Lead)',
-            email: 'dharmapuri.sec@connect.in',
-            phone: '+91 94433 22110',
-            registrationId: 'REG-DIV-TN201',
-            role: 'division',
-            kycStatus: 'approved',
-            registrationFeePaid: true,
-            performanceScore: 84,
-            earnings: 19500,
-            tieupsToday: 7,
-            tieupsYesterday: 6,
-            totalTieups: 72,
-            territory: { state: 'Tamil Nadu', district: 'Dharmapuri District', division: 'Dharmapuri Division' },
-            plusPoints: ['KYC Verified'],
-            minusPoints: [],
-            pincodes: [
-              {
-                _id: 'pin-tn-636701',
-                name: 'Vijay K (Pincode Agent 636701)',
-                email: 'vijay.636701@connect.in',
-                phone: '+91 93322 11009',
-                registrationId: 'REG-PIN-636701',
-                role: 'pincode',
-                kycStatus: 'approved',
-                registrationFeePaid: true,
-                performanceScore: 83,
-                earnings: 9200,
-                tieupsToday: 3,
-                tieupsYesterday: 3,
-                totalTieups: 38,
-                territory: { state: 'Tamil Nadu', district: 'Dharmapuri District', division: 'Dharmapuri Division', pincode: '636701' },
-                plusPoints: ['KYC Verified'],
-                minusPoints: []
-              }
-            ]
-          }
-        ]
-      }
-    ]
-  },
-  {
-    _id: 'state-ka',
-    name: 'Rajesh (KA State Lead)',
-    email: 'state@forge.in',
-    phone: '+91 98765 00002',
-    registrationId: 'REG-KA-STATE',
-    role: 'state',
-    kycStatus: 'approved',
-    registrationFeePaid: true,
-    performanceScore: 94,
-    earnings: 78000,
-    tieupsToday: 36,
-    tieupsYesterday: 32,
-    totalTieups: 380,
-    territory: { state: 'Karnataka' },
-    plusPoints: ['KYC Verified', 'Top Metro Territory'],
-    minusPoints: [],
-    districts: [
-      {
-        _id: 'dist-ka-bengaluru',
-        name: 'Amit (Bengaluru Urban District Lead)',
-        email: 'district@forge.in',
-        phone: '+91 98765 43210',
-        registrationId: 'REG-DIST-KA01',
-        role: 'district',
-        kycStatus: 'approved',
-        registrationFeePaid: true,
-        performanceScore: 91,
-        earnings: 45000,
-        tieupsToday: 20,
-        tieupsYesterday: 18,
-        totalTieups: 195,
-        territory: { state: 'Karnataka', district: 'Bengaluru Urban' },
-        plusPoints: ['KYC Verified'],
-        minusPoints: [],
-        divisions: [
-          {
-            _id: 'div-ka-south',
-            name: 'Kiran (Bengaluru South Division Lead)',
-            email: 'bengaluru.south@connect.in',
-            phone: '+91 97654 00112',
-            registrationId: 'REG-DIV-KA101',
-            role: 'division',
-            kycStatus: 'approved',
-            registrationFeePaid: true,
-            performanceScore: 89,
-            earnings: 26000,
-            tieupsToday: 10,
-            tieupsYesterday: 9,
-            totalTieups: 110,
-            territory: { state: 'Karnataka', district: 'Bengaluru Urban', division: 'Bengaluru South' },
-            plusPoints: ['KYC Verified'],
-            minusPoints: [],
-            pincodes: [
-              {
-                _id: 'pin-ka-560083',
-                name: 'Anil (Pincode Agent 560083)',
-                email: 'pincode@forge.in',
-                phone: '+91 99887 00111',
-                registrationId: 'REG-PIN-560083',
-                role: 'pincode',
-                kycStatus: 'approved',
-                registrationFeePaid: true,
-                performanceScore: 90,
-                earnings: 13800,
-                tieupsToday: 5,
-                tieupsYesterday: 5,
-                totalTieups: 55,
-                territory: { state: 'Karnataka', district: 'Bengaluru Urban', division: 'Bengaluru South', pincode: '560083' },
-                plusPoints: ['KYC Verified'],
-                minusPoints: []
-              }
-            ]
-          }
-        ]
-      }
-    ]
-  }
-];
-
 export const AgentManagement: React.FC = () => {
   const { user } = useAuth();
   const activeRole = user?.role || 'state';
@@ -345,7 +71,7 @@ export const AgentManagement: React.FC = () => {
         return res.data;
       } catch (err: any) {
         if (err?.response?.status !== 401) {
-          console.warn('Hierarchy fetch fallback to demo structure:', err);
+          console.warn('Hierarchy fetch error:', err);
         }
         return null;
       }
@@ -356,10 +82,9 @@ export const AgentManagement: React.FC = () => {
     }
   });
 
-  // Extract base tree states array
+  // Extract base tree states array from live backend API
   const allStates: AgentNode[] = useMemo(() => {
-    const apiTree: AgentNode[] = hierarchyData?.states || hierarchyData?.tree || [];
-    return apiTree.length > 0 ? apiTree : DEMO_HIERARCHY;
+    return hierarchyData?.states || hierarchyData?.tree || [];
   }, [hierarchyData]);
 
   // 1. STATE AGENT SCOPING: Strictly isolate assigned State
@@ -372,9 +97,9 @@ export const AgentManagement: React.FC = () => {
 
     if (found) return found;
 
-    // Construct self-node fallback for state agent if not found in list
+    // Construct self-node fallback from logged in user if backend has no records yet
     return {
-      _id: 'state-user-assigned',
+      _id: user?._id || 'state-user-assigned',
       name: user?.name || 'State Agent',
       email: user?.email || '',
       phone: user?.phone || user?.mobile || '',
@@ -382,15 +107,15 @@ export const AgentManagement: React.FC = () => {
       role: 'state' as const,
       kycStatus: user?.kycStatus || 'approved',
       registrationFeePaid: true,
-      performanceScore: 95,
-      earnings: 50000,
-      tieupsToday: 10,
-      tieupsYesterday: 8,
-      totalTieups: 100,
+      performanceScore: user?.performanceScore || 100,
+      earnings: user?.earnings || 0,
+      tieupsToday: 0,
+      tieupsYesterday: 0,
+      totalTieups: 0,
       territory: { state: userState },
       plusPoints: ['KYC Verified', 'Assigned State Lead'],
       minusPoints: [],
-      districts: DEMO_HIERARCHY[0].districts
+      districts: []
     };
   }, [allStates, userState, user]);
 
@@ -406,7 +131,7 @@ export const AgentManagement: React.FC = () => {
     if (found) return found;
 
     return {
-      _id: 'dist-user-assigned',
+      _id: user?._id || 'dist-user-assigned',
       name: user?.name || 'District Agent',
       email: user?.email || '',
       phone: user?.phone || user?.mobile || '',
@@ -414,15 +139,15 @@ export const AgentManagement: React.FC = () => {
       role: 'district' as const,
       kycStatus: user?.kycStatus || 'approved',
       registrationFeePaid: true,
-      performanceScore: 92,
-      earnings: 40000,
-      tieupsToday: 8,
-      tieupsYesterday: 6,
-      totalTieups: 80,
+      performanceScore: user?.performanceScore || 100,
+      earnings: user?.earnings || 0,
+      tieupsToday: 0,
+      tieupsYesterday: 0,
+      totalTieups: 0,
       territory: { state: userState, district: userDistrict },
       plusPoints: ['KYC Verified', 'Assigned District Lead'],
       minusPoints: [],
-      divisions: DEMO_HIERARCHY[0].districts?.[0].divisions
+      divisions: []
     };
   }, [assignedStateNode, allStates, userDistrict, userState, user]);
 
@@ -438,7 +163,7 @@ export const AgentManagement: React.FC = () => {
     if (found) return found;
 
     return {
-      _id: 'div-user-assigned',
+      _id: user?._id || 'div-user-assigned',
       name: user?.name || 'Division Agent',
       email: user?.email || '',
       phone: user?.phone || user?.mobile || '',
@@ -446,15 +171,15 @@ export const AgentManagement: React.FC = () => {
       role: 'division' as const,
       kycStatus: user?.kycStatus || 'approved',
       registrationFeePaid: true,
-      performanceScore: 88,
-      earnings: 25000,
-      tieupsToday: 5,
-      tieupsYesterday: 4,
-      totalTieups: 50,
+      performanceScore: user?.performanceScore || 100,
+      earnings: user?.earnings || 0,
+      tieupsToday: 0,
+      tieupsYesterday: 0,
+      totalTieups: 0,
       territory: { state: userState, district: userDistrict, division: userDivision },
       plusPoints: ['KYC Verified', 'Assigned Division Manager'],
       minusPoints: [],
-      pincodes: DEMO_HIERARCHY[0].districts?.[0].divisions?.[0].pincodes
+      pincodes: []
     };
   }, [assignedDistrictNode, allStates, userDivision, userDistrict, userState, user]);
 
