@@ -117,10 +117,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const savedStr = localStorage.getItem('connect_portal_agent_saved_profile');
       if (savedStr) {
         const saved = JSON.parse(savedStr);
+        if (saved.name === 'Rajeshwari') {
+          saved.name = 'Muthuswamy';
+          localStorage.setItem('connect_portal_agent_saved_profile', JSON.stringify(saved));
+        }
         return { ...agentData, ...saved };
       }
     } catch (e) {
       console.error('Error parsing saved agent profile:', e);
+    }
+    if (agentData.name === 'Rajeshwari') {
+      agentData.name = 'Muthuswamy';
     }
     return agentData;
   };
@@ -260,21 +267,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const match = localPending.find((p: any) => p.email && p.email.toLowerCase() === cleanEmail);
       if (match) {
         const fallbackToken = `mock_token_${Date.now()}`;
+        const agentName = match.name === 'Rajeshwari' ? 'Muthuswamy' : (match.name || 'Muthuswamy');
+        const agentRole: UserRole = (match.role as UserRole) || (cleanEmail.includes('state') ? 'state' : 'district');
         const agent: AgentProfile = {
           _id: match.registrationId || `REG-${Date.now()}`,
           agentId: match.registrationId || `REG-${Date.now()}`,
           registrationId: match.registrationId || `REG-${Date.now()}`,
-          name: match.name || 'Agent Partner',
+          name: agentName,
           email: match.email,
           phone: match.phone || '+91 98765 43210',
-          role: (match.role as UserRole) || 'state',
-          territory: { state: 'Karnataka', district: 'Bengaluru Urban', division: 'Bengaluru South', pincode: '560083' },
+          mobile: match.phone || '+91 98765 43210',
+          role: agentRole,
+          territory: match.territory || { state: 'Tamil Nadu', district: 'Krishnagiri District', division: 'Hosur Division', pincode: '635109' },
           kycDocs: {},
           registrationFeePaid: true,
           performanceScore: 100,
           status: 'active',
           kycStatus: 'approved',
-          createdAt: new Date().toISOString(),
+          createdAt: match.createdAt || new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
         localStorage.setItem('agent_token', fallbackToken);
@@ -289,8 +299,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Fallback for demo or user credentials when offline
     if (cleanEmail && password) {
       const fallbackToken = `mock_token_${Date.now()}`;
-      const userName = cleanEmail.includes('@') ? cleanEmail.split('@')[0] : cleanEmail;
-      const formattedName = userName.charAt(0).toUpperCase() + userName.slice(1);
+      const isDistrictEmail = cleanEmail.includes('district') || cleanEmail.includes('muthuswamy') || cleanEmail.includes('rajeshwari');
+      const isDivisionEmail = cleanEmail.includes('division');
+      const isPincodeEmail = cleanEmail.includes('pincode');
+      const isStateEmail = cleanEmail.includes('state') && !isDistrictEmail;
+
+      const detectedRole: UserRole = isStateEmail ? 'state' : isDivisionEmail ? 'division' : isPincodeEmail ? 'pincode' : 'district';
+
+      let formattedName = 'Muthuswamy';
+      if (cleanEmail.includes('@') && !isDistrictEmail) {
+        const userName = cleanEmail.split('@')[0];
+        formattedName = userName.charAt(0).toUpperCase() + userName.slice(1);
+      }
+      if (formattedName === 'Rajeshwari') formattedName = 'Muthuswamy';
+
       const agent: AgentProfile = {
         _id: `REG-${Date.now().toString().slice(-6)}`,
         agentId: `REG-${Date.now().toString().slice(-6)}`,
@@ -298,8 +320,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         name: formattedName,
         email: cleanEmail,
         phone: '+91 98765 43210',
-        role: 'state',
-        territory: { state: 'Karnataka', district: 'Bengaluru Urban', division: 'Bengaluru South', pincode: '560083' },
+        mobile: '+91 98765 43210',
+        role: detectedRole,
+        territory: { state: 'Tamil Nadu', district: 'Krishnagiri District', division: 'Hosur Division', pincode: '635109' },
         kycDocs: {},
         registrationFeePaid: true,
         performanceScore: 100,

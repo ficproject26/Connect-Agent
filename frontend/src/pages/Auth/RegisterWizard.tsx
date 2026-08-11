@@ -114,15 +114,15 @@ const ROLE_SAMPLES = {
     pincode: '570001'
   },
   district: {
-    name: 'Arun Prakash',
+    name: 'Muthuswamy',
     phone: '9012345678',
-    email: 'arun.prakash@example.com',
+    email: 'muthuswamy@example.com',
     aadhar: '3456 7890 1234',
     pan: 'LMNOP6789K',
-    state: 'Karnataka',
-    division: 'Bengaluru Division',
-    district: 'Tumakuru',
-    pincode: '572101'
+    state: 'Tamil Nadu',
+    division: 'Hosur Division',
+    district: 'Krishnagiri District',
+    pincode: '635109'
   },
   pincode: {
     name: 'Karthik R',

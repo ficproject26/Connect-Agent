@@ -83,7 +83,7 @@ export const DevRoleSwitcher: React.FC = () => {
               }`}
             >
               <Map className="w-3.5 h-3.5 text-amber-400" />
-              <span>TN District Lead (Karthik)</span>
+              <span>TN District Lead (Muthuswamy)</span>
             </button>
           </div>
 
@@ -111,7 +111,7 @@ export const DevRoleSwitcher: React.FC = () => {
               }`}
             >
               <Map className="w-3.5 h-3.5 text-blue-400" />
-              <span>KA District Lead (Amit)</span>
+              <span>KA District Lead (Muthuswamy)</span>
             </button>
 
             <button
