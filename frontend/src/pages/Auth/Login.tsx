@@ -161,7 +161,7 @@ export const Login: React.FC = () => {
               <h2 className="text-2xl font-black text-[#1b1c1c] tracking-tight">Welcome back</h2>
               <p className="text-xs text-[#52443a] font-medium">
                 Don't have an agent account?{' '}
-                <Link to="/register" className="text-[#864f19] font-bold hover:underline">
+                <Link to="/register?new=true" className="text-[#864f19] font-bold hover:underline">
                   Apply now
                 </Link>
               </p>
@@ -316,7 +316,7 @@ export const Login: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => navigate('/register')}
+              onClick={() => navigate('/register?new=true')}
               className="w-full py-3 mt-1 bg-slate-100 hover:bg-slate-200 text-[#52443a] rounded-xl text-xs font-bold uppercase tracking-wider transition-all border-none cursor-pointer"
             >
               Apply for Agent Onboarding

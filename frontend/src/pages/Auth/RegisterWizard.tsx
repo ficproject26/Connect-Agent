@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
 import { SignaturePad } from '../../components/ui/SignaturePad';
-import { ArrowLeft, ArrowRight, Save, Shield, FileText, CheckCircle, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Save, Shield, FileText, CheckCircle, Eye, EyeOff, RotateCcw, Trash2 } from 'lucide-react';
 import { AgentNetworkHero } from '../../components/auth/AgentNetworkHero';
 import connectPortalLogo from '../../assets/connect_portal_logo.png';
 
@@ -141,6 +141,16 @@ const REGISTRATION_DRAFT_KEY = 'agent_registration_draft';
 
 const getInitialDraft = () => {
   try {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('new') === 'true' || urlParams.get('fresh') === 'true') {
+        sessionStorage.removeItem(REGISTRATION_DRAFT_KEY);
+        sessionStorage.removeItem('agent_registration_draft');
+        localStorage.removeItem(REGISTRATION_DRAFT_KEY);
+        localStorage.removeItem('agent_registration_draft');
+        return null;
+      }
+    }
     const saved = sessionStorage.getItem(REGISTRATION_DRAFT_KEY);
     if (saved) return JSON.parse(saved);
   } catch (e) {
@@ -151,6 +161,7 @@ const getInitialDraft = () => {
 
 export const RegisterWizard: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { register } = useAuth();
 
   const initialDraft = useMemo(() => getInitialDraft(), []);
@@ -238,6 +249,32 @@ export const RegisterWizard: React.FC = () => {
     understandApproval: false
   });
 
+  // Clear all previous draft data completely
+  const clearDraft = () => {
+    try {
+      sessionStorage.removeItem(REGISTRATION_DRAFT_KEY);
+      sessionStorage.removeItem('agent_registration_draft');
+      localStorage.removeItem(REGISTRATION_DRAFT_KEY);
+      localStorage.removeItem('agent_registration_draft');
+    } catch (e) { }
+    setCurrentStep(1);
+    setRole('state');
+    setPersonalInfo({ name: '', phone: '', altPhone: '', email: '', password: '', confirmPassword: '', dob: '', gender: 'male', aadhaarNumber: '', panNumber: '' });
+    setAddress({ state: '', division: '', district: '', pincode: '', postOffice: '', fullAddress: '' });
+    setProfessionalInfo({ qualification: '', experience: 'fresher', previousCompany: '' });
+    setDocuments({
+      aadhaarCard: { fileName: '', dataUrl: '', size: 0 },
+      panCard: { fileName: '', dataUrl: '', size: 0 },
+      passportPhoto: { fileName: '', dataUrl: '', size: 0 },
+      signature: { fileName: '', dataUrl: '', size: 0 },
+      educationalCertificate: { fileName: '', dataUrl: '', size: 0 },
+      bankProof: { fileName: '', dataUrl: '', size: 0 }
+    });
+    setDeclaration({ infoCorrect: false, acceptTerms: false, understandApproval: false });
+    setFormErrors('');
+    setSuccessData(null);
+  };
+
   // Save form draft to sessionStorage automatically on state changes
   useEffect(() => {
     try {
@@ -258,26 +295,15 @@ export const RegisterWizard: React.FC = () => {
     }
   }, [currentStep, role, personalInfo, address, professionalInfo, documents, declaration]);
 
-  const clearDraft = () => {
-    try {
-      sessionStorage.removeItem(REGISTRATION_DRAFT_KEY);
-    } catch (e) { }
-    setCurrentStep(1);
-    setRole('state');
-    setPersonalInfo({ name: '', phone: '', altPhone: '', email: '', password: '', confirmPassword: '', dob: '', gender: 'male', aadhaarNumber: '', panNumber: '' });
-    setAddress({ state: '', division: '', district: '', pincode: '', postOffice: '', fullAddress: '' });
-    setProfessionalInfo({ qualification: '', experience: 'fresher', previousCompany: '' });
-    setDocuments({
-      aadhaarCard: { fileName: '', dataUrl: '', size: 0 },
-      panCard: { fileName: '', dataUrl: '', size: 0 },
-      passportPhoto: { fileName: '', dataUrl: '', size: 0 },
-      signature: { fileName: '', dataUrl: '', size: 0 },
-      educationalCertificate: { fileName: '', dataUrl: '', size: 0 },
-      bankProof: { fileName: '', dataUrl: '', size: 0 }
-    });
-    setDeclaration({ infoCorrect: false, acceptTerms: false, understandApproval: false });
-    setFormErrors('');
-  };
+  // Check URL query parameters or location state for fresh start
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('new') === 'true' || urlParams.get('fresh') === 'true' || location.state?.fresh) {
+        clearDraft();
+      }
+    }
+  }, [location]);
 
   // Success screen state
   const [successData, setSuccessData] = useState<{
@@ -608,10 +634,11 @@ export const RegisterWizard: React.FC = () => {
                 <button
                   type="button"
                   onClick={clearDraft}
-                  className="text-[11px] font-bold text-slate-400 hover:text-red-500 transition-colors bg-slate-100 hover:bg-red-50 px-2.5 py-1 rounded-lg border border-slate-200 hover:border-red-200"
-                  title="Clear saved draft and start fresh"
+                  className="flex items-center gap-1.5 text-xs font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-xl border border-red-200 shadow-2xs transition-colors cursor-pointer"
+                  title="Clear all fields, uploaded files, signature and start a blank registration"
                 >
-                  Clear Draft
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Start Blank Form</span>
                 </button>
                 <span className="text-xs font-black text-[#864f19] uppercase tracking-wider">
                   Agent Onboarding Portal
