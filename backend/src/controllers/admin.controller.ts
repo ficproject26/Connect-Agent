@@ -179,29 +179,35 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
     };
 
     const enrichedDistricts = districtAgents.map(dist => {
-      const distTerritory = dist.territory?.district || (dist as any).district || 'District Territory';
+      const distTerritory = dist.territory?.district || (dist as any).district;
+      const distState = dist.territory?.state || (dist as any).state;
       const enrichedDist = enrichAgentData(dist);
 
-      // Find child division agents under this district
+      // Find child division agents strictly under this district
       const matchingDivisions = divisionAgents
         .filter(div => {
           const divDist = div.territory?.district || (div as any).district;
-          return !divDist || divDist === distTerritory || districtAgents.length === 1;
+          const divState = div.territory?.state || (div as any).state;
+          if (distState && divState && distState !== divState) return false;
+          return Boolean(divDist && distTerritory && divDist.toLowerCase() === distTerritory.toLowerCase());
         })
         .map(div => {
-          const divTerritory = div.territory?.division || (div as any).division || 'Division Territory';
+          const divTerritory = div.territory?.division || (div as any).division;
+          const divDist = div.territory?.district || (div as any).district;
           const enrichedDiv = enrichAgentData(div);
 
-          // Find child pincode agents under this division (strictly 1 agent per pincode)
+          // Find child pincode agents strictly under this division
           const seenPincodes = new Set<string>();
           const matchingPincodes = pincodeAgents
             .filter(pin => {
               const pinDiv = pin.territory?.division || (pin as any).division;
+              const pinDist = pin.territory?.district || (pin as any).district;
               const pinCode = pin.territory?.pincode || (pin as any).pincode;
               if (pinCode && seenPincodes.has(pinCode)) {
-                return false; // Exclude duplicate agent on same pincode
+                return false;
               }
-              const isMatch = !pinDiv || pinDiv === divTerritory || divisionAgents.length === 1;
+              if (divDist && pinDist && divDist.toLowerCase() !== pinDist.toLowerCase()) return false;
+              const isMatch = Boolean(pinDiv && divTerritory && pinDiv.toLowerCase() === divTerritory.toLowerCase());
               if (isMatch && pinCode) {
                 seenPincodes.add(pinCode);
               }
@@ -242,12 +248,15 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
 
     // Build division list for division-level scoping
     const enrichedDivisions = divisionAgents.map(div => {
-      const divTerritory = div.territory?.division || (div as any).division || 'Division Territory';
+      const divTerritory = div.territory?.division || (div as any).division;
+      const divDist = div.territory?.district || (div as any).district;
       const enrichedDiv = enrichAgentData(div);
       const matchingPincodes = pincodeAgents
         .filter(pin => {
           const pinDiv = pin.territory?.division || (pin as any).division;
-          return !pinDiv || pinDiv === divTerritory || divisionAgents.length === 1;
+          const pinDist = pin.territory?.district || (pin as any).district;
+          if (divDist && pinDist && divDist.toLowerCase() !== pinDist.toLowerCase()) return false;
+          return Boolean(pinDiv && divTerritory && pinDiv.toLowerCase() === divTerritory.toLowerCase());
         })
         .map(pin => enrichAgentData(pin));
 
@@ -261,15 +270,15 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
 
     const enrichedPincodes = pincodeAgents.map(pin => enrichAgentData(pin));
 
-    // If state agents exist, nest under state, else return districts directly
+    // Nest districts strictly under their matching state
     let tree: any[] = [];
     if (stateAgents.length > 0) {
       tree = stateAgents.map(state => {
-        const stateTerritory = state.territory?.state || (state as any).state || 'State Territory';
+        const stateTerritory = state.territory?.state || (state as any).state;
         const enrichedState = enrichAgentData(state);
         const stateDistricts = enrichedDistricts.filter(d => {
-          const dState = d.territory?.state;
-          return !dState || dState === stateTerritory;
+          const dState = d.territory?.state || (d as any).state;
+          return Boolean(dState && stateTerritory && dState.toLowerCase() === stateTerritory.toLowerCase());
         });
 
         return {

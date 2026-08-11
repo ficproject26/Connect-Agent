@@ -325,17 +325,16 @@ export const StateDashboard: React.FC = () => {
                   <span>Top Performing Areas</span>
                   <span>Performance Rating</span>
                 </div>
-                {[
-                  { name: 'Hosur Division (Top)', rating: 'Score 98.2' },
-                  { name: 'Krishnagiri Central Sector (Top)', rating: 'Score 94.6' },
-                  { name: 'Bargur East Sector', rating: 'Score 72.4' },
-                  { name: 'Uthangarai South Sector', rating: 'Score 68.0' },
-                ].map((item, i) => (
-                  <div key={i} className="py-3 flex justify-between text-xs font-semibold">
-                    <span className="text-[#1b1c1c]">{item.name}</span>
-                    <span className="text-[#864f19] font-bold">{item.rating}</span>
-                  </div>
-                ))}
+                {divisionsList.length === 0 ? (
+                  <p className="py-6 text-center text-xs text-slate-400 font-semibold">No active rankings recorded under this state yet.</p>
+                ) : (
+                  divisionsList.map((item, i) => (
+                    <div key={i} className="py-3 flex justify-between text-xs font-semibold">
+                      <span className="text-[#1b1c1c]">{item.name}</span>
+                      <span className="text-[#864f19] font-bold">{item.score}</span>
+                    </div>
+                  ))
+                )}
               </>
             )}
           </div>
@@ -416,23 +415,9 @@ export const StateDashboard: React.FC = () => {
           </div>
           
           <div className="space-y-3">
-            {[
-              { type: 'Escalated Ticket', msg: 'Ticket ID #TK-9812: Document verification dispute for Apex Logistics.', time: '12m ago', alert: true },
-              { type: 'Pending Report', msg: 'Madurai Central Sector has not submitted the weekly targets log.', time: '1h ago', alert: false },
-              { type: 'New Registration', msg: 'New vendor registry request for "Downtown Bakery Store" pending approval.', time: '3h ago', alert: false },
-              { type: 'Announcement', msg: 'System wide maintenance scheduled for digital verification desks at 12:00 AM.', time: 'Yesterday', alert: false },
-            ].map((notif, idx) => (
-              <div key={idx} className="flex items-start gap-3 p-3 bg-[#fbf9f8] rounded-xl border border-[#eae8e7]/50">
-                <div className={`h-2 w-2 rounded-full mt-1 shrink-0 ${notif.alert ? 'bg-[#ba1a1a]' : 'bg-[#864f19]'}`} />
-                <div className="flex-grow space-y-0.5">
-                  <div className="flex justify-between items-center text-[10px] font-bold">
-                    <span className={notif.alert ? 'text-[#ba1a1a]' : 'text-[#864f19]'}>{notif.type}</span>
-                    <span className="text-[#52443a] font-medium">{notif.time}</span>
-                  </div>
-                  <p className="text-xs text-[#52443a] leading-normal">{notif.msg}</p>
-                </div>
-              </div>
-            ))}
+            <div className="p-4 text-center text-xs text-[#52443a] italic bg-[#fbf9f8] rounded-xl border border-dashed border-[#eae8e7]">
+              All escalated state alerts & notifications cleared.
+            </div>
           </div>
         </div>
       </div>

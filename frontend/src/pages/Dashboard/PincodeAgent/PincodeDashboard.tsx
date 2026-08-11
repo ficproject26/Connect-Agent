@@ -32,11 +32,7 @@ export const PincodeDashboard: React.FC = () => {
   const [isTyping, setIsTyping] = useState(false);
 
   // Field Alerts State (Stack behavior: newest items stack on top)
-  const [fieldAlerts, setFieldAlerts] = useState<any[]>([
-    { id: '3', type: 'New Targets Allocated', msg: 'A new target of 8 merchant visits has been assigned for today.', time: '10m ago', alert: false },
-    { id: '2', type: 'Meeting Reminder', msg: 'District supervisor sync scheduled for today at 5:00 PM.', time: '1h ago', alert: false },
-    { id: '1', type: 'Support Ticket Update', msg: 'Ticket ID #TK-9742 for merchant account setup has been resolved.', time: '4h ago', alert: false }
-  ]);
+  const [fieldAlerts, setFieldAlerts] = useState<any[]>([]);
 
   const dismissAlert = (id: string) => {
     setFieldAlerts(prev => prev.filter(item => item.id !== id));

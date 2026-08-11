@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { targetService } from '../../../api';
 import { Modal, Button } from '../../../components/ui';
@@ -24,21 +24,43 @@ interface PincodeSubordinate {
   checkIn: string;
 }
 
-const DIVISION_PINCODE_AGENTS: PincodeSubordinate[] = [
-  { id: 'pin_1', name: 'Muthukumar', pincode: '635109', territory: 'Hosur 635109 Area', phone: '9876508899', email: 'muthukumar@pincode.com', assignedTargets: 15, completedTargets: 14, earnings: 11200, totalOnboardedShops: 24, status: 'present', checkIn: '08:45 AM' },
-  { id: 'pin_2', name: 'Selvam', pincode: '635001', territory: 'Krishnagiri 635001 Area', phone: '9876506677', email: 'selvam@pincode.com', assignedTargets: 15, completedTargets: 12, earnings: 9800, totalOnboardedShops: 18, status: 'present', checkIn: '09:00 AM' },
-  { id: 'pin_3', name: 'Karthik Raja', pincode: '635104', territory: 'Bargur 635104 Area', phone: '9876505566', email: 'karthik.raja@pincode.com', assignedTargets: 15, completedTargets: 10, earnings: 7400, totalOnboardedShops: 12, status: 'late', checkIn: '09:40 AM' },
-  { id: 'pin_4', name: 'Srinivasan M', pincode: '635107', territory: 'Denkanikottai 635107 Area', phone: '9876507788', email: 'srinivasan.m@pincode.com', assignedTargets: 15, completedTargets: 8, earnings: 6200, totalOnboardedShops: 10, status: 'on_leave', checkIn: '---' }
-];
-
 export const DivisionDashboard: React.FC = () => {
   const { user } = useAuth();
+  const [pincodeAgentsList, setPincodeAgentsList] = useState<PincodeSubordinate[]>([]);
   const [targetTitle, setTargetTitle] = useState('');
-  const [selectedPincode, setSelectedPincode] = useState('Hosur (635109)');
+  const [selectedPincode, setSelectedPincode] = useState('Sector Pincode');
   const [districtTargetAssigned, setDistrictTargetAssigned] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<'pincodes' | 'vendors' | 'agents'>('agents');
   const [selectedAgent, setSelectedAgent] = useState<PincodeSubordinate | null>(null);
+
+  useEffect(() => {
+    const fetchSubordinates = async () => {
+      try {
+        const res = await targetService.getSubordinates();
+        if (res.data?.subordinates && res.data.subordinates.length > 0) {
+          const mapped: PincodeSubordinate[] = res.data.subordinates.map((s: any) => ({
+            id: s._id,
+            name: s.name,
+            pincode: s.territory?.pincode || s.pincode || 'N/A',
+            territory: typeof s.territory === 'object' ? s.territory?.division || s.territory?.state || 'Assigned Sector' : (s.territory || 'Division Sector'),
+            phone: s.phone || 'N/A',
+            email: s.email || 'N/A',
+            assignedTargets: s.assignedTargets || 0,
+            completedTargets: s.completedTargets || 0,
+            earnings: s.earnings || 0,
+            totalOnboardedShops: s.totalOnboardedShops || 0,
+            status: s.status === 'inactive' ? 'on_leave' : 'present',
+            checkIn: s.checkIn || '09:00 AM'
+          }));
+          setPincodeAgentsList(mapped);
+        }
+      } catch (err) {
+        console.warn('Subordinates fetch error:', err);
+      }
+    };
+    fetchSubordinates();
+  }, []);
 
   const handleAssign = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -261,12 +283,16 @@ export const DivisionDashboard: React.FC = () => {
                   <span>Pincode Area</span>
                   <span>Active Onboarders</span>
                 </div>
-                {['Hosur (635109)', 'Krishnagiri (635001)', 'Bargur (635104)', 'Denkanikottai (635107)'].map((pin, i) => (
-                  <div key={i} className="py-3 flex justify-between text-xs font-semibold">
-                    <span className="text-[#1b1c1c]">{pin}</span>
-                    <span className="text-[#34647b]">12 Field Onboarders active</span>
-                  </div>
-                ))}
+                {pincodeAgentsList.length === 0 ? (
+                  <p className="py-6 text-center text-xs text-slate-400 font-semibold">No active pincode agents registered under this division yet.</p>
+                ) : (
+                  pincodeAgentsList.map((agent, i) => (
+                    <div key={i} className="py-3 flex justify-between text-xs font-semibold">
+                      <span className="text-[#1b1c1c]">{agent.territory} ({agent.pincode})</span>
+                      <span className="text-[#34647b]">1 Onboarder active</span>
+                    </div>
+                  ))
+                )}
               </>
             )}
 
@@ -276,12 +302,7 @@ export const DivisionDashboard: React.FC = () => {
                   <span>Merchant Shop</span>
                   <span>Status</span>
                 </div>
-                {['Krishnagiri Supermarket', 'Hosur Fresh Produce', 'Bargur Traders', 'Denkanikottai Organics'].map((name, i) => (
-                  <div key={i} className="py-3 flex justify-between text-xs font-semibold">
-                    <span className="text-[#1b1c1c]">{name}</span>
-                    <span className="text-emerald-700 font-extrabold">Active & Synced</span>
-                  </div>
-                ))}
+                <p className="py-6 text-center text-xs text-slate-400 font-semibold">No merchant onboarding logs found for this division.</p>
               </>
             )}
 
@@ -292,29 +313,33 @@ export const DivisionDashboard: React.FC = () => {
                   <span>Target Progress</span>
                   <span>Inspect Action</span>
                 </div>
-                {DIVISION_PINCODE_AGENTS.map((agent) => (
-                  <div key={agent.id} className="py-3 flex justify-between items-center text-xs font-semibold">
-                    <div>
-                      <span className="font-bold text-[#1b1c1c] block">{agent.name}</span>
-                      <span className="text-[10px] text-[#864f19] uppercase font-black">PIN: {agent.pincode}</span>
+                {pincodeAgentsList.length === 0 ? (
+                  <p className="py-6 text-center text-xs text-slate-400 font-semibold">No pincode agents assigned to this division yet.</p>
+                ) : (
+                  pincodeAgentsList.map((agent) => (
+                    <div key={agent.id} className="py-3 flex justify-between items-center text-xs font-semibold">
+                      <div>
+                        <span className="font-bold text-[#1b1c1c] block">{agent.name}</span>
+                        <span className="text-[10px] text-[#864f19] uppercase font-black">PIN: {agent.pincode}</span>
+                      </div>
+                      <div>
+                        <span className="text-[#52443a] block">{agent.completedTargets} / {agent.assignedTargets} Targets</span>
+                        <span className={`inline-block text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded ${
+                          agent.status === 'present' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-[#864f19]'
+                        }`}>
+                          {agent.status}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedAgent(agent)}
+                        className="py-1 px-3 bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 text-[#864f19] text-[10px] font-extrabold uppercase tracking-wider rounded-lg transition cursor-pointer flex items-center gap-1"
+                      >
+                        <Eye className="w-3.5 h-3.5" /> Inspect
+                      </button>
                     </div>
-                    <div>
-                      <span className="text-[#52443a] block">{agent.completedTargets} / {agent.assignedTargets} Targets</span>
-                      <span className={`inline-block text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded ${
-                        agent.status === 'present' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
-                      }`}>
-                        {agent.status}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedAgent(agent)}
-                      className="py-1 px-3 bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 text-[#864f19] text-[10px] font-extrabold uppercase tracking-wider rounded-lg transition cursor-pointer flex items-center gap-1"
-                    >
-                      <Eye className="w-3.5 h-3.5" /> Inspect
-                    </button>
-                  </div>
-                ))}
+                  ))
+                )}
               </>
             )}
           </div>
