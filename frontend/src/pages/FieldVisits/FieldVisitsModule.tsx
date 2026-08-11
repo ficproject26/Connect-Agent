@@ -681,7 +681,7 @@ export const FieldVisitsModule: React.FC = () => {
                 <Calendar className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
                 <div>
                   <span className="text-[10px] text-slate-400 font-bold uppercase block">VISIT DATE & TIME</span>
-                  <span className="font-bold text-slate-800">{selectedVisitDetails.visitDate}, {selectedVisitDetails.visitTime || '11:45 AM'}</span>
+                  <span className="font-bold text-slate-800">{selectedVisitDetails.visitDate}{selectedVisitDetails.visitTime ? `, ${selectedVisitDetails.visitTime}` : ''}</span>
                 </div>
               </div>
 
@@ -689,7 +689,7 @@ export const FieldVisitsModule: React.FC = () => {
                 <ShieldCheck className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
                 <div>
                   <span className="text-[10px] text-slate-400 font-bold uppercase block">VISIT PURPOSE</span>
-                  <span className="font-bold text-slate-800">{selectedVisitDetails.visitPurpose || 'KYC Audit & QR Code Onboarding'}</span>
+                  <span className="font-bold text-slate-800">{selectedVisitDetails.visitPurpose || '—'}</span>
                 </div>
               </div>
 
@@ -714,17 +714,26 @@ export const FieldVisitsModule: React.FC = () => {
             <div className="space-y-1.5 pt-2 border-t border-slate-100">
               <span className="text-[10px] text-slate-400 font-bold uppercase block">STORE PHOTO</span>
               <div className="relative rounded-xl overflow-hidden border border-slate-200 h-32 group bg-slate-100">
-                <img
-                  src={selectedVisitDetails.photoBeforeVisit || 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?auto=format&fit=crop&w=400&q=80'}
-                  alt="Store Audit"
-                  className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                />
-                <button
-                  onClick={() => window.open(selectedVisitDetails.photoBeforeVisit || 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?auto=format&fit=crop&w=400&q=80', '_blank')}
-                  className="absolute bottom-2 right-2 px-2.5 py-1 bg-black/70 hover:bg-black text-white text-[10px] font-bold rounded-lg backdrop-blur-sm cursor-pointer border-none flex items-center gap-1"
-                >
-                  <Eye className="w-3 h-3" /> View Photo
-                </button>
+                {selectedVisitDetails.photoBeforeVisit ? (
+                  <>
+                    <img
+                      src={selectedVisitDetails.photoBeforeVisit}
+                      alt="Store Audit"
+                      className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                    />
+                    <button
+                      onClick={() => window.open(selectedVisitDetails.photoBeforeVisit!, '_blank')}
+                      className="absolute bottom-2 right-2 px-2.5 py-1 bg-black/70 hover:bg-black text-white text-[10px] font-bold rounded-lg backdrop-blur-sm cursor-pointer border-none flex items-center gap-1"
+                    >
+                      <Eye className="w-3 h-3" /> View Photo
+                    </button>
+                  </>
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-slate-400">
+                    <Camera className="w-8 h-8 opacity-40" />
+                    <span className="text-[10px]">No photo available</span>
+                  </div>
+                )}
               </div>
             </div>
 
