@@ -65,6 +65,13 @@ export const VendorsList: React.FC = () => {
     }
   });
 
+  // Active Role and Territory Scope
+  const activeRole = (user?.role as string) || 'state';
+  const userState = user?.territory?.state || 'Tamil Nadu';
+  const userDistrict = user?.territory?.district || 'Krishnagiri District';
+  const userDivision = user?.territory?.division || 'Hosur Division';
+  const userPincode = user?.territory?.pincode || '635109';
+
   // Sync API backend vendors into state
   useEffect(() => {
     if (apiVendorsData && apiVendorsData.length > 0) {
@@ -95,14 +102,7 @@ export const VendorsList: React.FC = () => {
         return [...newFromApi, ...prev];
       });
     }
-  }, [apiVendorsData, userState, userDistrict, userDivision, userPincode]);
-
-  // Active Role and Territory Scope
-  const activeRole = (user?.role as string) || 'state';
-  const userState = user?.territory?.state || 'Tamil Nadu';
-  const userDistrict = user?.territory?.district || 'Krishnagiri District';
-  const userDivision = user?.territory?.division || 'Hosur Division';
-  const userPincode = user?.territory?.pincode || '635109';
+  }, [apiVendorsData, userState, userDistrict, userDivision, userPincode, user?.name]);
 
   // Search and Filters
   const [searchTerm, setSearchTerm] = useState('');
