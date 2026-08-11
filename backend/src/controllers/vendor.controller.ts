@@ -3,27 +3,39 @@ import { z } from 'zod';
 import Vendor from '../models/Vendor';
 
 const createVendorSchema = z.object({
-  businessName: z.string().min(2, 'Business name required'),
-  ownerName: z.string().min(2, 'Owner name required'),
+  businessName: z.string().min(1, 'Business name required'),
+  ownerName: z.string().optional(),
   phone: z.string().min(10, 'Valid phone required'),
-  category: z.string().min(1, 'Category ID required'),
+  email: z.string().optional(),
+  category: z.string().optional(),
   gst: z.string().optional(),
+  state: z.string().optional(),
+  district: z.string().optional(),
+  division: z.string().optional(),
+  pincode: z.string().optional(),
+  kycStatus: z.string().optional(),
   location: z.object({
-    address: z.string().min(1),
-    latitude: z.number(),
-    longitude: z.number()
-  })
+    address: z.string().optional(),
+    latitude: z.number().optional(),
+    longitude: z.number().optional()
+  }).optional()
 });
 
 const updateVendorSchema = z.object({
   businessName: z.string().optional(),
   ownerName: z.string().optional(),
   phone: z.string().optional(),
+  email: z.string().optional(),
   gst: z.string().optional(),
+  state: z.string().optional(),
+  district: z.string().optional(),
+  division: z.string().optional(),
+  pincode: z.string().optional(),
+  kycStatus: z.string().optional(),
   location: z.object({
-    address: z.string(),
-    latitude: z.number(),
-    longitude: z.number()
+    address: z.string().optional(),
+    latitude: z.number().optional(),
+    longitude: z.number().optional()
   }).optional()
 });
 
@@ -33,7 +45,7 @@ export const getVendors = async (req: Request, res: Response) => {
     const agentId = (req as any).agent?.agentId;
     if (!agentId) return res.status(401).json({ message: 'Unauthorized' });
 
-    const { page = '1', limit = '20', status, category, search } = req.query;
+    const { page = '1', limit = '50', status, category, search } = req.query;
     const pageNum = parseInt(page as string, 10);
     const limitNum = parseInt(limit as string, 10);
 
@@ -50,7 +62,6 @@ export const getVendors = async (req: Request, res: Response) => {
 
     const total = await Vendor.countDocuments(filter);
     const vendors = await Vendor.find(filter)
-      .populate('category', 'name')
       .populate('assignedAgent', 'name email role')
       .sort({ createdAt: -1 })
       .skip((pageNum - 1) * limitNum)
@@ -73,7 +84,6 @@ export const getVendorById = async (req: Request, res: Response) => {
     if (!agentId) return res.status(401).json({ message: 'Unauthorized' });
 
     const vendor = await Vendor.findById(req.params.id)
-      .populate('category', 'name description')
       .populate('assignedAgent', 'name email role phone')
       .populate('documents');
 
@@ -93,17 +103,20 @@ export const createVendor = async (req: Request, res: Response) => {
 
     const data = createVendorSchema.parse(req.body);
 
-    const existing = await Vendor.findOne({ businessName: data.businessName });
-    if (existing) return res.status(400).json({ message: 'Vendor with this business name already exists' });
-
     const vendor = new Vendor({
       ...data,
+      ownerName: data.ownerName || 'Merchant Owner',
+      location: {
+        address: data.location?.address || `${data.district || ''}, ${data.state || ''} ${data.pincode || ''}`,
+        latitude: data.location?.latitude || 0,
+        longitude: data.location?.longitude || 0
+      },
       assignedAgent: agentId,
-      status: 'pending'
+      status: 'pending',
+      kycStatus: 'pending'
     });
 
     await vendor.save();
-    await vendor.populate('category', 'name');
     return res.status(201).json({ message: 'Vendor created successfully', vendor });
   } catch (error: any) {
     if (error instanceof z.ZodError) {

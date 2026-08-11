@@ -4,30 +4,42 @@ export interface IVendor extends Document {
   businessName: string;
   ownerName: string;
   phone: string;
-  category: Types.ObjectId; // References VendorCategory
+  email?: string;
+  category: Types.ObjectId | string;
   gst?: string;
+  state?: string;
+  district?: string;
+  division?: string;
+  pincode?: string;
+  kycStatus?: 'pending' | 'approved' | 'rejected';
   location: {
     address: string;
     latitude: number;
     longitude: number;
   };
   status: 'pending' | 'verified' | 'active' | 'inactive';
-  documents: Types.ObjectId[]; // References Document
-  assignedAgent?: Types.ObjectId; // References Agent/User
+  documents: Types.ObjectId[];
+  assignedAgent?: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
 
 const vendorSchema = new Schema<IVendor>({
-  businessName: { type: String, required: true, unique: true },
+  businessName: { type: String, required: true },
   ownerName: { type: String, required: true },
   phone: { type: String, required: true },
-  category: { type: Schema.Types.ObjectId, ref: 'VendorCategory', required: true },
+  email: { type: String },
+  category: { type: Schema.Types.Mixed },
   gst: { type: String },
+  state: { type: String },
+  district: { type: String },
+  division: { type: String },
+  pincode: { type: String },
+  kycStatus: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
   location: {
     address: { type: String, required: true },
-    latitude: { type: Number, required: true },
-    longitude: { type: Number, required: true }
+    latitude: { type: Number, default: 0 },
+    longitude: { type: Number, default: 0 }
   },
   status: { type: String, enum: ['pending', 'verified', 'active', 'inactive'], default: 'pending' },
   documents: [{ type: Schema.Types.ObjectId, ref: 'Document' }],

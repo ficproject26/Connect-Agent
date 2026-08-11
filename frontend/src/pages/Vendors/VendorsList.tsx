@@ -472,7 +472,7 @@ export const VendorsList: React.FC = () => {
       ownerName: newVendor.ownerName || 'Merchant Owner',
       phone: newVendor.phone,
       email: newVendor.email || `${newVendor.name.toLowerCase().replace(/\s+/g, '')}@example.com`,
-      state: newVendor.state || userState,
+      state: userState || newVendor.state || 'Tamil Nadu',
       division: newVendor.division || userDivision,
       district: newVendor.district || userDistrict,
       pincode: newVendor.pincode || userPincode,
@@ -485,8 +485,8 @@ export const VendorsList: React.FC = () => {
       storeType: finalStoreType,
       businessGst: newVendor.businessGst || '',
       fullAddress: newVendor.fullAddress
-        ? `${newVendor.fullAddress}${newVendor.landmark ? ` (Landmark: ${newVendor.landmark})` : ''}, ${newVendor.district}, ${newVendor.state} ${newVendor.pincode}`
-        : `${newVendor.postOffice || 'Main Market'}, ${newVendor.district}, ${newVendor.state} ${newVendor.pincode}`
+        ? `${newVendor.fullAddress}${newVendor.landmark ? ` (Landmark: ${newVendor.landmark})` : ''}, ${newVendor.district || userDistrict}, ${userState} ${newVendor.pincode || userPincode}`
+        : `${newVendor.postOffice || 'Main Market'}, ${newVendor.district || userDistrict}, ${userState} ${newVendor.pincode || userPincode}`
     };
 
     setVendors(prev => {
@@ -494,6 +494,12 @@ export const VendorsList: React.FC = () => {
       try {
         const customOnly = updated.filter(v => v.id.startsWith('REG-'));
         localStorage.setItem(userVendorsKey, JSON.stringify(customOnly));
+
+        // Store in pending onboardings for Admin review & approval
+        const pendingList = JSON.parse(localStorage.getItem('connect_portal_pending_vendor_onboardings') || '[]');
+        const updatedPending = [createdVendor, ...pendingList.filter((p: any) => p.id !== createdVendor.id)];
+        localStorage.setItem('connect_portal_pending_vendor_onboardings', JSON.stringify(updatedPending));
+        localStorage.setItem('pending_merchant_onboardings', JSON.stringify(updatedPending));
       } catch (e) {
         console.error('Failed to save custom vendor to localStorage:', e);
       }
@@ -505,8 +511,15 @@ export const VendorsList: React.FC = () => {
       businessName: createdVendor.name,
       ownerName: createdVendor.ownerName,
       phone: createdVendor.phone,
+      email: createdVendor.email,
       category: createdVendor.storeType,
       gst: createdVendor.businessGst,
+      state: createdVendor.state,
+      district: createdVendor.district,
+      division: createdVendor.division,
+      pincode: createdVendor.pincode,
+      status: 'pending',
+      kycStatus: 'pending',
       location: {
         address: createdVendor.fullAddress,
         latitude: 12.9716,
@@ -1117,26 +1130,27 @@ export const VendorsList: React.FC = () => {
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         onSuccess={(wizardData) => {
-          // Use agent's territory as guaranteed fallback so vendor always passes scope filter
+          // Guarantee state territory matches logged in agent's state
+          const targetState = userState || wizardData.state || 'Tamil Nadu';
           const createdVendor: Vendor = {
             id: `REG-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
             name: wizardData.name,
-            ownerName: wizardData.ownerName || '',
+            ownerName: wizardData.ownerName || 'Merchant Owner',
             phone: wizardData.phone,
-            email: wizardData.email,
-            state: wizardData.state || userState,
+            email: wizardData.email || `${wizardData.name.toLowerCase().replace(/\s+/g, '')}@example.com`,
+            state: targetState,
             division: wizardData.division || userDivision,
             district: wizardData.district || userDistrict,
             pincode: wizardData.pincode || userPincode,
             role: 'Merchant Partner',
             kycStatus: 'pending',
             status: 'active',
-            assignedAgent: user?.name || 'Agent',
+            assignedAgent: user?.name ? `${user.name} (${activeRole.charAt(0).toUpperCase() + activeRole.slice(1)} Agent)` : 'Logged Agent',
             createdAt: TODAY_DATE,
             updatedAt: TODAY_DATE,
-            storeType: wizardData.storeType || '',
+            storeType: wizardData.storeType || 'General Retail & Services',
             businessGst: wizardData.businessGst || '',
-            fullAddress: wizardData.fullAddress || ''
+            fullAddress: wizardData.fullAddress || `${wizardData.district || userDistrict}, ${targetState} ${wizardData.pincode || userPincode}`
           };
 
           setVendors(prev => {
@@ -1144,15 +1158,44 @@ export const VendorsList: React.FC = () => {
             try {
               const customOnly = updated.filter(v => v.id.startsWith('REG-'));
               localStorage.setItem(userVendorsKey, JSON.stringify(customOnly));
+
+              // Store in pending onboardings for Admin review & approval
+              const pendingList = JSON.parse(localStorage.getItem('connect_portal_pending_vendor_onboardings') || '[]');
+              const updatedPending = [createdVendor, ...pendingList.filter((p: any) => p.id !== createdVendor.id)];
+              localStorage.setItem('connect_portal_pending_vendor_onboardings', JSON.stringify(updatedPending));
+              localStorage.setItem('pending_merchant_onboardings', JSON.stringify(updatedPending));
             } catch (e) {
-              console.error('Failed to save custom vendor to localStorage:', e);
+              console.error('Failed to save vendor to localStorage:', e);
             }
             return updated;
           });
 
+          // Post to backend API so Admin backend receives pending request
+          api.post('/vendors', {
+            businessName: createdVendor.name,
+            ownerName: createdVendor.ownerName,
+            phone: createdVendor.phone,
+            email: createdVendor.email,
+            category: createdVendor.storeType,
+            gst: createdVendor.businessGst,
+            state: createdVendor.state,
+            district: createdVendor.district,
+            division: createdVendor.division,
+            pincode: createdVendor.pincode,
+            status: 'pending',
+            kycStatus: 'pending',
+            location: {
+              address: createdVendor.fullAddress,
+              latitude: 12.9716,
+              longitude: 77.5946
+            }
+          }).catch(err => {
+            console.warn('Backend API /vendors POST sync warning:', err);
+          });
+
           addNotification(
-            'Merchant Onboarded Successfully!',
-            `${createdVendor.name} has been onboarded under PIN ${createdVendor.pincode}.`,
+            'Merchant Onboarded & Submitted to Admin!',
+            `${createdVendor.name} has been submitted for Admin review and added to your dashboard under PIN ${createdVendor.pincode}.`,
             'high',
             'system'
           );
