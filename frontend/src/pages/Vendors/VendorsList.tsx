@@ -70,21 +70,21 @@ export const VendorsList: React.FC = () => {
     if (apiVendorsData && apiVendorsData.length > 0) {
       const mappedApiVendors: Vendor[] = apiVendorsData.map((v: any) => ({
         id: v.registrationId || v._id || `REG-${Math.floor(1000 + Math.random() * 9000)}`,
-        name: v.businessName || v.name || 'Merchant Store',
-        ownerName: v.ownerName || 'Merchant Owner',
-        phone: v.phone || '+91 98765 43210',
-        email: v.email || 'vendor@example.com',
-        state: v.state || 'Karnataka',
-        division: v.division || 'Bengaluru South',
-        district: v.district || 'Bengaluru Urban',
-        pincode: v.pincode || '560083',
+        name: v.businessName || v.name || '',
+        ownerName: v.ownerName || '',
+        phone: v.phone || '',
+        email: v.email || '',
+        state: v.state || userState,
+        division: v.division || userDivision,
+        district: v.district || userDistrict,
+        pincode: v.pincode || userPincode,
         role: 'Merchant Partner',
         kycStatus: v.kycStatus || 'pending',
         status: v.status || 'active',
-        assignedAgent: v.assignedAgent?.name || 'Pincode Agent',
+        assignedAgent: v.assignedAgent?.name || user?.name || '',
         createdAt: TODAY_DATE,
         updatedAt: TODAY_DATE,
-        storeType: v.category?.name || v.storeType || 'General Store',
+        storeType: v.category?.name || v.storeType || '',
         businessGst: v.gst || v.businessGst || '',
         fullAddress: v.location?.address || ''
       }));
@@ -95,7 +95,7 @@ export const VendorsList: React.FC = () => {
         return [...newFromApi, ...prev];
       });
     }
-  }, [apiVendorsData]);
+  }, [apiVendorsData, userState, userDistrict, userDivision, userPincode]);
 
   // Active Role and Territory Scope
   const activeRole = (user?.role as string) || 'state';
@@ -122,16 +122,17 @@ export const VendorsList: React.FC = () => {
   // 1. SCOPED VENDORS LIST BASED ON LOGGED IN AGENT HIERARCHY (STRICT STATE ISOLATION)
   const scopedVendors = useMemo(() => {
     return vendors.filter(vendor => {
-      // 1. First enforce strict State Territory match
-      const vendorState = (vendor.state || 'Karnataka').toLowerCase();
-      const activeState = (userState || 'Karnataka').toLowerCase();
-      
+      // 1. First enforce strict State Territory match (use agent's own state as fallback)
+      const vendorState = (vendor.state || userState).toLowerCase();
+      const activeState = userState.toLowerCase();
+
       const isStateMatch = vendorState.includes(activeState) || activeState.includes(vendorState);
       if (!isStateMatch) return false;
 
       // 2. Role-based scoping within assigned State
       if (activeRole === 'pincode') {
-        return vendor.pincode === userPincode || (userState === 'Tamil Nadu' ? vendor.pincode === '635109' : vendor.pincode === '560001');
+        // Match on agent's actual pincode only — no hardcoded fallbacks
+        return vendor.pincode === userPincode;
       }
 
       if (activeRole === 'division') {
@@ -1094,10 +1095,11 @@ export const VendorsList: React.FC = () => {
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         onSuccess={(wizardData) => {
+          // Use agent's territory as guaranteed fallback so vendor always passes scope filter
           const createdVendor: Vendor = {
-            id: `REG-${Math.floor(1000 + Math.random() * 9000)}`,
+            id: `REG-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
             name: wizardData.name,
-            ownerName: wizardData.ownerName || 'Merchant Owner',
+            ownerName: wizardData.ownerName || '',
             phone: wizardData.phone,
             email: wizardData.email,
             state: wizardData.state || userState,
@@ -1107,12 +1109,12 @@ export const VendorsList: React.FC = () => {
             role: 'Merchant Partner',
             kycStatus: 'pending',
             status: 'active',
-            assignedAgent: `${user?.name || 'Logged Agent'} (${activeRole.charAt(0).toUpperCase() + activeRole.slice(1)} Agent)`,
+            assignedAgent: user?.name || 'Agent',
             createdAt: TODAY_DATE,
             updatedAt: TODAY_DATE,
-            storeType: wizardData.storeType,
+            storeType: wizardData.storeType || '',
             businessGst: wizardData.businessGst || '',
-            fullAddress: wizardData.fullAddress
+            fullAddress: wizardData.fullAddress || ''
           };
 
           setVendors(prev => {
@@ -1126,24 +1128,9 @@ export const VendorsList: React.FC = () => {
             return updated;
           });
 
-          // Sync live with Backend API
-          api.post('/vendors', {
-            businessName: createdVendor.name,
-            ownerName: createdVendor.ownerName,
-            phone: createdVendor.phone,
-            email: createdVendor.email,
-            storeType: createdVendor.storeType,
-            gst: createdVendor.businessGst,
-            pincode: createdVendor.pincode,
-            district: createdVendor.district,
-            division: createdVendor.division,
-            state: createdVendor.state,
-            fullAddress: createdVendor.fullAddress
-          }).catch(err => console.warn('Vendor API sync error:', err));
-
           addNotification(
             'Merchant Onboarded Successfully!',
-            `${createdVendor.name} onboarded with 5-Step verification details under PIN ${createdVendor.pincode}.`,
+            `${createdVendor.name} has been onboarded under PIN ${createdVendor.pincode}.`,
             'high',
             'system'
           );
