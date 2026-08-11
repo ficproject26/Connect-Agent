@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Card, CardHeader, CardTitle, CardBody, Button } from '../../components/ui';
+import { Card, CardHeader, CardTitle, CardBody, Button, Modal } from '../../components/ui';
 import { Target, CheckCircle2, Calendar, Check, MapPin, Loader2, Plus, Users, Award } from 'lucide-react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
@@ -270,9 +270,14 @@ export const TargetsList: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {currentTasks.length === 0 ? (
-            <div className="col-span-full bg-white p-12 text-center rounded-[16px] border border-[#eae8e7] space-y-2">
-              <Target className="w-8 h-8 text-slate-300 mx-auto" />
-              <p className="text-sm font-bold text-slate-500">No active tasks match this filter list.</p>
+            <div className="col-span-full bg-white/80 backdrop-blur-xs p-10 text-center rounded-[20px] border border-[#eae8e7] space-y-3 shadow-xs">
+              <div className="w-12 h-12 rounded-2xl bg-[#864f19]/10 text-[#864f19] flex items-center justify-center mx-auto">
+                <Target className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-sm font-black text-slate-800">No active tasks match this filter list.</p>
+                <p className="text-xs text-slate-500 font-medium mt-1">Assign new targets or switch tabs to view completed history.</p>
+              </div>
             </div>
           ) : (
             currentTasks.map((task) => (
@@ -331,78 +336,79 @@ export const TargetsList: React.FC = () => {
       )}
 
       {/* MODAL: Create Target Goal (Manager Only) */}
-      {isCreateModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-[#eae8e7] space-y-5">
-            <div className="flex justify-between items-center border-b border-[#eae8e7] pb-3">
-              <h3 className="text-base font-black text-[#1b1c1c] flex items-center gap-2">
-                <Target className="w-5 h-5 text-[#864f19]" /> Create Target Goal
-              </h3>
-              <button onClick={() => setIsCreateModalOpen(false)} className="text-slate-400 hover:text-slate-600 font-bold text-lg cursor-pointer">×</button>
+      <Modal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        size="md"
+      >
+        <div className="space-y-4 font-sans">
+          <div className="flex justify-between items-center border-b border-[#eae8e7] pb-3">
+            <h3 className="text-base font-black text-[#1b1c1c] flex items-center gap-2">
+              <Target className="w-5 h-5 text-[#864f19]" /> Create Target Goal
+            </h3>
+          </div>
+
+          <form onSubmit={handleCreateTargetSubmit} className="space-y-4 text-xs font-semibold">
+            <div className="space-y-1">
+              <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target Title *</label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. Weekly Merchant Onboarding Target"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+              />
             </div>
 
-            <form onSubmit={handleCreateTargetSubmit} className="space-y-4 text-xs font-semibold">
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target Title *</label>
+                <label className="block text-[#52443a] uppercase text-[10px] font-bold">Frequency Type</label>
+                <select
+                  value={type}
+                  onChange={(e: any) => setType(e.target.value)}
+                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                >
+                  <option value="daily">Daily Goal</option>
+                  <option value="weekly">Weekly Goal</option>
+                  <option value="monthly">Monthly Goal</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target Quota Value</label>
                 <input
-                  type="text"
-                  required
-                  placeholder="e.g. Weekly Merchant Onboarding Target"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                  type="number"
+                  min={1}
+                  value={targetValue}
+                  onChange={(e) => setTargetValue(parseInt(e.target.value, 10) || 1)}
+                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                 />
               </div>
+            </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="block text-[#52443a] uppercase text-[10px] font-bold">Frequency Type</label>
-                  <select
-                    value={type}
-                    onChange={(e: any) => setType(e.target.value)}
-                    className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                  >
-                    <option value="daily">Daily Goal</option>
-                    <option value="weekly">Weekly Goal</option>
-                    <option value="monthly">Monthly Goal</option>
-                  </select>
-                </div>
+            <div className="space-y-1">
+              <label className="block text-[#52443a] uppercase text-[10px] font-bold">Goal Description & Instructions</label>
+              <textarea
+                rows={3}
+                placeholder="Describe goal criteria, required documents, or onboard merchant quota..."
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19] resize-none"
+              />
+            </div>
 
-                <div className="space-y-1">
-                  <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target Quota Value</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={targetValue}
-                    onChange={(e) => setTargetValue(parseInt(e.target.value, 10) || 1)}
-                    className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-[#52443a] uppercase text-[10px] font-bold">Goal Description & Instructions</label>
-                <textarea
-                  rows={3}
-                  placeholder="Describe goal criteria, required documents, or onboard merchant quota..."
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19] resize-none"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2 border-t border-[#eae8e7]">
-                <Button variant="outline" type="button" onClick={() => setIsCreateModalOpen(false)}>
-                  Cancel
-                </Button>
-                <Button variant="primary" type="submit" disabled={isSubmitting} className="bg-[#864f19] text-white font-bold">
-                  {isSubmitting ? 'Creating...' : 'Save Target Goal'}
-                </Button>
-              </div>
-            </form>
-          </div>
+            <div className="flex justify-end gap-2 pt-3 border-t border-[#eae8e7]">
+              <Button variant="outline" type="button" onClick={() => setIsCreateModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button variant="primary" type="submit" disabled={isSubmitting} className="bg-[#864f19] text-white font-bold">
+                {isSubmitting ? 'Creating...' : 'Save Target Goal'}
+              </Button>
+            </div>
+          </form>
         </div>
-      )}
+      </Modal>
 
     </div>
   );

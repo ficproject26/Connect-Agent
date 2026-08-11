@@ -48,7 +48,7 @@ export const Modal: React.FC<ModalProps> = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-forgeGray-950/40 backdrop-blur-sm"
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm"
           />
 
           {/* Modal Container */}
@@ -57,7 +57,7 @@ export const Modal: React.FC<ModalProps> = ({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
             transition={{ type: 'spring', duration: 0.4 }}
-            className={`relative w-full bg-white shadow-2xl overflow-hidden z-10 flex flex-col border border-[#eae8e7] ${isFullPage ? 'h-full max-h-full rounded-none' : 'rounded-2xl my-auto max-h-[90vh]'} ${sizeClasses[size]}`}
+            className={`relative w-full bg-white shadow-2xl overflow-hidden z-10 flex flex-col border border-[#eae8e7] ${isFullPage ? 'h-full max-h-full rounded-none' : 'rounded-3xl my-auto max-h-[90vh]'} ${sizeClasses[size]}`}
           >
             {/* Header */}
             {title && (
