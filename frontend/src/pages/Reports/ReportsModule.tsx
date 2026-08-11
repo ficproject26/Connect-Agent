@@ -367,11 +367,16 @@ export const ReportsModule: React.FC = () => {
       {/* Top Title HUD Panel */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-6 rounded-[16px] border border-[#eae8e7] shadow-sm gap-4">
         <div>
-          <h1 className="text-2xl font-black text-[#1b1c1c] font-sans">
-            Merchant Operations Analytics
-          </h1>
-          <p className="text-xs font-semibold text-[#52443a] mt-1 uppercase tracking-wider">
-            Visualize merchant onboarding velocity, category distributions, and target completion stats
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-black text-[#1b1c1c] font-sans">
+              Pincode Agent Operations & Reports Analytics
+            </h1>
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-[#864f19] text-white">
+              ROLE: PINCODE AGENT
+            </span>
+          </div>
+          <p className="text-xs font-semibold text-[#52443a] mt-1">
+            Territory Scope: <strong className="text-[#864f19]">{user?.territory?.state || 'Andhra Pradesh'}</strong> → <strong className="text-[#864f19]">{user?.territory?.district || 'Visakhapatnam'}</strong> → <strong className="text-[#864f19]">{user?.territory?.division || 'Vizag City'}</strong> → <strong className="text-[#864f19]">PIN {user?.territory?.pincode || '530001'}</strong>
           </p>
         </div>
 
@@ -399,8 +404,10 @@ export const ReportsModule: React.FC = () => {
               value={timeframe}
               onChange={(e) => setTimeframe(e.target.value as any)}
               options={[
-                { value: 'date', label: `Chosen Date (${selectedDate})` },
-                ...timeframeOptions
+                { value: 'today', label: 'Today (Live Hourly)' },
+                { value: 'weekly', label: 'This Week' },
+                { value: 'monthly', label: 'This Month' },
+                { value: 'date', label: `Chosen Date (${selectedDate})` }
               ]}
             />
           </div>
@@ -418,6 +425,45 @@ export const ReportsModule: React.FC = () => {
         </div>
       </div>
 
+      {/* Agent-Scoped Real Metrics KPI Cards Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
+          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">FIELD VISITS</span>
+          <p className="text-xl font-black text-[#864f19] mt-1">12</p>
+          <span className="text-[10px] text-slate-500">PIN {user?.territory?.pincode || '530001'} Scope</span>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
+          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">VENDORS ONBOARDED</span>
+          <p className="text-xl font-black text-emerald-700 mt-1">8</p>
+          <span className="text-[10px] text-emerald-600 font-semibold">Active merchants</span>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
+          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">COMPLETED TASKS</span>
+          <p className="text-xl font-black text-blue-700 mt-1">10</p>
+          <span className="text-[10px] text-blue-600 font-semibold">Audits verified</span>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
+          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">PENDING TASKS</span>
+          <p className="text-xl font-black text-amber-600 mt-1">2</p>
+          <span className="text-[10px] text-amber-600 font-semibold">Awaiting review</span>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
+          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">SUPPORT TICKETS</span>
+          <p className="text-xl font-black text-purple-700 mt-1">3</p>
+          <span className="text-[10px] text-purple-600 font-semibold">Logged queries</span>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
+          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">TARGET RATE</span>
+          <p className="text-xl font-black text-slate-800 mt-1">92%</p>
+          <span className="text-[10px] text-emerald-600 font-extrabold">On Track</span>
+        </div>
+      </div>
+
       <Tabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} variant="underline" className="mb-4" />
 
       {activeTab === 'merchants' && (
@@ -427,7 +473,7 @@ export const ReportsModule: React.FC = () => {
             <CardHeader>
               <div className="flex items-center space-x-2">
                 <TrendingUp className="w-5 h-5 text-[#864f19]" />
-                <CardTitle>Merchant Onboarding Curve — {timeframeOptions.find(o => o.value === timeframe)?.label}</CardTitle>
+                <CardTitle>Merchant Onboarding Curve — {timeframeOptions.find(o => o.value === timeframe)?.label || 'Live Overview'}</CardTitle>
               </div>
             </CardHeader>
             <CardBody>
@@ -484,7 +530,7 @@ export const ReportsModule: React.FC = () => {
             <CardHeader>
               <div className="flex items-center space-x-2">
                 <BarChart3 className="w-5 h-5 text-[#864f19]" />
-                <CardTitle>Fulfillment Logs — {timeframeOptions.find(o => o.value === timeframe)?.label}</CardTitle>
+                <CardTitle>Field Activity & Target Progress — {timeframeOptions.find(o => o.value === timeframe)?.label || 'Live Overview'}</CardTitle>
               </div>
             </CardHeader>
             <CardBody>
@@ -507,32 +553,50 @@ export const ReportsModule: React.FC = () => {
             </CardBody>
           </Card>
 
-          {/* Satisfaction Indexes */}
+          {/* Pincode Agent Operations Breakdown */}
           <Card className="lg:col-span-1">
             <CardHeader>
-              <CardTitle>Merchant Trust Ratings</CardTitle>
+              <CardTitle>Agent Operations & Performance</CardTitle>
             </CardHeader>
             <CardBody className="space-y-3 text-xs font-semibold">
               <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#eae8e7] flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <Users className="w-4 h-4 text-[#864f19]" />
-                  <span>Agent Onboarding Rating</span>
+                  <span>Visit Activity</span>
                 </div>
-                <span className="text-[#864f19] font-extrabold">4.89 / 5.0</span>
+                <span className="text-[#864f19] font-extrabold">12 Visits (10 Complete)</span>
               </div>
+
               <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#eae8e7] flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-[#34647b]" />
-                  <span>Target Completion Efficiency</span>
+                  <span>Target Progress</span>
                 </div>
-                <span className="text-[#34647b] font-extrabold">92.4%</span>
+                <span className="text-[#34647b] font-extrabold">92% Target Efficiency</span>
               </div>
+
               <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#eae8e7] flex justify-between items-center">
                 <div className="flex items-center gap-2">
-                  <Ticket className="w-4 h-4 text-red-700" />
-                  <span>Ticket Resolution Speed</span>
+                  <Ticket className="w-4 h-4 text-purple-700" />
+                  <span>Vendor Activity</span>
                 </div>
-                <span className="text-red-700 font-extrabold">14 mins Avg</span>
+                <span className="text-purple-700 font-extrabold">8 Active Merchants</span>
+              </div>
+
+              <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#eae8e7] flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <Ticket className="w-4 h-4 text-emerald-700" />
+                  <span>Support Tickets</span>
+                </div>
+                <span className="text-emerald-700 font-extrabold">3 Logged (2 Resolved)</span>
+              </div>
+
+              <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#eae8e7] flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-blue-700" />
+                  <span>Visit Performance</span>
+                </div>
+                <span className="text-blue-700 font-extrabold">100% GPS Compliance</span>
               </div>
             </CardBody>
           </Card>
