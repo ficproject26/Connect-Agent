@@ -50,13 +50,13 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
     ownerName: '',
     alternatePhone: '',
     agentCode: user?.name ? `${user.name} (${user.registrationId || 'AGENT-REF'})` : 'Self Registered',
-    copartnerName: '',
     password: '',
     confirmPassword: '',
 
     // Step 3
     panNumber: '',
     aadhaarNumber: '',
+    fssaiNumber: '',
     businessLicenseName: '',
     businessLicenseUrl: '',
     gstStatus: 'Non-GST Declared' as 'Non-GST Declared' | 'GST Registered',
@@ -237,6 +237,17 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
     if (aadhaarClean.length !== 12) {
       return 'Valid 12-digit Aadhaar Number is required.';
     }
+
+    const isFood = ['Supermarket & Retail', 'Fresh Produce Mart', 'Bakery & Confectionery', 'Organic Food Store', 'Restaurant & Cafe'].includes(formData.category) ||
+      (formData.category === 'Other' && /food|restaurant|bakery|cafe|grocery|produce/i.test(formData.customCategory));
+
+    if (isFood) {
+      const fssaiClean = formData.fssaiNumber ? formData.fssaiNumber.replace(/\D/g, '') : '';
+      if (!fssaiClean || fssaiClean.length !== 14) {
+        return 'Valid 14-digit FSSAI License / Registration Number is required for Food & Retail merchants.';
+      }
+    }
+
     if (!formData.businessLicenseName) {
       return 'Business License / Registration Document upload is required.';
     }
@@ -322,7 +333,7 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
       businessImages: formData.businessImages,
       alternatePhone: formData.alternatePhone,
       agentCode: formData.agentCode,
-      copartnerName: formData.copartnerName,
+      fssaiNumber: formData.fssaiNumber,
       panNumber: formData.panNumber.toUpperCase(),
       aadhaarNumber: formData.aadhaarNumber,
       businessLicenseName: formData.businessLicenseName,
@@ -586,6 +597,22 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                   required
                 />
                 <Input
+                  label="Owner Phone Number (Primary) *"
+                  placeholder="10-digit mobile number"
+                  value={formData.phone}
+                  onChange={(e) => {
+                    let clean = e.target.value.replace(/\D/g, '');
+                    if (clean.length > 0 && !/^[6-9]/.test(clean)) clean = '';
+                    setFormData({ ...formData, phone: clean.slice(0, 10) });
+                  }}
+                  maxLength={10}
+                  inputMode="numeric"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Input
                   label="Alternate Phone Number (Optional)"
                   placeholder="10-digit secondary contact"
                   value={formData.alternatePhone}
@@ -597,18 +624,10 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                   maxLength={10}
                   inputMode="numeric"
                 />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Input
-                  label="Agent Name / Code (Auto-filled)"
+                  label="Registered By Agent (Read-Only)"
                   value={formData.agentCode}
                   onChange={(e) => setFormData({ ...formData, agentCode: e.target.value })}
-                  disabled
-                />
-                <Input
-                  label="Merchant Category Type *"
-                  value={formData.category}
                   disabled
                 />
               </div>
@@ -703,6 +722,19 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                   maxLength={12}
                   inputMode="numeric"
                   required
+                />
+              </div>
+
+              {/* FSSAI License / Registration Number */}
+              <div>
+                <Input
+                  label={`FSSAI License / Registration Number (14 Digits) ${['Supermarket & Retail', 'Fresh Produce Mart', 'Bakery & Confectionery', 'Organic Food Store', 'Restaurant & Cafe'].includes(formData.category) || (formData.category === 'Other' && /food|restaurant|bakery|cafe|grocery|produce/i.test(formData.customCategory)) ? '*' : '(Optional)'}`}
+                  placeholder="e.g. 10019043002761 (14-digit registration number)"
+                  value={formData.fssaiNumber}
+                  onChange={(e) => setFormData({ ...formData, fssaiNumber: e.target.value.replace(/\D/g, '').slice(0, 14) })}
+                  maxLength={14}
+                  inputMode="numeric"
+                  required={['Supermarket & Retail', 'Fresh Produce Mart', 'Bakery & Confectionery', 'Organic Food Store', 'Restaurant & Cafe'].includes(formData.category)}
                 />
               </div>
 
@@ -912,8 +944,7 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                     <button type="button" onClick={() => setCurrentStep(2)} className="text-[10px] font-bold text-blue-700 hover:underline bg-transparent border-none cursor-pointer">Edit</button>
                   </div>
                   <p className="font-extrabold text-[#1b1c1c] text-sm">{formData.ownerName}</p>
-                  <p className="text-slate-600">Assigned Agent: {formData.agentCode}</p>
-                  {formData.copartnerName && <p className="text-slate-600">Co-partner: {formData.copartnerName}</p>}
+                  <p className="text-slate-600">Registered By Agent: {formData.agentCode}</p>
                 </div>
 
                 {/* Legal & Docs Summary */}
@@ -924,6 +955,7 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                   </div>
                   <p className="text-slate-700">PAN: <strong>{formData.panNumber.toUpperCase()}</strong></p>
                   <p className="text-slate-700">Aadhaar: <strong>{formData.aadhaarNumber}</strong></p>
+                  {formData.fssaiNumber && <p className="text-slate-700">FSSAI License: <strong>{formData.fssaiNumber}</strong></p>}
                   <p className="text-slate-700">GST Status: <strong>{formData.gstStatus}</strong> {formData.gstNumber && `(${formData.gstNumber.toUpperCase()})`}</p>
                   <p className="text-slate-700">MSME: <strong>{formData.msmeStatus}</strong></p>
                 </div>
