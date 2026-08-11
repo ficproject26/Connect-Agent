@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardBody, Button } from '../../components/ui';
 import { Target, CheckCircle2, Calendar, Check, MapPin, Loader2, Plus, Users, Award } from 'lucide-react';
 import api from '../../utils/api';
@@ -19,9 +19,14 @@ export const TargetsList: React.FC = () => {
   const { user } = useAuth();
   const isManager = user?.role === 'state' || user?.role === 'district' || user?.role === 'division';
 
+  const userTargetsKey = useMemo(() => {
+    return user?._id || user?.email ? `connect_portal_target_allocations_${user._id || user.email?.toLowerCase()}` : 'connect_portal_target_allocations';
+  }, [user]);
+
   const [allocations, setAllocations] = useState<Allocation[]>(() => {
     try {
-      const saved = localStorage.getItem('connect_portal_target_allocations');
+      const userKey = user?._id || user?.email ? `connect_portal_target_allocations_${user._id || user.email?.toLowerCase()}` : 'connect_portal_target_allocations';
+      const saved = localStorage.getItem(userKey);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -29,6 +34,17 @@ export const TargetsList: React.FC = () => {
     } catch (e) {}
     return [];
   });
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(userTargetsKey);
+      if (saved) {
+        setAllocations(JSON.parse(saved));
+      } else {
+        setAllocations([]);
+      }
+    } catch (e) {}
+  }, [userTargetsKey]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
   const [activeTab, setActiveTab] = useState<'today' | 'upcoming' | 'completed'>('today');
@@ -73,7 +89,7 @@ export const TargetsList: React.FC = () => {
           const localOnly = prev.filter(p => !apiIds.has(p._id));
           const combined = [...localOnly, ...mapped];
           try {
-            localStorage.setItem('connect_portal_target_allocations', JSON.stringify(combined));
+            localStorage.setItem(userTargetsKey, JSON.stringify(combined));
           } catch (e) {}
           return combined;
         });
@@ -98,7 +114,7 @@ export const TargetsList: React.FC = () => {
     setAllocations(prev => {
       const updated = prev.map(a => a._id === id ? { ...a, status: 'completed' as const } : a);
       try {
-        localStorage.setItem('connect_portal_target_allocations', JSON.stringify(updated));
+        localStorage.setItem(userTargetsKey, JSON.stringify(updated));
       } catch (e) {}
       return updated;
     });
@@ -134,7 +150,7 @@ export const TargetsList: React.FC = () => {
     setAllocations(prev => {
       const updated = [newAlloc, ...prev];
       try {
-        localStorage.setItem('connect_portal_target_allocations', JSON.stringify(updated));
+        localStorage.setItem(userTargetsKey, JSON.stringify(updated));
       } catch (e) {}
       return updated;
     });

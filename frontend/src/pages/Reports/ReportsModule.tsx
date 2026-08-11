@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardBody, Tabs, Select, Button, Charts, Input } from '../../components/ui';
 import { BarChart3, TrendingUp, Download, CheckCircle2, Ticket, Users, Upload, FileText, Loader2, Calendar } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../utils/api';
 
 export const ReportsModule: React.FC = () => {
-  const { addNotification } = useAuth();
+  const { user, addNotification } = useAuth();
   const [activeTab, setActiveTab] = useState('merchants');
   const [timeframe, setTimeframe] = useState('monthly');
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().slice(0, 10));
@@ -22,9 +22,14 @@ export const ReportsModule: React.FC = () => {
     }
   ];
 
+  const userReportsKey = useMemo(() => {
+    return user?._id || user?.email ? `connect_portal_submitted_reports_${user._id || user.email?.toLowerCase()}` : 'connect_portal_submitted_reports';
+  }, [user]);
+
   const [reports, setReports] = useState<any[]>(() => {
     try {
-      const saved = localStorage.getItem('connect_portal_submitted_reports');
+      const userKey = user?._id || user?.email ? `connect_portal_submitted_reports_${user._id || user.email?.toLowerCase()}` : 'connect_portal_submitted_reports';
+      const saved = localStorage.getItem(userKey);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -32,6 +37,19 @@ export const ReportsModule: React.FC = () => {
     } catch (e) {}
     return defaultSubmittedReports;
   });
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(userReportsKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) setReports(parsed);
+      } else {
+        setReports(defaultSubmittedReports);
+      }
+    } catch (e) {}
+  }, [userReportsKey]);
+
   const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const currentMonth = MONTH_NAMES[new Date().getMonth()];
   const currentYear = new Date().getFullYear().toString();
@@ -55,7 +73,7 @@ export const ReportsModule: React.FC = () => {
           const localOnly = prev.filter(p => !apiIds.has(p._id));
           const combined = [...localOnly, ...apiReports];
           try {
-            localStorage.setItem('connect_portal_submitted_reports', JSON.stringify(combined));
+            localStorage.setItem(userReportsKey, JSON.stringify(combined));
           } catch (e) {}
           return combined;
         });
@@ -69,7 +87,7 @@ export const ReportsModule: React.FC = () => {
 
   useEffect(() => {
     fetchSubmittedReports();
-  }, []);
+  }, [userReportsKey]);
 
   const handleReportSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,7 +110,7 @@ export const ReportsModule: React.FC = () => {
     setReports(prev => {
       const updated = [newReport, ...prev];
       try {
-        localStorage.setItem('connect_portal_submitted_reports', JSON.stringify(updated));
+        localStorage.setItem(userReportsKey, JSON.stringify(updated));
       } catch (e) {}
       return updated;
     });

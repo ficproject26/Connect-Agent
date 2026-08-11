@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
 import api from '../utils/api';
+import { queryClient } from '../utils/queryClient';
 
 export type UserRole = 'state' | 'division' | 'district' | 'pincode' | 'delivery_partner' | 'technician' | 'executive';
 
@@ -113,13 +114,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const applySavedProfileOverrides = (agentData: AgentProfile): AgentProfile => {
+    if (!agentData) return agentData;
     try {
-      const savedStr = localStorage.getItem('connect_portal_agent_saved_profile');
+      const userKey = `connect_portal_saved_profile_${agentData._id || agentData.email?.toLowerCase()}`;
+      const savedStr = localStorage.getItem(userKey);
       if (savedStr) {
         const saved = JSON.parse(savedStr);
         if (saved.name === 'Rajeshwari') {
           saved.name = 'Muthuswamy';
-          localStorage.setItem('connect_portal_agent_saved_profile', JSON.stringify(saved));
         }
         return { ...agentData, ...saved };
       }
@@ -155,11 +157,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await fetchNotifications();
     } catch (err: any) {
       if (err?.response?.status === 401) {
-        console.warn('Refetch user unauthorized on backend API, using local profile session.');
-      } else {
-        console.error('Refetch user failed:', err);
+        console.warn('Refetch user unauthorized on backend API (401). Performing clean session logout.');
+        logout();
+        return;
       }
-      // Fallback: If local user exists in localStorage, preserve session without logging out!
+      console.error('Refetch user error:', err);
       const savedUserStr = localStorage.getItem('agent_user');
       if (savedUserStr) {
         try {
@@ -167,10 +169,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(savedUser);
           return;
         } catch (e) {}
-      }
-      // Only logout if explicitly 401 Unauthorized AND no saved local user profile exists
-      if (err?.response?.status === 401 && !localStorage.getItem('agent_user')) {
-        logout();
       }
     }
   };
@@ -194,6 +192,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     initializeAuth();
+
+    // Multi-device & multi-tab session synchronization listener
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'agent_token' || e.key === 'agent_user') {
+        const newToken = localStorage.getItem('agent_token');
+        const newUserStr = localStorage.getItem('agent_user');
+        
+        queryClient.clear();
+        setToken(newToken);
+        if (newUserStr) {
+          try {
+            setUser(JSON.parse(newUserStr));
+          } catch (err) {
+            setUser(null);
+          }
+        } else {
+          setUser(null);
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, [token]);
 
   const login = async (email: string, password: string): Promise<any> => {
@@ -230,6 +251,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     for (const result of results) {
       if (result.status === 'fulfilled' && result.value?.data?.token) {
+        queryClient.clear();
         const data = result.value.data;
         const agent = data.agent || data.user || {};
         agent.status = (agent.kycStatus === 'approved' || agent.status === 'approved' || agent.status === 'active') ? 'active' : 'pending_approval';
@@ -447,10 +469,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
+    queryClient.clear();
     localStorage.removeItem('agent_token');
     localStorage.removeItem('agent_user');
+    localStorage.removeItem('connect_portal_agent_saved_profile');
+    sessionStorage.removeItem('agent_registration_draft');
     setToken(null);
     setUser(null);
+    setNotifications([]);
   };
 
   const updateAgent = (data: Partial<AgentProfile>) => {
@@ -459,8 +485,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!prev) return null;
         const updated = { ...prev, ...data };
         try {
-          const existingSaved = JSON.parse(localStorage.getItem('connect_portal_agent_saved_profile') || '{}');
-          localStorage.setItem('connect_portal_agent_saved_profile', JSON.stringify({ ...existingSaved, ...data }));
+          const userKey = `connect_portal_saved_profile_${prev._id || prev.email?.toLowerCase()}`;
+          const existingSaved = JSON.parse(localStorage.getItem(userKey) || '{}');
+          const mergedSaved = { ...existingSaved, ...data };
+          localStorage.setItem(userKey, JSON.stringify(mergedSaved));
+          localStorage.setItem('agent_user', JSON.stringify(updated));
         } catch (e) {
           console.error('Failed to save profile changes to localStorage:', e);
         }

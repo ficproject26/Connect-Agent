@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardBody, Button, StatusChip, Modal } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
 import { Calendar, Clock, CheckCircle2, UserCheck, Search, Users, ShieldAlert, ArrowRight, Download, FileText, Eye, Wallet, Target, Award, MapPin, Phone, Mail } from 'lucide-react';
@@ -36,21 +36,19 @@ export const AttendanceLogs: React.FC = () => {
   const { user } = useAuth();
   const isManager = user?.role === 'state' || user?.role === 'district' || user?.role === 'division';
 
+  const userPrefix = useMemo(() => {
+    return user?._id || user?.email ? `_usr_${user._id || user.email?.toLowerCase()}` : '';
+  }, [user]);
+
   // Subordinate checks state
   const [subordinateRoleFilter, setSubordinateRoleFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSubordinate, setSelectedSubordinate] = useState<SubordinateRecord | null>(null);
 
   // Personal check-in state
-  const [isCheckedIn, setIsCheckedIn] = useState<boolean>(() => {
-    return localStorage.getItem('agent_is_checked_in') === 'true';
-  });
-  const [checkInTime, setCheckInTime] = useState<string>(() => {
-    return localStorage.getItem('agent_check_in_time') || '';
-  });
-  const [checkOutTime, setCheckOutTime] = useState<string>(() => {
-    return localStorage.getItem('agent_check_out_time') || '';
-  });
+  const [isCheckedIn, setIsCheckedIn] = useState<boolean>(false);
+  const [checkInTime, setCheckInTime] = useState<string>('');
+  const [checkOutTime, setCheckOutTime] = useState<string>('');
   const [dailyComments, setDailyComments] = useState('');
   const [showCheckOutForm, setShowCheckOutForm] = useState(false);
 
@@ -58,17 +56,21 @@ export const AttendanceLogs: React.FC = () => {
   const todayStr = new Date().toISOString().slice(0, 10);
 
   // Personal history logs
-  const [personalHistory, setPersonalHistory] = useState<AttendanceRecord[]>(() => {
-    const saved = localStorage.getItem('agent_personal_history');
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
+  const [personalHistory, setPersonalHistory] = useState<AttendanceRecord[]>([]);
+
+  // Sync user-scoped attendance state when user changes
+  useEffect(() => {
+    setIsCheckedIn(localStorage.getItem(`agent_is_checked_in${userPrefix}`) === 'true');
+    setCheckInTime(localStorage.getItem(`agent_check_in_time${userPrefix}`) || '');
+    setCheckOutTime(localStorage.getItem(`agent_check_out_time${userPrefix}`) || '');
+
+    const savedHistory = localStorage.getItem(`agent_personal_history${userPrefix}`);
+    if (savedHistory) {
+      try { setPersonalHistory(JSON.parse(savedHistory)); } catch (e) { setPersonalHistory([]); }
+    } else {
+      setPersonalHistory([]);
     }
-    return [
-      { id: '1', date: '2026-07-19', checkIn: '09:05 AM', checkOut: '06:15 PM', duration: '9h 10m', status: 'present', comments: 'Onsite KYC verification and vendor sync completed.' },
-      { id: '2', date: '2026-07-18', checkIn: '09:12 AM', checkOut: '06:05 PM', duration: '8h 53m', status: 'present', comments: 'Pincode territory audit logs submitted.' },
-      { id: '3', date: '2026-07-17', checkIn: '09:30 AM', checkOut: '05:30 PM', duration: '8h 00m', status: 'half_day', comments: 'Leave permission taken for half day.' }
-    ];
-  });
+  }, [userPrefix]);
 
   // Subordinates log desk
   const [subordinateLogs, setSubordinateLogs] = useState<SubordinateRecord[]>(() => {
@@ -76,12 +78,7 @@ export const AttendanceLogs: React.FC = () => {
     if (saved) {
       try { return JSON.parse(saved); } catch (e) {}
     }
-    return [
-      { id: 'sub_1', name: 'Muthu Swamy', role: 'district', territory: 'Krishnagiri District', date: todayStr, checkIn: '09:00 AM', status: 'present', comments: 'District ops sync active.', phone: '9876501122', email: 'muthu.swamy@agent.com', assignedTargets: 45, completedTargets: 38, earnings: 28500, totalOnboardedShops: 62 },
-      { id: 'sub_2', name: 'Suresh Patil', role: 'division', territory: 'Hosur Division', date: todayStr, checkIn: '08:55 AM', status: 'present', comments: 'Division pincode distribution clear.', phone: '9876503344', email: 'suresh.patil@agent.com', assignedTargets: 25, completedTargets: 22, earnings: 16200, totalOnboardedShops: 38 },
-      { id: 'sub_3', name: 'Karthik Raja', role: 'pincode', territory: 'Hosur 635109 Area', date: todayStr, checkIn: '08:45 AM', status: 'present', comments: 'Onboarded 2 new Kirana shops today.', phone: '9876505566', email: 'karthik.raja@agent.com', assignedTargets: 15, completedTargets: 12, earnings: 9400, totalOnboardedShops: 19 },
-      { id: 'sub_4', name: 'Srinivasan M', role: 'pincode', territory: 'Krishnagiri 635001 Area', date: todayStr, checkIn: '---', status: 'on_leave', comments: 'Personal emergency leave.', phone: '9876507788', email: 'srinivasan.m@agent.com', assignedTargets: 15, completedTargets: 10, earnings: 7800, totalOnboardedShops: 14 }
-    ];
+    return [];
   });
 
   const handleCheckIn = async () => {
@@ -93,10 +90,10 @@ export const AttendanceLogs: React.FC = () => {
     setCheckOutTime('');
     setShowCheckOutForm(false);
 
-    localStorage.setItem('agent_is_checked_in', 'true');
-    localStorage.setItem('agent_check_in_time', timeString);
-    localStorage.setItem('agent_check_in_timestamp', nowMs.toString());
-    localStorage.removeItem('agent_check_out_time');
+    localStorage.setItem(`agent_is_checked_in${userPrefix}`, 'true');
+    localStorage.setItem(`agent_check_in_time${userPrefix}`, timeString);
+    localStorage.setItem(`agent_check_in_timestamp${userPrefix}`, nowMs.toString());
+    localStorage.removeItem(`agent_check_out_time${userPrefix}`);
 
     try {
       await api.post('/attendance/check-in', { comments: 'Daily check-in logged' });
@@ -116,7 +113,7 @@ export const AttendanceLogs: React.FC = () => {
 
     const updatedHistory = [activeTodayRecord, ...personalHistory.filter(r => r.date !== todayStr)];
     setPersonalHistory(updatedHistory);
-    localStorage.setItem('agent_personal_history', JSON.stringify(updatedHistory));
+    localStorage.setItem(`agent_personal_history${userPrefix}`, JSON.stringify(updatedHistory));
 
     if (user?.name) {
       const userSubRecord: SubordinateRecord = {
@@ -144,7 +141,7 @@ export const AttendanceLogs: React.FC = () => {
     e.preventDefault();
     const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const nowMs = Date.now();
-    const savedTimestamp = localStorage.getItem('agent_check_in_timestamp');
+    const savedTimestamp = localStorage.getItem(`agent_check_in_timestamp${userPrefix}`);
     
     let durationFormatted = '0h 0m';
     if (savedTimestamp) {
@@ -169,8 +166,8 @@ export const AttendanceLogs: React.FC = () => {
     setCheckOutTime(timeString);
     setShowCheckOutForm(false);
 
-    localStorage.setItem('agent_is_checked_in', 'false');
-    localStorage.setItem('agent_check_out_time', timeString);
+    localStorage.setItem(`agent_is_checked_in${userPrefix}`, 'false');
+    localStorage.setItem(`agent_check_out_time${userPrefix}`, timeString);
 
     try {
       await api.post('/attendance/check-out', { comments: dailyComments || 'Daily operations completed' });
@@ -190,7 +187,7 @@ export const AttendanceLogs: React.FC = () => {
 
     const updatedHistory = [completedTodayRecord, ...personalHistory.filter(r => r.date !== todayStr)];
     setPersonalHistory(updatedHistory);
-    localStorage.setItem('agent_personal_history', JSON.stringify(updatedHistory));
+    localStorage.setItem(`agent_personal_history${userPrefix}`, JSON.stringify(updatedHistory));
     setDailyComments('');
   };
 

@@ -38,10 +38,15 @@ const YESTERDAY_DATE = new Date(Date.now() - 86400000).toISOString().slice(0, 10
 export const VendorsList: React.FC = () => {
   const { user, addNotification } = useAuth();
 
-  // Initialize vendors from localStorage or API
+  const userVendorsKey = useMemo(() => {
+    return user?._id || user?.email ? `connect_portal_custom_vendors_${user._id || user.email?.toLowerCase()}` : 'connect_portal_custom_vendors';
+  }, [user]);
+
+  // Initialize vendors from user-scoped localStorage or API
   const [vendors, setVendors] = useState<Vendor[]>(() => {
     try {
-      const saved = localStorage.getItem('connect_portal_custom_vendors');
+      const userKey = user?._id || user?.email ? `connect_portal_custom_vendors_${user._id || user.email?.toLowerCase()}` : 'connect_portal_custom_vendors';
+      const saved = localStorage.getItem(userKey);
       if (saved) {
         return JSON.parse(saved);
       }
@@ -50,6 +55,17 @@ export const VendorsList: React.FC = () => {
     }
     return [];
   });
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(userVendorsKey);
+      if (saved) {
+        setVendors(JSON.parse(saved));
+      } else {
+        setVendors([]);
+      }
+    } catch (e) {}
+  }, [userVendorsKey]);
 
   // Fetch live backend vendors from API /api/vendors
   const { data: apiVendorsData } = useQuery({
@@ -477,7 +493,7 @@ export const VendorsList: React.FC = () => {
       const updated = [createdVendor, ...prev];
       try {
         const customOnly = updated.filter(v => v.id.startsWith('REG-'));
-        localStorage.setItem('connect_portal_custom_vendors', JSON.stringify(customOnly));
+        localStorage.setItem(userVendorsKey, JSON.stringify(customOnly));
       } catch (e) {
         console.error('Failed to save custom vendor to localStorage:', e);
       }
@@ -1127,7 +1143,7 @@ export const VendorsList: React.FC = () => {
             const updated = [createdVendor, ...prev];
             try {
               const customOnly = updated.filter(v => v.id.startsWith('REG-'));
-              localStorage.setItem('connect_portal_custom_vendors', JSON.stringify(customOnly));
+              localStorage.setItem(userVendorsKey, JSON.stringify(customOnly));
             } catch (e) {
               console.error('Failed to save custom vendor to localStorage:', e);
             }

@@ -37,9 +37,14 @@ export const FieldVisitsModule: React.FC = () => {
   const userPincode = user?.territory?.pincode || '635109';
   const userName = user?.name || 'Logged Agent';
 
+  const userVisitsKey = useMemo(() => {
+    return user?._id || user?.email ? `connect_portal_field_visits_${user._id || user.email?.toLowerCase()}` : 'connect_portal_field_visits';
+  }, [user]);
+
   const [visits, setVisits] = useState<FieldVisitRecord[]>(() => {
     try {
-      const saved = localStorage.getItem('connect_portal_field_visits');
+      const userKey = user?._id || user?.email ? `connect_portal_field_visits_${user._id || user.email?.toLowerCase()}` : 'connect_portal_field_visits';
+      const saved = localStorage.getItem(userKey);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -51,6 +56,17 @@ export const FieldVisitsModule: React.FC = () => {
     }
     return [];
   });
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(userVisitsKey);
+      if (saved) {
+        setVisits(JSON.parse(saved));
+      } else {
+        setVisits([]);
+      }
+    } catch (e) {}
+  }, [userVisitsKey]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [districtFilter, setDistrictFilter] = useState('all');
@@ -127,7 +143,7 @@ export const FieldVisitsModule: React.FC = () => {
           }));
           const combined = [...mapped, ...localOnly];
           try {
-            localStorage.setItem('connect_portal_field_visits', JSON.stringify(combined));
+            localStorage.setItem(userVisitsKey, JSON.stringify(combined));
           } catch (e) {}
           return combined;
         });
@@ -203,7 +219,7 @@ export const FieldVisitsModule: React.FC = () => {
     setVisits(prev => {
       const updated = [newVisit, ...prev];
       try {
-        localStorage.setItem('connect_portal_field_visits', JSON.stringify(updated));
+        localStorage.setItem(userVisitsKey, JSON.stringify(updated));
       } catch (e) {}
       return updated;
     });
@@ -237,7 +253,7 @@ export const FieldVisitsModule: React.FC = () => {
           : v
       );
       try {
-        localStorage.setItem('connect_portal_field_visits', JSON.stringify(updated));
+        localStorage.setItem(userVisitsKey, JSON.stringify(updated));
       } catch (e) {}
       return updated;
     });
