@@ -35,6 +35,9 @@ export const Login: React.FC = () => {
 
   const handleMobileChange = (val: string) => {
     let clean = val.replace(/\D/g, '');
+    if (clean.length > 0 && !/^[6-9]/.test(clean)) {
+      clean = '';
+    }
     if (clean.length > 10) clean = clean.slice(0, 10);
     setMobileNumber(clean);
   };
@@ -74,7 +77,7 @@ export const Login: React.FC = () => {
       const otpCode = data.otp || Math.floor(100000 + Math.random() * 900000).toString();
       addNotification('OTP Generated', `Your 6-digit OTP for +91 ${mobileNumber} is ${otpCode}`, 'high', 'system');
       
-      navigate('/verify-otp', {
+      navigate('/otp-verification', {
         state: {
           phone: mobileNumber,
           mobileNumber,
@@ -85,7 +88,7 @@ export const Login: React.FC = () => {
     } catch (err) {
       const fallbackOtp = Math.floor(100000 + Math.random() * 900000).toString();
       addNotification('OTP Generated', `Your 6-digit OTP for +91 ${mobileNumber} is ${fallbackOtp}`, 'high', 'system');
-      navigate('/verify-otp', {
+      navigate('/otp-verification', {
         state: {
           phone: mobileNumber,
           mobileNumber,

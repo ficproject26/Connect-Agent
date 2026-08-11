@@ -56,6 +56,9 @@ export const AgentManagement: React.FC = () => {
   // Search & Filter controls
   const [searchTerm, setSearchTerm] = useState('');
   const [kycFilter, setKycFilter] = useState<string>('all');
+  const [scopeFilter, setScopeFilter] = useState<string>(() => {
+    return activeRole === 'state' ? 'district' : activeRole === 'district' ? 'division' : 'pincode';
+  });
   const [selectedAgent, setSelectedAgent] = useState<AgentNode | null>(null);
 
   // Drill-down selection states
@@ -424,6 +427,40 @@ export const AgentManagement: React.FC = () => {
                   <XCircle className="w-3.5 h-3.5" />
                 </button>
               )}
+            </div>
+
+            {/* Hierarchy Scope Filter */}
+            <div className="flex items-center gap-1.5 bg-[#fbf9f8] border border-[#d7c3b5]/70 rounded-xl px-3 py-1.5">
+              <span className="text-[10px] font-black uppercase text-[#864f19]">Hierarchy Scope:</span>
+              <select
+                value={scopeFilter}
+                onChange={(e) => {
+                  setScopeFilter(e.target.value);
+                  setSelectedDistrictId(null);
+                  setSelectedDivisionId(null);
+                }}
+                className="bg-transparent text-[#1b1c1c] text-xs font-extrabold focus:outline-none cursor-pointer"
+              >
+                {activeRole === 'state' && (
+                  <>
+                    <option value="district">📍 District Agents Level Only</option>
+                    <option value="division">🟡 Division Managers Level Only</option>
+                    <option value="pincode">📍 Pincode Agents Level Only</option>
+                  </>
+                )}
+                {activeRole === 'district' && (
+                  <>
+                    <option value="division">🟡 Division Managers Level Only</option>
+                    <option value="pincode">📍 Pincode Agents Level Only</option>
+                  </>
+                )}
+                {activeRole === 'division' && (
+                  <option value="pincode">📍 Pincode Agents Level Only</option>
+                )}
+                {activeRole === 'pincode' && (
+                  <option value="pincode">📍 Pincode Agents Level Only</option>
+                )}
+              </select>
             </div>
 
             {/* KYC Status Filter */}

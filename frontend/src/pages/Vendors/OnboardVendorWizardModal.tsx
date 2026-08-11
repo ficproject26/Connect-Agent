@@ -451,7 +451,11 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                   label="Business Phone Number (10 Digits) *"
                   placeholder="10-digit mobile number"
                   value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                  onChange={(e) => {
+                    let clean = e.target.value.replace(/\D/g, '');
+                    if (clean.length > 0 && !/^[6-9]/.test(clean)) clean = '';
+                    setFormData({ ...formData, phone: clean.slice(0, 10) });
+                  }}
                   maxLength={10}
                   inputMode="numeric"
                   required
@@ -506,14 +510,6 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                   value={formData.website}
                   onChange={(e) => setFormData({ ...formData, website: e.target.value })}
                 />
-
-                {formData.state && (
-                  <div className="p-2.5 bg-white border border-[#eae8e7] rounded-lg text-[11px] font-bold text-slate-700 space-y-0.5">
-                    <p className="text-[9px] uppercase font-black text-[#864f19]">Auto-Detected Territory</p>
-                    <p>State: {formData.state} • District: {formData.district}</p>
-                    <p>Division: {formData.division} • Post Office: {formData.postOffice}</p>
-                  </div>
-                )}
               </div>
 
               {/* Logo Upload Section (Required) */}
@@ -593,7 +589,11 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                   label="Alternate Phone Number (Optional)"
                   placeholder="10-digit secondary contact"
                   value={formData.alternatePhone}
-                  onChange={(e) => setFormData({ ...formData, alternatePhone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                  onChange={(e) => {
+                    let clean = e.target.value.replace(/\D/g, '');
+                    if (clean.length > 0 && !/^[6-9]/.test(clean)) clean = '';
+                    setFormData({ ...formData, alternatePhone: clean.slice(0, 10) });
+                  }}
                   maxLength={10}
                   inputMode="numeric"
                 />
@@ -607,24 +607,22 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                   disabled
                 />
                 <Input
-                  label="Co-partner Name (Optional)"
-                  placeholder="e.g. Suresh Kumar"
-                  value={formData.copartnerName}
-                  onChange={(e) => setFormData({ ...formData, copartnerName: e.target.value })}
+                  label="Merchant Category Type *"
+                  value={formData.category}
+                  disabled
                 />
               </div>
 
-              {/* Password Section with Toggle & Criteria */}
+              {/* Account Password Creation */}
               <div className="p-3.5 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 space-y-3">
-                <p className="text-[10px] uppercase font-black text-[#864f19]">Account Login Security Password</p>
-
+                <p className="text-[10px] uppercase font-black text-[#864f19]">Vendor App Access Password</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1 relative">
-                    <label className="block text-[10px] font-bold text-[#52443a] uppercase">Password *</label>
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-slate-700 uppercase mb-1">Create Password *</label>
                     <div className="relative">
                       <input
                         type={showPassword ? 'text' : 'password'}
-                        placeholder="Create strong password"
+                        placeholder="••••••••"
                         value={formData.password}
                         onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                         className="w-full bg-white border border-[#d7c3b5]/60 rounded-xl py-2 pl-3 pr-9 text-xs focus:outline-none focus:ring-1 focus:ring-[#864f19]"
@@ -640,12 +638,12 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                     </div>
                   </div>
 
-                  <div className="space-y-1 relative">
-                    <label className="block text-[10px] font-bold text-[#52443a] uppercase">Confirm Password *</label>
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-slate-700 uppercase mb-1">Confirm Password *</label>
                     <div className="relative">
                       <input
                         type={showConfirmPassword ? 'text' : 'password'}
-                        placeholder="Re-enter password"
+                        placeholder="••••••••"
                         value={formData.confirmPassword}
                         onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                         className="w-full bg-white border border-[#d7c3b5]/60 rounded-xl py-2 pl-3 pr-9 text-xs focus:outline-none focus:ring-1 focus:ring-[#864f19]"
@@ -799,6 +797,8 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                 />
                 <Select
                   label="Bank Name *"
+                  isSearchable={true}
+                  placeholder="Select or search bank..."
                   options={[
                     { value: 'State Bank of India', label: 'State Bank of India (SBI)' },
                     { value: 'HDFC Bank', label: 'HDFC Bank' },
@@ -809,7 +809,29 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                     { value: 'Bank of Baroda', label: 'Bank of Baroda' },
                     { value: 'Kotak Mahindra Bank', label: 'Kotak Mahindra Bank' },
                     { value: 'Union Bank of India', label: 'Union Bank of India' },
-                    { value: 'Indian Overseas Bank', label: 'Indian Overseas Bank' }
+                    { value: 'Indian Overseas Bank', label: 'Indian Overseas Bank' },
+                    { value: 'IndusInd Bank', label: 'IndusInd Bank' },
+                    { value: 'Yes Bank', label: 'Yes Bank' },
+                    { value: 'IDFC FIRST Bank', label: 'IDFC FIRST Bank' },
+                    { value: 'Federal Bank', label: 'Federal Bank' },
+                    { value: 'Central Bank of India', label: 'Central Bank of India' },
+                    { value: 'Indian Bank', label: 'Indian Bank' },
+                    { value: 'UCO Bank', label: 'UCO Bank' },
+                    { value: 'Bank of Maharashtra', label: 'Bank of Maharashtra' },
+                    { value: 'Punjab & Sind Bank', label: 'Punjab & Sind Bank' },
+                    { value: 'Bandhan Bank', label: 'Bandhan Bank' },
+                    { value: 'South Indian Bank', label: 'South Indian Bank' },
+                    { value: 'Karur Vysya Bank', label: 'Karur Vysya Bank' },
+                    { value: 'City Union Bank', label: 'City Union Bank' },
+                    { value: 'IDBI Bank', label: 'IDBI Bank' },
+                    { value: 'Karnataka Bank', label: 'Karnataka Bank' },
+                    { value: 'Jammu & Kashmir Bank', label: 'Jammu & Kashmir Bank' },
+                    { value: 'RBL Bank', label: 'RBL Bank' },
+                    { value: 'Tamilnad Mercantile Bank', label: 'Tamilnad Mercantile Bank' },
+                    { value: 'AU Small Finance Bank', label: 'AU Small Finance Bank' },
+                    { value: 'Equitas Small Finance Bank', label: 'Equitas Small Finance Bank' },
+                    { value: 'Airtel Payments Bank', label: 'Airtel Payments Bank' },
+                    { value: 'PayTM Payments Bank', label: 'PayTM Payments Bank' }
                   ]}
                   value={formData.bankName}
                   onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}

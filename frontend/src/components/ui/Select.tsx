@@ -98,7 +98,7 @@ export const Select: React.FC<SelectProps> = ({
       {isOpen && (
         <div className="absolute left-0 right-0 top-full z-50 mt-1.5 w-full bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
           {/* Search Box inside Dropdown */}
-          {isSearchable && options.length > 5 && (
+          {isSearchable && (
             <div className="p-2 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
               <Search className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1" />
               <input

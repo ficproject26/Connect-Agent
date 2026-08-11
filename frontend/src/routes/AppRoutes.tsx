@@ -73,6 +73,7 @@ export const AppRoutes: React.FC = () => {
         <Route path="/login" element={<Navigate to="/" replace />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/otp-verification" element={<OTPVerification />} />
+        <Route path="/verify-otp" element={<OTPVerification />} />
         <Route path="/register" element={<RegisterWizard />} />
 
         {/* REGISTRATION PENDING REDIRECT */}

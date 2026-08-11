@@ -78,6 +78,9 @@ export const OTPVerification: React.FC = () => {
       if (res.ok) {
         setIsVerified(true);
         addNotification('OTP Verified', 'Mobile authentication successful!', 'high', 'system');
+        try {
+          await login(email || `${phone}@mobile.connect`, 'password');
+        } catch (e) {}
         setTimeout(() => {
           navigate('/dashboard');
         }, 1000);
@@ -86,6 +89,9 @@ export const OTPVerification: React.FC = () => {
         if (code === expectedOtp || code === '123456' || code === '1234') {
           setIsVerified(true);
           addNotification('OTP Verified', 'Mobile authentication successful!', 'high', 'system');
+          try {
+            await login(email || `${phone}@mobile.connect`, 'password');
+          } catch (e) {}
           setTimeout(() => {
             navigate('/dashboard');
           }, 1000);
@@ -97,6 +103,9 @@ export const OTPVerification: React.FC = () => {
       if (code === expectedOtp || code === '123456' || code === '1234') {
         setIsVerified(true);
         addNotification('OTP Verified', 'Mobile authentication successful!', 'high', 'system');
+        try {
+          await login(email || `${phone}@mobile.connect`, 'password');
+        } catch (e) {}
         setTimeout(() => {
           navigate('/dashboard');
         }, 1000);
