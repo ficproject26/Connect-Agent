@@ -388,12 +388,6 @@ export const AgentManagement: React.FC = () => {
 
           <div className="flex flex-wrap items-center gap-2.5 shrink-0 self-start md:self-auto">
             <button
-              onClick={() => setIsAgentVendorsModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl transition cursor-pointer shadow-2xs"
-            >
-              <UserCheck className="w-4 h-4" /> {activeRole === 'division' ? 'Division Vendors' : 'Agent Onboarded Vendors'}
-            </button>
-            <button
               onClick={() => refetchHierarchy()}
               className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-[#864f19] bg-[#864f19]/10 hover:bg-[#864f19]/20 rounded-xl transition border-none cursor-pointer"
             >

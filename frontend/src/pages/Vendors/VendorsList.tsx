@@ -624,13 +624,6 @@ export const VendorsList: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-3 shrink-0 self-start md:self-auto">
-          <button
-            type="button"
-            onClick={() => setIsAgentVendorsModalOpen(true)}
-            className="py-2.5 px-4 font-bold rounded-xl cursor-pointer text-xs uppercase tracking-wider bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 transition-all flex items-center gap-1.5 shadow-2xs"
-          >
-            <UserCheck className="w-4 h-4" /> Agent Onboarded Vendors
-          </button>
           <Button
             variant="primary"
             onClick={() => setIsAddModalOpen(true)}
