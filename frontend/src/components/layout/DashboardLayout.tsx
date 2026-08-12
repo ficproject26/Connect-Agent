@@ -62,8 +62,11 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
     { label: 'Settings', path: '/shared/settings', icon: <Settings className="w-5 h-5" /> },
   ];
 
+  const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';
+  const effectiveRole = (rawRole === 'agent' ? ((user as any)?.level || 'pincode') : rawRole).toLowerCase();
+
   const visibleSidebarItems = sidebarItems.filter(item => {
-    if (item.path === '/agents' && user?.role === 'pincode') {
+    if (item.path === '/agents' && effectiveRole === 'pincode') {
       return false;
     }
     return true;

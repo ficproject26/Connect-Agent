@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardBody, Button, Modal } from '../../components/ui';
-import { Target, CheckCircle2, Calendar, Check, MapPin, Loader2, Plus, Users, Award, Eye } from 'lucide-react';
+import { Target, CheckCircle2, Calendar, Check, MapPin, Loader2, Plus, Users, Award, Eye, Building2 } from 'lucide-react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
+import { getDistrictsForState, getDivisionsForDistrict } from '../../utils/locationData';
 
 interface Allocation {
   _id: string;
@@ -17,7 +18,17 @@ interface Allocation {
 
 export const TargetsList: React.FC = () => {
   const { user } = useAuth();
-  const isManager = user?.role === 'state' || user?.role === 'district' || user?.role === 'division';
+  
+  // Compute precise normalized role & level
+  const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';
+  const userRole = (rawRole === 'agent' ? ((user as any)?.level || 'pincode') : rawRole).toLowerCase();
+
+  const isManager = userRole === 'state' || userRole === 'district' || userRole === 'division';
+
+  const userState = user?.territory?.state || (user as any)?.assignedState || (user as any)?.state || 'Andhra Pradesh';
+  const userDistrict = user?.territory?.district || (user as any)?.assignedDistrict || (user as any)?.district || 'Visakhapatnam';
+  const userDivision = user?.territory?.division || (user as any)?.assignedDivision || (user as any)?.division || 'Vizag City Division';
+  const userPincode = user?.territory?.pincode || (user as any)?.assignedPincode || (user as any)?.pincode || '530001';
 
   const userTargetsKey = useMemo(() => {
     return user?._id || user?.email ? `connect_portal_target_allocations_${user._id || user.email?.toLowerCase()}` : 'connect_portal_target_allocations';
@@ -45,13 +56,12 @@ export const TargetsList: React.FC = () => {
       }
     } catch (e) {}
   }, [userTargetsKey]);
+
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
 
   // Modals state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
-  const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // New target form
@@ -61,42 +71,93 @@ export const TargetsList: React.FC = () => {
   const [targetValue, setTargetValue] = useState<number>(20);
   const [description, setDescription] = useState('');
 
-  const userDivision = user?.territory?.division || 'Vizag City Division';
-  const userDistrict = user?.territory?.district || 'Visakhapatnam';
-  const userState = user?.territory?.state || 'Andhra Pradesh';
-
-  const defaultAgentType = user?.role === 'state' ? 'district' : user?.role === 'district' ? 'division' : 'pincode';
+  const defaultAgentType = userRole === 'state' ? 'district' : userRole === 'district' ? 'division' : 'pincode';
   const [agentType, setAgentType] = useState<'district' | 'division' | 'pincode'>(defaultAgentType);
+  
+  const [selectedDistrict, setSelectedDistrict] = useState<string>(userDistrict);
+  const [selectedDivision, setSelectedDivision] = useState<string>(userDivision);
+  const [selectedPincode, setSelectedPincode] = useState<string>(userPincode);
   const [selectedAgent, setSelectedAgent] = useState<string>('');
-  const [selectedPincode, setSelectedPincode] = useState<string>('530001');
+
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
   const [endDate, setEndDate] = useState(new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10));
+
+  // Dynamic Territory Lists based on Authorized Scope
+  const availableDistricts = useMemo(() => {
+    if (userRole === 'state') {
+      return getDistrictsForState(userState);
+    }
+    return [userDistrict];
+  }, [userRole, userState, userDistrict]);
+
+  const availableDivisions = useMemo(() => {
+    if (userRole === 'state') {
+      return getDivisionsForDistrict(selectedDistrict || userDistrict, userState);
+    }
+    if (userRole === 'district') {
+      return getDivisionsForDistrict(userDistrict, userState);
+    }
+    return [userDivision];
+  }, [userRole, selectedDistrict, userDistrict, userState, userDivision]);
+
+  const availablePincodes = useMemo(() => {
+    const div = selectedDivision || userDivision;
+    if (div.toLowerCase().includes('vizag')) {
+      return ['530001', '530016', '530017', '530018', '530026'];
+    }
+    if (div.toLowerCase().includes('vijayawada')) {
+      return ['520001', '520002', '520003'];
+    }
+    return Array.from(new Set([userPincode, '530001', '530016', '530017', '530018', '530026']));
+  }, [selectedDivision, userDivision, userPincode]);
+
+  // Keep district/division/pincode selection valid on type or scope change
+  useEffect(() => {
+    if (availableDistricts.length > 0 && !availableDistricts.includes(selectedDistrict)) {
+      setSelectedDistrict(availableDistricts[0]);
+    }
+  }, [availableDistricts, selectedDistrict]);
+
+  useEffect(() => {
+    if (availableDivisions.length > 0 && !availableDivisions.includes(selectedDivision)) {
+      setSelectedDivision(availableDivisions[0]);
+    }
+  }, [availableDivisions, selectedDivision]);
+
+  useEffect(() => {
+    if (availablePincodes.length > 0 && !availablePincodes.includes(selectedPincode)) {
+      setSelectedPincode(availablePincodes[0]);
+    }
+  }, [availablePincodes, selectedPincode]);
 
   // Dynamic AP Agent list based on selected Agent Type & Territory Scope
   const apAgents = useMemo(() => {
     if (agentType === 'district') {
+      const dist = selectedDistrict || userDistrict;
       return [
-        { id: 'agt-d1', name: 'Anu', role: 'District Agent', territory: `${userDistrict} (${userState})` },
+        { id: 'agt-d1', name: 'Anu', role: 'District Agent', territory: `${dist} (${userState})` },
         { id: 'agt-d2', name: 'Rajesh Varma', role: 'District Agent', territory: `East Godavari (${userState})` },
         { id: 'agt-d3', name: 'Srinivas Rao', role: 'District Agent', territory: `Krishna District (${userState})` },
         { id: 'agt-d4', name: 'Prakash Naidu', role: 'District Agent', territory: `Guntur District (${userState})` }
       ];
     } else if (agentType === 'division') {
+      const div = selectedDivision || userDivision;
       return [
-        { id: 'agt-v1', name: 'goidhamma div', role: 'Division Agent', territory: `${userDivision} (${userDistrict})` },
-        { id: 'agt-v2', name: 'Ravi Manager', role: 'Division Agent', territory: `Gajuwaka Division (${userDistrict})` },
-        { id: 'agt-v3', name: 'Kiran Division', role: 'Division Agent', territory: `Anakapalle Division (${userDistrict})` },
-        { id: 'agt-v4', name: 'Suresh Division', role: 'Division Agent', territory: `Vijayawada Division (${userDistrict})` }
+        { id: 'agt-v1', name: 'goidhamma div', role: 'Division Agent', territory: `${div} (${selectedDistrict || userDistrict})` },
+        { id: 'agt-v2', name: 'Ravi Manager', role: 'Division Agent', territory: `Gajuwaka Division (${selectedDistrict || userDistrict})` },
+        { id: 'agt-v3', name: 'Kiran Division', role: 'Division Agent', territory: `Anakapalle Division (${selectedDistrict || userDistrict})` },
+        { id: 'agt-v4', name: 'Suresh Division', role: 'Division Agent', territory: `Vijayawada Central Division (${selectedDistrict || userDistrict})` }
       ];
     } else {
+      const pin = selectedPincode || userPincode;
       return [
-        { id: 'agt-p1', name: 'raki pin', role: 'Pincode Agent', territory: `PIN 530001 (${userDivision})` },
-        { id: 'agt-p2', name: 'Kiran Kumar', role: 'Pincode Agent', territory: `PIN 530017 (${userDivision})` },
-        { id: 'agt-p3', name: 'Ramesh Naidu', role: 'Pincode Agent', territory: `PIN 530018 (${userDivision})` },
-        { id: 'agt-p4', name: 'Nageswara Rao', role: 'Pincode Agent', territory: `PIN 530026 (${userDivision})` }
+        { id: 'agt-p1', name: 'raki pin', role: 'Pincode Agent', territory: `PIN ${pin} (${selectedDivision || userDivision})` },
+        { id: 'agt-p2', name: 'Kiran Kumar', role: 'Pincode Agent', territory: `PIN 530017 (${selectedDivision || userDivision})` },
+        { id: 'agt-p3', name: 'Ramesh Naidu', role: 'Pincode Agent', territory: `PIN 530018 (${selectedDivision || userDivision})` },
+        { id: 'agt-p4', name: 'Nageswara Rao', role: 'Pincode Agent', territory: `PIN 530026 (${selectedDivision || userDivision})` }
       ];
     }
-  }, [agentType, userDivision, userDistrict, userState]);
+  }, [agentType, selectedDistrict, selectedDivision, selectedPincode, userDistrict, userDivision, userState, userPincode]);
 
   useEffect(() => {
     if (apAgents.length > 0) {
@@ -106,10 +167,13 @@ export const TargetsList: React.FC = () => {
 
   useEffect(() => {
     if (isCreateModalOpen) {
-      const def = user?.role === 'state' ? 'district' : user?.role === 'district' ? 'division' : 'pincode';
+      const def = userRole === 'state' ? 'district' : userRole === 'district' ? 'division' : 'pincode';
       setAgentType(def);
+      setSelectedDistrict(userDistrict);
+      setSelectedDivision(userDivision);
+      setSelectedPincode(userPincode);
     }
-  }, [isCreateModalOpen, user?.role]);
+  }, [isCreateModalOpen, userRole, userDistrict, userDivision, userPincode]);
 
   const fetchAssignments = async () => {
     setIsLoading(true);
@@ -151,24 +215,9 @@ export const TargetsList: React.FC = () => {
     fetchAssignments();
   }, []);
 
-  const handleMarkCompleted = async (id: string) => {
-    try {
-      await api.patch(`/targets/assignments/${id}/status`, { status: 'completed' });
-    } catch (e) {
-      console.log('Simulated status update locally');
-    }
-    setAllocations(prev => {
-      const updated = prev.map(a => a._id === id ? { ...a, status: 'completed' as const } : a);
-      try {
-        localStorage.setItem(userTargetsKey, JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
-  };
-
   const handleCreateTargetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title) return;
+    if (!title || !isManager) return;
 
     setIsSubmitting(true);
     const assignedAgentObj = apAgents.find(a => a.name === selectedAgent) || apAgents[0];
@@ -218,10 +267,12 @@ export const TargetsList: React.FC = () => {
   };
 
   const [activeTab, setActiveTab] = useState<string>(() => {
-    if (user?.role === 'state') return 'district_allocations';
-    if (user?.role === 'district') return 'division_allocations';
-    return 'pincode_allocations';
+    if (userRole === 'state') return 'district_allocations';
+    if (userRole === 'district') return 'division_allocations';
+    if (userRole === 'division') return 'pincode_allocations';
+    return 'my_pincode_targets';
   });
+
   const [selectedTargetProgress, setSelectedTargetProgress] = useState<Allocation | null>(null);
 
   const getFilteredAllocations = () => {
@@ -233,6 +284,9 @@ export const TargetsList: React.FC = () => {
     }
     if (activeTab === 'division_allocations') {
       return allocations.filter(a => a.status !== 'completed' && (a.taskDescription?.toLowerCase().includes('division') || a.location?.toLowerCase().includes('division')));
+    }
+    if (activeTab === 'my_pincode_targets') {
+      return allocations.filter(a => a.status !== 'completed');
     }
     // Default: pincode_allocations
     return allocations.filter(a => a.status !== 'completed' && !a.taskDescription?.toLowerCase().includes('district agent') && !a.taskDescription?.toLowerCase().includes('division agent'));
@@ -251,11 +305,11 @@ export const TargetsList: React.FC = () => {
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-black text-[#1b1c1c] tracking-tight">Targets & Task Allocations</h1>
             <span className="px-2.5 py-0.5 bg-[#864f19]/10 text-[#864f19] font-black text-[10px] uppercase rounded-full border border-[#864f19]/20">
-              {user?.role === 'state' ? 'STATE SCOPE' : user?.role === 'district' ? 'DISTRICT SCOPE' : 'DIVISION SCOPE'}
+              {userRole === 'state' ? 'STATE SUPERVISION' : userRole === 'district' ? 'DISTRICT SUPERVISION' : userRole === 'division' ? 'DIVISION MANAGEMENT' : 'PINCODE FIELD AGENT'}
             </span>
           </div>
           <p className="text-xs text-[#52443a] font-semibold uppercase tracking-wider">
-            Scope: <strong className="text-[#864f19]">{user?.role === 'state' ? userState : user?.role === 'district' ? userDistrict : userDivision}</strong>
+            Authorized Scope: <strong className="text-[#864f19]">{userRole === 'state' ? userState : userRole === 'district' ? userDistrict : userRole === 'division' ? userDivision : `PIN ${userPincode} (${userDivision})`}</strong>
           </p>
         </div>
 
@@ -291,6 +345,7 @@ export const TargetsList: React.FC = () => {
             </div>
           </div>
 
+          {/* Only Managers can assign new targets. Pincode Agents cannot create or assign targets */}
           {isManager && (
             <Button
               variant="primary"
@@ -304,9 +359,9 @@ export const TargetsList: React.FC = () => {
         </div>
       </div>
 
-      {/* Hierarchy Tabs (Role Scoped, No My Direct Targets) */}
+      {/* Hierarchy Tabs (Role Scoped) */}
       <div className="flex flex-wrap gap-4 border-b border-[#eae8e7] pb-px">
-        {user?.role === 'state' && (
+        {userRole === 'state' && (
           <button
             onClick={() => setActiveTab('district_allocations')}
             className={`text-xs font-extrabold uppercase pb-3.5 border-b-2 transition-all cursor-pointer ${
@@ -317,7 +372,7 @@ export const TargetsList: React.FC = () => {
           </button>
         )}
 
-        {(user?.role === 'state' || user?.role === 'district') && (
+        {(userRole === 'state' || userRole === 'district') && (
           <button
             onClick={() => setActiveTab('division_allocations')}
             className={`text-xs font-extrabold uppercase pb-3.5 border-b-2 transition-all cursor-pointer ${
@@ -328,14 +383,27 @@ export const TargetsList: React.FC = () => {
           </button>
         )}
 
-        <button
-          onClick={() => setActiveTab('pincode_allocations')}
-          className={`text-xs font-extrabold uppercase pb-3.5 border-b-2 transition-all cursor-pointer ${
-            activeTab === 'pincode_allocations' ? 'border-[#864f19] text-[#864f19]' : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          📍 Pincode Agent Allocations
-        </button>
+        {userRole !== 'pincode' && (
+          <button
+            onClick={() => setActiveTab('pincode_allocations')}
+            className={`text-xs font-extrabold uppercase pb-3.5 border-b-2 transition-all cursor-pointer ${
+              activeTab === 'pincode_allocations' ? 'border-[#864f19] text-[#864f19]' : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            📍 Pincode Agent Allocations
+          </button>
+        )}
+
+        {userRole === 'pincode' && (
+          <button
+            onClick={() => setActiveTab('my_pincode_targets')}
+            className={`text-xs font-extrabold uppercase pb-3.5 border-b-2 transition-all cursor-pointer ${
+              activeTab === 'my_pincode_targets' ? 'border-[#864f19] text-[#864f19]' : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            🎯 My Assigned Targets
+          </button>
+        )}
 
         <button
           onClick={() => setActiveTab('completed')}
@@ -360,8 +428,10 @@ export const TargetsList: React.FC = () => {
                 <Target className="w-6 h-6" />
               </div>
               <div>
-                <p className="text-sm font-black text-slate-800">No target allocations match this view.</p>
-                <p className="text-xs text-slate-500 font-medium mt-1">Assign shop tie-up targets to downstream agents across your territory.</p>
+                <p className="text-sm font-black text-slate-800">No target allocations found for this view.</p>
+                <p className="text-xs text-slate-500 font-medium mt-1">
+                  {isManager ? 'Assign shop tie-up targets to downstream agents across your authorized territory.' : 'Your assigned quota goals will be listed here once allocated by your Division Manager.'}
+                </p>
               </div>
             </div>
           ) : (
@@ -492,48 +562,91 @@ export const TargetsList: React.FC = () => {
         </Modal>
       )}
 
-      {/* MODAL: Create Target Goal (Manager Only) */}
-      <Modal
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        title="Create Target Goal"
-        size="md"
-      >
-        <div className="space-y-4 font-sans text-xs">
-          <form onSubmit={handleCreateTargetSubmit} className="space-y-3.5 font-semibold">
-            
-            {/* Target Type Selection (Role-Based Downstream Agent Selection) */}
-            <div className="space-y-1">
-              <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target Type *</label>
-              <div className="flex flex-wrap gap-2">
-                {user?.role === 'state' && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setAgentType('district')}
-                      className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl border transition cursor-pointer text-center ${
-                        agentType === 'district'
-                          ? 'bg-[#864f19] text-white border-[#864f19]'
-                          : 'bg-[#fbf9f8] text-[#52443a] border-[#d7c3b5]/60 hover:bg-[#eae8e7]'
-                      }`}
-                    >
-                      District Agent Target
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAgentType('division')}
-                      className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl border transition cursor-pointer text-center ${
-                        agentType === 'division'
-                          ? 'bg-[#864f19] text-white border-[#864f19]'
-                          : 'bg-[#fbf9f8] text-[#52443a] border-[#d7c3b5]/60 hover:bg-[#eae8e7]'
-                      }`}
-                    >
-                      Division Agent Target
-                    </button>
+      {/* MODAL: Create Target Goal (State / District / Division Managers Only) */}
+      {isManager && (
+        <Modal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+          title="Create Target Goal"
+          size="md"
+        >
+          <div className="space-y-4 font-sans text-xs">
+            <form onSubmit={handleCreateTargetSubmit} className="space-y-3.5 font-semibold">
+              
+              {/* Target Type Selection (Role-Based Downstream Agent Selection Only) */}
+              <div className="space-y-1">
+                <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target Type *</label>
+                <div className="flex flex-wrap gap-2">
+                  {userRole === 'state' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setAgentType('district')}
+                        className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl border transition cursor-pointer text-center ${
+                          agentType === 'district'
+                            ? 'bg-[#864f19] text-white border-[#864f19]'
+                            : 'bg-[#fbf9f8] text-[#52443a] border-[#d7c3b5]/60 hover:bg-[#eae8e7]'
+                        }`}
+                      >
+                        District Agent Target
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAgentType('division')}
+                        className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl border transition cursor-pointer text-center ${
+                          agentType === 'division'
+                            ? 'bg-[#864f19] text-white border-[#864f19]'
+                            : 'bg-[#fbf9f8] text-[#52443a] border-[#d7c3b5]/60 hover:bg-[#eae8e7]'
+                        }`}
+                      >
+                        Division Agent Target
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAgentType('pincode')}
+                        className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl border transition cursor-pointer text-center ${
+                          agentType === 'pincode'
+                            ? 'bg-[#864f19] text-white border-[#864f19]'
+                            : 'bg-[#fbf9f8] text-[#52443a] border-[#d7c3b5]/60 hover:bg-[#eae8e7]'
+                        }`}
+                      >
+                        Pincode Agent Target
+                      </button>
+                    </>
+                  )}
+
+                  {userRole === 'district' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setAgentType('division')}
+                        className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl border transition cursor-pointer text-center ${
+                          agentType === 'division'
+                            ? 'bg-[#864f19] text-white border-[#864f19]'
+                            : 'bg-[#fbf9f8] text-[#52443a] border-[#d7c3b5]/60 hover:bg-[#eae8e7]'
+                        }`}
+                      >
+                        Division Agent Target
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAgentType('pincode')}
+                        className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl border transition cursor-pointer text-center ${
+                          agentType === 'pincode'
+                            ? 'bg-[#864f19] text-white border-[#864f19]'
+                            : 'bg-[#fbf9f8] text-[#52443a] border-[#d7c3b5]/60 hover:bg-[#eae8e7]'
+                        }`}
+                      >
+                        Pincode Agent Target
+                      </button>
+                    </>
+                  )}
+
+                  {userRole === 'division' && (
                     <button
                       type="button"
                       onClick={() => setAgentType('pincode')}
-                      className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl border transition cursor-pointer text-center ${
+                      className={`w-full py-2 px-3 text-xs font-bold rounded-xl border transition cursor-pointer text-center ${
                         agentType === 'pincode'
                           ? 'bg-[#864f19] text-white border-[#864f19]'
                           : 'bg-[#fbf9f8] text-[#52443a] border-[#d7c3b5]/60 hover:bg-[#eae8e7]'
@@ -541,185 +654,178 @@ export const TargetsList: React.FC = () => {
                     >
                       Pincode Agent Target
                     </button>
-                  </>
-                )}
+                  )}
+                </div>
+              </div>
 
-                {user?.role === 'district' && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setAgentType('division')}
-                      className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl border transition cursor-pointer text-center ${
-                        agentType === 'division'
-                          ? 'bg-[#864f19] text-white border-[#864f19]'
-                          : 'bg-[#fbf9f8] text-[#52443a] border-[#d7c3b5]/60 hover:bg-[#eae8e7]'
-                      }`}
-                    >
-                      Division Agent Target
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAgentType('pincode')}
-                      className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl border transition cursor-pointer text-center ${
-                        agentType === 'pincode'
-                          ? 'bg-[#864f19] text-white border-[#864f19]'
-                          : 'bg-[#fbf9f8] text-[#52443a] border-[#d7c3b5]/60 hover:bg-[#eae8e7]'
-                      }`}
-                    >
-                      Pincode Agent Target
-                    </button>
-                  </>
-                )}
+              <div className="space-y-1">
+                <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target Title *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Weekly Merchant Onboarding Target"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                />
+              </div>
 
-                {(user?.role === 'division' || (!user?.role || user?.role === 'pincode')) && (
-                  <button
-                    type="button"
-                    onClick={() => setAgentType('pincode')}
-                    className={`w-full py-2 px-3 text-xs font-bold rounded-xl border transition cursor-pointer text-center ${
-                      agentType === 'pincode'
-                        ? 'bg-[#864f19] text-white border-[#864f19]'
-                        : 'bg-[#fbf9f8] text-[#52443a] border-[#d7c3b5]/60 hover:bg-[#eae8e7]'
-                    }`}
+              {/* Target Metric & Frequency */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target Metric *</label>
+                  <select
+                    value={targetMetric}
+                    onChange={(e: any) => setTargetMetric(e.target.value)}
+                    className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                   >
-                    Pincode Agent Target
-                  </button>
+                    <option value="shop_tieups">Shop Tie-ups</option>
+                    <option value="vendor_onboarding">Vendor Onboarding</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[#52443a] uppercase text-[10px] font-bold">Frequency Type</label>
+                  <select
+                    value={type}
+                    onChange={(e: any) => setType(e.target.value)}
+                    className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                  >
+                    <option value="daily">Daily Goal</option>
+                    <option value="weekly">Weekly Goal</option>
+                    <option value="monthly">Monthly Goal</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Dynamic Territory & Agent Selection based on authorized role & scope */}
+              <div className="grid grid-cols-2 gap-3">
+                
+                {/* Territory Selector (District / Division / Pincode) */}
+                {agentType === 'district' && (
+                  <div className="space-y-1">
+                    <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target District *</label>
+                    <select
+                      value={selectedDistrict}
+                      onChange={(e) => setSelectedDistrict(e.target.value)}
+                      className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                    >
+                      {availableDistricts.map(d => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
+                  </div>
                 )}
-              </div>
-            </div>
 
-            <div className="space-y-1">
-              <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target Title *</label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. Weekly Merchant Onboarding Target"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-              />
-            </div>
+                {agentType === 'division' && (
+                  <div className="space-y-1">
+                    <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target Division *</label>
+                    <select
+                      value={selectedDivision}
+                      onChange={(e) => setSelectedDivision(e.target.value)}
+                      className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                    >
+                      {availableDivisions.map(div => (
+                        <option key={div} value={div}>{div}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
-            {/* Target Metric & Frequency */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target Metric *</label>
-                <select
-                  value={targetMetric}
-                  onChange={(e: any) => setTargetMetric(e.target.value)}
-                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                >
-                  <option value="shop_tieups">Shop Tie-ups</option>
-                  <option value="vendor_onboarding">Vendor Onboarding</option>
-                </select>
-              </div>
+                {agentType === 'pincode' && (
+                  <div className="space-y-1">
+                    <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target Pincode *</label>
+                    <select
+                      value={selectedPincode}
+                      onChange={(e) => setSelectedPincode(e.target.value)}
+                      className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                    >
+                      {availablePincodes.map(pin => (
+                        <option key={pin} value={pin}>PIN {pin}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
-              <div className="space-y-1">
-                <label className="block text-[#52443a] uppercase text-[10px] font-bold">Frequency Type</label>
-                <select
-                  value={type}
-                  onChange={(e: any) => setType(e.target.value)}
-                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                >
-                  <option value="daily">Daily Goal</option>
-                  <option value="weekly">Weekly Goal</option>
-                  <option value="monthly">Monthly Goal</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Agent & Pincode Selection */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target Pincode *</label>
-                <select
-                  value={selectedPincode}
-                  onChange={(e) => setSelectedPincode(e.target.value)}
-                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                >
-                  <option value="530001">530001 (Central Vizag)</option>
-                  <option value="530017">530017 (MVP Colony)</option>
-                  <option value="530018">530018 (Madhavadhara)</option>
-                  <option value="530026">530026 (Gajuwaka)</option>
-                </select>
+                {/* Agent Selector */}
+                <div className="space-y-1">
+                  <label className="block text-[#52443a] uppercase text-[10px] font-bold">
+                    {agentType === 'district' ? 'Assign to District Agent *' : agentType === 'division' ? 'Assign to Division Agent *' : 'Assign to Pincode Agent *'}
+                  </label>
+                  <select
+                    value={selectedAgent}
+                    onChange={(e) => setSelectedAgent(e.target.value)}
+                    className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                  >
+                    {apAgents.map(agt => (
+                      <option key={agt.id} value={agt.name}>
+                        {agt.name} ({agt.territory})
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="block text-[#52443a] uppercase text-[10px] font-bold">
-                  {agentType === 'district' ? 'Assign to District Agent *' : agentType === 'division' ? 'Assign to Division Agent *' : 'Assign to Pincode Agent *'}
-                </label>
-                <select
-                  value={selectedAgent}
-                  onChange={(e) => setSelectedAgent(e.target.value)}
-                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                >
-                  {apAgents.map(agt => (
-                    <option key={agt.id} value={agt.name}>
-                      {agt.name} ({agt.territory})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
+              {/* Quantity, Start Date & End Date */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target Quantity *</label>
+                  <input
+                    type="number"
+                    min={1}
+                    required
+                    value={targetValue}
+                    onChange={(e) => setTargetValue(parseInt(e.target.value, 10) || 1)}
+                    className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                  />
+                </div>
 
-            {/* Quantity, Start Date & End Date */}
-            <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <label className="block text-[#52443a] uppercase text-[10px] font-bold">Start Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[#52443a] uppercase text-[10px] font-bold">End Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                  />
+                </div>
+              </div>
+
               <div className="space-y-1">
-                <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target Quantity *</label>
-                <input
-                  type="number"
-                  min={1}
-                  required
-                  value={targetValue}
-                  onChange={(e) => setTargetValue(parseInt(e.target.value, 10) || 1)}
-                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                <label className="block text-[#52443a] uppercase text-[10px] font-bold">Goal Description & Instructions</label>
+                <textarea
+                  rows={3}
+                  placeholder="Describe goal criteria, required documents, or onboard merchant quota..."
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19] resize-none"
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="block text-[#52443a] uppercase text-[10px] font-bold">Start Date *</label>
-                <input
-                  type="date"
-                  required
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                />
+              <div className="flex justify-end gap-2 pt-3 border-t border-[#eae8e7]">
+                <Button variant="outline" type="button" onClick={() => setIsCreateModalOpen(false)}>
+                  Cancel
+                </Button>
+                <Button variant="primary" type="submit" disabled={isSubmitting} className="bg-[#864f19] text-white font-bold">
+                  {isSubmitting ? 'Creating...' : 'Save Target Goal'}
+                </Button>
               </div>
-
-              <div className="space-y-1">
-                <label className="block text-[#52443a] uppercase text-[10px] font-bold">End Date *</label>
-                <input
-                  type="date"
-                  required
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <label className="block text-[#52443a] uppercase text-[10px] font-bold">Goal Description & Instructions</label>
-              <textarea
-                rows={3}
-                placeholder="Describe goal criteria, required documents, or onboard merchant quota..."
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19] resize-none"
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-3 border-t border-[#eae8e7]">
-              <Button variant="outline" type="button" onClick={() => setIsCreateModalOpen(false)}>
-                Cancel
-              </Button>
-              <Button variant="primary" type="submit" disabled={isSubmitting} className="bg-[#864f19] text-white font-bold">
-                {isSubmitting ? 'Creating...' : 'Save Target Goal'}
-              </Button>
-            </div>
-          </form>
-        </div>
-      </Modal>
+            </form>
+          </div>
+        </Modal>
+      )}
 
     </div>
   );

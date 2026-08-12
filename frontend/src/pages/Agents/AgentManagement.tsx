@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { Navigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
@@ -46,7 +47,14 @@ export interface AgentNode {
 
 export const AgentManagement: React.FC = () => {
   const { user } = useAuth();
-  const activeRole = user?.role || 'state';
+  const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';
+  const effectiveRole = (rawRole === 'agent' ? ((user as any)?.level || 'pincode') : rawRole).toLowerCase();
+
+  if (effectiveRole === 'pincode') {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  const activeRole = effectiveRole;
 
   // Logged-in Agent's Territory Parameters
   const userState = user?.territory?.state || 'Tamil Nadu';

@@ -112,11 +112,52 @@ export const createVendor = async (req: Request, res: Response) => {
         longitude: data.location?.longitude || 0
       },
       assignedAgent: agentId,
+      joiningType: 'agent',
+      createdVia: 'agent',
       status: 'pending',
       kycStatus: 'pending'
     });
 
     await vendor.save();
+
+    // Also sync vendor to users collection for Admin Portal join requests
+    try {
+      const db = mongoose.connection.db;
+      if (db) {
+        await db.collection('users').updateOne(
+          { email: data.email.toLowerCase() },
+          {
+            $set: {
+              name: data.businessName || (data as any).name || data.ownerName,
+              businessName: data.businessName || (data as any).name,
+              contactPerson: data.ownerName || (data as any).contactPerson || (data as any).name,
+              email: data.email.toLowerCase(),
+              phone: data.phone || '',
+              role: 'Vendor',
+              vendorType: data.category || 'General Store',
+              category: data.category || 'General Store',
+              status: 'pending',
+              kycStatus: 'pending',
+              joiningType: 'agent',
+              createdVia: 'agent',
+              assignedAgent: agentId,
+              agentId: agentId,
+              onboardedBy: agentId,
+              assignedState: data.state || '',
+              assignedDistrict: data.district || '',
+              assignedDivision: (data as any).division || '',
+              pincode: data.pincode || '',
+              address: data.location?.address || `${data.district || ''}, ${data.state || ''} ${data.pincode || ''}`,
+              registrationId: (vendor as any).registrationId || `REG-${Date.now().toString().slice(-6)}-${Math.floor(1000 + Math.random() * 9000)}`,
+              createdAt: new Date()
+            }
+          },
+          { upsert: true }
+        );
+      }
+    } catch (syncErr) {
+      console.error('Error syncing vendor to admin users collection:', syncErr);
+    }
     return res.status(201).json({ message: 'Vendor created successfully', vendor });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
