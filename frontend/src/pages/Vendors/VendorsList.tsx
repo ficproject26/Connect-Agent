@@ -1199,9 +1199,11 @@ export const VendorsList: React.FC = () => {
           // 1. Post to Agent App backend
           api.post('/vendors', vendorPayload).then(() => {
             refetchVendors();
+            window.dispatchEvent(new CustomEvent('vendorOnboarded', { detail: createdVendor }));
           }).catch(err => {
             console.warn('Backend API /vendors POST sync warning:', err);
             refetchVendors();
+            window.dispatchEvent(new CustomEvent('vendorOnboarded', { detail: createdVendor }));
           });
 
           // 2. Direct sync to Admin backend agent-onboard endpoint for guaranteed real-time availability
