@@ -59,6 +59,39 @@ export const TargetsList: React.FC = () => {
   const [type, setType] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
   const [targetValue, setTargetValue] = useState<number>(10);
   const [description, setDescription] = useState('');
+  const [agentType, setAgentType] = useState<'district' | 'division' | 'pincode'>('district');
+  const [selectedAgent, setSelectedAgent] = useState<string>('Muthuswamy');
+
+  // Dynamic AP Agent list based on selected Agent Type
+  const apAgents = useMemo(() => {
+    if (agentType === 'district') {
+      return [
+        { id: 'agt-d1', name: 'Muthuswamy', role: 'District Agent', territory: 'NTR District (AP)' },
+        { id: 'agt-d2', name: 'Anu', role: 'District Agent', territory: 'Visakhapatnam District (AP)' },
+        { id: 'agt-d3', name: 'Rajeshwari', role: 'District Agent', territory: 'Guntur District (AP)' },
+        { id: 'agt-d4', name: 'Kalyan', role: 'District Agent', territory: 'Tirupati District (AP)' }
+      ];
+    } else if (agentType === 'division') {
+      return [
+        { id: 'agt-v1', name: 'Srinivas', role: 'Division Agent', territory: 'Vijayawada Central Division (AP)' },
+        { id: 'agt-v2', name: 'Venkat', role: 'Division Agent', territory: 'Vizag City Division (AP)' },
+        { id: 'agt-v3', name: 'Subba Rao', role: 'Division Agent', territory: 'Guntur Urban Division (AP)' }
+      ];
+    } else {
+      return [
+        { id: 'agt-p1', name: 'Kiran Kumar', role: 'Pincode Agent', territory: 'PIN 520001 (Vijayawada, AP)' },
+        { id: 'agt-p2', name: 'Ramesh Naidu', role: 'Pincode Agent', territory: 'PIN 530001 (Visakhapatnam, AP)' },
+        { id: 'agt-p3', name: 'Nageswara Rao', role: 'Pincode Agent', territory: 'PIN 522001 (Guntur, AP)' }
+      ];
+    }
+  }, [agentType]);
+
+  // Keep selectedAgent synced when agentType changes
+  useEffect(() => {
+    if (apAgents.length > 0) {
+      setSelectedAgent(apAgents[0].name);
+    }
+  }, [apAgents]);
 
   // Assignment form
   const [assignedAgentEmail, setAssignedAgentEmail] = useState('');
@@ -125,14 +158,16 @@ export const TargetsList: React.FC = () => {
     if (!title) return;
 
     setIsSubmitting(true);
+    const assignedAgentObj = apAgents.find(a => a.name === selectedAgent) || apAgents[0];
+
     const newAlloc: Allocation = {
       _id: `TSK-${Math.floor(1000 + Math.random() * 9000)}`,
       vendorName: title,
-      location: 'Assigned Territory Scope',
+      location: `Assigned to: ${assignedAgentObj.name} (${assignedAgentObj.role} - ${assignedAgentObj.territory})`,
       dueDate: 'Today, 6:00 PM',
       status: 'assigned',
       priority: type === 'daily' ? 'high' : 'medium',
-      taskDescription: description || `Achieve ${type} quota target goal of ${targetValue} onboarding logs.`,
+      taskDescription: description || `Achieve ${type} quota target goal of ${targetValue} onboarding logs. Assigned to ${assignedAgentObj.name}.`,
       targetValue
     };
 
@@ -141,7 +176,10 @@ export const TargetsList: React.FC = () => {
         title,
         description,
         type,
-        targetValue
+        targetValue,
+        assignedAgent: assignedAgentObj.name,
+        agentRole: assignedAgentObj.role,
+        agentTerritory: assignedAgentObj.territory
       });
     } catch (e) {
       console.log('Simulated local target creation');
@@ -339,16 +377,11 @@ export const TargetsList: React.FC = () => {
       <Modal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
+        title="Create Target Goal"
         size="md"
       >
-        <div className="space-y-4 font-sans">
-          <div className="flex justify-between items-center border-b border-[#eae8e7] pb-3">
-            <h3 className="text-base font-black text-[#1b1c1c] flex items-center gap-2">
-              <Target className="w-5 h-5 text-[#864f19]" /> Create Target Goal
-            </h3>
-          </div>
-
-          <form onSubmit={handleCreateTargetSubmit} className="space-y-4 text-xs font-semibold">
+        <div className="space-y-4 font-sans text-xs">
+          <form onSubmit={handleCreateTargetSubmit} className="space-y-4 font-semibold">
             <div className="space-y-1">
               <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target Title *</label>
               <input
@@ -384,6 +417,38 @@ export const TargetsList: React.FC = () => {
                   onChange={(e) => setTargetValue(parseInt(e.target.value, 10) || 1)}
                   className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                 />
+              </div>
+            </div>
+
+            {/* Agent Type Dropdown */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="block text-[#52443a] uppercase text-[10px] font-bold">Agent Type *</label>
+                <select
+                  value={agentType}
+                  onChange={(e: any) => setAgentType(e.target.value)}
+                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                >
+                  <option value="district">District Agent</option>
+                  <option value="division">Division Agent</option>
+                  <option value="pincode">Pincode Agent</option>
+                </select>
+              </div>
+
+              {/* Agent Selection Dropdown */}
+              <div className="space-y-1">
+                <label className="block text-[#52443a] uppercase text-[10px] font-bold">Assign to Agent *</label>
+                <select
+                  value={selectedAgent}
+                  onChange={(e) => setSelectedAgent(e.target.value)}
+                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                >
+                  {apAgents.map(agt => (
+                    <option key={agt.id} value={agt.name}>
+                      {agt.name} ({agt.territory})
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 

@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardBody, Button, Modal } from '../../components/ui';
 import {
   MapPin, Navigation, Camera, CheckCircle2, Clock, Plus, Search, Store,
   AlertCircle, ArrowRight, Download, FileText, Printer, User, Filter, RotateCcw,
-  Building, Calendar, ShieldCheck, X, Eye
+  Building, Calendar, ShieldCheck, X, Eye, LogOut, Check, ThumbsUp, ThumbsDown
 } from 'lucide-react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
@@ -31,10 +32,11 @@ interface FieldVisitRecord {
 
 export const FieldVisitsModule: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const activeRole = (user?.role as string) || 'state';
-  const userState = user?.territory?.state || 'Tamil Nadu';
-  const userDistrict = user?.territory?.district || 'Krishnagiri District';
-  const userPincode = user?.territory?.pincode || '635109';
+  const userState = user?.territory?.state || 'Andhra Pradesh';
+  const userDistrict = user?.territory?.district || 'NTR District';
+  const userPincode = user?.territory?.pincode || '520001';
   const userName = user?.name || 'Logged Agent';
 
   const userVisitsKey = useMemo(() => {
@@ -80,6 +82,13 @@ export const FieldVisitsModule: React.FC = () => {
   const [selectedVisitDetails, setSelectedVisitDetails] = useState<FieldVisitRecord | null>(null);
   const [isStartModalOpen, setIsStartModalOpen] = useState(false);
   const [selectedVisitToComplete, setSelectedVisitToComplete] = useState<FieldVisitRecord | null>(null);
+
+  // Check Out Modal States (Requirement 4)
+  const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
+  const [checkoutVisit, setCheckoutVisit] = useState<FieldVisitRecord | null>(null);
+  const [checkoutOutcome, setCheckoutOutcome] = useState<'interested' | 'not_interested' | null>(null);
+  const [notInterestedReason, setNotInterestedReason] = useState<string>('');
+  const [customReason, setCustomReason] = useState<string>('');
 
   // Start Form State
   const [vendorName, setVendorName] = useState('');
@@ -286,6 +295,72 @@ export const FieldVisitsModule: React.FC = () => {
     setSelectedVisitToComplete(null);
     setCompleteRemarks('');
     setIsSubmitting(false);
+  };
+
+  // Check Out handlers for Field Visit details drawer (Requirement 4)
+  const handleOpenCheckoutModal = (visit: FieldVisitRecord) => {
+    setCheckoutVisit(visit);
+    setCheckoutOutcome(null);
+    setNotInterestedReason('');
+    setCustomReason('');
+    setIsCheckoutModalOpen(true);
+  };
+
+  const handleInterestedSubmit = () => {
+    if (!checkoutVisit) return;
+    const checkoutTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    setVisits(prev => {
+      const updated = prev.map(v =>
+        v._id === checkoutVisit._id
+          ? {
+              ...v,
+              status: 'completed' as const,
+              remarks: 'Interested - Proceeding to Vendor Onboarding',
+              visitTime: `${v.visitTime || 'Checked-In'} → Checked-Out (Interested) at ${checkoutTime}`
+            }
+          : v
+      );
+      try {
+        localStorage.setItem(userVisitsKey, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    setIsCheckoutModalOpen(false);
+    setSelectedVisitDetails(null);
+    navigate('/vendors');
+  };
+
+  const handleNotInterestedSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!checkoutVisit) return;
+
+    const finalReason = notInterestedReason === 'Other'
+      ? (customReason.trim() || 'Merchant not interested')
+      : (notInterestedReason || 'Merchant not interested');
+
+    const checkoutTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    setVisits(prev => {
+      const updated = prev.map(v =>
+        v._id === checkoutVisit._id
+          ? {
+              ...v,
+              status: 'completed' as const,
+              remarks: `Not Interested: ${finalReason}`,
+              visitTime: `${v.visitTime || 'Checked-In'} → Checked-Out (Not Interested) at ${checkoutTime}`
+            }
+          : v
+      );
+      try {
+        localStorage.setItem(userVisitsKey, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    setIsCheckoutModalOpen(false);
+    setSelectedVisitDetails(null);
   };
 
   // Printable PDF Export function
@@ -780,7 +855,13 @@ export const FieldVisitsModule: React.FC = () => {
               </div>
             </div>
 
-            <div className="pt-2">
+            <div className="pt-3 space-y-2 border-t border-slate-100">
+              <button
+                onClick={() => handleOpenCheckoutModal(selectedVisitDetails)}
+                className="w-full py-2.5 bg-[#864f19] hover:bg-[#a3672f] text-white font-extrabold rounded-xl text-xs cursor-pointer border-none shadow flex items-center justify-center gap-2 uppercase tracking-wider transition"
+              >
+                <LogOut className="w-4 h-4" /> Check Out Field Visit
+              </button>
               <button
                 onClick={() => setSelectedVisitDetails(null)}
                 className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer border-none"
@@ -961,6 +1042,116 @@ export const FieldVisitsModule: React.FC = () => {
               </Button>
             </div>
           </form>
+        )}
+      </Modal>
+
+      {/* MODAL: Check Out Flow (Interested / Not Interested - Requirement 4) */}
+      <Modal
+        isOpen={isCheckoutModalOpen}
+        onClose={() => setIsCheckoutModalOpen(false)}
+        title="Field Visit Check-Out"
+        size="md"
+      >
+        {checkoutVisit && (
+          <div className="space-y-5 font-sans text-xs">
+            <div className="p-3.5 bg-[#fbf9f8] rounded-2xl border border-[#eae8e7] space-y-1">
+              <span className="text-[10px] text-[#864f19] font-black uppercase tracking-wider block">STORE VISIT DETAILS</span>
+              <p className="font-extrabold text-[#1b1c1c] text-sm">{checkoutVisit.vendorName}</p>
+              <p className="text-slate-500 text-xs font-medium">{checkoutVisit.storeAddress}</p>
+            </div>
+
+            {!checkoutOutcome ? (
+              <div className="space-y-4">
+                <p className="text-xs font-bold text-slate-700 text-center uppercase tracking-wider">
+                  Is the merchant interested in onboarding?
+                </p>
+
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Interested Option */}
+                  <button
+                    type="button"
+                    onClick={handleInterestedSubmit}
+                    className="p-5 rounded-2xl border-2 border-emerald-500/40 bg-emerald-50/50 hover:bg-emerald-100/70 hover:border-emerald-600 transition text-center cursor-pointer space-y-2 group"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center mx-auto shadow group-hover:scale-110 transition">
+                      <ThumbsUp className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="font-black text-emerald-900 text-sm uppercase tracking-wide">Interested</p>
+                      <p className="text-[10px] text-emerald-700 font-semibold mt-0.5">Proceed to Vendor Onboarding</p>
+                    </div>
+                  </button>
+
+                  {/* Not Interested Option */}
+                  <button
+                    type="button"
+                    onClick={() => setCheckoutOutcome('not_interested')}
+                    className="p-5 rounded-2xl border-2 border-rose-400/40 bg-rose-50/50 hover:bg-rose-100/70 hover:border-rose-500 transition text-center cursor-pointer space-y-2 group"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-rose-600 text-white flex items-center justify-center mx-auto shadow group-hover:scale-110 transition">
+                      <ThumbsDown className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="font-black text-rose-900 text-sm uppercase tracking-wide">Not Interested</p>
+                      <p className="text-[10px] text-rose-700 font-semibold mt-0.5">Record Reason & Complete</p>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleNotInterestedSubmit} className="space-y-4 font-semibold">
+                <div className="p-3 bg-rose-50 rounded-xl border border-rose-200">
+                  <p className="text-xs font-black text-rose-900 uppercase">Merchant Status: Not Interested</p>
+                  <p className="text-[11px] text-rose-700 font-medium mt-0.5">Please specify the reason for declining onboarding.</p>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[#52443a] uppercase text-[10px] font-bold">Reason for Rejection / Decline *</label>
+                  <select
+                    required
+                    value={notInterestedReason}
+                    onChange={(e) => setNotInterestedReason(e.target.value)}
+                    className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                  >
+                    <option value="">-- Select Reason --</option>
+                    <option value="Not interested in digital onboarding">Not interested in digital onboarding</option>
+                    <option value="High commission or subscription fee concerns">High commission / fee concerns</option>
+                    <option value="Already using competitor POS platform">Already using competitor platform</option>
+                    <option value="Lack of smartphone or technical literacy">No smartphone / technical literacy</option>
+                    <option value="Business owner unavailable / absent">Business owner unavailable</option>
+                    <option value="Other">Other (Custom Reason)</option>
+                  </select>
+                </div>
+
+                {notInterestedReason === 'Other' && (
+                  <div className="space-y-1">
+                    <label className="block text-[#52443a] uppercase text-[10px] font-bold">Custom Reason Remarks *</label>
+                    <textarea
+                      required
+                      rows={3}
+                      placeholder="Enter detailed reason..."
+                      value={customReason}
+                      onChange={(e) => setCustomReason(e.target.value)}
+                      className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19] resize-none"
+                    />
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center pt-3 border-t border-[#eae8e7]">
+                  <button
+                    type="button"
+                    onClick={() => setCheckoutOutcome(null)}
+                    className="text-xs font-bold text-slate-500 hover:text-slate-700 cursor-pointer bg-transparent border-none"
+                  >
+                    ← Back
+                  </button>
+                  <Button variant="primary" type="submit" className="bg-rose-600 hover:bg-rose-700 text-white font-bold border-none">
+                    Save Reason & Complete
+                  </Button>
+                </div>
+              </form>
+            )}
+          </div>
         )}
       </Modal>
 

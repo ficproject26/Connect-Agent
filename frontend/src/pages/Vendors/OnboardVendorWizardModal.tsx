@@ -5,6 +5,7 @@ import {
   Upload, Eye, EyeOff, X, AlertCircle, ShieldCheck, Check, Info, FileCode, Plus
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { getLocationFromPincode } from '../../utils/locationData';
 
 interface OnboardVendorWizardModalProps {
   isOpen: boolean;
@@ -35,11 +36,11 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
     phone: '',
     email: '',
     fullAddress: '',
-    pincode: user?.territory?.pincode || '636112',
-    state: user?.territory?.state || 'Tamil Nadu',
-    district: user?.territory?.district || 'Salem',
-    division: user?.territory?.division || 'Attur Division',
-    postOffice: 'Attur Head Post Office',
+    pincode: user?.territory?.pincode || '520001',
+    state: user?.territory?.state || 'Andhra Pradesh',
+    district: user?.territory?.district || 'NTR District',
+    division: user?.territory?.division || 'Vijayawada Central Division',
+    postOffice: 'Vijayawada Head Post Office',
     operatingHours: '09:00 AM - 09:00 PM',
     website: '',
     logoUrl: '',
@@ -86,25 +87,11 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
     let postOffice = formData.postOffice;
 
     if (cleaned.length === 6) {
-      const firstDigit = cleaned.charAt(0);
-      const prefixTwo = parseInt(cleaned.slice(0, 2), 10);
-
-      if (firstDigit === '1') {
-        if (prefixTwo === 11) {
-          state = "Delhi"; division = "Delhi Division"; district = "New Delhi";
-        } else if (prefixTwo >= 12 && prefixTwo <= 13) {
-          state = "Haryana"; division = "Gurugram Division"; district = "Gurugram";
-        } else {
-          state = "Punjab"; division = "Ludhiana Division"; district = "Ludhiana";
-        }
-      } else if (firstDigit === '4') {
-        state = "Maharashtra"; division = "Mumbai Division"; district = "Mumbai Suburban";
-      } else if (firstDigit === '5') {
-        state = "Karnataka"; division = "Bengaluru South"; district = "Bengaluru Urban";
-      } else if (firstDigit === '6') {
-        state = "Tamil Nadu"; division = "Hosur Division"; district = "Krishnagiri District";
-      }
-      postOffice = `Post Office PIN-${cleaned}`;
+      const info = getLocationFromPincode(cleaned);
+      state = info.state;
+      district = info.district;
+      division = info.division;
+      postOffice = info.postOffice;
     }
 
     setFormData(prev => ({

@@ -10,6 +10,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { OnboardVendorWizardModal } from './OnboardVendorWizardModal';
 import { AgentOnboardedVendorsModal } from './AgentOnboardedVendorsModal';
+import { getDistrictsForState, getDivisionsForDistrict, getLocationFromPincode } from '../../utils/locationData';
 
 interface Vendor {
   id: string;
@@ -91,10 +92,10 @@ export const VendorsList: React.FC = () => {
 
   // Active Role and Territory Scope
   const activeRole = (user?.role as string) || 'state';
-  const userState = user?.territory?.state || 'Tamil Nadu';
-  const userDistrict = user?.territory?.district || 'Krishnagiri District';
-  const userDivision = user?.territory?.division || 'Hosur Division';
-  const userPincode = user?.territory?.pincode || '635109';
+  const userState = user?.territory?.state || 'Andhra Pradesh';
+  const userDistrict = user?.territory?.district || 'NTR District';
+  const userDivision = user?.territory?.division || 'Vijayawada Central Division';
+  const userPincode = user?.territory?.pincode || '520001';
 
   // Sync API backend vendors into state
   useEffect(() => {
@@ -112,10 +113,10 @@ export const VendorsList: React.FC = () => {
           ownerName: v.ownerName || 'Merchant Owner',
           phone: v.phone || '',
           email: v.email || '',
-          state: v.state || '',
-          division: v.division || '',
-          district: v.district || '',
-          pincode: v.pincode || '',
+          state: v.state || userState,
+          division: v.division || userDivision,
+          district: v.district || userDistrict,
+          pincode: v.pincode || userPincode,
           role: 'Merchant Partner',
           kycStatus: v.kycStatus || 'pending',
           status: v.status === 'inactive' ? 'inactive' : 'active',
@@ -134,7 +135,7 @@ export const VendorsList: React.FC = () => {
         return [...newFromApi, ...prev];
       });
     }
-  }, [apiVendorsData, user?.name]);
+  }, [apiVendorsData, user?.name, userState, userDistrict, userDivision, userPincode]);
 
   // Search and Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -150,6 +151,11 @@ export const VendorsList: React.FC = () => {
 
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Reset divisionFilter if districtFilter changes to an incompatible value
+  useEffect(() => {
+    setDivisionFilter('all');
+  }, [districtFilter]);
 
   // 1. SCOPED VENDORS LIST BASED ON LOGGED IN AGENT HIERARCHY (STRICT STATE ISOLATION)
   const scopedVendors = useMemo(() => {
@@ -179,12 +185,12 @@ export const VendorsList: React.FC = () => {
     });
   }, [vendors, activeRole, userState, userDistrict, userDivision, userPincode]);
 
-  // Extract unique filter dropdown values from scoped vendors list
+  // Extract unique filter dropdown values strictly scoped to Andhra Pradesh
   const categories = useMemo(() => Array.from(new Set(scopedVendors.map(v => v.storeType))), [scopedVendors]);
-  const districts = useMemo(() => Array.from(new Set(scopedVendors.map(v => v.district))), [scopedVendors]);
-  const divisions = useMemo(() => Array.from(new Set(scopedVendors.map(v => v.division))), [scopedVendors]);
-  const pincodes = useMemo(() => Array.from(new Set(scopedVendors.map(v => v.pincode))), [scopedVendors]);
-  const agents = useMemo(() => Array.from(new Set(scopedVendors.map(v => v.assignedAgent))), [scopedVendors]);
+  const districts = useMemo(() => getDistrictsForState(userState), [userState]);
+  const divisions = useMemo(() => getDivisionsForDistrict(districtFilter, userState), [districtFilter, userState]);
+  const pincodes = useMemo(() => Array.from(new Set(scopedVendors.map(v => v.pincode).filter(Boolean))), [scopedVendors]);
+  const agents = useMemo(() => Array.from(new Set(scopedVendors.map(v => v.assignedAgent).filter(Boolean))), [scopedVendors]);
 
   // Compute 6 KPI Card Metrics from SCOPED vendors list
   const metrics = useMemo(() => {
@@ -1037,17 +1043,13 @@ export const VendorsList: React.FC = () => {
               <div className="space-y-1">
                 <p className="text-[10px] uppercase font-black text-slate-400">Territory Location</p>
                 <p className="font-bold text-slate-800">
-                  {[
-                    selectedVendor.district,
-                    selectedVendor.division ? `(${selectedVendor.division})` : '',
-                    selectedVendor.state
-                  ].filter(Boolean).join(' ') || 'Unassigned Territory'}
+                  {`${selectedVendor.district || userDistrict} (${selectedVendor.division || userDivision}), ${selectedVendor.state || userState}`}
                 </p>
               </div>
 
               <div className="space-y-1">
                 <p className="text-[10px] uppercase font-black text-slate-400">Pincode</p>
-                <p className="font-bold text-slate-800">{selectedVendor.pincode}</p>
+                <p className="font-bold text-slate-800">{selectedVendor.pincode || userPincode}</p>
               </div>
 
               <div className="space-y-1">
@@ -1061,12 +1063,14 @@ export const VendorsList: React.FC = () => {
               </div>
             </div>
 
-            {selectedVendor.fullAddress && (
-              <div className="space-y-1 text-xs">
-                <p className="text-[10px] uppercase font-black text-slate-400">Full Business Address</p>
-                <p className="font-bold text-slate-700 bg-slate-50 p-2.5 rounded-xl border border-slate-200">{selectedVendor.fullAddress}</p>
-              </div>
-            )}
+            <div className="space-y-1 text-xs">
+              <p className="text-[10px] uppercase font-black text-slate-400">Full Business Address</p>
+              <p className="font-bold text-slate-700 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                {selectedVendor.fullAddress && !selectedVendor.fullAddress.toLowerCase().includes('salem')
+                  ? selectedVendor.fullAddress
+                  : `${selectedVendor.name}, ${selectedVendor.division || userDivision}, ${selectedVendor.district || userDistrict}, ${selectedVendor.state || userState} - ${selectedVendor.pincode || userPincode}`}
+              </p>
+            </div>
 
             {selectedVendor.rejectionReason && (
               <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs space-y-1">

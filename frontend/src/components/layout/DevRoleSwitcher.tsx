@@ -59,7 +59,35 @@ export const DevRoleSwitcher: React.FC = () => {
             )}
           </div>
 
-          <p className="text-[10px] text-amber-400 uppercase font-black tracking-widest">Tamil Nadu Sandbox Accounts</p>
+          <p className="text-[10px] text-emerald-400 uppercase font-black tracking-widest">Andhra Pradesh Sandbox Accounts</p>
+          
+          <div className="space-y-1">
+            <button
+              onClick={() => handleRoleSwitch('ap_state@forge.in')}
+              className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-xl text-left text-xs font-semibold transition-all ${
+                user?.role === 'state' && user?.territory?.state === 'Andhra Pradesh'
+                  ? 'bg-emerald-600 text-white font-bold' 
+                  : 'hover:bg-white/5 text-slate-300'
+              }`}
+            >
+              <Shield className="w-3.5 h-3.5 text-emerald-400" />
+              <span>AP State Lead (Suresh)</span>
+            </button>
+
+            <button
+              onClick={() => handleRoleSwitch('ap_district@forge.in')}
+              className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-xl text-left text-xs font-semibold transition-all ${
+                user?.role === 'district' && user?.territory?.state === 'Andhra Pradesh'
+                  ? 'bg-emerald-600 text-white font-bold' 
+                  : 'hover:bg-white/5 text-slate-300'
+              }`}
+            >
+              <Map className="w-3.5 h-3.5 text-emerald-400" />
+              <span>AP District Lead (Muthuswamy)</span>
+            </button>
+          </div>
+
+          <p className="text-[10px] text-amber-400 uppercase font-black tracking-widest pt-1">Tamil Nadu Sandbox Accounts</p>
           
           <div className="space-y-1">
             <button
