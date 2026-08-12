@@ -225,3 +225,27 @@ export const getLocationFromPincode = (pincodeStr: string) => {
     postOffice: `Post Office PIN-${pin || '520001'}`
   };
 };
+
+export const getPincodesForDivision = (divisionName: string): string[] => {
+  if (!divisionName) return ['530001', '530016', '530017', '530018', '530026'];
+  const divLower = divisionName.toLowerCase();
+  
+  const matched = Object.keys(PINCODE_DIRECTORY).filter(
+    pin => PINCODE_DIRECTORY[pin].division.toLowerCase() === divLower
+  );
+  if (matched.length > 0) return matched;
+
+  if (divLower.includes('vizag')) return ['530001', '530016', '530017', '530018', '530026'];
+  if (divLower.includes('anakapalle')) return ['531001', '531002', '531019'];
+  if (divLower.includes('bheemuni')) return ['531163', '531164'];
+  if (divLower.includes('vijayawada')) return ['520001', '520002', '520003'];
+  if (divLower.includes('guntur')) return ['522001', '522002', '522003'];
+  if (divLower.includes('tenali')) return ['522201', '522202', '522203'];
+  if (divLower.includes('hosur')) return ['635109', '635110', '635126'];
+  if (divLower.includes('denkanikottai')) return ['635107', '635114'];
+  if (divLower.includes('attur')) return ['636112', '636113'];
+  if (divLower.includes('bengaluru') || divLower.includes('bangalore')) return ['560001', '560002'];
+
+  return ['530001', '530016', '530017', '530018', '530026'];
+};
+

@@ -3,7 +3,7 @@ import { Card, CardHeader, CardTitle, CardBody, Button, Modal } from '../../comp
 import { Target, CheckCircle2, Calendar, Check, MapPin, Loader2, Plus, Users, Award, Eye, Building2 } from 'lucide-react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
-import { getDistrictsForState, getDivisionsForDistrict } from '../../utils/locationData';
+import { getDistrictsForState, getDivisionsForDistrict, getPincodesForDivision } from '../../utils/locationData';
 
 interface Allocation {
   _id: string;
@@ -91,8 +91,9 @@ export const TargetsList: React.FC = () => {
   }, [userRole, userState, userDistrict]);
 
   const availableDivisions = useMemo(() => {
+    const currentDist = selectedDistrict || userDistrict;
     if (userRole === 'state') {
-      return getDivisionsForDistrict(selectedDistrict || userDistrict, userState);
+      return getDivisionsForDistrict(currentDist, userState);
     }
     if (userRole === 'district') {
       return getDivisionsForDistrict(userDistrict, userState);
@@ -101,15 +102,9 @@ export const TargetsList: React.FC = () => {
   }, [userRole, selectedDistrict, userDistrict, userState, userDivision]);
 
   const availablePincodes = useMemo(() => {
-    const div = selectedDivision || userDivision;
-    if (div.toLowerCase().includes('vizag')) {
-      return ['530001', '530016', '530017', '530018', '530026'];
-    }
-    if (div.toLowerCase().includes('vijayawada')) {
-      return ['520001', '520002', '520003'];
-    }
-    return Array.from(new Set([userPincode, '530001', '530016', '530017', '530018', '530026']));
-  }, [selectedDivision, userDivision, userPincode]);
+    const currentDiv = selectedDivision || userDivision;
+    return getPincodesForDivision(currentDiv);
+  }, [selectedDivision, userDivision]);
 
   // Keep district/division/pincode selection valid on type or scope change
   useEffect(() => {
@@ -698,11 +693,9 @@ export const TargetsList: React.FC = () => {
                 </div>
               </div>
 
-              {/* Dynamic Territory & Agent Selection based on authorized role & scope */}
-              <div className="grid grid-cols-2 gap-3">
-                
-                {/* Territory Selector (District / Division / Pincode) */}
-                {agentType === 'district' && (
+              {/* Dynamic Territory & Agent Selection based on selected Target Type */}
+              {agentType === 'district' && (
+                <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target District *</label>
                     <select
@@ -715,56 +708,132 @@ export const TargetsList: React.FC = () => {
                       ))}
                     </select>
                   </div>
-                )}
 
-                {agentType === 'division' && (
                   <div className="space-y-1">
-                    <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target Division *</label>
+                    <label className="block text-[#52443a] uppercase text-[10px] font-bold">Assign to District Agent *</label>
                     <select
-                      value={selectedDivision}
-                      onChange={(e) => setSelectedDivision(e.target.value)}
+                      value={selectedAgent}
+                      onChange={(e) => setSelectedAgent(e.target.value)}
                       className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                     >
-                      {availableDivisions.map(div => (
-                        <option key={div} value={div}>{div}</option>
+                      {apAgents.map(agt => (
+                        <option key={agt.id} value={agt.name}>
+                          {agt.name} ({agt.territory})
+                        </option>
                       ))}
                     </select>
                   </div>
-                )}
-
-                {agentType === 'pincode' && (
-                  <div className="space-y-1">
-                    <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target Pincode *</label>
-                    <select
-                      value={selectedPincode}
-                      onChange={(e) => setSelectedPincode(e.target.value)}
-                      className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                    >
-                      {availablePincodes.map(pin => (
-                        <option key={pin} value={pin}>PIN {pin}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {/* Agent Selector */}
-                <div className="space-y-1">
-                  <label className="block text-[#52443a] uppercase text-[10px] font-bold">
-                    {agentType === 'district' ? 'Assign to District Agent *' : agentType === 'division' ? 'Assign to Division Agent *' : 'Assign to Pincode Agent *'}
-                  </label>
-                  <select
-                    value={selectedAgent}
-                    onChange={(e) => setSelectedAgent(e.target.value)}
-                    className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                  >
-                    {apAgents.map(agt => (
-                      <option key={agt.id} value={agt.name}>
-                        {agt.name} ({agt.territory})
-                      </option>
-                    ))}
-                  </select>
                 </div>
-              </div>
+              )}
+
+              {agentType === 'division' && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target District *</label>
+                      <select
+                        value={selectedDistrict}
+                        onChange={(e) => setSelectedDistrict(e.target.value)}
+                        className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                      >
+                        {availableDistricts.map(d => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target Division *</label>
+                      <select
+                        value={selectedDivision}
+                        onChange={(e) => setSelectedDivision(e.target.value)}
+                        className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                      >
+                        {availableDivisions.map(div => (
+                          <option key={div} value={div}>{div}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[#52443a] uppercase text-[10px] font-bold">Assign to Division Agent *</label>
+                    <select
+                      value={selectedAgent}
+                      onChange={(e) => setSelectedAgent(e.target.value)}
+                      className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                    >
+                      {apAgents.map(agt => (
+                        <option key={agt.id} value={agt.name}>
+                          {agt.name} ({agt.territory})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {agentType === 'pincode' && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target District *</label>
+                      <select
+                        value={selectedDistrict}
+                        onChange={(e) => setSelectedDistrict(e.target.value)}
+                        className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                      >
+                        {availableDistricts.map(d => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target Division *</label>
+                      <select
+                        value={selectedDivision}
+                        onChange={(e) => setSelectedDivision(e.target.value)}
+                        className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                      >
+                        {availableDivisions.map(div => (
+                          <option key={div} value={div}>{div}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target Pincode *</label>
+                      <select
+                        value={selectedPincode}
+                        onChange={(e) => setSelectedPincode(e.target.value)}
+                        className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                      >
+                        {availablePincodes.map(pin => (
+                          <option key={pin} value={pin}>PIN {pin}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-[#52443a] uppercase text-[10px] font-bold">Assign to Pincode Agent *</label>
+                      <select
+                        value={selectedAgent}
+                        onChange={(e) => setSelectedAgent(e.target.value)}
+                        className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                      >
+                        {apAgents.map(agt => (
+                          <option key={agt.id} value={agt.name}>
+                            {agt.name} ({agt.territory})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Quantity, Start Date & End Date */}
               <div className="grid grid-cols-3 gap-3">
