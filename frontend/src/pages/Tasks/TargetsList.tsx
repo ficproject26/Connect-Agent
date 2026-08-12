@@ -56,30 +56,37 @@ export const TargetsList: React.FC = () => {
 
   // New target form
   const [title, setTitle] = useState('');
-  const [targetCategory, setTargetCategory] = useState<'my_target' | 'pincode_agent'>('pincode_agent');
   const [targetMetric, setTargetMetric] = useState<'shop_tieups' | 'vendor_onboarding'>('shop_tieups');
   const [type, setType] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
   const [targetValue, setTargetValue] = useState<number>(20);
   const [description, setDescription] = useState('');
-  const [agentType, setAgentType] = useState<'district' | 'division' | 'pincode'>('pincode');
-  const [selectedAgent, setSelectedAgent] = useState<string>('raki pin');
-  const [selectedPincode, setSelectedPincode] = useState<string>('530001');
-  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
-  const [endDate, setEndDate] = useState(new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10));
 
   const userDivision = user?.territory?.division || 'Vizag City Division';
   const userDistrict = user?.territory?.district || 'Visakhapatnam';
   const userState = user?.territory?.state || 'Andhra Pradesh';
 
-  // Dynamic AP Agent list based on selected Agent Type & Division Scope
+  const defaultAgentType = user?.role === 'state' ? 'district' : user?.role === 'district' ? 'division' : 'pincode';
+  const [agentType, setAgentType] = useState<'district' | 'division' | 'pincode'>(defaultAgentType);
+  const [selectedAgent, setSelectedAgent] = useState<string>('');
+  const [selectedPincode, setSelectedPincode] = useState<string>('530001');
+  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [endDate, setEndDate] = useState(new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10));
+
+  // Dynamic AP Agent list based on selected Agent Type & Territory Scope
   const apAgents = useMemo(() => {
     if (agentType === 'district') {
       return [
-        { id: 'agt-d2', name: 'Anu', role: 'District Agent', territory: `${userDistrict} (${userState})` }
+        { id: 'agt-d1', name: 'Anu', role: 'District Agent', territory: `${userDistrict} (${userState})` },
+        { id: 'agt-d2', name: 'Rajesh Varma', role: 'District Agent', territory: `East Godavari (${userState})` },
+        { id: 'agt-d3', name: 'Srinivas Rao', role: 'District Agent', territory: `Krishna District (${userState})` },
+        { id: 'agt-d4', name: 'Prakash Naidu', role: 'District Agent', territory: `Guntur District (${userState})` }
       ];
     } else if (agentType === 'division') {
       return [
-        { id: 'agt-v2', name: user?.name || 'Division Agent', role: 'Division Agent', territory: `${userDivision} (${userDistrict})` }
+        { id: 'agt-v1', name: 'goidhamma div', role: 'Division Agent', territory: `${userDivision} (${userDistrict})` },
+        { id: 'agt-v2', name: 'Ravi Manager', role: 'Division Agent', territory: `Gajuwaka Division (${userDistrict})` },
+        { id: 'agt-v3', name: 'Kiran Division', role: 'Division Agent', territory: `Anakapalle Division (${userDistrict})` },
+        { id: 'agt-v4', name: 'Suresh Division', role: 'Division Agent', territory: `Vijayawada Division (${userDistrict})` }
       ];
     } else {
       return [
@@ -89,13 +96,20 @@ export const TargetsList: React.FC = () => {
         { id: 'agt-p4', name: 'Nageswara Rao', role: 'Pincode Agent', territory: `PIN 530026 (${userDivision})` }
       ];
     }
-  }, [agentType, userDivision, userDistrict, userState, user]);
+  }, [agentType, userDivision, userDistrict, userState]);
 
   useEffect(() => {
     if (apAgents.length > 0) {
       setSelectedAgent(apAgents[0].name);
     }
   }, [apAgents]);
+
+  useEffect(() => {
+    if (isCreateModalOpen) {
+      const def = user?.role === 'state' ? 'district' : user?.role === 'district' ? 'division' : 'pincode';
+      setAgentType(def);
+    }
+  }, [isCreateModalOpen, user?.role]);
 
   const fetchAssignments = async () => {
     setIsLoading(true);
@@ -157,18 +171,16 @@ export const TargetsList: React.FC = () => {
     if (!title) return;
 
     setIsSubmitting(true);
-    const assignedAgentObj = targetCategory === 'my_target'
-      ? { name: user?.name || 'Division Agent', role: 'Division Agent', territory: userDivision }
-      : (apAgents.find(a => a.name === selectedAgent) || apAgents[0]);
+    const assignedAgentObj = apAgents.find(a => a.name === selectedAgent) || apAgents[0];
 
     const newAlloc: Allocation = {
       _id: `TSK-${Math.floor(1000 + Math.random() * 9000)}`,
       vendorName: title,
-      location: targetCategory === 'my_target' ? `Personal Target (${userDivision})` : `Assigned to: ${assignedAgentObj.name} (PIN ${selectedPincode}, ${userDivision})`,
+      location: `Assigned to: ${assignedAgentObj.name} (${assignedAgentObj.territory})`,
       dueDate: `${startDate} to ${endDate}`,
       status: 'assigned',
       priority: type === 'daily' ? 'high' : 'medium',
-      taskDescription: description || `${targetMetric === 'shop_tieups' ? 'Shop Tie-ups' : 'Vendor Onboarding'} quota goal of ${targetValue} shops. Assigned to ${assignedAgentObj.name}.`,
+      taskDescription: description || `${targetMetric === 'shop_tieups' ? 'Shop Tie-ups' : 'Vendor Onboarding'} quota goal of ${targetValue} shops. Assigned to ${assignedAgentObj.name} (${assignedAgentObj.role}).`,
       targetValue
     };
 
@@ -205,18 +217,25 @@ export const TargetsList: React.FC = () => {
     setTargetValue(20);
   };
 
-  const [activeTab, setActiveTab] = useState<'my_direct' | 'pincode_allocations' | 'completed'>('pincode_allocations');
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    if (user?.role === 'state') return 'district_allocations';
+    if (user?.role === 'district') return 'division_allocations';
+    return 'pincode_allocations';
+  });
   const [selectedTargetProgress, setSelectedTargetProgress] = useState<Allocation | null>(null);
 
   const getFilteredAllocations = () => {
     if (activeTab === 'completed') {
       return allocations.filter(a => a.status === 'completed');
     }
-    if (activeTab === 'my_direct') {
-      return allocations.filter(a => a.status !== 'completed' && (a.location.includes('Personal Target') || a.location.includes('Self Target')));
+    if (activeTab === 'district_allocations') {
+      return allocations.filter(a => a.status !== 'completed' && (a.taskDescription?.toLowerCase().includes('district') || a.location?.toLowerCase().includes('district')));
+    }
+    if (activeTab === 'division_allocations') {
+      return allocations.filter(a => a.status !== 'completed' && (a.taskDescription?.toLowerCase().includes('division') || a.location?.toLowerCase().includes('division')));
     }
     // Default: pincode_allocations
-    return allocations.filter(a => a.status !== 'completed' && !a.location.includes('Personal Target'));
+    return allocations.filter(a => a.status !== 'completed' && !a.taskDescription?.toLowerCase().includes('district agent') && !a.taskDescription?.toLowerCase().includes('division agent'));
   };
 
   const currentTasks = getFilteredAllocations();
@@ -232,11 +251,11 @@ export const TargetsList: React.FC = () => {
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-black text-[#1b1c1c] tracking-tight">Targets & Task Allocations</h1>
             <span className="px-2.5 py-0.5 bg-[#864f19]/10 text-[#864f19] font-black text-[10px] uppercase rounded-full border border-[#864f19]/20">
-              DIVISION SCOPE
+              {user?.role === 'state' ? 'STATE SCOPE' : user?.role === 'district' ? 'DISTRICT SCOPE' : 'DIVISION SCOPE'}
             </span>
           </div>
           <p className="text-xs text-[#52443a] font-semibold uppercase tracking-wider">
-            Scope: <strong className="text-[#864f19]">{userDivision}</strong> ({userDistrict}, {userState})
+            Scope: <strong className="text-[#864f19]">{user?.role === 'state' ? userState : user?.role === 'district' ? userDistrict : userDivision}</strong>
           </p>
         </div>
 
@@ -277,7 +296,7 @@ export const TargetsList: React.FC = () => {
               variant="primary"
               onClick={() => setIsCreateModalOpen(true)}
               leftIcon={<Plus className="w-4 h-4" />}
-              className="py-2.5 px-4 font-bold rounded-xl border-none text-xs uppercase tracking-wider shadow-sm transition w-full sm:w-auto justify-center bg-[#864f19] text-white"
+              className="py-2.5 px-4 font-bold rounded-xl border-none text-xs uppercase tracking-wider shadow-sm transition w-full sm:w-auto justify-center bg-[#864f19] text-white cursor-pointer"
             >
               Assign New Target
             </Button>
@@ -285,8 +304,30 @@ export const TargetsList: React.FC = () => {
         </div>
       </div>
 
-      {/* Hierarchy Tabs */}
-      <div className="flex gap-4 border-b border-[#eae8e7] pb-px">
+      {/* Hierarchy Tabs (Role Scoped, No My Direct Targets) */}
+      <div className="flex flex-wrap gap-4 border-b border-[#eae8e7] pb-px">
+        {user?.role === 'state' && (
+          <button
+            onClick={() => setActiveTab('district_allocations')}
+            className={`text-xs font-extrabold uppercase pb-3.5 border-b-2 transition-all cursor-pointer ${
+              activeTab === 'district_allocations' ? 'border-[#864f19] text-[#864f19]' : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            🏢 District Agent Allocations
+          </button>
+        )}
+
+        {(user?.role === 'state' || user?.role === 'district') && (
+          <button
+            onClick={() => setActiveTab('division_allocations')}
+            className={`text-xs font-extrabold uppercase pb-3.5 border-b-2 transition-all cursor-pointer ${
+              activeTab === 'division_allocations' ? 'border-[#864f19] text-[#864f19]' : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            🏛️ Division Agent Allocations
+          </button>
+        )}
+
         <button
           onClick={() => setActiveTab('pincode_allocations')}
           className={`text-xs font-extrabold uppercase pb-3.5 border-b-2 transition-all cursor-pointer ${
@@ -295,14 +336,7 @@ export const TargetsList: React.FC = () => {
         >
           📍 Pincode Agent Allocations
         </button>
-        <button
-          onClick={() => setActiveTab('my_direct')}
-          className={`text-xs font-extrabold uppercase pb-3.5 border-b-2 transition-all cursor-pointer ${
-            activeTab === 'my_direct' ? 'border-[#864f19] text-[#864f19]' : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          👤 My Direct Targets
-        </button>
+
         <button
           onClick={() => setActiveTab('completed')}
           className={`text-xs font-extrabold uppercase pb-3.5 border-b-2 transition-all cursor-pointer ${
@@ -327,7 +361,7 @@ export const TargetsList: React.FC = () => {
               </div>
               <div>
                 <p className="text-sm font-black text-slate-800">No target allocations match this view.</p>
-                <p className="text-xs text-slate-500 font-medium mt-1">Assign shop tie-up targets to downstream Pincode Agents or create personal targets.</p>
+                <p className="text-xs text-slate-500 font-medium mt-1">Assign shop tie-up targets to downstream agents across your territory.</p>
               </div>
             </div>
           ) : (
@@ -356,7 +390,7 @@ export const TargetsList: React.FC = () => {
                   <CardBody className="py-4 space-y-3">
                     <p className="text-xs text-slate-600 font-medium leading-relaxed">{task.taskDescription}</p>
 
-                    {/* Progress Metrics: Assigned, Achieved, Remaining, Progress % */}
+                    {/* Progress Metrics */}
                     <div className="grid grid-cols-4 gap-1.5 bg-[#fbf9f8] p-2.5 rounded-xl border border-[#d7c3b5]/40 text-center">
                       <div>
                         <span className="text-[8px] uppercase font-bold text-slate-400 block">Assigned</span>
@@ -395,26 +429,13 @@ export const TargetsList: React.FC = () => {
                       {task.priority} priority
                     </span>
                     
-                    {activeTab === 'pincode_allocations' ? (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedTargetProgress(task)}
-                        className="py-1 px-3 bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 text-[#864f19] font-bold text-[11px] rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
-                      >
-                        <Eye className="w-3.5 h-3.5" /> View Progress
-                      </button>
-                    ) : (
-                      task.status !== 'completed' && (
-                        <Button
-                          variant="primary"
-                          className="py-1 px-3 text-[10px] h-auto font-bold uppercase tracking-wider bg-[#864f19] hover:bg-[#a3672f] text-white border-none cursor-pointer flex items-center gap-1"
-                          onClick={() => handleMarkCompleted(task._id)}
-                          leftIcon={<Check className="w-3.5 h-3.5" />}
-                        >
-                          Done
-                        </Button>
-                      )
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTargetProgress(task)}
+                      className="py-1 px-3 bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 text-[#864f19] font-bold text-[11px] rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                    >
+                      <Eye className="w-3.5 h-3.5" /> View Progress
+                    </button>
                   </div>
                 </Card>
               );
@@ -481,32 +502,88 @@ export const TargetsList: React.FC = () => {
         <div className="space-y-4 font-sans text-xs">
           <form onSubmit={handleCreateTargetSubmit} className="space-y-3.5 font-semibold">
             
-            {/* Target Category Selection */}
+            {/* Target Type Selection (Role-Based Downstream Agent Selection) */}
             <div className="space-y-1">
               <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target Type *</label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => { setTargetCategory('my_target'); setAgentType('division'); }}
-                  className={`py-2 px-3 text-xs font-bold rounded-xl border transition cursor-pointer text-center ${
-                    targetCategory === 'my_target'
-                      ? 'bg-[#864f19] text-white border-[#864f19]'
-                      : 'bg-[#fbf9f8] text-[#52443a] border-[#d7c3b5]/60 hover:bg-[#eae8e7]'
-                  }`}
-                >
-                  My Target (Division Agent)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setTargetCategory('pincode_agent'); setAgentType('pincode'); }}
-                  className={`py-2 px-3 text-xs font-bold rounded-xl border transition cursor-pointer text-center ${
-                    targetCategory === 'pincode_agent'
-                      ? 'bg-[#864f19] text-white border-[#864f19]'
-                      : 'bg-[#fbf9f8] text-[#52443a] border-[#d7c3b5]/60 hover:bg-[#eae8e7]'
-                  }`}
-                >
-                  Pincode Agent Target
-                </button>
+              <div className="flex flex-wrap gap-2">
+                {user?.role === 'state' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setAgentType('district')}
+                      className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl border transition cursor-pointer text-center ${
+                        agentType === 'district'
+                          ? 'bg-[#864f19] text-white border-[#864f19]'
+                          : 'bg-[#fbf9f8] text-[#52443a] border-[#d7c3b5]/60 hover:bg-[#eae8e7]'
+                      }`}
+                    >
+                      District Agent Target
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAgentType('division')}
+                      className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl border transition cursor-pointer text-center ${
+                        agentType === 'division'
+                          ? 'bg-[#864f19] text-white border-[#864f19]'
+                          : 'bg-[#fbf9f8] text-[#52443a] border-[#d7c3b5]/60 hover:bg-[#eae8e7]'
+                      }`}
+                    >
+                      Division Agent Target
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAgentType('pincode')}
+                      className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl border transition cursor-pointer text-center ${
+                        agentType === 'pincode'
+                          ? 'bg-[#864f19] text-white border-[#864f19]'
+                          : 'bg-[#fbf9f8] text-[#52443a] border-[#d7c3b5]/60 hover:bg-[#eae8e7]'
+                      }`}
+                    >
+                      Pincode Agent Target
+                    </button>
+                  </>
+                )}
+
+                {user?.role === 'district' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setAgentType('division')}
+                      className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl border transition cursor-pointer text-center ${
+                        agentType === 'division'
+                          ? 'bg-[#864f19] text-white border-[#864f19]'
+                          : 'bg-[#fbf9f8] text-[#52443a] border-[#d7c3b5]/60 hover:bg-[#eae8e7]'
+                      }`}
+                    >
+                      Division Agent Target
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAgentType('pincode')}
+                      className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl border transition cursor-pointer text-center ${
+                        agentType === 'pincode'
+                          ? 'bg-[#864f19] text-white border-[#864f19]'
+                          : 'bg-[#fbf9f8] text-[#52443a] border-[#d7c3b5]/60 hover:bg-[#eae8e7]'
+                      }`}
+                    >
+                      Pincode Agent Target
+                    </button>
+                  </>
+                )}
+
+                {(user?.role === 'division' || (!user?.role || user?.role === 'pincode')) && (
+                  <button
+                    type="button"
+                    onClick={() => setAgentType('pincode')}
+                    className={`w-full py-2 px-3 text-xs font-bold rounded-xl border transition cursor-pointer text-center ${
+                      agentType === 'pincode'
+                        ? 'bg-[#864f19] text-white border-[#864f19]'
+                        : 'bg-[#fbf9f8] text-[#52443a] border-[#d7c3b5]/60 hover:bg-[#eae8e7]'
+                    }`}
+                  >
+                    Pincode Agent Target
+                  </button>
+                )}
               </div>
             </div>
 
@@ -567,22 +644,19 @@ export const TargetsList: React.FC = () => {
               </div>
 
               <div className="space-y-1">
-                <label className="block text-[#52443a] uppercase text-[10px] font-bold">Assign to Pincode Agent *</label>
+                <label className="block text-[#52443a] uppercase text-[10px] font-bold">
+                  {agentType === 'district' ? 'Assign to District Agent *' : agentType === 'division' ? 'Assign to Division Agent *' : 'Assign to Pincode Agent *'}
+                </label>
                 <select
-                  disabled={targetCategory === 'my_target'}
                   value={selectedAgent}
                   onChange={(e) => setSelectedAgent(e.target.value)}
-                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19] disabled:opacity-50"
+                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                 >
-                  {targetCategory === 'my_target' ? (
-                    <option value={user?.name || 'Division Agent'}>{user?.name || 'Division Agent'} (Self Target)</option>
-                  ) : (
-                    apAgents.map(agt => (
-                      <option key={agt.id} value={agt.name}>
-                        {agt.name} ({agt.territory})
-                      </option>
-                    ))
-                  )}
+                  {apAgents.map(agt => (
+                    <option key={agt.id} value={agt.name}>
+                      {agt.name} ({agt.territory})
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
