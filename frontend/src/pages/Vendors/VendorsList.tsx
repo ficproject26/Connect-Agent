@@ -793,35 +793,39 @@ export const VendorsList: React.FC = () => {
               </div>
             </div>
 
-            {/* Secondary Filters Row */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-2 border-t border-[#d7c3b5]/30 items-end">
-              <div>
-                <Select
-                  label="District"
-                  options={
-                    activeRole === 'state'
-                      ? [{ value: 'all', label: 'All State Districts' }, ...districts.map(d => ({ value: d, label: d }))]
-                      : [{ value: userDistrict, label: `${userDistrict}` }]
-                  }
-                  value={activeRole === 'state' ? districtFilter : userDistrict}
-                  onChange={(e) => setDistrictFilter(e.target.value)}
-                  disabled={activeRole !== 'state'}
-                />
-              </div>
+            {/* Secondary Filters Row (District & Division dropdowns removed for Division Agent) */}
+            <div className={`grid gap-3 pt-2 border-t border-[#d7c3b5]/30 items-end ${activeRole === 'division' ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-6'}`}>
+              {activeRole !== 'division' && (
+                <>
+                  <div>
+                    <Select
+                      label="District"
+                      options={
+                        activeRole === 'state'
+                          ? [{ value: 'all', label: 'All State Districts' }, ...districts.map(d => ({ value: d, label: d }))]
+                          : [{ value: userDistrict, label: `${userDistrict}` }]
+                      }
+                      value={activeRole === 'state' ? districtFilter : userDistrict}
+                      onChange={(e) => setDistrictFilter(e.target.value)}
+                      disabled={activeRole !== 'state'}
+                    />
+                  </div>
 
-              <div>
-                <Select
-                  label="Division"
-                  options={
-                    activeRole === 'state' || activeRole === 'district'
-                      ? [{ value: 'all', label: activeRole === 'district' ? 'All Divisions in District' : 'All Divisions' }, ...divisions.map(d => ({ value: d, label: d }))]
-                      : [{ value: userDivision, label: `${userDivision}` }]
-                  }
-                  value={activeRole === 'state' || activeRole === 'district' ? divisionFilter : userDivision}
-                  onChange={(e) => setDivisionFilter(e.target.value)}
-                  disabled={activeRole === 'division' || activeRole === 'pincode'}
-                />
-              </div>
+                  <div>
+                    <Select
+                      label="Division"
+                      options={
+                        activeRole === 'state' || activeRole === 'district'
+                          ? [{ value: 'all', label: activeRole === 'district' ? 'All Divisions in District' : 'All Divisions' }, ...divisions.map(d => ({ value: d, label: d }))]
+                          : [{ value: userDivision, label: `${userDivision}` }]
+                      }
+                      value={activeRole === 'state' || activeRole === 'district' ? divisionFilter : userDivision}
+                      onChange={(e) => setDivisionFilter(e.target.value)}
+                      disabled={activeRole === 'division' || activeRole === 'pincode'}
+                    />
+                  </div>
+                </>
+              )}
 
               <div>
                 <Select
@@ -917,30 +921,25 @@ export const VendorsList: React.FC = () => {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-[#fbf9f8] border-b border-[#eae8e7] text-[10px] font-black text-[#52443a] uppercase tracking-wider">
-                  <th className="py-3.5 px-4">Registration ID</th>
-                  <th className="py-3.5 px-4">Vendor & Owner Name</th>
+                  <th className="py-3.5 px-4">Vendor</th>
                   <th className="py-3.5 px-4">Category</th>
-                  <th className="py-3.5 px-4">Contact Info</th>
-                  <th className="py-3.5 px-4">Territory (District / PIN)</th>
-                  <th className="py-3.5 px-4">Assigned Agent</th>
-                  <th className="py-3.5 px-4">Vendor Status</th>
+                  <th className="py-3.5 px-4">Pincode</th>
+                  <th className="py-3.5 px-4">Onboarded / Assigned By</th>
+                  <th className="py-3.5 px-4">Status</th>
                   <th className="py-3.5 px-4">KYC Status</th>
-                  <th className="py-3.5 px-4 text-center">Actions</th>
+                  <th className="py-3.5 px-4">Registration Date</th>
+                  <th className="py-3.5 px-4 text-center">Details</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#eae8e7] text-xs">
                 {filteredVendors.map((vendor) => (
                   <tr key={vendor.id} className="hover:bg-[#f6f3f2]/40 transition">
-                    <td className="py-3.5 px-4 font-extrabold text-[#864f19]">
-                      {vendor.id}
-                      <p className="text-[10px] text-slate-400 font-semibold">{vendor.createdAt}</p>
-                    </td>
-
                     <td className="py-3.5 px-4">
                       <p className="font-extrabold text-[#1b1c1c] text-sm">{vendor.name}</p>
                       <p className="text-[11px] text-slate-500 font-bold flex items-center gap-1">
                         <User className="w-3 h-3 text-slate-400" /> {vendor.ownerName}
                       </p>
+                      <p className="text-[10px] text-[#864f19] font-bold mt-0.5">ID: {vendor.id}</p>
                     </td>
 
                     <td className="py-3.5 px-4">
@@ -953,13 +952,8 @@ export const VendorsList: React.FC = () => {
                     </td>
 
                     <td className="py-3.5 px-4">
-                      <p className="font-bold text-slate-700">{vendor.phone}</p>
-                      <p className="text-[10px] text-slate-400 font-medium">{vendor.email}</p>
-                    </td>
-
-                    <td className="py-3.5 px-4">
-                      <p className="font-bold text-slate-800">{vendor.district}</p>
-                      <p className="text-[10px] text-slate-500 font-semibold">{vendor.division} • PIN: {vendor.pincode}</p>
+                      <p className="font-bold text-slate-800">PIN: {vendor.pincode}</p>
+                      <p className="text-[10px] text-slate-500 font-semibold">{vendor.district || userDistrict}</p>
                     </td>
 
                     <td className="py-3.5 px-4 font-bold text-[#864f19]">
@@ -974,10 +968,15 @@ export const VendorsList: React.FC = () => {
                       {getKycBadge(vendor.kycStatus)}
                     </td>
 
+                    <td className="py-3.5 px-4 font-semibold text-slate-600">
+                      {vendor.createdAt}
+                    </td>
+
                     <td className="py-3.5 px-4 text-center">
                       <button
+                        type="button"
                         onClick={() => handleOpenDetails(vendor)}
-                        className="py-1.5 px-3 bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 text-[#864f19] text-xs font-bold rounded-xl transition cursor-pointer flex items-center gap-1 mx-auto"
+                        className="py-1 px-3 bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 text-[#864f19] font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1 mx-auto"
                       >
                         <Eye className="w-3.5 h-3.5" /> Details
                       </button>

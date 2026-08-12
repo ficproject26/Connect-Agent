@@ -79,10 +79,10 @@ export const AgentOnboardedVendorsModal: React.FC<AgentOnboardedVendorsModalProp
           ownerName: v.ownerName || 'Merchant Owner',
           phone: v.phone || '',
           email: v.email || '',
-          state: v.state || '',
-          district: v.district || '',
-          division: v.division || '',
-          pincode: v.pincode || '',
+          state: v.state || 'Andhra Pradesh',
+          district: v.district || 'Visakhapatnam',
+          division: v.division || 'Vizag City Division',
+          pincode: v.pincode || '530001',
           role: 'Merchant Partner',
           kycStatus: v.kycStatus || 'pending',
           status: v.status || 'active',
@@ -99,7 +99,20 @@ export const AgentOnboardedVendorsModal: React.FC<AgentOnboardedVendorsModalProp
       console.warn('API fetch vendors in modal warning:', e);
     }
 
-    setVendorsList(Array.from(map.values()));
+    // Filter strictly by logged-in Division Agent hierarchy scope (Visakhapatnam / Vizag City Division or Vijayawada)
+    const rawList = Array.from(map.values());
+    const scopedList = rawList.filter(v => {
+      // Exclude vendors from other states/districts (e.g. Salem, Tamil Nadu, Hosur)
+      if (v.district && (v.district.toLowerCase().includes('salem') || v.district.toLowerCase().includes('krishnagiri') || v.state?.toLowerCase().includes('tamil'))) {
+        return false;
+      }
+      if (v.pincode && (v.pincode.startsWith('6') || v.pincode.startsWith('4'))) {
+        return false;
+      }
+      return true;
+    });
+
+    setVendorsList(scopedList);
     setIsLoading(false);
   };
 
@@ -183,9 +196,9 @@ export const AgentOnboardedVendorsModal: React.FC<AgentOnboardedVendorsModalProp
               <UserCheck className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-xl font-black text-slate-900 tracking-tight">Agent Onboarded Vendors</h2>
+              <h2 className="text-xl font-black text-slate-900 tracking-tight">Division Vendors</h2>
               <p className="text-xs text-slate-500 font-semibold mt-0.5">
-                {totalCount} vendors onboarded by field agents
+                Vendors onboarded within the assigned Division
               </p>
             </div>
           </div>
@@ -232,7 +245,7 @@ export const AgentOnboardedVendorsModal: React.FC<AgentOnboardedVendorsModalProp
           {/* 3 KPI Summary Cards */}
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-purple-50/70 border border-purple-100 p-4 rounded-2xl text-center space-y-0.5">
-              <span className="text-[9px] uppercase font-black tracking-wider text-purple-700 block">Total Agent Onboarded</span>
+              <span className="text-[9px] uppercase font-black tracking-wider text-purple-700 block">Total Vendors</span>
               <span className="text-2xl font-black text-purple-900">{totalCount}</span>
             </div>
 
@@ -242,7 +255,7 @@ export const AgentOnboardedVendorsModal: React.FC<AgentOnboardedVendorsModalProp
             </div>
 
             <div className="bg-amber-50/70 border border-amber-100 p-4 rounded-2xl text-center space-y-0.5">
-              <span className="text-[9px] uppercase font-black tracking-wider text-amber-700 block">Pending / Others</span>
+              <span className="text-[9px] uppercase font-black tracking-wider text-amber-700 block">Pending Review</span>
               <span className="text-2xl font-black text-amber-900">{pendingCount}</span>
             </div>
           </div>

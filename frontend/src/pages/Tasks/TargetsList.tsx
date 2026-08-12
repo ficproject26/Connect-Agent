@@ -53,50 +53,50 @@ export const TargetsList: React.FC = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // New target form
   const [title, setTitle] = useState('');
+  const [targetCategory, setTargetCategory] = useState<'my_target' | 'pincode_agent'>('pincode_agent');
+  const [targetMetric, setTargetMetric] = useState<'shop_tieups' | 'vendor_onboarding'>('shop_tieups');
   const [type, setType] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
-  const [targetValue, setTargetValue] = useState<number>(10);
+  const [targetValue, setTargetValue] = useState<number>(20);
   const [description, setDescription] = useState('');
-  const [agentType, setAgentType] = useState<'district' | 'division' | 'pincode'>('district');
-  const [selectedAgent, setSelectedAgent] = useState<string>('Muthuswamy');
+  const [agentType, setAgentType] = useState<'district' | 'division' | 'pincode'>('pincode');
+  const [selectedAgent, setSelectedAgent] = useState<string>('raki pin');
+  const [selectedPincode, setSelectedPincode] = useState<string>('530001');
+  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [endDate, setEndDate] = useState(new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10));
 
-  // Dynamic AP Agent list based on selected Agent Type
+  const userDivision = user?.territory?.division || 'Vizag City Division';
+  const userDistrict = user?.territory?.district || 'Visakhapatnam';
+  const userState = user?.territory?.state || 'Andhra Pradesh';
+
+  // Dynamic AP Agent list based on selected Agent Type & Division Scope
   const apAgents = useMemo(() => {
     if (agentType === 'district') {
       return [
-        { id: 'agt-d1', name: 'Muthuswamy', role: 'District Agent', territory: 'NTR District (AP)' },
-        { id: 'agt-d2', name: 'Anu', role: 'District Agent', territory: 'Visakhapatnam District (AP)' },
-        { id: 'agt-d3', name: 'Rajeshwari', role: 'District Agent', territory: 'Guntur District (AP)' },
-        { id: 'agt-d4', name: 'Kalyan', role: 'District Agent', territory: 'Tirupati District (AP)' }
+        { id: 'agt-d2', name: 'Anu', role: 'District Agent', territory: `${userDistrict} (${userState})` }
       ];
     } else if (agentType === 'division') {
       return [
-        { id: 'agt-v1', name: 'Srinivas', role: 'Division Agent', territory: 'Vijayawada Central Division (AP)' },
-        { id: 'agt-v2', name: 'Venkat', role: 'Division Agent', territory: 'Vizag City Division (AP)' },
-        { id: 'agt-v3', name: 'Subba Rao', role: 'Division Agent', territory: 'Guntur Urban Division (AP)' }
+        { id: 'agt-v2', name: user?.name || 'Division Agent', role: 'Division Agent', territory: `${userDivision} (${userDistrict})` }
       ];
     } else {
       return [
-        { id: 'agt-p1', name: 'Kiran Kumar', role: 'Pincode Agent', territory: 'PIN 520001 (Vijayawada, AP)' },
-        { id: 'agt-p2', name: 'Ramesh Naidu', role: 'Pincode Agent', territory: 'PIN 530001 (Visakhapatnam, AP)' },
-        { id: 'agt-p3', name: 'Nageswara Rao', role: 'Pincode Agent', territory: 'PIN 522001 (Guntur, AP)' }
+        { id: 'agt-p1', name: 'raki pin', role: 'Pincode Agent', territory: `PIN 530001 (${userDivision})` },
+        { id: 'agt-p2', name: 'Kiran Kumar', role: 'Pincode Agent', territory: `PIN 530017 (${userDivision})` },
+        { id: 'agt-p3', name: 'Ramesh Naidu', role: 'Pincode Agent', territory: `PIN 530018 (${userDivision})` },
+        { id: 'agt-p4', name: 'Nageswara Rao', role: 'Pincode Agent', territory: `PIN 530026 (${userDivision})` }
       ];
     }
-  }, [agentType]);
+  }, [agentType, userDivision, userDistrict, userState, user]);
 
-  // Keep selectedAgent synced when agentType changes
   useEffect(() => {
     if (apAgents.length > 0) {
       setSelectedAgent(apAgents[0].name);
     }
   }, [apAgents]);
-
-  // Assignment form
-  const [assignedAgentEmail, setAssignedAgentEmail] = useState('');
-  const [dueDate, setDueDate] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchAssignments = async () => {
     setIsLoading(true);
@@ -109,12 +109,12 @@ export const TargetsList: React.FC = () => {
         const mapped: Allocation[] = backendAssignments.map((a: any) => ({
           _id: a._id,
           vendorName: a.target?.title || 'Merchant Onboarding Target',
-          location: 'Territory Jurisdiction Scope',
+          location: `PIN ${selectedPincode} (${userDivision})`,
           dueDate: new Date(a.dueDate).toLocaleDateString() + ' ' + new Date(a.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           status: a.status,
           priority: a.target?.type === 'daily' ? 'high' : 'medium',
           taskDescription: a.target?.description || 'Achieve merchant onboarding quota target goal.',
-          targetValue: a.target?.targetValue || 10
+          targetValue: a.target?.targetValue || 20
         }));
 
         setAllocations(prev => {
@@ -158,16 +158,18 @@ export const TargetsList: React.FC = () => {
     if (!title) return;
 
     setIsSubmitting(true);
-    const assignedAgentObj = apAgents.find(a => a.name === selectedAgent) || apAgents[0];
+    const assignedAgentObj = targetCategory === 'my_target'
+      ? { name: user?.name || 'Division Agent', role: 'Division Agent', territory: userDivision }
+      : (apAgents.find(a => a.name === selectedAgent) || apAgents[0]);
 
     const newAlloc: Allocation = {
       _id: `TSK-${Math.floor(1000 + Math.random() * 9000)}`,
       vendorName: title,
-      location: `Assigned to: ${assignedAgentObj.name} (${assignedAgentObj.role} - ${assignedAgentObj.territory})`,
-      dueDate: 'Today, 6:00 PM',
+      location: targetCategory === 'my_target' ? `Personal Target (${userDivision})` : `Assigned to: ${assignedAgentObj.name} (PIN ${selectedPincode}, ${userDivision})`,
+      dueDate: `${startDate} to ${endDate}`,
       status: 'assigned',
       priority: type === 'daily' ? 'high' : 'medium',
-      taskDescription: description || `Achieve ${type} quota target goal of ${targetValue} onboarding logs. Assigned to ${assignedAgentObj.name}.`,
+      taskDescription: description || `${targetMetric === 'shop_tieups' ? 'Shop Tie-ups' : 'Vendor Onboarding'} quota goal of ${targetValue} shops. Assigned to ${assignedAgentObj.name}.`,
       targetValue
     };
 
@@ -179,7 +181,10 @@ export const TargetsList: React.FC = () => {
         targetValue,
         assignedAgent: assignedAgentObj.name,
         agentRole: assignedAgentObj.role,
-        agentTerritory: assignedAgentObj.territory
+        agentTerritory: assignedAgentObj.territory,
+        pincode: selectedPincode,
+        startDate,
+        endDate
       });
     } catch (e) {
       console.log('Simulated local target creation');
@@ -198,7 +203,7 @@ export const TargetsList: React.FC = () => {
     // Reset form
     setTitle('');
     setDescription('');
-    setTargetValue(10);
+    setTargetValue(20);
   };
 
   const getFilteredAllocations = () => {
@@ -223,7 +228,7 @@ export const TargetsList: React.FC = () => {
         <div className="space-y-1">
           <h1 className="text-2xl font-black text-[#1b1c1c] tracking-tight">Targets & Task Allocations</h1>
           <p className="text-xs text-[#52443a] font-semibold uppercase tracking-wider">
-            Review allocated field visits, view quota progress, and submit verification updates.
+            Scope: <strong className="text-[#864f19]">{userDivision}</strong> ({userDistrict}, {userState})
           </p>
         </div>
 
@@ -264,7 +269,7 @@ export const TargetsList: React.FC = () => {
               variant="primary"
               onClick={() => setIsCreateModalOpen(true)}
               leftIcon={<Plus className="w-4 h-4" />}
-              className="py-2.5 px-4 font-bold rounded-xl border-none text-xs uppercase tracking-wider shadow-sm transition w-full sm:w-auto justify-center"
+              className="py-2.5 px-4 font-bold rounded-xl border-none text-xs uppercase tracking-wider shadow-sm transition w-full sm:w-auto justify-center bg-[#864f19] text-white"
             >
               Create Target Goal
             </Button>
@@ -318,57 +323,79 @@ export const TargetsList: React.FC = () => {
               </div>
             </div>
           ) : (
-            currentTasks.map((task) => (
-              <Card key={task._id} className="relative overflow-hidden flex flex-col justify-between">
-                <CardHeader className="flex justify-between items-start border-b border-slate-50 pb-3">
-                  <div>
-                    <span className="text-[10px] text-slate-400 font-bold block">{task._id}</span>
-                    <CardTitle className="text-sm font-extrabold text-slate-900 mt-0.5">{task.vendorName}</CardTitle>
-                  </div>
-                  <span className={`inline-block px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
-                    task.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
-                    task.status === 'overdue' ? 'bg-red-50 text-red-700 border border-red-100' :
-                    'bg-blue-50 text-blue-700 border border-blue-100'
-                  }`}>
-                    {task.status}
-                  </span>
-                </CardHeader>
+            currentTasks.map((task) => {
+              const assignedVal = task.targetValue || 20;
+              const achievedVal = task.status === 'completed' ? assignedVal : Math.min(8, assignedVal);
+              const remainingVal = Math.max(0, assignedVal - achievedVal);
 
-                <CardBody className="py-4 space-y-3">
-                  <p className="text-xs text-slate-600 font-medium leading-relaxed">{task.taskDescription}</p>
-
-                  <div className="space-y-1.5 pt-1 text-[11px] font-semibold text-slate-500">
-                    <div className="flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5 text-slate-400" /> {task.location}
+              return (
+                <Card key={task._id} className="relative overflow-hidden flex flex-col justify-between">
+                  <CardHeader className="flex justify-between items-start border-b border-slate-50 pb-3">
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold block">{task._id}</span>
+                      <CardTitle className="text-sm font-extrabold text-slate-900 mt-0.5">{task.vendorName}</CardTitle>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5 text-slate-400" /> Due: <span className={task.status === 'overdue' ? 'text-red-600 font-bold' : ''}>{task.dueDate}</span>
-                    </div>
-                  </div>
-                </CardBody>
+                    <span className={`inline-block px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                      task.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
+                      task.status === 'overdue' ? 'bg-red-50 text-red-700 border border-red-100' :
+                      'bg-blue-50 text-blue-700 border border-blue-100'
+                    }`}>
+                      {task.status}
+                    </span>
+                  </CardHeader>
 
-                <div className="p-4 bg-slate-50 border-t border-slate-100/80 flex items-center justify-between gap-3">
-                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${
-                    task.priority === 'high' ? 'bg-red-100 text-red-700' :
-                    task.priority === 'medium' ? 'bg-amber-100 text-amber-700' :
-                    'bg-slate-200 text-slate-600'
-                  }`}>
-                    {task.priority} priority
-                  </span>
-                  
-                  {task.status !== 'completed' && (
-                    <Button
-                      variant="primary"
-                      className="py-1 px-3 text-[10px] h-auto font-bold uppercase tracking-wider bg-[#864f19] hover:bg-[#a3672f] text-white border-none cursor-pointer flex items-center gap-1"
-                      onClick={() => handleMarkCompleted(task._id)}
-                      leftIcon={<Check className="w-3.5 h-3.5" />}
-                    >
-                      Done
-                    </Button>
-                  )}
-                </div>
-              </Card>
-            ))
+                  <CardBody className="py-4 space-y-3">
+                    <p className="text-xs text-slate-600 font-medium leading-relaxed">{task.taskDescription}</p>
+
+                    {/* Progress Metrics: Assigned, Achieved, Remaining */}
+                    <div className="grid grid-cols-3 gap-2 bg-[#fbf9f8] p-2.5 rounded-xl border border-[#d7c3b5]/40 text-center">
+                      <div>
+                        <span className="text-[8px] uppercase font-bold text-slate-400 block">Assigned</span>
+                        <span className="text-xs font-black text-slate-800">{assignedVal}</span>
+                      </div>
+                      <div className="border-l border-[#d7c3b5]/30">
+                        <span className="text-[8px] uppercase font-bold text-emerald-600 block">Achieved</span>
+                        <span className="text-xs font-black text-emerald-700">{achievedVal}</span>
+                      </div>
+                      <div className="border-l border-[#d7c3b5]/30">
+                        <span className="text-[8px] uppercase font-bold text-[#864f19] block">Remaining</span>
+                        <span className="text-xs font-black text-[#864f19]">{remainingVal}</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5 pt-1 text-[11px] font-semibold text-slate-500">
+                      <div className="flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-slate-400" /> {task.location}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5 text-slate-400" /> Date: <span className={task.status === 'overdue' ? 'text-red-600 font-bold' : ''}>{task.dueDate}</span>
+                      </div>
+                    </div>
+                  </CardBody>
+
+                  <div className="p-4 bg-slate-50 border-t border-slate-100/80 flex items-center justify-between gap-3">
+                    <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${
+                      task.priority === 'high' ? 'bg-red-100 text-red-700' :
+                      task.priority === 'medium' ? 'bg-amber-100 text-amber-700' :
+                      'bg-slate-200 text-slate-600'
+                    }`}>
+                      {task.priority} priority
+                    </span>
+                    
+                    {task.status !== 'completed' && (
+                      <Button
+                        variant="primary"
+                        className="py-1 px-3 text-[10px] h-auto font-bold uppercase tracking-wider bg-[#864f19] hover:bg-[#a3672f] text-white border-none cursor-pointer flex items-center gap-1"
+                        onClick={() => handleMarkCompleted(task._id)}
+                        leftIcon={<Check className="w-3.5 h-3.5" />}
+                      >
+                        Done
+                      </Button>
+                    )}
+                  </div>
+                </Card>
+              );
+            })
           )}
         </div>
       )}
@@ -381,7 +408,37 @@ export const TargetsList: React.FC = () => {
         size="md"
       >
         <div className="space-y-4 font-sans text-xs">
-          <form onSubmit={handleCreateTargetSubmit} className="space-y-4 font-semibold">
+          <form onSubmit={handleCreateTargetSubmit} className="space-y-3.5 font-semibold">
+            
+            {/* Target Category Selection */}
+            <div className="space-y-1">
+              <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target Type *</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setTargetCategory('my_target'); setAgentType('division'); }}
+                  className={`py-2 px-3 text-xs font-bold rounded-xl border transition cursor-pointer text-center ${
+                    targetCategory === 'my_target'
+                      ? 'bg-[#864f19] text-white border-[#864f19]'
+                      : 'bg-[#fbf9f8] text-[#52443a] border-[#d7c3b5]/60 hover:bg-[#eae8e7]'
+                  }`}
+                >
+                  My Target (Division Agent)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setTargetCategory('pincode_agent'); setAgentType('pincode'); }}
+                  className={`py-2 px-3 text-xs font-bold rounded-xl border transition cursor-pointer text-center ${
+                    targetCategory === 'pincode_agent'
+                      ? 'bg-[#864f19] text-white border-[#864f19]'
+                      : 'bg-[#fbf9f8] text-[#52443a] border-[#d7c3b5]/60 hover:bg-[#eae8e7]'
+                  }`}
+                >
+                  Pincode Agent Target
+                </button>
+              </div>
+            </div>
+
             <div className="space-y-1">
               <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target Title *</label>
               <input
@@ -390,65 +447,109 @@ export const TargetsList: React.FC = () => {
                 placeholder="e.g. Weekly Merchant Onboarding Target"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
               />
             </div>
 
+            {/* Target Metric & Frequency */}
             <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target Metric *</label>
+                <select
+                  value={targetMetric}
+                  onChange={(e: any) => setTargetMetric(e.target.value)}
+                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                >
+                  <option value="shop_tieups">Shop Tie-ups</option>
+                  <option value="vendor_onboarding">Vendor Onboarding</option>
+                </select>
+              </div>
+
               <div className="space-y-1">
                 <label className="block text-[#52443a] uppercase text-[10px] font-bold">Frequency Type</label>
                 <select
                   value={type}
                   onChange={(e: any) => setType(e.target.value)}
-                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                 >
                   <option value="daily">Daily Goal</option>
                   <option value="weekly">Weekly Goal</option>
                   <option value="monthly">Monthly Goal</option>
                 </select>
               </div>
+            </div>
+
+            {/* Agent & Pincode Selection */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target Pincode *</label>
+                <select
+                  value={selectedPincode}
+                  onChange={(e) => setSelectedPincode(e.target.value)}
+                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                >
+                  <option value="530001">530001 (Central Vizag)</option>
+                  <option value="530017">530017 (MVP Colony)</option>
+                  <option value="530018">530018 (Madhavadhara)</option>
+                  <option value="530026">530026 (Gajuwaka)</option>
+                </select>
+              </div>
 
               <div className="space-y-1">
-                <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target Quota Value</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={targetValue}
-                  onChange={(e) => setTargetValue(parseInt(e.target.value, 10) || 1)}
-                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                />
+                <label className="block text-[#52443a] uppercase text-[10px] font-bold">Assign to Pincode Agent *</label>
+                <select
+                  disabled={targetCategory === 'my_target'}
+                  value={selectedAgent}
+                  onChange={(e) => setSelectedAgent(e.target.value)}
+                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19] disabled:opacity-50"
+                >
+                  {targetCategory === 'my_target' ? (
+                    <option value={user?.name || 'Division Agent'}>{user?.name || 'Division Agent'} (Self Target)</option>
+                  ) : (
+                    apAgents.map(agt => (
+                      <option key={agt.id} value={agt.name}>
+                        {agt.name} ({agt.territory})
+                      </option>
+                    ))
+                  )}
+                </select>
               </div>
             </div>
 
-            {/* Agent Type Dropdown */}
-            <div className="grid grid-cols-2 gap-3">
+            {/* Quantity, Start Date & End Date */}
+            <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1">
-                <label className="block text-[#52443a] uppercase text-[10px] font-bold">Agent Type *</label>
-                <select
-                  value={agentType}
-                  onChange={(e: any) => setAgentType(e.target.value)}
-                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                >
-                  <option value="district">District Agent</option>
-                  <option value="division">Division Agent</option>
-                  <option value="pincode">Pincode Agent</option>
-                </select>
+                <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target Quantity *</label>
+                <input
+                  type="number"
+                  min={1}
+                  required
+                  value={targetValue}
+                  onChange={(e) => setTargetValue(parseInt(e.target.value, 10) || 1)}
+                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                />
               </div>
 
-              {/* Agent Selection Dropdown */}
               <div className="space-y-1">
-                <label className="block text-[#52443a] uppercase text-[10px] font-bold">Assign to Agent *</label>
-                <select
-                  value={selectedAgent}
-                  onChange={(e) => setSelectedAgent(e.target.value)}
-                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                >
-                  {apAgents.map(agt => (
-                    <option key={agt.id} value={agt.name}>
-                      {agt.name} ({agt.territory})
-                    </option>
-                  ))}
-                </select>
+                <label className="block text-[#52443a] uppercase text-[10px] font-bold">Start Date *</label>
+                <input
+                  type="date"
+                  required
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-[#52443a] uppercase text-[10px] font-bold">End Date *</label>
+                <input
+                  type="date"
+                  required
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                />
               </div>
             </div>
 
@@ -459,7 +560,7 @@ export const TargetsList: React.FC = () => {
                 placeholder="Describe goal criteria, required documents, or onboard merchant quota..."
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19] resize-none"
+                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19] resize-none"
               />
             </div>
 

@@ -57,6 +57,8 @@ export const AgentManagement: React.FC = () => {
   // Search & Filter controls
   const [searchTerm, setSearchTerm] = useState('');
   const [kycFilter, setKycFilter] = useState<string>('all');
+  const [pincodeFilter, setPincodeFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [scopeFilter, setScopeFilter] = useState<string>(() => {
     return activeRole === 'state' ? 'district' : activeRole === 'district' ? 'division' : 'pincode';
   });
@@ -353,13 +355,15 @@ export const AgentManagement: React.FC = () => {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-black text-[#1b1c1c] tracking-tight">Role-Based Agent Directory</h1>
+                <h1 className="text-2xl font-black text-[#1b1c1c] tracking-tight">
+                  {activeRole === 'division' ? 'Pincode Agent Directory' : 'Role-Based Agent Directory'}
+                </h1>
                 <span className="px-2.5 py-0.5 bg-[#864f19]/10 text-[#864f19] font-black text-[10px] uppercase rounded-full border border-[#864f19]/20">
                   Role: {activeRole.toUpperCase()} AGENT
                 </span>
               </div>
               <p className="text-xs text-[#52443a] font-semibold mt-0.5">
-                Territory-Scoped Drill-Down Directory: {activeRole === 'state' ? `Assigned State (${userState})` : activeRole === 'district' ? `Assigned District (${userDistrict})` : activeRole === 'division' ? `Assigned Division (${userDivision})` : `Assigned Pincode (${userPincode})`}
+                Territory-Scoped Directory: {activeRole === 'state' ? `Assigned State (${userState})` : activeRole === 'district' ? `Assigned District (${userDistrict})` : activeRole === 'division' ? `Assigned Division (${userDivision})` : `Assigned Pincode (${userPincode})`}
               </p>
             </div>
           </div>
@@ -457,39 +461,64 @@ export const AgentManagement: React.FC = () => {
               )}
             </div>
 
-            {/* Hierarchy Scope Filter */}
-            <div className="flex items-center gap-1.5 bg-[#fbf9f8] border border-[#d7c3b5]/70 rounded-xl px-3 py-1.5">
-              <span className="text-[10px] font-black uppercase text-[#864f19]">Hierarchy Scope:</span>
+            {/* Hierarchy Scope Filter (Only shown for State/District roles) */}
+            {activeRole !== 'division' && activeRole !== 'pincode' && (
+              <div className="flex items-center gap-1.5 bg-[#fbf9f8] border border-[#d7c3b5]/70 rounded-xl px-3 py-1.5">
+                <span className="text-[10px] font-black uppercase text-[#864f19]">Hierarchy Scope:</span>
+                <select
+                  value={scopeFilter}
+                  onChange={(e) => {
+                    setScopeFilter(e.target.value);
+                    setSelectedDistrictId(null);
+                    setSelectedDivisionId(null);
+                  }}
+                  className="bg-transparent text-[#1b1c1c] text-xs font-extrabold focus:outline-none cursor-pointer"
+                >
+                  {activeRole === 'state' && (
+                    <>
+                      <option value="district">📍 District Agents Level Only</option>
+                      <option value="division">🟡 Division Managers Level Only</option>
+                      <option value="pincode">📍 Pincode Agents Level Only</option>
+                    </>
+                  )}
+                  {activeRole === 'district' && (
+                    <>
+                      <option value="division">🟡 Division Managers Level Only</option>
+                      <option value="pincode">📍 Pincode Agents Level Only</option>
+                    </>
+                  )}
+                </select>
+              </div>
+            )}
+
+            {/* Pincode Filter (for Division Agent) */}
+            {activeRole === 'division' && (
               <select
-                value={scopeFilter}
-                onChange={(e) => {
-                  setScopeFilter(e.target.value);
-                  setSelectedDistrictId(null);
-                  setSelectedDivisionId(null);
-                }}
-                className="bg-transparent text-[#1b1c1c] text-xs font-extrabold focus:outline-none cursor-pointer"
+                value={pincodeFilter}
+                onChange={(e) => setPincodeFilter(e.target.value)}
+                className="bg-[#fbf9f8] border border-[#d7c3b5]/70 text-[#1b1c1c] text-xs font-extrabold rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19] cursor-pointer shadow-2xs"
               >
-                {activeRole === 'state' && (
-                  <>
-                    <option value="district">📍 District Agents Level Only</option>
-                    <option value="division">🟡 Division Managers Level Only</option>
-                    <option value="pincode">📍 Pincode Agents Level Only</option>
-                  </>
-                )}
-                {activeRole === 'district' && (
-                  <>
-                    <option value="division">🟡 Division Managers Level Only</option>
-                    <option value="pincode">📍 Pincode Agents Level Only</option>
-                  </>
-                )}
-                {activeRole === 'division' && (
-                  <option value="pincode">📍 Pincode Agents Level Only</option>
-                )}
-                {activeRole === 'pincode' && (
-                  <option value="pincode">📍 Pincode Agents Level Only</option>
-                )}
+                <option value="all">📍 All Pincodes</option>
+                <option value="530001">PIN 530001 (Central)</option>
+                <option value="530017">PIN 530017 (MVP Colony)</option>
+                <option value="530018">PIN 530018 (Madhavadhara)</option>
+                <option value="530026">PIN 530026 (Gajuwaka)</option>
               </select>
-            </div>
+            )}
+
+            {/* Status Filter */}
+            {activeRole === 'division' && (
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="bg-[#fbf9f8] border border-[#d7c3b5]/70 text-[#1b1c1c] text-xs font-extrabold rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19] cursor-pointer shadow-2xs"
+              >
+                <option value="all">⚡ All Statuses</option>
+                <option value="active">Active</option>
+                <option value="present">Present</option>
+                <option value="on_leave">On Leave</option>
+              </select>
+            )}
 
             {/* KYC Status Filter */}
             <select
@@ -1010,42 +1039,30 @@ export const AgentManagement: React.FC = () => {
         {/* ------------------------------------------------------------- */}
         {activeRole === 'division' && (
           <div className="space-y-5">
-            {/* Division Header (Only assigned Division is shown) */}
+            {/* Division Summary Header Card */}
             <div className="bg-amber-50/60 p-5 rounded-2xl border border-amber-200 space-y-3">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-center justify-between">
                 <div>
-                  <div className="flex items-center gap-2">
-                    {getRoleBadge('division')}
-                    <span className="text-xs font-semibold text-slate-400">ID: {assignedDivisionNode.registrationId}</span>
-                    {getKycBadge(assignedDivisionNode.kycStatus)}
-                  </div>
-                  <h3 className="text-xl font-black text-amber-950 mt-1">{assignedDivisionNode.name}</h3>
-                  <p className="text-xs font-bold text-amber-800 flex items-center gap-1.5 mt-0.5">
-                    <Layers className="w-3.5 h-3.5 text-amber-600" />
-                    Assigned Division: {assignedDivisionNode.territory?.division || userDivision} ({userDistrict}, {userState})
-                  </p>
+                  <span className="text-[10px] font-black uppercase text-amber-900 tracking-wider block">Division Scope Summary</span>
+                  <h3 className="text-lg font-black text-amber-950 mt-0.5">
+                    Division: {assignedDivisionNode.territory?.division || userDivision} ({userDistrict}, {userState})
+                  </h3>
                 </div>
-                <button
-                  onClick={() => setSelectedAgent(assignedDivisionNode)}
-                  className="px-3.5 py-2 bg-white hover:bg-amber-50 text-amber-900 font-extrabold text-xs rounded-xl border border-amber-300 transition cursor-pointer flex items-center gap-1.5 self-start md:self-auto shadow-2xs"
-                >
-                  <Eye className="w-4 h-4 text-amber-600" /> Scorecard
-                </button>
               </div>
 
-              {/* Division Summary Metrics Strip */}
+              {/* Division Summary Metrics: Pincodes, Pincode Agents, Active Agents */}
               <div className="flex flex-wrap items-center gap-4 border-t border-amber-200/60 pt-3">
                 <div className="text-left">
-                  <p className="text-[9px] uppercase font-extrabold text-amber-800">Assigned Pincodes</p>
-                  <p className="text-sm font-black text-amber-950">{assignedDivisionNode.pincodes?.length || 4} Pincodes</p>
+                  <p className="text-[9px] uppercase font-extrabold text-amber-800">Pincodes</p>
+                  <p className="text-base font-black text-amber-950">{assignedDivisionNode.pincodes?.length || 4} Pincodes</p>
                 </div>
                 <div className="text-left border-l border-amber-200 pl-4">
-                  <p className="text-[9px] uppercase font-extrabold text-amber-800">Active Pincode Agents</p>
-                  <p className="text-sm font-black text-amber-950">{assignedDivisionNode.pincodes?.length || 4} Active</p>
+                  <p className="text-[9px] uppercase font-extrabold text-amber-800">Pincode Agents</p>
+                  <p className="text-base font-black text-amber-950">{assignedDivisionNode.pincodes?.length || 4} Agents</p>
                 </div>
                 <div className="text-left border-l border-amber-200 pl-4">
-                  <p className="text-[9px] uppercase font-extrabold text-amber-800">Total Vendors</p>
-                  <p className="text-sm font-black text-amber-950">{getNodeTierCounts(assignedDivisionNode).totalTieups || 12} Vendors</p>
+                  <p className="text-[9px] uppercase font-extrabold text-amber-800">Active Agents</p>
+                  <p className="text-base font-black text-amber-950">{assignedDivisionNode.pincodes?.length || 4} Active</p>
                 </div>
               </div>
             </div>
@@ -1072,13 +1089,16 @@ export const AgentManagement: React.FC = () => {
                     >
                       <div className="flex items-center gap-3">
                         <span className="p-2 bg-slate-100 text-slate-700 rounded-lg">
-                          <MapPin className="w-4 h-4" />
+                          <MapPin className="w-4 h-4 text-[#864f19]" />
                         </span>
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="font-extrabold text-xs text-[#1b1c1c]">{pin.name}</span>
                             <span className="px-2 py-0.5 bg-slate-800 text-white text-[10px] font-black rounded">
-                              PIN: {pin.territory?.pincode || 'N/A'}
+                              PIN: {pin.territory?.pincode || '530001'}
+                            </span>
+                            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-[10px] rounded">
+                              Active
                             </span>
                             {getKycBadge(pin.kycStatus)}
                           </div>
@@ -1086,7 +1106,20 @@ export const AgentManagement: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-4">
+                      <div className="flex flex-wrap items-center gap-4">
+                        <div className="text-right">
+                          <p className="text-[8px] uppercase font-bold text-slate-400">Vendors</p>
+                          <p className="text-xs font-black text-slate-800">12 Vendors</p>
+                        </div>
+                        <div className="text-right border-l border-slate-200 pl-3">
+                          <p className="text-[8px] uppercase font-bold text-slate-400">Target Progress</p>
+                          <p className="text-xs font-black text-[#864f19]">8 / 20 Targets</p>
+                        </div>
+                        <div className="text-right border-l border-slate-200 pl-3">
+                          <p className="text-[8px] uppercase font-bold text-slate-400">Performance Score</p>
+                          <p className="text-xs font-black text-emerald-700">88.5%</p>
+                        </div>
+
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); setSelectedAgent(pin); }}
@@ -1199,10 +1232,33 @@ export const AgentManagement: React.FC = () => {
 
               {selectedAgent.role === 'division' ? (
                 <>
-                  {/* Division Operations & Coverage */}
+                  {/* Merchant Tie-ups Status (Retained because Division Agents can directly onboard shops) */}
                   <div className="space-y-2">
-                    <h4 className="text-xs font-black uppercase text-[#864f19] tracking-wider">Division Operations & Coverage</h4>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <h4 className="text-xs font-black uppercase text-[#864f19] tracking-wider">Merchant Tie-ups Status</h4>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="bg-emerald-50 p-3.5 rounded-2xl border border-emerald-200">
+                        <p className="text-[9px] uppercase font-extrabold text-emerald-800">Tieups Today</p>
+                        <p className="text-lg font-black text-emerald-700 mt-0.5">{selMetrics.tieupsToday} Shops</p>
+                      </div>
+                      <div className="bg-blue-50 p-3.5 rounded-2xl border border-blue-200">
+                        <p className="text-[9px] uppercase font-extrabold text-blue-800">Tieups Yesterday</p>
+                        <p className="text-lg font-black text-blue-700 mt-0.5">{selMetrics.tieupsYesterday} Shops</p>
+                      </div>
+                      <div className="bg-amber-50 p-3.5 rounded-2xl border border-amber-200">
+                        <p className="text-[9px] uppercase font-extrabold text-amber-800">Total Tieups</p>
+                        <p className="text-lg font-black text-amber-800 mt-0.5">{selMetrics.totalTieups} Total</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Division Operations, Coverage & Achievements */}
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-black uppercase text-[#864f19] tracking-wider">Division Operations & Achievements</h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      <div className="bg-purple-50/70 p-3.5 rounded-2xl border border-purple-200">
+                        <p className="text-[9px] uppercase font-extrabold text-purple-800">Total Vendors</p>
+                        <p className="text-base font-black text-purple-950 mt-0.5">{selMetrics.totalTieups || 12} Vendors</p>
+                      </div>
                       <div className="bg-amber-50/70 p-3.5 rounded-2xl border border-amber-200">
                         <p className="text-[9px] uppercase font-extrabold text-amber-800">Pincodes Managed</p>
                         <p className="text-base font-black text-amber-950 mt-0.5">{selMetrics.pinCount || 4} Pincodes</p>
@@ -1211,21 +1267,6 @@ export const AgentManagement: React.FC = () => {
                         <p className="text-[9px] uppercase font-extrabold text-blue-800">Pincode Agents</p>
                         <p className="text-base font-black text-blue-950 mt-0.5">{selMetrics.pinCount || 4} Agents</p>
                       </div>
-                      <div className="bg-emerald-50/70 p-3.5 rounded-2xl border border-emerald-200">
-                        <p className="text-[9px] uppercase font-extrabold text-emerald-800">Active Agents</p>
-                        <p className="text-base font-black text-emerald-950 mt-0.5">{selMetrics.pinCount || 4} Active</p>
-                      </div>
-                      <div className="bg-purple-50/70 p-3.5 rounded-2xl border border-purple-200">
-                        <p className="text-[9px] uppercase font-extrabold text-purple-800">Total Vendors</p>
-                        <p className="text-base font-black text-purple-950 mt-0.5">{selMetrics.totalTieups || 12} Vendors</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Performance & Incentives */}
-                  <div className="space-y-2">
-                    <h4 className="text-xs font-black uppercase text-[#864f19] tracking-wider">Performance & Incentives</h4>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                       <div className="bg-[#fbf9f8] p-3.5 rounded-2xl border border-[#d7c3b5]/30">
                         <p className="text-[9px] uppercase font-extrabold text-[#52443a]">Targets Achieved</p>
                         <p className="text-base font-black text-emerald-700 mt-0.5">18 / 20 Targets</p>
@@ -1237,10 +1278,6 @@ export const AgentManagement: React.FC = () => {
                       <div className="bg-[#fbf9f8] p-3.5 rounded-2xl border border-[#d7c3b5]/30">
                         <p className="text-[9px] uppercase font-extrabold text-[#52443a]">Performance Score</p>
                         <p className="text-base font-black text-[#864f19] mt-0.5">88.5%</p>
-                      </div>
-                      <div className="bg-[#fbf9f8] p-3.5 rounded-2xl border border-[#d7c3b5]/30">
-                        <p className="text-[9px] uppercase font-extrabold text-[#52443a]">Applicable Incentives</p>
-                        <p className="text-base font-black text-emerald-700 mt-0.5">₹4,500</p>
                       </div>
                     </div>
                   </div>
