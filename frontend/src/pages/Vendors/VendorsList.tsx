@@ -1162,30 +1162,54 @@ export const VendorsList: React.FC = () => {
           });
 
           // Post to backend API so Admin backend receives pending request
-          api.post('/vendors', {
-            businessName: createdVendor.name,
-            ownerName: createdVendor.ownerName,
-            phone: createdVendor.phone,
+          const vendorPayload = {
+            businessName: createdVendor.name || 'Merchant Store',
+            name: createdVendor.name || 'Merchant Store',
+            ownerName: createdVendor.ownerName || 'Merchant Owner',
+            contactPerson: createdVendor.ownerName || 'Merchant Owner',
+            phone: createdVendor.phone || '9876543210',
             email: createdVendor.email,
-            category: createdVendor.storeType,
+            category: createdVendor.storeType || 'Supermarket & Retail',
+            subCategory: createdVendor.storeType || 'Supermarket & Retail',
             gst: createdVendor.businessGst,
+            assignedState: createdVendor.state,
             state: createdVendor.state,
+            assignedDistrict: createdVendor.district,
             district: createdVendor.district,
+            assignedDivision: createdVendor.division,
             division: createdVendor.division,
             pincode: createdVendor.pincode,
+            address: createdVendor.fullAddress,
             status: 'pending',
             kycStatus: 'pending',
+            joiningType: 'agent',
+            createdVia: 'agent',
+            registrationSource: 'agent',
+            agentId: user?._id || user?.id,
+            onboardedBy: user?._id || user?.id,
+            agentName: user?.name || 'Field Agent',
+            agentRegistrationId: user?.registrationId || 'AG-PIN-1001',
             location: {
               address: createdVendor.fullAddress,
               latitude: 12.9716,
               longitude: 77.5946
             }
-          }).then(() => {
+          };
+
+          // 1. Post to Agent App backend
+          api.post('/vendors', vendorPayload).then(() => {
             refetchVendors();
           }).catch(err => {
             console.warn('Backend API /vendors POST sync warning:', err);
             refetchVendors();
           });
+
+          // 2. Direct sync to Admin backend agent-onboard endpoint for guaranteed real-time availability
+          fetch('https://connect-admin-seven.vercel.app/api/admin/enterprise/vendors/agent-onboard', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(vendorPayload)
+          }).catch(err => console.warn('Admin direct sync warning:', err));
 
           addNotification(
             'Merchant Onboarded & Submitted to Admin!',
