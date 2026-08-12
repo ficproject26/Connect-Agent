@@ -793,38 +793,33 @@ export const VendorsList: React.FC = () => {
               </div>
             </div>
 
-            {/* Secondary Filters Row (District & Division dropdowns removed for Division Agent) */}
-            <div className={`grid gap-3 pt-2 border-t border-[#d7c3b5]/30 items-end ${activeRole === 'division' ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-6'}`}>
-              {activeRole !== 'division' && (
-                <>
-                  <div>
-                    <Select
-                      label="District"
-                      options={
-                        activeRole === 'state'
-                          ? [{ value: 'all', label: 'All State Districts' }, ...districts.map(d => ({ value: d, label: d }))]
-                          : [{ value: userDistrict, label: `${userDistrict}` }]
-                      }
-                      value={activeRole === 'state' ? districtFilter : userDistrict}
-                      onChange={(e) => setDistrictFilter(e.target.value)}
-                      disabled={activeRole !== 'state'}
-                    />
-                  </div>
+            {/* Secondary Filters Row (District dropdown removed for District & Division Agents) */}
+            <div className={`grid gap-3 pt-2 border-t border-[#d7c3b5]/30 items-end ${activeRole === 'division' || activeRole === 'district' ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-6'}`}>
+              {activeRole === 'state' && (
+                <div>
+                  <Select
+                    label="District"
+                    options={[{ value: 'all', label: 'All State Districts' }, ...districts.map(d => ({ value: d, label: d }))]}
+                    value={districtFilter}
+                    onChange={(e) => setDistrictFilter(e.target.value)}
+                  />
+                </div>
+              )}
 
-                  <div>
-                    <Select
-                      label="Division"
-                      options={
-                        activeRole === 'state' || activeRole === 'district'
-                          ? [{ value: 'all', label: activeRole === 'district' ? 'All Divisions in District' : 'All Divisions' }, ...divisions.map(d => ({ value: d, label: d }))]
-                          : [{ value: userDivision, label: `${userDivision}` }]
-                      }
-                      value={activeRole === 'state' || activeRole === 'district' ? divisionFilter : userDivision}
-                      onChange={(e) => setDivisionFilter(e.target.value)}
-                      disabled={activeRole === 'division' || activeRole === 'pincode'}
-                    />
-                  </div>
-                </>
+              {activeRole !== 'division' && (
+                <div>
+                  <Select
+                    label="Division"
+                    options={
+                      activeRole === 'state' || activeRole === 'district'
+                        ? [{ value: 'all', label: activeRole === 'district' ? 'All Divisions in District' : 'All Divisions' }, ...divisions.map(d => ({ value: d, label: d }))]
+                        : [{ value: userDivision, label: `${userDivision}` }]
+                    }
+                    value={activeRole === 'state' || activeRole === 'district' ? divisionFilter : userDivision}
+                    onChange={(e) => setDivisionFilter(e.target.value)}
+                    disabled={activeRole === 'division' || activeRole === 'pincode'}
+                  />
+                </div>
               )}
 
               <div>

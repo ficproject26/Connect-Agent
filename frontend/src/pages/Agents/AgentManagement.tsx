@@ -830,53 +830,9 @@ export const AgentManagement: React.FC = () => {
         {activeRole === 'district' && (
           <div className="space-y-6">
             
-            {/* DISTRICT LEVEL VIEW 1: Show District Details Header & List of Divisions */}
+            {/* DISTRICT LEVEL VIEW 1: List of Divisions under assigned District */}
             {!selectedDivisionId && (
               <div className="space-y-5">
-                {/* District Details Header (Only District Agent's assigned District is shown) */}
-                <div className="border border-[#d7c3b5]/60 rounded-2xl overflow-hidden bg-gradient-to-r from-[#fbf9f8] to-white p-5 shadow-xs border-l-4 border-l-[#864f19]">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        {getRoleBadge('district')}
-                        <span className="text-xs font-semibold text-slate-400">ID: {assignedDistrictNode.registrationId}</span>
-                        {getKycBadge(assignedDistrictNode.kycStatus)}
-                      </div>
-                      <h3 className="text-xl font-black text-[#1b1c1c] mt-1">{assignedDistrictNode.name}</h3>
-                      <p className="text-xs font-bold text-[#52443a] flex items-center gap-1.5 mt-0.5">
-                        <MapPin className="w-3.5 h-3.5 text-[#864f19]" />
-                        Assigned District: {assignedDistrictNode.territory?.district || userDistrict} ({assignedDistrictNode.territory?.state || userState})
-                      </p>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-4">
-                      {(() => {
-                        const metrics = getNodeTierCounts(assignedDistrictNode);
-                        return (
-                          <>
-                            <div className="text-right">
-                              <p className="text-[10px] uppercase font-extrabold text-slate-400">Revenue</p>
-                              <p className="text-base font-black text-emerald-700">₹{metrics.totalRevenue.toLocaleString()}</p>
-                            </div>
-                            <div className="text-right border-l border-slate-200 pl-3">
-                              <p className="text-[10px] uppercase font-extrabold text-slate-400">Divisions</p>
-                              <span className="px-2 py-0.5 bg-amber-600 text-white font-black text-[10px] rounded">
-                                {assignedDistrictNode.divisions?.length || 0} Divisions
-                              </span>
-                            </div>
-                            <button
-                              onClick={() => setSelectedAgent(assignedDistrictNode)}
-                              className="px-3.5 py-1.5 bg-[#fbf9f8] hover:bg-[#eae8e7] text-[#864f19] font-bold text-xs rounded-xl border border-[#d7c3b5] transition cursor-pointer flex items-center gap-1"
-                            >
-                              <Eye className="w-3.5 h-3.5" /> Scorecard
-                            </button>
-                          </>
-                        );
-                      })()}
-                    </div>
-                  </div>
-                </div>
-
                 {/* List of Divisions under this District */}
                 <div className="space-y-3">
                   <h4 className="text-xs font-black uppercase tracking-wider text-[#864f19] flex items-center gap-1.5">

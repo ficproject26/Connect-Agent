@@ -6,7 +6,8 @@ import api from '../../utils/api';
 
 export const ReportsModule: React.FC = () => {
   const { user, addNotification } = useAuth();
-  const [activeTab, setActiveTab] = useState('merchants');
+  const activeRole = (user?.role as string) || 'state';
+  const [activeTab, setActiveTab] = useState('overview');
   const [timeframe, setTimeframe] = useState<'today' | 'weekly' | 'monthly' | 'date'>('today');
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [isExporting, setIsExporting] = useState(false);
@@ -604,9 +605,15 @@ export const ReportsModule: React.FC = () => {
               <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 space-y-1.5 text-[11px] font-semibold">
                 <span className="text-[9px] font-black text-[#864f19] uppercase tracking-wider block">Assigned Territory (Auto-Filled)</span>
                 <p className="text-slate-800">State: <strong>{userState}</strong></p>
-                <p className="text-slate-800">District: <strong>{userDistrict}</strong></p>
-                <p className="text-slate-800">Assigned Division: <strong>{userDivision}</strong> (All Downstream Pincodes)</p>
-                <p className="text-slate-600 text-[10px]">Submitted By: <strong>{user?.name || 'Division Agent'}</strong></p>
+                {activeRole === 'state' ? (
+                  <p className="text-slate-800">Territory Jurisdiction: <strong className="text-[#864f19]">All Districts ({userState})</strong></p>
+                ) : (
+                  <>
+                    <p className="text-slate-800">District: <strong>{userDistrict}</strong></p>
+                    <p className="text-slate-800">Assigned Division: <strong>{userDivision}</strong> (All Downstream Pincodes)</p>
+                  </>
+                )}
+                <p className="text-slate-600 text-[10px]">Submitted By: <strong>{user?.name || (activeRole === 'state' ? 'State Agent' : 'Division Agent')}</strong></p>
               </div>
 
               <div className="space-y-1">
