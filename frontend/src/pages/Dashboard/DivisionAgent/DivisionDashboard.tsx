@@ -86,8 +86,8 @@ export const DivisionDashboard: React.FC = () => {
             territory: typeof s.territory === 'object' ? s.territory?.division || userDivision : (s.territory || userDivision),
             phone: s.phone || 'N/A',
             email: s.email || 'N/A',
-            assignedTargets: s.assignedTargets || 20,
-            completedTargets: s.completedTargets || 8,
+            assignedTargets: s.assignedTargets || 0,
+            completedTargets: s.completedTargets || 0,
             earnings: s.earnings || 0,
             totalOnboardedShops: s.totalOnboardedShops || 0,
             status: s.status === 'inactive' ? 'on_leave' : 'present',
@@ -173,12 +173,12 @@ export const DivisionDashboard: React.FC = () => {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: 'Assigned Pincodes', val: `${divisionPincodesList.length} Pincodes`, icon: <MapPin className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
-          { label: 'Active Pincode Agents', val: `${pincodeAgentsList.length || 4} active`, icon: <Users className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
-          { label: 'Total Vendors', val: '12 registered', icon: <Users className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
-          { label: 'Active Vendors', val: '10 active', icon: <CheckCircle2 className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
-          { label: "Today's Targets", val: '20 targets', icon: <Target className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
-          { label: 'Pending Targets', val: '4 remaining', icon: <Clock className="w-4 h-4 text-[#4f4635]" />, bg: 'bg-[#efe1ca]' },
-          { label: 'Open Tickets', val: '2 unresolved', icon: <Ticket className="w-4 h-4 text-red-700" />, bg: 'bg-red-50' },
+          { label: 'Active Pincode Agents', val: `${pincodeAgentsList.length} active`, icon: <Users className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
+          { label: 'Total Vendors', val: `${pincodeAgentsList.reduce((sum, s) => sum + (s.totalOnboardedShops || 0), 0)} registered`, icon: <Users className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
+          { label: 'Active Vendors', val: `${pincodeAgentsList.reduce((sum, s) => sum + (s.totalOnboardedShops || 0), 0)} active`, icon: <CheckCircle2 className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
+          { label: "Today's Targets", val: `${pincodeAgentsList.reduce((sum, s) => sum + (s.assignedTargets || 0), 0)} targets`, icon: <Target className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
+          { label: 'Pending Targets', val: `${pincodeAgentsList.reduce((sum, s) => sum + Math.max(0, (s.assignedTargets || 0) - (s.completedTargets || 0)), 0)} remaining`, icon: <Clock className="w-4 h-4 text-[#4f4635]" />, bg: 'bg-[#efe1ca]' },
+          { label: 'Open Tickets', val: '0 unresolved', icon: <Ticket className="w-4 h-4 text-red-700" />, bg: 'bg-red-50' },
           { label: 'Division Performance', val: '88.5%', icon: <TrendingUp className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' }
         ].map((card, idx) => (
           <div key={idx} className="bg-white p-5 rounded-[16px] border border-[#eae8e7] flex items-center justify-between shadow-sm relative overflow-hidden group">

@@ -220,29 +220,44 @@ export const StateDashboard: React.FC = () => {
           <div className="space-y-4">
             <div>
               <div className="flex justify-between text-xs font-bold text-[#52443a] mb-1">
-                <span>Vendor Growth Trend</span>
-                <span className="text-green-600">+12.4% MoM</span>
+                <span>Vendor Active Rate</span>
+                <span className="text-green-600">
+                  {metrics.totalVendors > 0 ? Math.round((metrics.activeVendors / metrics.totalVendors) * 100) : 0}% Active
+                </span>
               </div>
               <div className="w-full bg-[#f6f3f2] h-2 rounded-full overflow-hidden">
-                <div className="bg-emerald-600 h-full w-[78%] rounded-full"></div>
+                <div
+                  className="bg-emerald-600 h-full rounded-full transition-all duration-500"
+                  style={{ width: `${metrics.totalVendors > 0 ? Math.round((metrics.activeVendors / metrics.totalVendors) * 100) : 0}%` }}
+                />
               </div>
             </div>
             <div>
               <div className="flex justify-between text-xs font-bold text-[#52443a] mb-1">
-                <span>Target Completion Trend</span>
-                <span className="text-[#864f19]">+4.5% Growth</span>
+                <span>Territory Division Coverage</span>
+                <span className="text-[#864f19]">
+                  {metrics.totalDistricts > 0 ? Math.min(100, Math.round((metrics.totalDivisions / Math.max(1, metrics.totalDistricts * 2)) * 100)) : 0}% Coverage
+                </span>
               </div>
               <div className="w-full bg-[#f6f3f2] h-2 rounded-full overflow-hidden">
-                <div className="bg-[#864f19] h-full w-[84%] rounded-full"></div>
+                <div
+                  className="bg-[#864f19] h-full rounded-full transition-all duration-500"
+                  style={{ width: `${metrics.totalDistricts > 0 ? Math.min(100, Math.round((metrics.totalDivisions / Math.max(1, metrics.totalDistricts * 2)) * 100)) : 0}%` }}
+                />
               </div>
             </div>
             <div>
               <div className="flex justify-between text-xs font-bold text-[#52443a] mb-1">
-                <span>Ticket Resolution Trend</span>
-                <span className="text-[#34647b]">92.8% Resolved</span>
+                <span>Pending Approvals Ratio</span>
+                <span className="text-[#34647b]">
+                  {metrics.totalVendors > 0 ? Math.round((metrics.pendingVendors / metrics.totalVendors) * 100) : 0}% Pending
+                </span>
               </div>
               <div className="w-full bg-[#f6f3f2] h-2 rounded-full overflow-hidden">
-                <div className="bg-[#34647b] h-full w-[92.8%] rounded-full"></div>
+                <div
+                  className="bg-[#34647b] h-full rounded-full transition-all duration-500"
+                  style={{ width: `${metrics.totalVendors > 0 ? Math.round((metrics.pendingVendors / metrics.totalVendors) * 100) : 0}%` }}
+                />
               </div>
             </div>
           </div>

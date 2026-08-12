@@ -12,13 +12,37 @@ interface DocumentInfo {
 export const KycVerification: React.FC = () => {
   const { user } = useAuth();
   
-  const [docs, setDocs] = useState<Record<string, DocumentInfo>>({
-    aadhaar: { name: 'Aadhaar Card', status: 'verified', updatedAt: '2026-07-18' },
-    pan: { name: 'PAN Card', status: 'verified', updatedAt: '2026-07-18' },
-    photo: { name: 'Passport Size Photo', status: 'verified', updatedAt: '2026-07-18' },
-    education: { name: 'Educational Certificate', status: 'pending', updatedAt: '2026-07-19' },
-    bank: { name: 'Bank Passbook / Cancelled Cheque', status: 'missing', updatedAt: 'Not uploaded' }
-  });
+  const userRegDate = user?.createdAt 
+    ? new Date(user.createdAt).toISOString().split('T')[0] 
+    : new Date().toISOString().split('T')[0];
+
+  const [docs, setDocs] = useState<Record<string, DocumentInfo>>(() => ({
+    aadhaar: { 
+      name: 'Aadhaar Card', 
+      status: user?.kycDocs?.aadhaarCard ? (user?.kycStatus === 'approved' ? 'verified' : 'pending') : 'missing', 
+      updatedAt: user?.kycDocs?.aadhaarCard ? userRegDate : 'Not uploaded' 
+    },
+    pan: { 
+      name: 'PAN Card', 
+      status: user?.kycDocs?.panCard ? (user?.kycStatus === 'approved' ? 'verified' : 'pending') : 'missing', 
+      updatedAt: user?.kycDocs?.panCard ? userRegDate : 'Not uploaded' 
+    },
+    photo: { 
+      name: 'Passport Size Photo', 
+      status: user?.kycDocs?.passportPhoto ? (user?.kycStatus === 'approved' ? 'verified' : 'pending') : 'missing', 
+      updatedAt: user?.kycDocs?.passportPhoto ? userRegDate : 'Not uploaded' 
+    },
+    education: { 
+      name: 'Educational Certificate', 
+      status: user?.kycDocs?.educationalCertificates ? (user?.kycStatus === 'approved' ? 'verified' : 'pending') : 'missing', 
+      updatedAt: user?.kycDocs?.educationalCertificates ? userRegDate : 'Not uploaded' 
+    },
+    bank: { 
+      name: 'Bank Passbook / Cancelled Cheque', 
+      status: user?.kycDocs?.cancelledCheque ? (user?.kycStatus === 'approved' ? 'verified' : 'pending') : 'missing', 
+      updatedAt: user?.kycDocs?.cancelledCheque ? userRegDate : 'Not uploaded' 
+    }
+  }));
 
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);

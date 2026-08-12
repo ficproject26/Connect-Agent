@@ -189,15 +189,17 @@ export const ReportsModule: React.FC = () => {
   }, [user]);
 
   // Derived real metrics across Division
-  const fieldVisitsCount = realVisits.length || 12;
-  const visitsCompletedCount = realVisits.filter(v => v.status === 'completed').length || 10;
-  const vendorsOnboardedCount = realVendors.length || 12;
-  const completedTasksCount = realTargets.filter(t => t.status === 'completed' || t.status === 'achieved').length || 18;
-  const pendingTasksCount = realTargets.filter(t => t.status !== 'completed' && t.status !== 'achieved').length || 2;
-  const supportTicketsCount = realTickets.length || 3;
-  const ticketsResolvedCount = realTickets.filter(t => t.status === 'resolved' || t.status === 'closed').length || 2;
+  const fieldVisitsCount = realVisits.length;
+  const visitsCompletedCount = realVisits.filter(v => v.status === 'completed').length;
+  const vendorsOnboardedCount = realVendors.length;
+  const completedTasksCount = realTargets.filter(t => t.status === 'completed' || t.status === 'achieved').length;
+  const pendingTasksCount = realTargets.filter(t => t.status !== 'completed' && t.status !== 'achieved').length;
+  const supportTicketsCount = realTickets.length;
+  const ticketsResolvedCount = realTickets.filter(t => t.status === 'resolved' || t.status === 'closed').length;
 
-  const targetRatePercent = 88.5;
+  const targetRatePercent = completedTasksCount > 0 && (completedTasksCount + pendingTasksCount) > 0
+    ? Math.round((completedTasksCount / (completedTasksCount + pendingTasksCount)) * 1000) / 10
+    : 0;
 
   // Real Dynamic Chart Datasets based on division system state
   const merchantData = useMemo(() => {
