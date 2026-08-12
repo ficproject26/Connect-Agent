@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardBody, Button, Modal } from '../../components/ui';
-import { Target, CheckCircle2, Calendar, Check, MapPin, Loader2, Plus, Users, Award } from 'lucide-react';
+import { Target, CheckCircle2, Calendar, Check, MapPin, Loader2, Plus, Users, Award, Eye } from 'lucide-react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 
@@ -47,7 +47,6 @@ export const TargetsList: React.FC = () => {
   }, [userTargetsKey]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
-  const [activeTab, setActiveTab] = useState<'today' | 'upcoming' | 'completed'>('today');
 
   // Modals state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -206,14 +205,18 @@ export const TargetsList: React.FC = () => {
     setTargetValue(20);
   };
 
+  const [activeTab, setActiveTab] = useState<'my_direct' | 'pincode_allocations' | 'completed'>('pincode_allocations');
+  const [selectedTargetProgress, setSelectedTargetProgress] = useState<Allocation | null>(null);
+
   const getFilteredAllocations = () => {
     if (activeTab === 'completed') {
       return allocations.filter(a => a.status === 'completed');
     }
-    if (activeTab === 'upcoming') {
-      return allocations.filter(a => a.status !== 'completed' && !a.dueDate.includes('Today') && !a.dueDate.includes('Yesterday'));
+    if (activeTab === 'my_direct') {
+      return allocations.filter(a => a.status !== 'completed' && (a.location.includes('Personal Target') || a.location.includes('Self Target')));
     }
-    return allocations.filter(a => a.status !== 'completed');
+    // Default: pincode_allocations
+    return allocations.filter(a => a.status !== 'completed' && !a.location.includes('Personal Target'));
   };
 
   const currentTasks = getFilteredAllocations();
@@ -226,7 +229,12 @@ export const TargetsList: React.FC = () => {
       {/* Header HUD */}
       <div className="bg-white p-6 rounded-[16px] border border-[#eae8e7] shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div className="space-y-1">
-          <h1 className="text-2xl font-black text-[#1b1c1c] tracking-tight">Targets & Task Allocations</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-black text-[#1b1c1c] tracking-tight">Targets & Task Allocations</h1>
+            <span className="px-2.5 py-0.5 bg-[#864f19]/10 text-[#864f19] font-black text-[10px] uppercase rounded-full border border-[#864f19]/20">
+              DIVISION SCOPE
+            </span>
+          </div>
           <p className="text-xs text-[#52443a] font-semibold uppercase tracking-wider">
             Scope: <strong className="text-[#864f19]">{userDivision}</strong> ({userDistrict}, {userState})
           </p>
@@ -271,29 +279,29 @@ export const TargetsList: React.FC = () => {
               leftIcon={<Plus className="w-4 h-4" />}
               className="py-2.5 px-4 font-bold rounded-xl border-none text-xs uppercase tracking-wider shadow-sm transition w-full sm:w-auto justify-center bg-[#864f19] text-white"
             >
-              Create Target Goal
+              Assign New Target
             </Button>
           )}
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* Hierarchy Tabs */}
       <div className="flex gap-4 border-b border-[#eae8e7] pb-px">
         <button
-          onClick={() => setActiveTab('today')}
+          onClick={() => setActiveTab('pincode_allocations')}
           className={`text-xs font-extrabold uppercase pb-3.5 border-b-2 transition-all cursor-pointer ${
-            activeTab === 'today' ? 'border-[#864f19] text-[#864f19]' : 'border-transparent text-slate-500 hover:text-slate-800'
+            activeTab === 'pincode_allocations' ? 'border-[#864f19] text-[#864f19]' : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
-          Today's Schedule & Active
+          📍 Pincode Agent Allocations
         </button>
         <button
-          onClick={() => setActiveTab('upcoming')}
+          onClick={() => setActiveTab('my_direct')}
           className={`text-xs font-extrabold uppercase pb-3.5 border-b-2 transition-all cursor-pointer ${
-            activeTab === 'upcoming' ? 'border-[#864f19] text-[#864f19]' : 'border-transparent text-slate-500 hover:text-slate-800'
+            activeTab === 'my_direct' ? 'border-[#864f19] text-[#864f19]' : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
-          Upcoming Allocations
+          👤 My Direct Targets
         </button>
         <button
           onClick={() => setActiveTab('completed')}
@@ -301,7 +309,7 @@ export const TargetsList: React.FC = () => {
             activeTab === 'completed' ? 'border-[#864f19] text-[#864f19]' : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
-          Completed History
+          ✓ Completed History
         </button>
       </div>
 
@@ -318,8 +326,8 @@ export const TargetsList: React.FC = () => {
                 <Target className="w-6 h-6" />
               </div>
               <div>
-                <p className="text-sm font-black text-slate-800">No active tasks match this filter list.</p>
-                <p className="text-xs text-slate-500 font-medium mt-1">Assign new targets or switch tabs to view completed history.</p>
+                <p className="text-sm font-black text-slate-800">No target allocations match this view.</p>
+                <p className="text-xs text-slate-500 font-medium mt-1">Assign shop tie-up targets to downstream Pincode Agents or create personal targets.</p>
               </div>
             </div>
           ) : (
@@ -327,6 +335,7 @@ export const TargetsList: React.FC = () => {
               const assignedVal = task.targetValue || 20;
               const achievedVal = task.status === 'completed' ? assignedVal : Math.min(8, assignedVal);
               const remainingVal = Math.max(0, assignedVal - achievedVal);
+              const pctVal = Math.round((achievedVal / assignedVal) * 100);
 
               return (
                 <Card key={task._id} className="relative overflow-hidden flex flex-col justify-between">
@@ -347,8 +356,8 @@ export const TargetsList: React.FC = () => {
                   <CardBody className="py-4 space-y-3">
                     <p className="text-xs text-slate-600 font-medium leading-relaxed">{task.taskDescription}</p>
 
-                    {/* Progress Metrics: Assigned, Achieved, Remaining */}
-                    <div className="grid grid-cols-3 gap-2 bg-[#fbf9f8] p-2.5 rounded-xl border border-[#d7c3b5]/40 text-center">
+                    {/* Progress Metrics: Assigned, Achieved, Remaining, Progress % */}
+                    <div className="grid grid-cols-4 gap-1.5 bg-[#fbf9f8] p-2.5 rounded-xl border border-[#d7c3b5]/40 text-center">
                       <div>
                         <span className="text-[8px] uppercase font-bold text-slate-400 block">Assigned</span>
                         <span className="text-xs font-black text-slate-800">{assignedVal}</span>
@@ -361,6 +370,10 @@ export const TargetsList: React.FC = () => {
                         <span className="text-[8px] uppercase font-bold text-[#864f19] block">Remaining</span>
                         <span className="text-xs font-black text-[#864f19]">{remainingVal}</span>
                       </div>
+                      <div className="border-l border-[#d7c3b5]/30">
+                        <span className="text-[8px] uppercase font-bold text-blue-600 block">Progress</span>
+                        <span className="text-xs font-black text-blue-700">{pctVal}%</span>
+                      </div>
                     </div>
 
                     <div className="space-y-1.5 pt-1 text-[11px] font-semibold text-slate-500">
@@ -368,7 +381,7 @@ export const TargetsList: React.FC = () => {
                         <MapPin className="w-3.5 h-3.5 text-slate-400" /> {task.location}
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <Calendar className="w-3.5 h-3.5 text-slate-400" /> Date: <span className={task.status === 'overdue' ? 'text-red-600 font-bold' : ''}>{task.dueDate}</span>
+                        <Calendar className="w-3.5 h-3.5 text-slate-400" /> Period: <span className={task.status === 'overdue' ? 'text-red-600 font-bold' : ''}>{task.dueDate}</span>
                       </div>
                     </div>
                   </CardBody>
@@ -382,15 +395,25 @@ export const TargetsList: React.FC = () => {
                       {task.priority} priority
                     </span>
                     
-                    {task.status !== 'completed' && (
-                      <Button
-                        variant="primary"
-                        className="py-1 px-3 text-[10px] h-auto font-bold uppercase tracking-wider bg-[#864f19] hover:bg-[#a3672f] text-white border-none cursor-pointer flex items-center gap-1"
-                        onClick={() => handleMarkCompleted(task._id)}
-                        leftIcon={<Check className="w-3.5 h-3.5" />}
+                    {activeTab === 'pincode_allocations' ? (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedTargetProgress(task)}
+                        className="py-1 px-3 bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 text-[#864f19] font-bold text-[11px] rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
                       >
-                        Done
-                      </Button>
+                        <Eye className="w-3.5 h-3.5" /> View Progress
+                      </button>
+                    ) : (
+                      task.status !== 'completed' && (
+                        <Button
+                          variant="primary"
+                          className="py-1 px-3 text-[10px] h-auto font-bold uppercase tracking-wider bg-[#864f19] hover:bg-[#a3672f] text-white border-none cursor-pointer flex items-center gap-1"
+                          onClick={() => handleMarkCompleted(task._id)}
+                          leftIcon={<Check className="w-3.5 h-3.5" />}
+                        >
+                          Done
+                        </Button>
+                      )
                     )}
                   </div>
                 </Card>
@@ -398,6 +421,54 @@ export const TargetsList: React.FC = () => {
             })
           )}
         </div>
+      )}
+
+      {/* Target Progress Drawer/Modal */}
+      {selectedTargetProgress && (
+        <Modal
+          isOpen={Boolean(selectedTargetProgress)}
+          onClose={() => setSelectedTargetProgress(null)}
+          title="Target Quota & Audit Progress"
+          size="md"
+        >
+          <div className="space-y-4 font-sans text-xs">
+            <div className="bg-[#fbf9f8] p-4 rounded-2xl border border-[#d7c3b5]/40 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-extrabold text-sm text-[#1b1c1c]">{selectedTargetProgress.vendorName}</span>
+                <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-black rounded-full uppercase">
+                  {selectedTargetProgress.status}
+                </span>
+              </div>
+              <p className="text-slate-600 text-xs font-medium">{selectedTargetProgress.taskDescription}</p>
+              <p className="text-slate-400 text-[11px] font-semibold">{selectedTargetProgress.location}</p>
+            </div>
+
+            <div className="grid grid-cols-4 gap-2 text-center">
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <span className="text-[9px] uppercase font-bold text-slate-400 block">Assigned</span>
+                <span className="text-lg font-black text-slate-900">{selectedTargetProgress.targetValue || 20}</span>
+              </div>
+              <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-200">
+                <span className="text-[9px] uppercase font-bold text-emerald-700 block">Achieved</span>
+                <span className="text-lg font-black text-emerald-800">8</span>
+              </div>
+              <div className="bg-amber-50 p-3 rounded-xl border border-amber-200">
+                <span className="text-[9px] uppercase font-bold text-amber-700 block">Remaining</span>
+                <span className="text-lg font-black text-amber-800">12</span>
+              </div>
+              <div className="bg-blue-50 p-3 rounded-xl border border-blue-200">
+                <span className="text-[9px] uppercase font-bold text-blue-700 block">Progress</span>
+                <span className="text-lg font-black text-blue-800">40%</span>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 flex justify-end">
+              <Button variant="outline" onClick={() => setSelectedTargetProgress(null)}>
+                Close Breakdown
+              </Button>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {/* MODAL: Create Target Goal (Manager Only) */}

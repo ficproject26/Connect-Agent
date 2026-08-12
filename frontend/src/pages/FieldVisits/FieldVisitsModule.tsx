@@ -35,8 +35,9 @@ export const FieldVisitsModule: React.FC = () => {
   const navigate = useNavigate();
   const activeRole = (user?.role as string) || 'state';
   const userState = user?.territory?.state || 'Andhra Pradesh';
-  const userDistrict = user?.territory?.district || 'NTR District';
-  const userPincode = user?.territory?.pincode || '520001';
+  const userDistrict = user?.territory?.district || 'Visakhapatnam';
+  const userDivision = user?.territory?.division || 'Vizag City Division';
+  const userPincode = user?.territory?.pincode || '530001';
   const userName = user?.name || 'Logged Agent';
 
   const userVisitsKey = useMemo(() => {
@@ -447,11 +448,11 @@ export const FieldVisitsModule: React.FC = () => {
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-black text-[#1b1c1c]">Field Visit Monitoring</h1>
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-[#864f19] text-white">
-              ROLE: {activeRole.toUpperCase()} AGENT
+              ROLE: DIVISION AGENT
             </span>
           </div>
           <p className="text-xs font-semibold text-[#52443a] mt-1 uppercase tracking-wider">
-            MONITOR FIELD VISITS, VERIFY AGENT ACTIVITY, AND REVIEW MERCHANT AUDIT REPORTS ACROSS {userState.toUpperCase()}
+            MONITOR FIELD VISITS, VERIFY PINCODE AGENT ACTIVITY, AND REVIEW MERCHANT AUDIT REPORTS WITHIN ASSIGNED DIVISION ({userDivision.toUpperCase()})
           </p>
         </div>
         
@@ -548,7 +549,7 @@ export const FieldVisitsModule: React.FC = () => {
         {/* Left Column: Ledger Table */}
         <div className={`${selectedVisitDetails ? 'lg:col-span-8' : 'lg:col-span-12'} space-y-4 transition-all duration-300`}>
 
-          {/* Search & Filter Controls Bar */}
+          {/* Search & Filter Controls Bar (District filter dropdown removed for Division Agent) */}
           <div className="bg-white p-4 rounded-[16px] border border-[#eae8e7] shadow-sm space-y-3">
             <div className="flex flex-col sm:flex-row items-center gap-3">
               <div className="flex-1 relative w-full">
@@ -562,43 +563,35 @@ export const FieldVisitsModule: React.FC = () => {
                 />
               </div>
 
-              {/* Hide District, Pincode, and Agent filters for Pincode Agent */}
-              {activeRole !== 'pincode' && (
-                <>
-                  <div className="w-full sm:w-40">
-                    <select
-                      value={districtFilter}
-                      onChange={(e) => setDistrictFilter(e.target.value)}
-                      className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                    >
-                      <option value="all">All Districts</option>
-                      {districts.map(d => <option key={d} value={d}>{d}</option>)}
-                    </select>
-                  </div>
+              {/* Division-Scoped Pincode & Agent Filter Dropdowns */}
+              <div className="w-full sm:w-44">
+                <select
+                  value={pincodeFilter}
+                  onChange={(e) => setPincodeFilter(e.target.value)}
+                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                >
+                  <option value="all">📍 All Pincodes</option>
+                  <option value="530001">PIN 530001 (Central)</option>
+                  <option value="530017">PIN 530017 (MVP Colony)</option>
+                  <option value="530018">PIN 530018 (Madhavadhara)</option>
+                  <option value="530026">PIN 530026 (Gajuwaka)</option>
+                </select>
+              </div>
 
-                  <div className="w-full sm:w-40">
-                    <select
-                      value={pincodeFilter}
-                      onChange={(e) => setPincodeFilter(e.target.value)}
-                      className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                    >
-                      <option value="all">All Pincodes</option>
-                      {pincodes.map(p => <option key={p} value={p}>PIN {p}</option>)}
-                    </select>
-                  </div>
-
-                  <div className="w-full sm:w-40">
-                    <select
-                      value={agentFilter}
-                      onChange={(e) => setAgentFilter(e.target.value)}
-                      className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                    >
-                      <option value="all">All Agents</option>
-                      {agents.map(a => <option key={a} value={a}>{a}</option>)}
-                    </select>
-                  </div>
-                </>
-              )}
+              <div className="w-full sm:w-48">
+                <select
+                  value={agentFilter}
+                  onChange={(e) => setAgentFilter(e.target.value)}
+                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                >
+                  <option value="all">👤 All Agents in Division</option>
+                  <option value={userName}>My Direct Visits (Division Agent)</option>
+                  <option value="raki pin">raki pin (Pincode Agent - 530001)</option>
+                  <option value="Kiran Kumar">Kiran Kumar (Pincode Agent - 530017)</option>
+                  <option value="Ramesh Naidu">Ramesh Naidu (Pincode Agent - 530018)</option>
+                  <option value="Nageswara Rao">Nageswara Rao (Pincode Agent - 530026)</option>
+                </select>
+              </div>
 
               <div className="w-full sm:w-40">
                 <select

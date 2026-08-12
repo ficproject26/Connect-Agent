@@ -161,9 +161,14 @@ export const TicketsList: React.FC = () => {
       {/* HUD Header Panel */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-6 rounded-[16px] border border-[#eae8e7] shadow-sm gap-4">
         <div>
-          <h1 className="text-2xl font-black text-[#1b1c1c] font-sans">Pincode Agent Support Tickets Desk</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-black text-[#1b1c1c] font-sans">Division Support & Escalation Desk</h1>
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-[#864f19] text-white">
+              DIVISION SCOPE
+            </span>
+          </div>
           <p className="text-xs font-semibold text-[#52443a] mt-1 uppercase tracking-wider">
-            Submit merchant queries, KYC document disputes, or account issues directly to the Support Desk.
+            SUBMIT MERCHANT QUERIES, KYC DOCUMENT DISPUTES, OR ESCALATE TICKETS ACROSS ASSIGNED DIVISION AND DOWNSTREAM PINCODE AGENTS.
           </p>
         </div>
       </div>

@@ -178,10 +178,10 @@ export const WalletDashboard: React.FC = () => {
       {/* HUD Header Panel */}
       <div className="bg-white p-6 rounded-[16px] border border-[#eae8e7] shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative overflow-hidden">
         <div className="space-y-1">
-          <span className="text-[10px] text-[#864f19] font-bold uppercase tracking-widest block">AGENT REVENUE & PAYOUT HUB</span>
+          <span className="text-[10px] text-[#864f19] font-bold uppercase tracking-widest block">DIVISION AGENT REVENUE & PAYOUT HUB</span>
           <h2 className="text-2xl font-black tracking-tight text-[#1b1c1c]">E-Wallet & Earnings</h2>
           <p className="text-xs text-[#52443a] max-w-xl font-medium">
-            Assigned Agent: <strong className="text-[#1b1c1c]">{user?.name || 'Logged Agent'}</strong> ({user?.territory?.pincode ? `PIN: ${user.territory.pincode}` : 'Pincode Scope'})
+            Assigned Agent: <strong className="text-[#1b1c1c]">{user?.name || 'Division Manager'}</strong> (<span className="text-[#864f19] font-bold">Division Scope: {user?.territory?.division || 'Vizag City Division'}</span>) • Direct Shop Tie-up Commissions & Performance Incentives Only
           </p>
         </div>
       </div>
