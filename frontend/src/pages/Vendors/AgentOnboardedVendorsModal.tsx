@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, X, CheckCircle2, Clock, XCircle, MapPin, Phone, Mail, User, Store, Check, UserCheck, RefreshCw } from 'lucide-react';
+import { Search, X, CheckCircle2, Clock, XCircle, MapPin, Phone, Mail, User, Store, Check, UserCheck, RefreshCw, Building2 } from 'lucide-react';
 import api from '../../utils/api';
+import { useAuth } from '../../context/AuthContext';
 
 export interface VendorItem {
   id: string;
@@ -16,6 +17,8 @@ export interface VendorItem {
   kycStatus: 'approved' | 'pending' | 'rejected';
   status: 'active' | 'inactive' | 'pending';
   assignedAgent: string;
+  onboardedBy?: string;
+  agentRole?: string;
   createdAt: string;
   updatedAt: string;
   storeType: string;
@@ -36,6 +39,10 @@ export const AgentOnboardedVendorsModal: React.FC<AgentOnboardedVendorsModalProp
   userVendorsKey,
   onStatusChange
 }) => {
+  const { user } = useAuth();
+  const activeRole = user?.role || 'state';
+  const userState = user?.territory?.state || 'Andhra Pradesh';
+
   const [searchTerm, setSearchTerm] = useState('');
   const [vendorsList, setVendorsList] = useState<VendorItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -58,9 +65,29 @@ export const AgentOnboardedVendorsModal: React.FC<AgentOnboardedVendorsModalProp
         if (raw) {
           const arr = JSON.parse(raw);
           if (Array.isArray(arr)) {
-            arr.forEach((v: VendorItem) => {
+            arr.forEach((v: any) => {
               if (v && (v.id || v.name)) {
-                map.set(v.id || v.name, v);
+                const item: VendorItem = {
+                  id: v.id || v.registrationId || `REG-${Math.floor(1000 + Math.random() * 9000)}`,
+                  name: v.name || v.businessName || '',
+                  ownerName: v.ownerName || 'Merchant Owner',
+                  phone: v.phone || '',
+                  email: v.email || '',
+                  state: v.state || userState,
+                  district: v.district || 'Visakhapatnam',
+                  division: v.division || 'Vizag City Division',
+                  pincode: v.pincode || '530001',
+                  role: 'Merchant Partner',
+                  kycStatus: v.kycStatus || 'pending',
+                  status: v.status || 'active',
+                  assignedAgent: typeof v.assignedAgent === 'string' ? v.assignedAgent : (v.assignedAgent?.name || 'Field Agent'),
+                  onboardedBy: v.onboardedBy || (typeof v.assignedAgent === 'string' ? v.assignedAgent : v.assignedAgent?.name || 'Field Agent'),
+                  agentRole: v.agentRole || (v.assignedAgent?.role ? (v.assignedAgent.role === 'district' ? 'District Agent' : v.assignedAgent.role === 'division' ? 'Division Manager' : 'Pincode Agent') : 'Pincode Agent'),
+                  createdAt: v.createdAt || new Date().toISOString().slice(0, 10),
+                  updatedAt: v.updatedAt || new Date().toISOString().slice(0, 10),
+                  storeType: v.storeType || 'General Store'
+                };
+                map.set(item.id || item.name, item);
               }
             });
           }
@@ -73,20 +100,38 @@ export const AgentOnboardedVendorsModal: React.FC<AgentOnboardedVendorsModalProp
       const res = await api.get('/vendors');
       const apiVendors = res.data?.vendors || [];
       apiVendors.forEach((v: any) => {
+        const rawAgentRole = v.assignedAgent?.role || v.agentRole || '';
+        let formattedAgentRole = 'Pincode Agent';
+        if (rawAgentRole === 'district') formattedAgentRole = 'District Agent';
+        else if (rawAgentRole === 'division') formattedAgentRole = 'Division Manager';
+        else if (rawAgentRole === 'pincode') formattedAgentRole = 'Pincode Agent';
+        else if (rawAgentRole === 'state') formattedAgentRole = 'State Agent';
+        else if (v.assignedAgent?.name) {
+          const lower = v.assignedAgent.name.toLowerCase();
+          if (lower.includes('district')) formattedAgentRole = 'District Agent';
+          else if (lower.includes('division') || lower.includes('manager')) formattedAgentRole = 'Division Manager';
+        }
+
+        const agentNameStr = v.assignedAgent?.name 
+          ? v.assignedAgent.name 
+          : (typeof v.assignedAgent === 'string' ? v.assignedAgent : 'Field Agent');
+
         const item: VendorItem = {
           id: v.registrationId || v._id || `REG-${Math.floor(1000 + Math.random() * 9000)}`,
           name: v.businessName || v.name || '',
           ownerName: v.ownerName || 'Merchant Owner',
           phone: v.phone || '',
           email: v.email || '',
-          state: v.state || 'Andhra Pradesh',
+          state: v.state || userState,
           district: v.district || 'Visakhapatnam',
           division: v.division || 'Vizag City Division',
           pincode: v.pincode || '530001',
           role: 'Merchant Partner',
           kycStatus: v.kycStatus || 'pending',
           status: v.status || 'active',
-          assignedAgent: v.assignedAgent?.name ? `${v.assignedAgent.name} (${v.assignedAgent.role || 'Agent'})` : (typeof v.assignedAgent === 'string' ? v.assignedAgent : 'Field Agent'),
+          assignedAgent: agentNameStr,
+          onboardedBy: agentNameStr,
+          agentRole: formattedAgentRole,
           createdAt: v.createdAt ? new Date(v.createdAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
           updatedAt: v.updatedAt ? new Date(v.updatedAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
           storeType: v.category?.name || v.storeType || 'General Store',
@@ -99,20 +144,39 @@ export const AgentOnboardedVendorsModal: React.FC<AgentOnboardedVendorsModalProp
       console.warn('API fetch vendors in modal warning:', e);
     }
 
-    // Filter strictly by logged-in Division Agent hierarchy scope (Visakhapatnam / Vizag City Division or Vijayawada)
     const rawList = Array.from(map.values());
-    const scopedList = rawList.filter(v => {
-      // Exclude vendors from other states/districts (e.g. Salem, Tamil Nadu, Hosur)
-      if (v.district && (v.district.toLowerCase().includes('salem') || v.district.toLowerCase().includes('krishnagiri') || v.state?.toLowerCase().includes('tamil'))) {
-        return false;
-      }
-      if (v.pincode && (v.pincode.startsWith('6') || v.pincode.startsWith('4'))) {
-        return false;
-      }
-      return true;
-    });
 
-    setVendorsList(scopedList);
+    const isSameState = (st?: string) => {
+      if (!st) return true;
+      const s1 = st.toLowerCase();
+      const s2 = userState.toLowerCase();
+      return s1.includes(s2) || s2.includes(s1);
+    };
+
+    if (activeRole === 'state') {
+      // STATE AGENT: Show vendors onboarded by District, Division, and Pincode Agents across assigned state
+      // Keep State Agent's direct vendor onboarding separate
+      const scopedList = rawList.filter(v => {
+        if (!isSameState(v.state)) return false;
+        // Keep direct State Agent onboarding separate
+        if (v.agentRole === 'State Agent') return false;
+        return true;
+      });
+      setVendorsList(scopedList);
+    } else {
+      // OTHER ROLES (e.g. Division Agent): Filter by division territory scope
+      const scopedList = rawList.filter(v => {
+        if (v.district && (v.district.toLowerCase().includes('salem') || v.district.toLowerCase().includes('krishnagiri') || v.state?.toLowerCase().includes('tamil'))) {
+          return false;
+        }
+        if (v.pincode && (v.pincode.startsWith('6') || v.pincode.startsWith('4'))) {
+          return false;
+        }
+        return true;
+      });
+      setVendorsList(scopedList);
+    }
+
     setIsLoading(false);
   };
 
@@ -120,7 +184,7 @@ export const AgentOnboardedVendorsModal: React.FC<AgentOnboardedVendorsModalProp
     if (isOpen) {
       loadVendors();
     }
-  }, [isOpen, userVendorsKey]);
+  }, [isOpen, userVendorsKey, activeRole, userState]);
 
   // Filtered vendors based on search query
   const filteredVendors = useMemo(() => {
@@ -132,8 +196,11 @@ export const AgentOnboardedVendorsModal: React.FC<AgentOnboardedVendorsModalProp
       v.id.toLowerCase().includes(q) ||
       v.phone.includes(q) ||
       v.pincode.includes(q) ||
+      v.district.toLowerCase().includes(q) ||
+      v.division.toLowerCase().includes(q) ||
       v.email.toLowerCase().includes(q) ||
-      v.assignedAgent.toLowerCase().includes(q)
+      v.assignedAgent.toLowerCase().includes(q) ||
+      (v.agentRole && v.agentRole.toLowerCase().includes(q))
     );
   }, [vendorsList, searchTerm]);
 
@@ -142,10 +209,14 @@ export const AgentOnboardedVendorsModal: React.FC<AgentOnboardedVendorsModalProp
   const activeCount = vendorsList.filter(v => v.status === 'active' || v.kycStatus === 'approved').length;
   const pendingCount = vendorsList.filter(v => v.kycStatus === 'pending' || v.status === 'pending').length;
 
+  const modalTitle = activeRole === 'state' ? 'Agent Onboarded Vendors' : 'Division Vendors';
+  const modalSubtitle = activeRole === 'state'
+    ? `Vendors onboarded by District, Division, and Pincode agents across ${userState}`
+    : 'Vendors onboarded within the assigned Division';
+
   const handleApprove = (vId: string) => {
     setVendorsList(prev => prev.map(v => v.id === vId ? { ...v, kycStatus: 'approved', status: 'active' } : v));
     
-    // Update local storage queues
     ['connect_portal_pending_vendor_onboardings', 'pending_merchant_onboardings', userVendorsKey].forEach(key => {
       if (!key) return;
       try {
@@ -196,9 +267,9 @@ export const AgentOnboardedVendorsModal: React.FC<AgentOnboardedVendorsModalProp
               <UserCheck className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-xl font-black text-slate-900 tracking-tight">Division Vendors</h2>
+              <h2 className="text-xl font-black text-slate-900 tracking-tight">{modalTitle}</h2>
               <p className="text-xs text-slate-500 font-semibold mt-0.5">
-                Vendors onboarded within the assigned Division
+                {modalSubtitle}
               </p>
             </div>
           </div>
@@ -229,7 +300,7 @@ export const AgentOnboardedVendorsModal: React.FC<AgentOnboardedVendorsModalProp
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by vendor name, agent name, agent ID, pincode, email..."
+              placeholder="Search by vendor name, agent name, agent ID, pincode, district, division, email..."
               className="w-full bg-slate-50/80 border border-slate-200/90 rounded-2xl py-2.5 pl-10 pr-4 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition"
             />
             {searchTerm && (
@@ -284,6 +355,17 @@ export const AgentOnboardedVendorsModal: React.FC<AgentOnboardedVendorsModalProp
                       <span className="px-2 py-0.5 bg-slate-100 text-slate-700 font-bold text-[10px] rounded-full border border-slate-200">
                         {vendor.storeType}
                       </span>
+
+                      {/* Vendor Status Badge */}
+                      <span className={`px-2 py-0.5 font-bold text-[10px] rounded-full border ${
+                        vendor.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                        vendor.status === 'inactive' ? 'bg-rose-50 text-rose-700 border-rose-200' :
+                        'bg-amber-50 text-amber-700 border-amber-200'
+                      }`}>
+                        Status: {vendor.status.toUpperCase()}
+                      </span>
+
+                      {/* KYC Status Badge */}
                       {vendor.kycStatus === 'approved' && (
                         <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-extrabold text-[10px] rounded-full flex items-center gap-1 border border-emerald-200">
                           <CheckCircle2 className="w-3 h-3" /> Approved KYC
@@ -304,11 +386,14 @@ export const AgentOnboardedVendorsModal: React.FC<AgentOnboardedVendorsModalProp
                     <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-slate-600">
                       <span className="flex items-center gap-1"><User className="w-3.5 h-3.5 text-slate-400" /> {vendor.ownerName}</span>
                       <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5 text-slate-400" /> +91 {vendor.phone}</span>
-                      <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-purple-600" /> PIN: {vendor.pincode} ({vendor.district})</span>
+                      <span className="flex items-center gap-1 text-purple-700 font-bold">
+                        <MapPin className="w-3.5 h-3.5 text-purple-600" />
+                        District: {vendor.district} • Division: {vendor.division} • PIN: {vendor.pincode}
+                      </span>
                     </div>
 
-                    <div className="text-[11px] text-slate-400 font-medium">
-                      Onboarded by: <span className="font-bold text-slate-700">{vendor.assignedAgent}</span> • ID: <span className="font-bold text-slate-700">{vendor.id}</span>
+                    <div className="text-[11px] text-slate-500 font-medium">
+                      Onboarded by: <span className="font-extrabold text-slate-800">{vendor.onboardedBy || vendor.assignedAgent}</span> <span className="text-purple-700 font-bold">({vendor.agentRole || 'Pincode Agent'})</span> • Registration ID: <span className="font-extrabold text-slate-800">{vendor.id}</span>
                     </div>
                   </div>
 
@@ -351,3 +436,4 @@ export const AgentOnboardedVendorsModal: React.FC<AgentOnboardedVendorsModalProp
 };
 
 export default AgentOnboardedVendorsModal;
+
