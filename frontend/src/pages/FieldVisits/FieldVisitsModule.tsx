@@ -449,11 +449,15 @@ export const FieldVisitsModule: React.FC = () => {
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-black text-[#1b1c1c]">Field Visit Monitoring</h1>
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-[#864f19] text-white">
-              ROLE: DIVISION AGENT
+              ROLE: {activeRole.toUpperCase()} AGENT
             </span>
           </div>
           <p className="text-xs font-semibold text-[#52443a] mt-1 uppercase tracking-wider">
-            MONITOR FIELD VISITS, VERIFY PINCODE AGENT ACTIVITY, AND REVIEW MERCHANT AUDIT REPORTS WITHIN ASSIGNED DIVISION ({userDivision.toUpperCase()})
+            {activeRole === 'pincode'
+              ? `MONITOR FIELD VISITS AND VENDOR ACTIVITY WITHIN YOUR ASSIGNED PIN (${userPincode})`
+              : activeRole === 'division'
+              ? `MONITOR FIELD VISITS, VERIFY PINCODE AGENT ACTIVITY, AND REVIEW MERCHANT AUDIT REPORTS WITHIN ASSIGNED DIVISION (${userDivision.toUpperCase()})`
+              : `MONITOR FIELD VISITS, VERIFY AGENT ACTIVITY, AND REVIEW MERCHANT AUDIT REPORTS`}
           </p>
         </div>
         
@@ -672,7 +676,11 @@ export const FieldVisitsModule: React.FC = () => {
                           <p className="text-[10px] text-slate-400 font-medium">PIN: {v.territoryPincode || userPincode}</p>
                         </td>
                         <td className="py-3.5 px-4 align-middle text-slate-500 font-mono text-[11px]">
-                          {v.latitude}, {v.longitude}
+                          {(!v.latitude || !v.longitude || (v.latitude === 0 && v.longitude === 0)) ? (
+                            <span className="text-slate-400 font-semibold italic text-xs font-sans">GPS unavailable</span>
+                          ) : (
+                            `${v.latitude}, ${v.longitude}`
+                          )}
                         </td>
                         <td className="py-3.5 px-4 align-middle text-slate-600">
                           <p>{v.visitDate}</p>
@@ -788,13 +796,19 @@ export const FieldVisitsModule: React.FC = () => {
                 <div className="w-full">
                   <span className="text-[10px] text-slate-400 font-bold uppercase block">GPS LOCATION</span>
                   <div className="flex items-center justify-between mt-0.5">
-                    <span className="font-mono text-[11px] text-slate-700">{selectedVisitDetails.latitude}, {selectedVisitDetails.longitude}</span>
-                    <button
-                      onClick={() => window.open(`https://maps.google.com/?q=${selectedVisitDetails.latitude},${selectedVisitDetails.longitude}`, '_blank')}
-                      className="text-[10px] font-bold text-[#864f19] hover:underline cursor-pointer border border-[#d7c3b5] px-2 py-0.5 rounded-md bg-transparent"
-                    >
-                      View on Map
-                    </button>
+                    {(!selectedVisitDetails.latitude || !selectedVisitDetails.longitude || (selectedVisitDetails.latitude === 0 && selectedVisitDetails.longitude === 0)) ? (
+                      <span className="text-slate-400 font-semibold italic text-xs font-sans">GPS unavailable</span>
+                    ) : (
+                      <>
+                        <span className="font-mono text-[11px] text-slate-700">{selectedVisitDetails.latitude}, {selectedVisitDetails.longitude}</span>
+                        <button
+                          onClick={() => window.open(`https://maps.google.com/?q=${selectedVisitDetails.latitude},${selectedVisitDetails.longitude}`, '_blank')}
+                          className="text-[10px] font-bold text-[#864f19] hover:underline cursor-pointer border border-[#d7c3b5] px-2 py-0.5 rounded-md bg-transparent"
+                        >
+                          View on Map
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -877,23 +891,33 @@ export const FieldVisitsModule: React.FC = () => {
         size="full"
       >
         <form onSubmit={handleStartVisitSubmit} className="space-y-4 text-xs font-semibold">
-          {/* Read-Only Auto-Filled Division Territory Scope */}
+          {/* Read-Only Auto-Filled Division/Pincode Territory Scope */}
           <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 space-y-1 text-[11px] font-semibold">
             <span className="text-[9px] font-black text-[#864f19] uppercase tracking-wider block">Assigned Territory (Auto-Filled)</span>
-            <p className="text-slate-800">Jurisdiction: <strong>{userState}</strong> → <strong>{userDistrict}</strong> → <strong className="text-[#864f19]">{userDivision}</strong></p>
+            <p className="text-slate-800">
+              Jurisdiction: <strong>{userState}</strong> → <strong>{userDistrict}</strong> → <strong className="text-[#864f19]">{userDivision}</strong>
+              {activeRole === 'pincode' && <span> → <strong>PIN {userPincode}</strong></span>}
+            </p>
           </div>
 
           <div className="space-y-1">
             <label className="block text-[#52443a] uppercase text-[10px] font-bold">Select Pincode *</label>
             <select
-              value={visitPincode}
+              value={activeRole === 'pincode' ? userPincode : visitPincode}
               onChange={(e) => setVisitPincode(e.target.value)}
+              disabled={activeRole === 'pincode'}
               className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
             >
-              <option value="530001">530001 (Central Visakhapatnam)</option>
-              <option value="530017">530017 (MVP Colony)</option>
-              <option value="530018">530018 (Madhavadhara)</option>
-              <option value="530026">530026 (Gajuwaka)</option>
+              {activeRole === 'pincode' ? (
+                <option value={userPincode}>{userPincode} (Assigned PIN)</option>
+              ) : (
+                <>
+                  <option value="530001">530001 (Central Visakhapatnam)</option>
+                  <option value="530017">530017 (MVP Colony)</option>
+                  <option value="530018">530018 (Madhavadhara)</option>
+                  <option value="530026">530026 (Gajuwaka)</option>
+                </>
+              )}
             </select>
           </div>
 
