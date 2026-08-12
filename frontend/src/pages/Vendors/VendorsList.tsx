@@ -71,7 +71,7 @@ export const VendorsList: React.FC = () => {
   }, [userVendorsKey]);
 
   // Fetch live backend vendors from API /api/vendors
-  const { data: apiVendorsData } = useQuery({
+  const { data: apiVendorsData, refetch: refetchVendors } = useQuery({
     queryKey: ['liveVendorsBackend'],
     queryFn: async () => {
       try {
@@ -1135,7 +1135,7 @@ export const VendorsList: React.FC = () => {
             pincode: wizardData.pincode || userPincode,
             role: 'Merchant Partner',
             kycStatus: 'pending',
-            status: 'active',
+            status: 'pending',
             assignedAgent: user?.name ? `${user.name} (${activeRole.charAt(0).toUpperCase() + activeRole.slice(1)} Agent)` : 'Logged Agent',
             createdAt: TODAY_DATE,
             updatedAt: TODAY_DATE,
@@ -1180,8 +1180,11 @@ export const VendorsList: React.FC = () => {
               latitude: 12.9716,
               longitude: 77.5946
             }
+          }).then(() => {
+            refetchVendors();
           }).catch(err => {
             console.warn('Backend API /vendors POST sync warning:', err);
+            refetchVendors();
           });
 
           addNotification(

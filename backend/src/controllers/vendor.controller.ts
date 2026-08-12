@@ -4,23 +4,27 @@ import { z } from 'zod';
 import Vendor from '../models/Vendor';
 
 const createVendorSchema = z.object({
-  businessName: z.string().min(1, 'Business name required'),
+  businessName: z.string().optional(),
+  name: z.string().optional(),
   ownerName: z.string().optional(),
-  phone: z.string().min(10, 'Valid phone required'),
+  contactPerson: z.string().optional(),
+  phone: z.string().optional(),
   email: z.string().optional(),
   category: z.string().optional(),
+  storeType: z.string().optional(),
   gst: z.string().optional(),
   state: z.string().optional(),
   district: z.string().optional(),
   division: z.string().optional(),
   pincode: z.string().optional(),
   kycStatus: z.string().optional(),
+  status: z.string().optional(),
   location: z.object({
     address: z.string().optional(),
     latitude: z.number().optional(),
     longitude: z.number().optional()
   }).optional()
-});
+}).passthrough();
 
 const updateVendorSchema = z.object({
   businessName: z.string().optional(),
@@ -124,24 +128,25 @@ export const createVendor = async (req: Request, res: Response) => {
     // Also sync vendor to users collection for Admin Portal join requests
     try {
       const db = mongoose.connection.db;
-      const vendorEmail = data.email ? data.email.toLowerCase() : '';
-      if (db && vendorEmail) {
+      const vendorEmail = data.email ? data.email.toLowerCase() : `vendor_${Date.now()}@connect.app`;
+      if (db) {
         await db.collection('users').updateOne(
           { email: vendorEmail },
           {
             $set: {
-              name: data.businessName || (data as any).name || data.ownerName,
-              businessName: data.businessName || (data as any).name,
-              contactPerson: data.ownerName || (data as any).contactPerson || (data as any).name,
+              name: data.businessName || (data as any).name || data.ownerName || 'Merchant Vendor',
+              businessName: data.businessName || (data as any).name || data.ownerName || 'Merchant Store',
+              contactPerson: data.ownerName || (data as any).contactPerson || (data as any).name || 'Owner',
               email: vendorEmail,
-              phone: data.phone || '',
+              phone: data.phone || '9876543210',
               role: 'Vendor',
-              vendorType: data.category || 'General Store',
-              category: data.category || 'General Store',
+              vendorType: data.category || (data as any).storeType || 'Supermarket & Retail',
+              category: data.category || (data as any).storeType || 'Supermarket & Retail',
               status: 'pending',
               kycStatus: 'pending',
               joiningType: 'agent',
               createdVia: 'agent',
+              registrationSource: 'agent',
               assignedAgent: agentId,
               agentId: agentId,
               onboardedBy: agentId,
