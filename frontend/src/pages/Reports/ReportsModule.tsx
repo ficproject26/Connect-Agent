@@ -594,8 +594,9 @@ export const ReportsModule: React.FC = () => {
                   className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                 >
                   <option value="Daily Division Report">Daily Division Report</option>
-                  <option value="Field Audit Summary">Field Audit Summary</option>
-                  <option value="Target / Performance Report">Target / Performance Report</option>
+                  <option value="Weekly Division Report">Weekly Division Report</option>
+                  <option value="Target Performance Report">Target Performance Report</option>
+                  <option value="Agent/Vendor Performance Report">Agent/Vendor Performance Report</option>
                 </select>
               </div>
 
@@ -604,7 +605,7 @@ export const ReportsModule: React.FC = () => {
                 <span className="text-[9px] font-black text-[#864f19] uppercase tracking-wider block">Assigned Territory (Auto-Filled)</span>
                 <p className="text-slate-800">State: <strong>{userState}</strong></p>
                 <p className="text-slate-800">District: <strong>{userDistrict}</strong></p>
-                <p className="text-slate-800">Division: <strong>{userDivision}</strong> (Downstream Pincodes)</p>
+                <p className="text-slate-800">Assigned Division: <strong>{userDivision}</strong> (All Downstream Pincodes)</p>
                 <p className="text-slate-600 text-[10px]">Submitted By: <strong>{user?.name || 'Division Agent'}</strong></p>
               </div>
 

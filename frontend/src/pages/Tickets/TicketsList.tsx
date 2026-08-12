@@ -313,12 +313,36 @@ export const TicketsList: React.FC = () => {
               />
             </div>
 
-            {/* Territory Pincode Info (Dynamic Registered Pincode) */}
-            <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 space-y-1 text-[11px]">
-              <p className="text-[9px] font-black text-[#864f19] uppercase tracking-wider">Territory Location Details</p>
+            {/* Territory Location Details & Agent Assignment */}
+            <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 space-y-1.5 text-[11px]">
+              <p className="text-[9px] font-black text-[#864f19] uppercase tracking-wider">Territory Location Details (Division Scope)</p>
               <p className="text-slate-800">State: <strong>{user?.territory?.state || 'Andhra Pradesh'}</strong></p>
-              <p className="text-slate-800">District: <strong>{user?.territory?.district || 'NTR District'}</strong></p>
-              <p className="text-slate-800">Pincode: <strong>{user?.territory?.pincode || '520001'}</strong></p>
+              <p className="text-slate-800">District: <strong>{user?.territory?.district || 'Visakhapatnam'}</strong></p>
+              <p className="text-slate-800">Assigned Division: <strong className="text-[#864f19]">{user?.territory?.division || 'Vizag City Division'}</strong></p>
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Select Merchant Pincode *</label>
+              <select
+                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+              >
+                <option value="530001">530001 (Central Visakhapatnam)</option>
+                <option value="530017">530017 (MVP Colony)</option>
+                <option value="530018">530018 (Madhavadhara)</option>
+                <option value="530026">530026 (Gajuwaka)</option>
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Assigned Pincode Agent</label>
+              <select
+                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+              >
+                <option value="raki pin">raki pin (Pincode Agent - 530001)</option>
+                <option value="Kiran Kumar">Kiran Kumar (Pincode Agent - 530017)</option>
+                <option value="Ramesh Naidu">Ramesh Naidu (Pincode Agent - 530018)</option>
+                <option value="Nageswara Rao">Nageswara Rao (Pincode Agent - 530026)</option>
+              </select>
             </div>
 
             <div className="space-y-1">

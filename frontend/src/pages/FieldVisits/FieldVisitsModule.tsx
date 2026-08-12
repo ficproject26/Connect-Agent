@@ -92,6 +92,7 @@ export const FieldVisitsModule: React.FC = () => {
   const [customReason, setCustomReason] = useState<string>('');
 
   // Start Form State
+  const [visitPincode, setVisitPincode] = useState('530001');
   const [vendorName, setVendorName] = useState('');
   const [storeAddress, setStoreAddress] = useState('');
   const [latitude, setLatitude] = useState<number | ''>('');
@@ -876,6 +877,26 @@ export const FieldVisitsModule: React.FC = () => {
         size="full"
       >
         <form onSubmit={handleStartVisitSubmit} className="space-y-4 text-xs font-semibold">
+          {/* Read-Only Auto-Filled Division Territory Scope */}
+          <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 space-y-1 text-[11px] font-semibold">
+            <span className="text-[9px] font-black text-[#864f19] uppercase tracking-wider block">Assigned Territory (Auto-Filled)</span>
+            <p className="text-slate-800">Jurisdiction: <strong>{userState}</strong> → <strong>{userDistrict}</strong> → <strong className="text-[#864f19]">{userDivision}</strong></p>
+          </div>
+
+          <div className="space-y-1">
+            <label className="block text-[#52443a] uppercase text-[10px] font-bold">Select Pincode *</label>
+            <select
+              value={visitPincode}
+              onChange={(e) => setVisitPincode(e.target.value)}
+              className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+            >
+              <option value="530001">530001 (Central Visakhapatnam)</option>
+              <option value="530017">530017 (MVP Colony)</option>
+              <option value="530018">530018 (Madhavadhara)</option>
+              <option value="530026">530026 (Gajuwaka)</option>
+            </select>
+          </div>
+
           <div className="space-y-1">
             <label className="block text-[#52443a] uppercase text-[10px] font-bold">Merchant Store Name *</label>
             <input

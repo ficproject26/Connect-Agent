@@ -235,6 +235,35 @@ export const ProfileModule: React.FC = () => {
                   />
                 </div>
 
+                {/* Read-Only Assigned Territory Jurisdiction Section */}
+                <div className="pt-6 border-t border-forgeGray-100 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <MapPin className="w-5 h-5 text-[#864f19]" />
+                      <h4 className="text-sm font-black text-forgeGray-900 font-sans">
+                        Assigned Territory Jurisdiction
+                      </h4>
+                    </div>
+                    <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                      ACCOUNT ACTIVE
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3.5 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 text-xs font-semibold">
+                    <div>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">STATE JURISDICTION</span>
+                      <p className="text-slate-900 font-extrabold mt-0.5">{user?.territory?.state || 'Andhra Pradesh'}</p>
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">ASSIGNED DISTRICT</span>
+                      <p className="text-slate-900 font-extrabold mt-0.5">{user?.territory?.district || 'Visakhapatnam'}</p>
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">ASSIGNED DIVISION</span>
+                      <p className="text-[#864f19] font-black mt-0.5">{user?.territory?.division || 'Vizag City Division'}</p>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Inline Vehicle Details Section */}
                 {(role === 'delivery_partner' || role === 'technician') && (
                   <div className="pt-6 border-t border-forgeGray-100 space-y-4">
