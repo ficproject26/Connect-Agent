@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { Search, X, CheckCircle2, Clock, XCircle, MapPin, Phone, Mail, User, Store, Check, UserCheck, RefreshCw, Building2 } from 'lucide-react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
@@ -254,14 +255,14 @@ export const AgentOnboardedVendorsModal: React.FC<AgentOnboardedVendorsModalProp
     if (onStatusChange) onStatusChange(vId, 'rejected');
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || typeof document === 'undefined') return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in font-sans">
-      <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-hidden shadow-2xl border border-slate-200 flex flex-col">
+  return ReactDOM.createPortal(
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in font-sans">
+      <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-hidden shadow-2xl border border-slate-200 flex flex-col z-[99999]">
         
         {/* Header */}
-        <div className="p-6 pb-4 border-b border-slate-100 flex items-start justify-between bg-white">
+        <div className="p-6 pb-4 border-b border-slate-100 flex items-start justify-between bg-white shrink-0">
           <div className="flex items-center gap-3.5">
             <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 border border-purple-100 flex items-center justify-center shrink-0">
               <UserCheck className="w-6 h-6" />
@@ -291,7 +292,7 @@ export const AgentOnboardedVendorsModal: React.FC<AgentOnboardedVendorsModalProp
         </div>
 
         {/* Content Body */}
-        <div className="p-6 overflow-y-auto space-y-5 flex-1">
+        <div className="p-6 overflow-y-auto space-y-5 flex-1 max-h-[calc(90vh-140px)]">
           
           {/* Search Field */}
           <div className="relative">
@@ -417,7 +418,7 @@ export const AgentOnboardedVendorsModal: React.FC<AgentOnboardedVendorsModalProp
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 px-6 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
+        <div className="p-4 px-6 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between shrink-0">
           <span className="text-xs font-bold text-slate-500">
             Showing {filteredVendors.length} of {totalCount} agent-onboarded vendors
           </span>
@@ -431,7 +432,8 @@ export const AgentOnboardedVendorsModal: React.FC<AgentOnboardedVendorsModalProp
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
