@@ -103,18 +103,7 @@ export const TicketsList: React.FC = () => {
       }));
       setTickets(mapped);
     } catch (err: any) {
-      setTickets([
-        {
-          _id: 'TK-1001',
-          ticketId: 'TKT-74892',
-          vendorName: 'Hosur Supermarket',
-          category: 'KYC Document Issue',
-          description: 'Aadhaar QR scan failure during merchant verification.',
-          priority: 'high',
-          status: 'in_progress',
-          createdAt: new Date().toLocaleDateString('en-GB')
-        }
-      ]);
+      setTickets([]);
     } finally {
       setIsLoading(false);
     }
@@ -306,33 +295,26 @@ export const TicketsList: React.FC = () => {
           </div>
           
           <form onSubmit={handleRaiseTicket} className="space-y-4 text-xs font-semibold">
-            {/* Select Assigned Vendor */}
+            {/* Manual Merchant Name Input */}
             <div className="space-y-1">
-              <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Select Assigned Vendor *</label>
-              <select
-                value={selectedVendorId}
-                onChange={(e) => handleVendorSelect(e.target.value)}
+              <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Assigned Merchant Store Name *</label>
+              <input
+                type="text"
+                required
+                placeholder="Enter merchant / store name..."
+                value={vendorShopName}
+                onChange={(e) => setVendorShopName(e.target.value)}
                 className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-              >
-                <option value="">-- Select Assigned Merchant --</option>
-                {assignedVendors.map((v) => (
-                  <option key={v._id || v.id} value={v._id || v.id}>
-                    {v.businessName || v.name} ({v.ownerName || 'Owner'})
-                  </option>
-                ))}
-              </select>
+              />
             </div>
 
-            {/* Read-Only Auto-Filled Vendor Details */}
-            {selectedVendorId && (
-              <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 space-y-2 text-[11px]">
-                <p className="text-[9px] font-black text-[#864f19] uppercase tracking-wider">Auto-filled Vendor Details (Read-Only)</p>
-                <p className="text-slate-800">Owner: <strong>{vendorName}</strong></p>
-                <p className="text-slate-800">Shop Name: <strong>{vendorShopName}</strong></p>
-                <p className="text-slate-800">Phone: <strong>{vendorPhone}</strong></p>
-                <p className="text-slate-600 text-[10px] truncate" title={vendorAddress}>Address: {vendorAddress}</p>
-              </div>
-            )}
+            {/* Territory Pincode Info (Dynamic Registered Pincode) */}
+            <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 space-y-1 text-[11px]">
+              <p className="text-[9px] font-black text-[#864f19] uppercase tracking-wider">Territory Location Details</p>
+              <p className="text-slate-800">State: <strong>{user?.territory?.state || 'Andhra Pradesh'}</strong></p>
+              <p className="text-slate-800">District: <strong>{user?.territory?.district || 'NTR District'}</strong></p>
+              <p className="text-slate-800">Pincode: <strong>{user?.territory?.pincode || '520001'}</strong></p>
+            </div>
 
             <div className="space-y-1">
               <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Select Issue Category *</label>

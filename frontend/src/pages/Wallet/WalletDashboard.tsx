@@ -216,7 +216,9 @@ export const WalletDashboard: React.FC = () => {
 
         <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">NEXT PAYOUT DATE</span>
-          <p className="text-sm font-extrabold text-blue-700 mt-2">Friday, 15 Aug</p>
+          <p className="text-sm font-extrabold text-blue-700 mt-2">
+            {pendingPayouts > 0 ? new Date(Date.now() + 7 * 86400000).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : '--'}
+          </p>
         </div>
       </div>
 
@@ -270,21 +272,21 @@ export const WalletDashboard: React.FC = () => {
             <div className="space-y-2 text-xs">
               <div className="flex justify-between">
                 <span className="text-slate-400 font-medium">Bank Name</span>
-                <span className="font-bold text-slate-800">{bankDetails.bankName || user?.bankDetails?.bankName || 'State Bank of India'}</span>
+                <span className="font-bold text-slate-800">{bankDetails.bankName || user?.bankDetails?.bankName || 'Not Linked'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400 font-medium">Account No.</span>
                 <span className="font-bold text-slate-800">
-                  ••••••{((bankDetails.accountNumber || user?.bankDetails?.accountNumber || '9876543210')).slice(-4)}
+                  {(bankDetails.accountNumber || user?.bankDetails?.accountNumber) ? `••••••${(bankDetails.accountNumber || user?.bankDetails?.accountNumber).slice(-4)}` : 'Not Linked'}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400 font-medium">IFSC Code</span>
-                <span className="font-bold text-slate-800">{bankDetails.ifscCode || user?.bankDetails?.ifscCode || 'SBIN0004821'}</span>
+                <span className="font-bold text-slate-800">{bankDetails.ifscCode || user?.bankDetails?.ifscCode || 'Not Linked'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400 font-medium">Account Holder</span>
-                <span className="font-bold text-slate-800 truncate max-w-[120px]">{user?.name || bankDetails.holderName}</span>
+                <span className="font-bold text-slate-800 truncate max-w-[120px]">{user?.name || bankDetails.holderName || 'Agent'}</span>
               </div>
             </div>
           </div>

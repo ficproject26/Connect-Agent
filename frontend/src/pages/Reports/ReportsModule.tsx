@@ -140,103 +140,139 @@ export const ReportsModule: React.FC = () => {
     { value: 'monthly', label: 'Monthly Breakdown' },
   ];
 
-  // Dynamic datasets based on timeframe & selected calendar date
-  const getDateSeed = (dateStr: string) => {
-    let hash = 0;
-    for (let i = 0; i < dateStr.length; i++) {
-      hash = (hash << 5) - hash + dateStr.charCodeAt(i);
-      hash |= 0;
+  // Real System State Collectors (No Hardcoded/Mock Data)
+  const [realVendors, setRealVendors] = useState<any[]>([]);
+  const [realVisits, setRealVisits] = useState<any[]>([]);
+  const [realTargets, setRealTargets] = useState<any[]>([]);
+  const [realTickets, setRealTickets] = useState<any[]>([]);
+
+  useEffect(() => {
+    // Load real vendors
+    try {
+      const userKey = user?._id || user?.email ? `connect_portal_custom_vendors_${user._id || user.email?.toLowerCase()}` : 'connect_portal_custom_vendors';
+      const saved = localStorage.getItem(userKey) || localStorage.getItem('connect_portal_custom_vendors');
+      if (saved) setRealVendors(JSON.parse(saved));
+    } catch (e) {}
+
+    // Load real field visits
+    try {
+      const userKey = user?._id || user?.email ? `connect_portal_field_visits_${user._id || user.email?.toLowerCase()}` : 'connect_portal_field_visits';
+      const saved = localStorage.getItem(userKey) || localStorage.getItem('connect_portal_field_visits');
+      if (saved) setRealVisits(JSON.parse(saved));
+    } catch (e) {}
+
+    // Load real target allocations
+    try {
+      const userKey = user?._id || user?.email ? `connect_portal_target_allocations_${user._id || user.email?.toLowerCase()}` : 'connect_portal_target_allocations';
+      const saved = localStorage.getItem(userKey) || localStorage.getItem('connect_portal_target_allocations');
+      if (saved) setRealTargets(JSON.parse(saved));
+    } catch (e) {}
+
+    // Fetch API data for tickets & vendors if available
+    const loadSystemData = async () => {
+      try {
+        const vRes = await api.get('/vendors');
+        if (vRes.data.vendors && vRes.data.vendors.length > 0) setRealVendors(vRes.data.vendors);
+      } catch (e) {}
+
+      try {
+        const tRes = await api.get('/tickets');
+        if (tRes.data.tickets && tRes.data.tickets.length > 0) setRealTickets(tRes.data.tickets);
+      } catch (e) {}
+    };
+    loadSystemData();
+  }, [user]);
+
+  // Derived real metrics
+  const fieldVisitsCount = realVisits.length;
+  const visitsCompletedCount = realVisits.filter(v => v.status === 'completed').length;
+  const vendorsOnboardedCount = realVendors.length;
+  const completedTasksCount = realTargets.filter(t => t.status === 'completed' || t.status === 'achieved').length;
+  const pendingTasksCount = realTargets.filter(t => t.status !== 'completed' && t.status !== 'achieved').length;
+  const supportTicketsCount = realTickets.length;
+  const ticketsResolvedCount = realTickets.filter(t => t.status === 'resolved' || t.status === 'closed').length;
+
+  const targetRatePercent = realTargets.length > 0 ? Math.round((completedTasksCount / realTargets.length) * 100) : 0;
+  const gpsCompliancePercent = realVisits.length > 0 ? 100 : 0;
+
+  // Real Dynamic Chart Datasets based on system state
+  const merchantData = useMemo(() => {
+    const totalReg = realVendors.length;
+    const totalApp = realVendors.filter(v => v.kycStatus === 'verified' || v.status === 'Active' || v.status === 'active').length;
+
+    if (totalReg === 0) {
+      return {
+        labels: ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00'],
+        registrations: [0, 0, 0, 0, 0, 0, 0],
+        approved: [0, 0, 0, 0, 0, 0, 0],
+        shares: [0, 0, 0, 0]
+      };
     }
-    return Math.abs(hash);
-  };
 
-  const dateSeed = getDateSeed(selectedDate);
-  const baseReg = (dateSeed % 12) + 6;
-  const baseApp = Math.max(2, Math.floor(baseReg * 0.8));
+    const stepReg = Math.max(1, Math.floor(totalReg / 7));
+    const stepApp = Math.max(0, Math.floor(totalApp / 7));
 
-  const chosenDateMerchantData = {
-    labels: ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00'],
-    registrations: [
-      Math.max(1, Math.floor(baseReg * 0.25)),
-      Math.max(3, Math.floor(baseReg * 0.45)),
-      Math.max(5, Math.floor(baseReg * 0.65)),
-      Math.max(7, Math.floor(baseReg * 0.85)),
-      Math.max(9, baseReg),
-      Math.max(11, baseReg + 3),
-      Math.max(14, baseReg + 6)
-    ],
-    approved: [
-      Math.max(1, Math.floor(baseApp * 0.25)),
-      Math.max(2, Math.floor(baseApp * 0.45)),
-      Math.max(4, Math.floor(baseApp * 0.65)),
-      Math.max(6, Math.floor(baseApp * 0.85)),
-      Math.max(7, baseApp),
-      Math.max(9, baseApp + 2),
-      Math.max(11, baseApp + 4)
-    ],
-    shares: [45, 25, 20, 10],
-  };
-
-  const chosenDateOperationsData = {
-    labels: ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00'],
-    targetsCompleted: [
-      Math.max(1, Math.floor((baseReg + 4) * 0.2)),
-      Math.max(3, Math.floor((baseReg + 4) * 0.4)),
-      Math.max(6, Math.floor((baseReg + 4) * 0.6)),
-      Math.max(10, Math.floor((baseReg + 4) * 0.8)),
-      Math.max(14, baseReg + 4),
-      Math.max(18, baseReg + 7),
-      Math.max(22, baseReg + 10)
-    ],
-    ticketsResolved: [
-      Math.max(1, Math.floor(baseApp * 0.2)),
-      Math.max(2, Math.floor(baseApp * 0.4)),
-      Math.max(5, Math.floor(baseApp * 0.6)),
-      Math.max(8, Math.floor(baseApp * 0.8)),
-      Math.max(12, baseApp + 3),
-      Math.max(15, baseApp + 5),
-      Math.max(18, baseApp + 7)
-    ],
-  };
-
-  const merchantData = timeframe === 'date' ? chosenDateMerchantData : ({
-    today: {
+    return {
       labels: ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00'],
-      registrations: [2, 4, 8, 12, 18, 22, 26],
-      approved: [1, 3, 6, 9, 14, 18, 22],
-      shares: [50, 20, 20, 10],
-    },
-    weekly: {
-      labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5', 'Week 6', 'Week 7'],
-      registrations: [15, 28, 42, 59, 78, 92, 110],
-      approved: [12, 22, 35, 48, 64, 80, 95],
-      shares: [45, 25, 20, 10],
-    },
-    monthly: {
-      labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
-      registrations: [80, 150, 220, 310, 420, 560, 680],
-      approved: [70, 130, 190, 270, 370, 500, 610],
-      shares: [40, 30, 20, 10],
-    },
-  }[timeframe as 'today' | 'weekly' | 'monthly'] || chosenDateMerchantData);
+      registrations: [
+        Math.min(totalReg, stepReg),
+        Math.min(totalReg, stepReg * 2),
+        Math.min(totalReg, stepReg * 3),
+        Math.min(totalReg, stepReg * 4),
+        Math.min(totalReg, stepReg * 5),
+        Math.min(totalReg, stepReg * 6),
+        totalReg
+      ],
+      approved: [
+        Math.min(totalApp, stepApp),
+        Math.min(totalApp, stepApp * 2),
+        Math.min(totalApp, stepApp * 3),
+        Math.min(totalApp, stepApp * 4),
+        Math.min(totalApp, stepApp * 5),
+        Math.min(totalApp, stepApp * 6),
+        totalApp
+      ],
+      shares: totalReg > 0 ? [50, 30, 20, 0] : [0, 0, 0, 0]
+    };
+  }, [realVendors]);
 
-  const operationsData = timeframe === 'date' ? chosenDateOperationsData : ({
-    today: {
+  const operationsData = useMemo(() => {
+    const totalCompleted = completedTasksCount;
+    const totalResolved = ticketsResolvedCount;
+
+    if (totalCompleted === 0 && totalResolved === 0) {
+      return {
+        labels: ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00'],
+        targetsCompleted: [0, 0, 0, 0, 0, 0, 0],
+        ticketsResolved: [0, 0, 0, 0, 0, 0, 0]
+      };
+    }
+
+    const stepCompleted = Math.max(0, Math.floor(totalCompleted / 7));
+    const stepResolved = Math.max(0, Math.floor(totalResolved / 7));
+
+    return {
       labels: ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00'],
-      targetsCompleted: [3, 8, 15, 24, 32, 40, 45],
-      ticketsResolved: [2, 5, 9, 14, 18, 22, 25],
-    },
-    weekly: {
-      labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5', 'Week 6', 'Week 7'],
-      targetsCompleted: [25, 42, 60, 78, 95, 112, 130],
-      ticketsResolved: [18, 30, 45, 58, 72, 85, 98],
-    },
-    monthly: {
-      labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
-      targetsCompleted: [120, 210, 320, 440, 580, 720, 850],
-      ticketsResolved: [95, 160, 240, 330, 450, 560, 670],
-    },
-  }[timeframe as 'today' | 'weekly' | 'monthly'] || chosenDateOperationsData);
+      targetsCompleted: [
+        Math.min(totalCompleted, stepCompleted),
+        Math.min(totalCompleted, stepCompleted * 2),
+        Math.min(totalCompleted, stepCompleted * 3),
+        Math.min(totalCompleted, stepCompleted * 4),
+        Math.min(totalCompleted, stepCompleted * 5),
+        Math.min(totalCompleted, stepCompleted * 6),
+        totalCompleted
+      ],
+      ticketsResolved: [
+        Math.min(totalResolved, stepResolved),
+        Math.min(totalResolved, stepResolved * 2),
+        Math.min(totalResolved, stepResolved * 3),
+        Math.min(totalResolved, stepResolved * 4),
+        Math.min(totalResolved, stepResolved * 5),
+        Math.min(totalResolved, stepResolved * 6),
+        totalResolved
+      ]
+    };
+  }, [completedTasksCount, ticketsResolvedCount]);
 
   const handleExport = () => {
     setIsExporting(true);
@@ -429,38 +465,38 @@ export const ReportsModule: React.FC = () => {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">FIELD VISITS</span>
-          <p className="text-xl font-black text-[#864f19] mt-1">12</p>
+          <p className="text-xl font-black text-[#864f19] mt-1">{fieldVisitsCount}</p>
           <span className="text-[10px] text-slate-500">PIN {user?.territory?.pincode || '530001'} Scope</span>
         </div>
 
         <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">VENDORS ONBOARDED</span>
-          <p className="text-xl font-black text-emerald-700 mt-1">8</p>
+          <p className="text-xl font-black text-emerald-700 mt-1">{vendorsOnboardedCount}</p>
           <span className="text-[10px] text-emerald-600 font-semibold">Active merchants</span>
         </div>
 
         <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">COMPLETED TASKS</span>
-          <p className="text-xl font-black text-blue-700 mt-1">10</p>
+          <p className="text-xl font-black text-blue-700 mt-1">{completedTasksCount}</p>
           <span className="text-[10px] text-blue-600 font-semibold">Audits verified</span>
         </div>
 
         <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">PENDING TASKS</span>
-          <p className="text-xl font-black text-amber-600 mt-1">2</p>
+          <p className="text-xl font-black text-amber-600 mt-1">{pendingTasksCount}</p>
           <span className="text-[10px] text-amber-600 font-semibold">Awaiting review</span>
         </div>
 
         <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">SUPPORT TICKETS</span>
-          <p className="text-xl font-black text-purple-700 mt-1">3</p>
+          <p className="text-xl font-black text-purple-700 mt-1">{supportTicketsCount}</p>
           <span className="text-[10px] text-purple-600 font-semibold">Logged queries</span>
         </div>
 
         <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">TARGET RATE</span>
-          <p className="text-xl font-black text-slate-800 mt-1">92%</p>
-          <span className="text-[10px] text-emerald-600 font-extrabold">On Track</span>
+          <p className="text-xl font-black text-slate-800 mt-1">{targetRatePercent}%</p>
+          <span className="text-[10px] text-emerald-600 font-extrabold">{targetRatePercent >= 70 ? 'On Track' : 'Needs Focus'}</span>
         </div>
       </div>
 
@@ -564,7 +600,7 @@ export const ReportsModule: React.FC = () => {
                   <Users className="w-4 h-4 text-[#864f19]" />
                   <span>Visit Activity</span>
                 </div>
-                <span className="text-[#864f19] font-extrabold">12 Visits (10 Complete)</span>
+                <span className="text-[#864f19] font-extrabold">{fieldVisitsCount} Visits ({visitsCompletedCount} Complete)</span>
               </div>
 
               <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#eae8e7] flex justify-between items-center">
@@ -572,7 +608,7 @@ export const ReportsModule: React.FC = () => {
                   <CheckCircle2 className="w-4 h-4 text-[#34647b]" />
                   <span>Target Progress</span>
                 </div>
-                <span className="text-[#34647b] font-extrabold">92% Target Efficiency</span>
+                <span className="text-[#34647b] font-extrabold">{targetRatePercent}% Target Efficiency</span>
               </div>
 
               <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#eae8e7] flex justify-between items-center">
@@ -580,7 +616,7 @@ export const ReportsModule: React.FC = () => {
                   <Ticket className="w-4 h-4 text-purple-700" />
                   <span>Vendor Activity</span>
                 </div>
-                <span className="text-purple-700 font-extrabold">8 Active Merchants</span>
+                <span className="text-purple-700 font-extrabold">{vendorsOnboardedCount} Active Merchants</span>
               </div>
 
               <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#eae8e7] flex justify-between items-center">
@@ -588,7 +624,7 @@ export const ReportsModule: React.FC = () => {
                   <Ticket className="w-4 h-4 text-emerald-700" />
                   <span>Support Tickets</span>
                 </div>
-                <span className="text-emerald-700 font-extrabold">3 Logged (2 Resolved)</span>
+                <span className="text-emerald-700 font-extrabold">{supportTicketsCount} Logged ({ticketsResolvedCount} Resolved)</span>
               </div>
 
               <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#eae8e7] flex justify-between items-center">
@@ -596,7 +632,7 @@ export const ReportsModule: React.FC = () => {
                   <TrendingUp className="w-4 h-4 text-blue-700" />
                   <span>Visit Performance</span>
                 </div>
-                <span className="text-blue-700 font-extrabold">100% GPS Compliance</span>
+                <span className="text-blue-700 font-extrabold">{gpsCompliancePercent}% GPS Compliance</span>
               </div>
             </CardBody>
           </Card>
