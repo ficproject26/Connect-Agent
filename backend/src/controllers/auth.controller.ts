@@ -142,14 +142,14 @@ export const register = async (req: Request, res: Response) => {
               isActive: false,
               kycDocs: validatedData.kycDocs || (req.body as any).kycDocs || {},
               kyc: {
-                aadhaarNumber: validatedData.kycDocs?.aadhaarNumber || (req.body as any).aadhaarNumber || '',
+                aadhaarNumber: (validatedData.kycDocs as any)?.aadhaarNumber || (req.body as any).aadhaarNumber || '',
                 aadhaarImage: validatedData.kycDocs?.aadhaarCard || '',
-                panNumber: validatedData.kycDocs?.panNumber || (req.body as any).panNumber || '',
+                panNumber: (validatedData.kycDocs as any)?.panNumber || (req.body as any).panNumber || '',
                 panImage: validatedData.kycDocs?.panCard || '',
                 selfie: validatedData.kycDocs?.passportPhoto || '',
                 businessProofImage: validatedData.kycDocs?.signature || '',
-                educationalCertificates: validatedData.kycDocs?.educationalCertificates || '',
-                cancelledCheque: validatedData.kycDocs?.cancelledCheque || ''
+                educationalCertificates: (validatedData.kycDocs as any)?.educationalCertificates || '',
+                cancelledCheque: (validatedData.kycDocs as any)?.cancelledCheque || ''
               },
               createdAt: new Date()
             }

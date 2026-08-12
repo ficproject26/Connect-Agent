@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import mongoose from 'mongoose';
 import { z } from 'zod';
 import Vendor from '../models/Vendor';
 
@@ -123,15 +124,16 @@ export const createVendor = async (req: Request, res: Response) => {
     // Also sync vendor to users collection for Admin Portal join requests
     try {
       const db = mongoose.connection.db;
-      if (db) {
+      const vendorEmail = data.email ? data.email.toLowerCase() : '';
+      if (db && vendorEmail) {
         await db.collection('users').updateOne(
-          { email: data.email.toLowerCase() },
+          { email: vendorEmail },
           {
             $set: {
               name: data.businessName || (data as any).name || data.ownerName,
               businessName: data.businessName || (data as any).name,
               contactPerson: data.ownerName || (data as any).contactPerson || (data as any).name,
-              email: data.email.toLowerCase(),
+              email: vendorEmail,
               phone: data.phone || '',
               role: 'Vendor',
               vendorType: data.category || 'General Store',
