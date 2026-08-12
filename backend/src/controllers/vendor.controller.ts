@@ -108,17 +108,27 @@ export const createVendor = async (req: Request, res: Response) => {
 
     const data = createVendorSchema.parse(req.body);
 
+    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const randDigits = Math.floor(1000 + Math.random() * 9000);
+    const generatedRegId = `REG-${dateStr}-${randDigits}`;
+
     const vendor = new Vendor({
       ...data,
-      ownerName: data.ownerName || 'Merchant Owner',
+      businessName: data.businessName || (data as any).name || 'Merchant Store',
+      ownerName: data.ownerName || (data as any).contactPerson || 'Merchant Owner',
       location: {
         address: data.location?.address || `${data.district || ''}, ${data.state || ''} ${data.pincode || ''}`,
         latitude: data.location?.latitude || 0,
         longitude: data.location?.longitude || 0
       },
       assignedAgent: agentId,
+      agentId: agentId,
+      onboardedBy: agentId,
       joiningType: 'agent',
       createdVia: 'agent',
+      registrationSource: 'agent',
+      registrationId: generatedRegId,
+      role: 'Vendor',
       status: 'pending',
       kycStatus: 'pending'
     });

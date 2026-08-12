@@ -19,7 +19,17 @@ export interface IVendor extends Document {
   };
   status: 'pending' | 'verified' | 'active' | 'inactive';
   documents: Types.ObjectId[];
-  assignedAgent?: Types.ObjectId;
+  assignedAgent?: Types.ObjectId | string;
+  joiningType?: string;
+  createdVia?: string;
+  registrationSource?: string;
+  agentId?: Types.ObjectId | string;
+  onboardedBy?: Types.ObjectId | string;
+  onboardedByAgentId?: Types.ObjectId | string;
+  agentName?: string;
+  agentRegistrationId?: string;
+  registrationId?: string;
+  role?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -41,13 +51,25 @@ const vendorSchema = new Schema<IVendor>({
     latitude: { type: Number, default: 0 },
     longitude: { type: Number, default: 0 }
   },
-  status: { type: String, enum: ['pending', 'verified', 'active', 'inactive'], default: 'pending' },
+  status: { type: String, default: 'pending' },
   documents: [{ type: Schema.Types.ObjectId, ref: 'Document' }],
   assignedAgent: { type: Schema.Types.ObjectId, ref: 'Agent' },
+  // Agent onboarding tracking fields
+  joiningType: { type: String },
+  createdVia: { type: String },
+  registrationSource: { type: String },
+  agentId: { type: Schema.Types.Mixed },
+  onboardedBy: { type: Schema.Types.Mixed },
+  onboardedByAgentId: { type: Schema.Types.Mixed },
+  agentName: { type: String },
+  agentRegistrationId: { type: String },
+  registrationId: { type: String },
+  role: { type: String },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 }, {
-  timestamps: true
+  timestamps: true,
+  strict: false
 });
 
 export const Vendor = model<IVendor>('Vendor', vendorSchema);
