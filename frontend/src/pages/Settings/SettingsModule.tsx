@@ -57,10 +57,10 @@ export const SettingsModule: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-forgeGray-200/50 pb-6">
         <div>
           <h1 className="text-3xl font-black font-sans text-forgeGray-900 leading-tight">
-            Partner Settings
+            Settings
           </h1>
           <p className="text-forgeGray-450 mt-1 font-semibold text-sm">
-            Manage your enterprise profile, operational alerts, and compliance standards.
+            Manage your profile, preferences, and support options.
           </p>
         </div>
       </div>
@@ -414,7 +414,7 @@ export const SettingsModule: React.FC = () => {
                   <ChevronRight className="w-4 h-4 text-forgeGray-400" />
                 </a>
                 <a href="#terms" className="flex items-center justify-between p-2.5 hover:bg-forgeGray-50 rounded-xl text-forgeGray-650">
-                  <span>Partner Terms & Declaration Guidelines</span>
+                  <span>Agent Terms & Guidelines</span>
                   <ChevronRight className="w-4 h-4 text-forgeGray-400" />
                 </a>
               </CardBody>
@@ -432,17 +432,17 @@ export const SettingsModule: React.FC = () => {
               </CardHeader>
               <CardBody className="space-y-4 text-xs font-semibold">
                 <p className="text-forgeGray-550 leading-relaxed font-medium">
-                  Need help with booking calculations, payouts, or active order navigations? Speak directly with our operational help desk.
+                  Need help with vendor onboarding, field visits, KYC document verification, targets, or support tickets? Contact our agent operations help desk.
                 </p>
 
                 <div className="space-y-3">
                   <div className="flex items-center space-x-3 p-3 bg-forgeGray-50 rounded-xl border border-forgeGray-100">
                     <div className="p-2 bg-emerald-500/10 text-emerald-600 rounded-lg">
-                      <Phone className="w-4 h-4" />
+                      <Clock className="w-4 h-4" />
                     </div>
                     <div>
-                      <p className="text-[10px] text-forgeGray-450 uppercase">Emergency hotline</p>
-                      <p className="font-extrabold text-forgeGray-950">+91 1800 200 4545</p>
+                      <p className="text-[10px] text-forgeGray-450 uppercase font-extrabold">Agent Operations Helpdesk</p>
+                      <p className="font-extrabold text-forgeGray-950">Mon – Sat (9:00 AM – 7:00 PM IST)</p>
                     </div>
                   </div>
 
@@ -451,8 +451,8 @@ export const SettingsModule: React.FC = () => {
                       <Mail className="w-4 h-4" />
                     </div>
                     <div>
-                      <p className="text-[10px] text-forgeGray-450 uppercase">Partner Support Email</p>
-                      <p className="font-extrabold text-forgeGray-950">support@forgeindia.in</p>
+                      <p className="text-[10px] text-forgeGray-450 uppercase font-extrabold">Agent Support Email</p>
+                      <p className="font-extrabold text-forgeGray-950">support@connectagent.in</p>
                     </div>
                   </div>
                 </div>

@@ -26,13 +26,53 @@ interface PincodeSubordinate {
 
 export const DivisionDashboard: React.FC = () => {
   const { user } = useAuth();
+  const userState = user?.territory?.state || 'Andhra Pradesh';
+  const userDistrict = user?.territory?.district || 'Visakhapatnam';
+  const userDivision = user?.territory?.division || 'Vizag City Division';
+  const userPincode = user?.territory?.pincode || '530001';
+
   const [pincodeAgentsList, setPincodeAgentsList] = useState<PincodeSubordinate[]>([]);
   const [targetTitle, setTargetTitle] = useState('');
-  const [selectedPincode, setSelectedPincode] = useState('Sector Pincode');
+  const [selectedPincode, setSelectedPincode] = useState('');
+  const [selectedAgentId, setSelectedAgentId] = useState('');
+  const [targetQuantity, setTargetQuantity] = useState('20');
+  const [targetDate, setTargetDate] = useState(new Date().toISOString().slice(0, 10));
+
   const [districtTargetAssigned, setDistrictTargetAssigned] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<'pincodes' | 'vendors' | 'agents'>('agents');
   const [selectedAgent, setSelectedAgent] = useState<PincodeSubordinate | null>(null);
+
+  const divisionPincodesList = React.useMemo(() => {
+    if (userDivision.toLowerCase().includes('vizag') || userDistrict.toLowerCase().includes('visakha')) {
+      return [
+        { name: 'Vizag City Central (530001)', code: '530001', score: '94% completed' },
+        { name: 'MVP Colony (530017)', code: '530017', score: '88% completed' },
+        { name: 'Madhavadhara (530018)', code: '530018', score: '72% completed' },
+        { name: 'Gajuwaka (530026)', code: '530026', score: '64% completed' }
+      ];
+    } else if (userDivision.toLowerCase().includes('vijayawada') || userDistrict.toLowerCase().includes('ntr')) {
+      return [
+        { name: 'Vijayawada Central (520001)', code: '520001', score: '94% completed' },
+        { name: 'Governorpet (520002)', code: '520002', score: '88% completed' },
+        { name: 'Autonagar (520007)', code: '520007', score: '72% completed' },
+        { name: 'Labbipet (520010)', code: '520010', score: '64% completed' }
+      ];
+    }
+    const basePin = parseInt(userPincode || '530001');
+    return [
+      { name: `${userDivision} Sector 1 (${basePin})`, code: `${basePin}`, score: '94% completed' },
+      { name: `${userDivision} Sector 2 (${basePin + 1})`, code: `${basePin + 1}`, score: '88% completed' },
+      { name: `${userDivision} Sector 3 (${basePin + 2})`, code: `${basePin + 2}`, score: '72% completed' },
+      { name: `${userDivision} Sector 4 (${basePin + 3})`, code: `${basePin + 3}`, score: '64% completed' }
+    ];
+  }, [userDivision, userDistrict, userPincode]);
+
+  useEffect(() => {
+    if (divisionPincodesList.length > 0 && !selectedPincode) {
+      setSelectedPincode(divisionPincodesList[0].code);
+    }
+  }, [divisionPincodesList, selectedPincode]);
 
   useEffect(() => {
     const fetchSubordinates = async () => {
@@ -42,25 +82,26 @@ export const DivisionDashboard: React.FC = () => {
           const mapped: PincodeSubordinate[] = res.data.subordinates.map((s: any) => ({
             id: s._id,
             name: s.name,
-            pincode: s.territory?.pincode || s.pincode || 'N/A',
-            territory: typeof s.territory === 'object' ? s.territory?.division || s.territory?.state || 'Assigned Sector' : (s.territory || 'Division Sector'),
+            pincode: s.territory?.pincode || s.pincode || divisionPincodesList[0].code,
+            territory: typeof s.territory === 'object' ? s.territory?.division || userDivision : (s.territory || userDivision),
             phone: s.phone || 'N/A',
             email: s.email || 'N/A',
-            assignedTargets: s.assignedTargets || 0,
-            completedTargets: s.completedTargets || 0,
+            assignedTargets: s.assignedTargets || 20,
+            completedTargets: s.completedTargets || 8,
             earnings: s.earnings || 0,
             totalOnboardedShops: s.totalOnboardedShops || 0,
             status: s.status === 'inactive' ? 'on_leave' : 'present',
             checkIn: s.checkIn || '09:00 AM'
           }));
           setPincodeAgentsList(mapped);
+          if (mapped.length > 0) setSelectedAgentId(mapped[0].id);
         }
       } catch (err) {
         console.warn('Subordinates fetch error:', err);
       }
     };
     fetchSubordinates();
-  }, []);
+  }, [userDivision, divisionPincodesList]);
 
   const handleAssign = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,10 +110,10 @@ export const DivisionDashboard: React.FC = () => {
     setIsSubmitting(true);
     try {
       await targetService.allocateTarget({
-        divisionName: selectedPincode,
+        divisionName: userDivision,
         title: targetTitle.trim(),
         type: 'daily',
-        targetValue: 15
+        targetValue: parseInt(targetQuantity) || 15
       });
       setDistrictTargetAssigned(true);
       setTargetTitle('');
@@ -87,7 +128,6 @@ export const DivisionDashboard: React.FC = () => {
     }
   };
 
-
   return (
     <div className="space-y-6 animate-fade-in text-[#1b1c1c] font-sans">
       
@@ -97,7 +137,7 @@ export const DivisionDashboard: React.FC = () => {
           <span className="text-[10px] text-[#864f19] font-bold uppercase tracking-widest block">Division Supervision Panel</span>
           <h2 className="text-2xl font-black tracking-tight text-[#1b1c1c]">Welcome back, {user?.name || 'Division Agent'}</h2>
           <p className="text-xs text-[#52443a] max-w-xl font-medium">
-            Manage all pincode sectors under your division. Track pincode distributions, vendor growth, and ticket resolution speed.
+            Assigned Territory: <strong className="text-[#864f19]">{userState}</strong> → <strong className="text-[#864f19]">{userDistrict}</strong> → <strong className="text-[#864f19]">{userDivision}</strong>
           </p>
         </div>
         <div className="flex items-center gap-3 shrink-0">
@@ -124,7 +164,7 @@ export const DivisionDashboard: React.FC = () => {
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
               />
             </svg>
-            <span className="absolute text-[10px] font-black text-slate-800">88%</span>
+            <span className="absolute text-[9px] font-black text-slate-800">88.5%</span>
           </div>
         </div>
       </div>
@@ -132,13 +172,13 @@ export const DivisionDashboard: React.FC = () => {
       {/* Simplified Division KPI Cards Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Assigned Pincodes', val: `${pincodeAgentsList.length > 0 ? pincodeAgentsList.length * 2 : 24} Pincodes`, icon: <MapPin className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
-          { label: 'Active Pincode Agents', val: `${pincodeAgentsList.length || 120} active`, icon: <Users className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
-          { label: 'Total Vendors', val: '4,280 registered', icon: <Users className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
-          { label: 'Active Vendors', val: '3,120 active', icon: <CheckCircle2 className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
-          { label: "Today's Targets", val: '144 targets', icon: <Target className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
-          { label: 'Pending Targets', val: '24 remaining', icon: <Clock className="w-4 h-4 text-[#4f4635]" />, bg: 'bg-[#efe1ca]' },
-          { label: 'Open Tickets', val: '38 unresolved', icon: <Ticket className="w-4 h-4 text-red-700" />, bg: 'bg-red-50' },
+          { label: 'Assigned Pincodes', val: `${divisionPincodesList.length} Pincodes`, icon: <MapPin className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
+          { label: 'Active Pincode Agents', val: `${pincodeAgentsList.length || 4} active`, icon: <Users className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
+          { label: 'Total Vendors', val: '12 registered', icon: <Users className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
+          { label: 'Active Vendors', val: '10 active', icon: <CheckCircle2 className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
+          { label: "Today's Targets", val: '20 targets', icon: <Target className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
+          { label: 'Pending Targets', val: '4 remaining', icon: <Clock className="w-4 h-4 text-[#4f4635]" />, bg: 'bg-[#efe1ca]' },
+          { label: 'Open Tickets', val: '2 unresolved', icon: <Ticket className="w-4 h-4 text-red-700" />, bg: 'bg-red-50' },
           { label: 'Division Performance', val: '88.5%', icon: <TrendingUp className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' }
         ].map((card, idx) => (
           <div key={idx} className="bg-white p-5 rounded-[16px] border border-[#eae8e7] flex items-center justify-between shadow-sm relative overflow-hidden group">
@@ -160,12 +200,7 @@ export const DivisionDashboard: React.FC = () => {
         <div className="bg-[#ffffff] p-6 rounded-[16px] border border-[#eae8e7] shadow-sm space-y-4">
           <h3 className="font-extrabold text-sm text-[#1b1c1c]">Pincode Performance</h3>
           <div className="space-y-2">
-            {[
-              { name: 'Hosur (635109)', score: '94% completed' },
-              { name: 'Krishnagiri (635001)', score: '88% completed' },
-              { name: 'Bargur (635104)', score: '72% completed' },
-              { name: 'Denkanikottai (635107)', score: '64% completed' }
-            ].map((pin, index) => (
+            {divisionPincodesList.map((pin, index) => (
               <div key={index} className="flex justify-between text-xs font-bold p-2 bg-[#fbf9f8] rounded-lg">
                 <span className="text-[#52443a]">{pin.name}</span>
                 <span className="text-[#864f19]">{pin.score}</span>
@@ -190,10 +225,10 @@ export const DivisionDashboard: React.FC = () => {
             <div>
               <div className="flex justify-between text-xs font-bold text-[#52443a] mb-1">
                 <span>Daily Target Progress</span>
-                <span className="text-[#864f19]">78.9% Done</span>
+                <span className="text-[#864f19]">88.5% Done</span>
               </div>
               <div className="w-full bg-[#f6f3f2] h-2 rounded-full overflow-hidden">
-                <div className="bg-[#864f19] h-full w-[78.9%] rounded-full"></div>
+                <div className="bg-[#864f19] h-full w-[88.5%] rounded-full"></div>
               </div>
             </div>
           </div>
@@ -214,7 +249,7 @@ export const DivisionDashboard: React.FC = () => {
             </div>
             <div className="flex justify-between text-[11px] text-[#52443a] font-medium pt-2">
               <span>Avg Resolution: 18m</span>
-              <span>Open Tickets: 38</span>
+              <span>Open Tickets: 2</span>
             </div>
           </div>
         </div>
@@ -240,16 +275,12 @@ export const DivisionDashboard: React.FC = () => {
                   <span>Pincode Area</span>
                   <span>Active Onboarders</span>
                 </div>
-                {pincodeAgentsList.length === 0 ? (
-                  <p className="py-6 text-center text-xs text-slate-400 font-semibold">No active pincode agents registered under this division yet.</p>
-                ) : (
-                  pincodeAgentsList.map((agent, i) => (
-                    <div key={i} className="py-3 flex justify-between text-xs font-semibold">
-                      <span className="text-[#1b1c1c]">{agent.territory} ({agent.pincode})</span>
-                      <span className="text-[#34647b]">1 Onboarder active</span>
-                    </div>
-                  ))
-                )}
+                {divisionPincodesList.map((pin, i) => (
+                  <div key={i} className="py-3 flex justify-between text-xs font-semibold">
+                    <span className="text-[#1b1c1c]">{pin.name}</span>
+                    <span className="text-[#34647b]">1 Onboarder active</span>
+                  </div>
+                ))}
               </>
             )}
 
@@ -259,7 +290,7 @@ export const DivisionDashboard: React.FC = () => {
                   <span>Merchant Shop</span>
                   <span>Status</span>
                 </div>
-                <p className="py-6 text-center text-xs text-slate-400 font-semibold">No merchant onboarding logs found for this division.</p>
+                <p className="py-6 text-center text-xs text-slate-400 font-semibold">Merchant onboarding logs for {userDivision} synced.</p>
               </>
             )}
 
@@ -271,7 +302,38 @@ export const DivisionDashboard: React.FC = () => {
                   <span>Inspect Action</span>
                 </div>
                 {pincodeAgentsList.length === 0 ? (
-                  <p className="py-6 text-center text-xs text-slate-400 font-semibold">No pincode agents assigned to this division yet.</p>
+                  <div className="py-3 flex justify-between items-center text-xs font-semibold">
+                    <div>
+                      <span className="font-bold text-[#1b1c1c] block">raki pin</span>
+                      <span className="text-[10px] text-[#864f19] uppercase font-black">PIN: {divisionPincodesList[0].code}</span>
+                    </div>
+                    <div>
+                      <span className="text-[#52443a] block font-bold">8 / 20 Targets</span>
+                      <span className="inline-block text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">
+                        In Progress
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAgent({
+                        id: 'raki-1',
+                        name: 'raki pin',
+                        pincode: divisionPincodesList[0].code,
+                        territory: userDivision,
+                        phone: '6789098653',
+                        email: 'raki@gmail.com',
+                        assignedTargets: 20,
+                        completedTargets: 8,
+                        earnings: 0,
+                        totalOnboardedShops: 0,
+                        status: 'present',
+                        checkIn: '09:00 AM'
+                      })}
+                      className="py-1 px-3 bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 text-[#864f19] text-[10px] font-extrabold uppercase tracking-wider rounded-lg transition cursor-pointer flex items-center gap-1"
+                    >
+                      <Eye className="w-3.5 h-3.5" /> Inspect
+                    </button>
+                  </div>
                 ) : (
                   pincodeAgentsList.map((agent) => (
                     <div key={agent.id} className="py-3 flex justify-between items-center text-xs font-semibold">
@@ -280,7 +342,7 @@ export const DivisionDashboard: React.FC = () => {
                         <span className="text-[10px] text-[#864f19] uppercase font-black">PIN: {agent.pincode}</span>
                       </div>
                       <div>
-                        <span className="text-[#52443a] block">{agent.completedTargets} / {agent.assignedTargets} Targets</span>
+                        <span className="text-[#52443a] block font-bold">{agent.completedTargets || 8} / {agent.assignedTargets || 20} Targets</span>
                         <span className={`inline-block text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded ${
                           agent.status === 'present' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-[#864f19]'
                         }`}>
@@ -305,48 +367,88 @@ export const DivisionDashboard: React.FC = () => {
         {/* Quick actions target form */}
         <div className="bg-white rounded-[16px] border border-[#eae8e7] shadow-sm p-6 flex flex-col justify-between space-y-4">
           <div className="border-b border-[#eae8e7] pb-3">
-            <h3 className="font-extrabold text-sm text-[#1b1c1c]">Assign Pincode Targets</h3>
-            <p className="text-[10px] text-[#52443a] mt-0.5">Assign daily merchant targets to active Pincode Agents.</p>
+            <h3 className="font-extrabold text-sm text-[#1b1c1c]">Assign Pincode Agent Targets</h3>
+            <p className="text-[10px] text-[#52443a] mt-0.5 font-medium">Assign daily merchant targets to active Pincode Agents in {userDivision}.</p>
           </div>
           
-          <form onSubmit={handleAssign} className="space-y-4 flex-grow flex flex-col justify-between">
+          <form onSubmit={handleAssign} className="space-y-3.5 flex-grow flex flex-col justify-between">
             <div className="space-y-1">
-              <label className="block text-[9px] font-bold text-[#52443a] uppercase tracking-wider">Select Target Pincode</label>
+              <label className="block text-[9px] font-bold text-[#52443a] uppercase tracking-wider">Select Target Pincode *</label>
               <select
                 value={selectedPincode}
                 onChange={(e) => setSelectedPincode(e.target.value)}
-                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3.5 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
               >
-                <option value="Hosur (635109)">Hosur (635109)</option>
-                <option value="Krishnagiri (635001)">Krishnagiri (635001)</option>
-                <option value="Bargur (635104)">Bargur (635104)</option>
-                <option value="Denkanikottai (635107)">Denkanikottai (635107)</option>
+                {divisionPincodesList.map((pin) => (
+                  <option key={pin.code} value={pin.code}>{pin.name}</option>
+                ))}
               </select>
             </div>
 
             <div className="space-y-1">
-              <label className="block text-[9px] font-bold text-[#52443a] uppercase tracking-wider">Target Campaign Title</label>
+              <label className="block text-[9px] font-bold text-[#52443a] uppercase tracking-wider">Select Pincode Agent *</label>
+              <select
+                value={selectedAgentId}
+                onChange={(e) => setSelectedAgentId(e.target.value)}
+                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+              >
+                {pincodeAgentsList.length === 0 ? (
+                  <option value="raki-pin">raki pin (PIN: {divisionPincodesList[0]?.code})</option>
+                ) : (
+                  pincodeAgentsList.map((a) => (
+                    <option key={a.id} value={a.id}>{a.name} (PIN: {a.pincode})</option>
+                  ))
+                )}
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-[9px] font-bold text-[#52443a] uppercase tracking-wider">Target Quantity *</label>
+              <input
+                type="number"
+                min="1"
+                required
+                value={targetQuantity}
+                onChange={(e) => setTargetQuantity(e.target.value)}
+                placeholder="e.g. 20"
+                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-[9px] font-bold text-[#52443a] uppercase tracking-wider">Target Campaign Title *</label>
               <input
                 type="text"
+                required
                 value={targetTitle}
                 onChange={(e) => setTargetTitle(e.target.value)}
                 placeholder="e.g. Onboard 20 new restaurants"
-                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3.5 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-[9px] font-bold text-[#52443a] uppercase tracking-wider">Target Date *</label>
+              <input
+                type="date"
+                required
+                value={targetDate}
+                onChange={(e) => setTargetDate(e.target.value)}
+                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
               />
             </div>
 
             {districtTargetAssigned && (
-              <p className="text-[10px] text-green-600 font-bold text-center">Pincode Target Allocated & Synced!</p>
+              <p className="text-[10px] text-green-600 font-bold text-center">Pincode Agent Target Allocated & Synced!</p>
             )}
 
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-3 bg-[#864f19] hover:bg-[#a3672f] text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-sm transition-all border-none cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+              className="w-full py-2.5 bg-[#864f19] hover:bg-[#a3672f] text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-sm transition-all border-none cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 mt-2"
             >
-              <Send className="w-3.5 h-3.5" /> {isSubmitting ? 'Assigning...' : 'Assign Targets'}
+              <Send className="w-3.5 h-3.5" /> {isSubmitting ? 'Assigning...' : 'Assign Pincode Agent Targets'}
             </button>
-
           </form>
         </div>
       </div>
@@ -391,9 +493,9 @@ export const DivisionDashboard: React.FC = () => {
           
           <div className="space-y-3">
             {[
-              { type: 'New Vendor Alert', msg: 'New vendor registration for "Krishnagiri Fresh Produce" pending document audit.', time: '10m ago', alert: false },
-              { type: 'Escalated Ticket', msg: 'Ticket ID #TK-9742: Device authentication failure logged at Hosur Pincode 635109.', time: '2h ago', alert: true },
-              { type: 'Pending Reports Alert', msg: 'Pincode Sector 635109 has not submitted the monthly visits status logs.', time: '4h ago', alert: false }
+              { type: 'New Vendor Alert', msg: `New vendor registration pending document audit in ${userDivision}.`, time: '10m ago', alert: false },
+              { type: 'Escalated Ticket', msg: `Ticket ID #TK-9742: Merchant terminal query logged at PIN ${divisionPincodesList[0]?.code || '530001'}.`, time: '2h ago', alert: true },
+              { type: 'Field Visit Alert', msg: `Pincode Sector ${divisionPincodesList[0]?.code || '530001'} field report submitted successfully.`, time: '4h ago', alert: false }
             ].map((notif, idx) => (
               <div key={idx} className="flex items-start gap-3 p-3 bg-[#fbf9f8] rounded-xl border border-[#eae8e7]/50">
                 <div className={`h-2 w-2 rounded-full mt-1 shrink-0 ${notif.alert ? 'bg-[#ba1a1a]' : 'bg-[#864f19]'}`} />

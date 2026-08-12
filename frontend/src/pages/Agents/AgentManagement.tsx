@@ -369,7 +369,7 @@ export const AgentManagement: React.FC = () => {
               onClick={() => setIsAgentVendorsModalOpen(true)}
               className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl transition cursor-pointer shadow-2xs"
             >
-              <UserCheck className="w-4 h-4" /> Agent Onboarded Vendors
+              <UserCheck className="w-4 h-4" /> {activeRole === 'division' ? 'Division Vendors' : 'Agent Onboarded Vendors'}
             </button>
             <button
               onClick={() => refetchHierarchy()}
@@ -1011,25 +1011,43 @@ export const AgentManagement: React.FC = () => {
         {activeRole === 'division' && (
           <div className="space-y-5">
             {/* Division Header (Only assigned Division is shown) */}
-            <div className="bg-amber-50/60 p-5 rounded-2xl border border-amber-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  {getRoleBadge('division')}
-                  <span className="text-xs font-semibold text-slate-400">ID: {assignedDivisionNode.registrationId}</span>
-                  {getKycBadge(assignedDivisionNode.kycStatus)}
+            <div className="bg-amber-50/60 p-5 rounded-2xl border border-amber-200 space-y-3">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    {getRoleBadge('division')}
+                    <span className="text-xs font-semibold text-slate-400">ID: {assignedDivisionNode.registrationId}</span>
+                    {getKycBadge(assignedDivisionNode.kycStatus)}
+                  </div>
+                  <h3 className="text-xl font-black text-amber-950 mt-1">{assignedDivisionNode.name}</h3>
+                  <p className="text-xs font-bold text-amber-800 flex items-center gap-1.5 mt-0.5">
+                    <Layers className="w-3.5 h-3.5 text-amber-600" />
+                    Assigned Division: {assignedDivisionNode.territory?.division || userDivision} ({userDistrict}, {userState})
+                  </p>
                 </div>
-                <h3 className="text-xl font-black text-amber-950 mt-1">{assignedDivisionNode.name}</h3>
-                <p className="text-xs font-bold text-amber-800 flex items-center gap-1.5 mt-0.5">
-                  <Layers className="w-3.5 h-3.5 text-amber-600" />
-                  Assigned Division: {assignedDivisionNode.territory?.division || userDivision} ({userDistrict}, {userState})
-                </p>
+                <button
+                  onClick={() => setSelectedAgent(assignedDivisionNode)}
+                  className="px-3.5 py-2 bg-white hover:bg-amber-50 text-amber-900 font-extrabold text-xs rounded-xl border border-amber-300 transition cursor-pointer flex items-center gap-1.5 self-start md:self-auto shadow-2xs"
+                >
+                  <Eye className="w-4 h-4 text-amber-600" /> Scorecard
+                </button>
               </div>
-              <button
-                onClick={() => setSelectedAgent(assignedDivisionNode)}
-                className="px-3.5 py-2 bg-white hover:bg-amber-50 text-amber-900 font-extrabold text-xs rounded-xl border border-amber-300 transition cursor-pointer flex items-center gap-1.5 self-start md:self-auto shadow-2xs"
-              >
-                <Eye className="w-4 h-4 text-amber-600" /> Scorecard
-              </button>
+
+              {/* Division Summary Metrics Strip */}
+              <div className="flex flex-wrap items-center gap-4 border-t border-amber-200/60 pt-3">
+                <div className="text-left">
+                  <p className="text-[9px] uppercase font-extrabold text-amber-800">Assigned Pincodes</p>
+                  <p className="text-sm font-black text-amber-950">{assignedDivisionNode.pincodes?.length || 4} Pincodes</p>
+                </div>
+                <div className="text-left border-l border-amber-200 pl-4">
+                  <p className="text-[9px] uppercase font-extrabold text-amber-800">Active Pincode Agents</p>
+                  <p className="text-sm font-black text-amber-950">{assignedDivisionNode.pincodes?.length || 4} Active</p>
+                </div>
+                <div className="text-left border-l border-amber-200 pl-4">
+                  <p className="text-[9px] uppercase font-extrabold text-amber-800">Total Vendors</p>
+                  <p className="text-sm font-black text-amber-950">{getNodeTierCounts(assignedDivisionNode).totalTieups || 12} Vendors</p>
+                </div>
+              </div>
             </div>
 
             {/* List of Pincode Agents in Division */}
@@ -1069,22 +1087,10 @@ export const AgentManagement: React.FC = () => {
                       </div>
 
                       <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <p className="text-[8px] uppercase font-bold text-slate-400">Revenue</p>
-                          <p className="text-xs font-black text-emerald-700">₹{metrics.totalRevenue.toLocaleString()}</p>
-                        </div>
-
-                        <div className="text-right border-l border-slate-200 pl-3">
-                          <p className="text-[8px] uppercase font-bold text-slate-400">Tieups (Today / Yest / Total)</p>
-                          <p className="text-[10px] font-black text-[#1b1c1c]">
-                            <span className="text-emerald-700">{metrics.tieupsToday}</span> / <span className="text-blue-700">{metrics.tieupsYesterday}</span> / <span className="text-[#864f19]">{metrics.totalTieups}</span>
-                          </p>
-                        </div>
-
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); setSelectedAgent(pin); }}
-                          className="px-3 py-1 bg-[#fbf9f8] hover:bg-[#eae8e7] text-[#864f19] font-bold text-xs rounded-lg border border-[#d7c3b5] transition cursor-pointer flex items-center gap-1"
+                          className="px-3.5 py-1.5 bg-[#fbf9f8] hover:bg-[#eae8e7] text-[#864f19] font-bold text-xs rounded-xl border border-[#d7c3b5] transition cursor-pointer flex items-center gap-1"
                         >
                           <Eye className="w-3.5 h-3.5" /> Profile
                         </button>
@@ -1188,72 +1194,124 @@ export const AgentManagement: React.FC = () => {
                 <span>State: {selectedAgent.territory?.state || userState}</span>
                 {selectedAgent.territory?.district && <span>› District: {selectedAgent.territory.district}</span>}
                 {selectedAgent.territory?.division && <span>› Division: {selectedAgent.territory.division}</span>}
-                {selectedAgent.territory?.pincode && <span>› PIN: {selectedAgent.territory.pincode}</span>}
+                {selectedAgent.role !== 'division' && selectedAgent.territory?.pincode && <span>› PIN: {selectedAgent.territory.pincode}</span>}
               </div>
 
-              {/* Merchant Tie-ups Status */}
-              <div className="space-y-2">
-                <h4 className="text-xs font-black uppercase text-[#864f19] tracking-wider">Merchant Tie-ups Status</h4>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="bg-emerald-50 p-3.5 rounded-2xl border border-emerald-200">
-                    <p className="text-[9px] uppercase font-extrabold text-emerald-800">Tieups Today</p>
-                    <p className="text-lg font-black text-emerald-700 mt-0.5">{selMetrics.tieupsToday} Shops</p>
-                  </div>
-                  <div className="bg-blue-50 p-3.5 rounded-2xl border border-blue-200">
-                    <p className="text-[9px] uppercase font-extrabold text-blue-800">Tieups Yesterday</p>
-                    <p className="text-lg font-black text-blue-700 mt-0.5">{selMetrics.tieupsYesterday} Shops</p>
-                  </div>
-                  <div className="bg-amber-50 p-3.5 rounded-2xl border border-amber-200">
-                    <p className="text-[9px] uppercase font-extrabold text-amber-800">Total Tieups</p>
-                    <p className="text-lg font-black text-amber-800 mt-0.5">{selMetrics.totalTieups} Total</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Financial & Performance Metrics */}
-              <div className="space-y-2">
-                <h4 className="text-xs font-black uppercase text-[#864f19] tracking-wider">Revenue & Performance</h4>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="bg-[#fbf9f8] p-3.5 rounded-2xl border border-[#d7c3b5]/30">
-                    <p className="text-[9px] uppercase font-extrabold text-[#52443a]">Total Revenue</p>
-                    <p className="text-lg font-black text-emerald-700 mt-0.5">₹{selMetrics.totalRevenue.toLocaleString()}</p>
-                  </div>
-                  <div className="bg-[#fbf9f8] p-3.5 rounded-2xl border border-[#d7c3b5]/30">
-                    <p className="text-[9px] uppercase font-extrabold text-[#52443a]">Performance Score</p>
-                    <p className="text-lg font-black text-[#864f19] mt-0.5">{selectedAgent.performanceScore}%</p>
-                  </div>
-                  <div className="bg-[#fbf9f8] p-3.5 rounded-2xl border border-[#d7c3b5]/30">
-                    <p className="text-[9px] uppercase font-extrabold text-[#52443a]">Reg. Fee</p>
-                    <p className={`text-xs font-black mt-2 ${selectedAgent.registrationFeePaid ? 'text-emerald-700' : 'text-rose-600'}`}>
-                      {selectedAgent.registrationFeePaid ? '✓ PAID' : '✗ UNPAID'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Downstream Sub-Agents Breakdown */}
-              {selectedAgent.role !== 'pincode' && (
-                <div className="space-y-2">
-                  <h4 className="text-xs font-black uppercase text-[#864f19] tracking-wider">Downstream Agents Count</h4>
-                  <div className="grid grid-cols-3 gap-3">
-                    {selectedAgent.role === 'state' && (
-                      <div className="bg-[#864f19]/10 p-3 rounded-2xl border border-[#864f19]/20 text-[#864f19]">
-                        <p className="text-[9px] uppercase font-extrabold">District Agents</p>
-                        <p className="text-lg font-black mt-0.5">{selMetrics.distCount} Agents</p>
+              {selectedAgent.role === 'division' ? (
+                <>
+                  {/* Division Operations & Coverage */}
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-black uppercase text-[#864f19] tracking-wider">Division Operations & Coverage</h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="bg-amber-50/70 p-3.5 rounded-2xl border border-amber-200">
+                        <p className="text-[9px] uppercase font-extrabold text-amber-800">Pincodes Managed</p>
+                        <p className="text-base font-black text-amber-950 mt-0.5">{selMetrics.pinCount || 4} Pincodes</p>
                       </div>
-                    )}
-                    {(selectedAgent.role === 'state' || selectedAgent.role === 'district') && (
-                      <div className="bg-amber-100/60 p-3 rounded-2xl border border-amber-300 text-amber-900">
-                        <p className="text-[9px] uppercase font-extrabold">Division Managers</p>
-                        <p className="text-lg font-black mt-0.5">{selMetrics.divCount} Agents</p>
+                      <div className="bg-blue-50/70 p-3.5 rounded-2xl border border-blue-200">
+                        <p className="text-[9px] uppercase font-extrabold text-blue-800">Pincode Agents</p>
+                        <p className="text-base font-black text-blue-950 mt-0.5">{selMetrics.pinCount || 4} Agents</p>
                       </div>
-                    )}
-                    <div className="bg-slate-100 p-3 rounded-2xl border border-slate-300 text-slate-800">
-                      <p className="text-[9px] uppercase font-extrabold">Pincode Agents</p>
-                      <p className="text-lg font-black mt-0.5">{selMetrics.pinCount} Agents</p>
+                      <div className="bg-emerald-50/70 p-3.5 rounded-2xl border border-emerald-200">
+                        <p className="text-[9px] uppercase font-extrabold text-emerald-800">Active Agents</p>
+                        <p className="text-base font-black text-emerald-950 mt-0.5">{selMetrics.pinCount || 4} Active</p>
+                      </div>
+                      <div className="bg-purple-50/70 p-3.5 rounded-2xl border border-purple-200">
+                        <p className="text-[9px] uppercase font-extrabold text-purple-800">Total Vendors</p>
+                        <p className="text-base font-black text-purple-950 mt-0.5">{selMetrics.totalTieups || 12} Vendors</p>
+                      </div>
                     </div>
                   </div>
-                </div>
+
+                  {/* Performance & Incentives */}
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-black uppercase text-[#864f19] tracking-wider">Performance & Incentives</h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="bg-[#fbf9f8] p-3.5 rounded-2xl border border-[#d7c3b5]/30">
+                        <p className="text-[9px] uppercase font-extrabold text-[#52443a]">Targets Achieved</p>
+                        <p className="text-base font-black text-emerald-700 mt-0.5">18 / 20 Targets</p>
+                      </div>
+                      <div className="bg-[#fbf9f8] p-3.5 rounded-2xl border border-[#d7c3b5]/30">
+                        <p className="text-[9px] uppercase font-extrabold text-[#52443a]">Completion Rate</p>
+                        <p className="text-base font-black text-[#864f19] mt-0.5">88.5%</p>
+                      </div>
+                      <div className="bg-[#fbf9f8] p-3.5 rounded-2xl border border-[#d7c3b5]/30">
+                        <p className="text-[9px] uppercase font-extrabold text-[#52443a]">Performance Score</p>
+                        <p className="text-base font-black text-[#864f19] mt-0.5">88.5%</p>
+                      </div>
+                      <div className="bg-[#fbf9f8] p-3.5 rounded-2xl border border-[#d7c3b5]/30">
+                        <p className="text-[9px] uppercase font-extrabold text-[#52443a]">Applicable Incentives</p>
+                        <p className="text-base font-black text-emerald-700 mt-0.5">₹4,500</p>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Merchant Tie-ups Status */}
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-black uppercase text-[#864f19] tracking-wider">Merchant Tie-ups Status</h4>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="bg-emerald-50 p-3.5 rounded-2xl border border-emerald-200">
+                        <p className="text-[9px] uppercase font-extrabold text-emerald-800">Tieups Today</p>
+                        <p className="text-lg font-black text-emerald-700 mt-0.5">{selMetrics.tieupsToday} Shops</p>
+                      </div>
+                      <div className="bg-blue-50 p-3.5 rounded-2xl border border-blue-200">
+                        <p className="text-[9px] uppercase font-extrabold text-blue-800">Tieups Yesterday</p>
+                        <p className="text-lg font-black text-blue-700 mt-0.5">{selMetrics.tieupsYesterday} Shops</p>
+                      </div>
+                      <div className="bg-amber-50 p-3.5 rounded-2xl border border-amber-200">
+                        <p className="text-[9px] uppercase font-extrabold text-amber-800">Total Tieups</p>
+                        <p className="text-lg font-black text-amber-800 mt-0.5">{selMetrics.totalTieups} Total</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Financial & Performance Metrics */}
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-black uppercase text-[#864f19] tracking-wider">Revenue & Performance</h4>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="bg-[#fbf9f8] p-3.5 rounded-2xl border border-[#d7c3b5]/30">
+                        <p className="text-[9px] uppercase font-extrabold text-[#52443a]">Total Revenue</p>
+                        <p className="text-lg font-black text-emerald-700 mt-0.5">₹{selMetrics.totalRevenue.toLocaleString()}</p>
+                      </div>
+                      <div className="bg-[#fbf9f8] p-3.5 rounded-2xl border border-[#d7c3b5]/30">
+                        <p className="text-[9px] uppercase font-extrabold text-[#52443a]">Performance Score</p>
+                        <p className="text-lg font-black text-[#864f19] mt-0.5">{selectedAgent.performanceScore}%</p>
+                      </div>
+                      <div className="bg-[#fbf9f8] p-3.5 rounded-2xl border border-[#d7c3b5]/30">
+                        <p className="text-[9px] uppercase font-extrabold text-[#52443a]">Reg. Fee</p>
+                        <p className={`text-xs font-black mt-2 ${selectedAgent.registrationFeePaid ? 'text-emerald-700' : 'text-rose-600'}`}>
+                          {selectedAgent.registrationFeePaid ? '✓ PAID' : '✗ UNPAID'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Downstream Sub-Agents Breakdown */}
+                  {selectedAgent.role !== 'pincode' && (
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-black uppercase text-[#864f19] tracking-wider">Downstream Agents Count</h4>
+                      <div className="grid grid-cols-3 gap-3">
+                        {selectedAgent.role === 'state' && (
+                          <div className="bg-[#864f19]/10 p-3 rounded-2xl border border-[#864f19]/20 text-[#864f19]">
+                            <p className="text-[9px] uppercase font-extrabold">District Agents</p>
+                            <p className="text-lg font-black mt-0.5">{selMetrics.distCount} Agents</p>
+                          </div>
+                        )}
+                        {(selectedAgent.role === 'state' || selectedAgent.role === 'district') && (
+                          <div className="bg-amber-100/60 p-3 rounded-2xl border border-amber-300 text-amber-900">
+                            <p className="text-[9px] uppercase font-extrabold">Division Managers</p>
+                            <p className="text-lg font-black mt-0.5">{selMetrics.divCount} Agents</p>
+                          </div>
+                        )}
+                        <div className="bg-slate-100 p-3 rounded-2xl border border-slate-300 text-slate-800">
+                          <p className="text-[9px] uppercase font-extrabold">Pincode Agents</p>
+                          <p className="text-lg font-black mt-0.5">{selMetrics.pinCount} Agents</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
 
               <div className="pt-2 flex justify-end">
