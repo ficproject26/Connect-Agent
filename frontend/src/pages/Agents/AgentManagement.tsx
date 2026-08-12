@@ -60,10 +60,18 @@ export const AgentManagement: React.FC = () => {
   const [pincodeFilter, setPincodeFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [scopeFilter, setScopeFilter] = useState<string>(() => {
-    return activeRole === 'state' ? 'district' : activeRole === 'district' ? 'division' : 'pincode';
+    return activeRole === 'state' ? 'hierarchy' : activeRole === 'district' ? 'division' : 'pincode';
   });
   const [selectedAgent, setSelectedAgent] = useState<AgentNode | null>(null);
   const [isAgentVendorsModalOpen, setIsAgentVendorsModalOpen] = useState(false);
+
+  // Helper function to format test or raw agent names into clean display format
+  const formatCleanAgentName = (name?: string, defaultRole?: string, territory?: string) => {
+    if (!name || name === 'old' || name === 'ap' || name.length <= 3) {
+      return territory ? `${territory} ${defaultRole || 'Lead'}` : defaultRole || 'Agent';
+    }
+    return name;
+  };
 
   // Drill-down selection states
   const [selectedDistrictId, setSelectedDistrictId] = useState<string | null>(null);
@@ -102,7 +110,17 @@ export const AgentManagement: React.FC = () => {
       return sState.includes(targetState) || targetState.includes(sState);
     });
 
-    if (found) return found;
+    const stateFilteredDistricts = (hierarchyData?.districts || []).filter((d: any) => {
+      const st = (d.territory?.state || d.state || userState).toLowerCase();
+      return st.includes(targetState) || targetState.includes(st);
+    });
+
+    if (found) {
+      return {
+        ...found,
+        districts: (found.districts && found.districts.length > 0) ? found.districts : stateFilteredDistricts
+      };
+    }
 
     // Construct self-node fallback from logged in user if backend has no records yet
     return {
@@ -122,9 +140,9 @@ export const AgentManagement: React.FC = () => {
       territory: { state: userState },
       plusPoints: ['KYC Verified', 'Assigned State Lead'],
       minusPoints: [],
-      districts: []
+      districts: stateFilteredDistricts
     };
-  }, [allStates, userState, user]);
+  }, [allStates, hierarchyData, userState, user]);
 
   // 2. DISTRICT AGENT SCOPING: Strictly isolate assigned District
   const assignedDistrictNode = useMemo(() => {
@@ -476,9 +494,10 @@ export const AgentManagement: React.FC = () => {
                 >
                   {activeRole === 'state' && (
                     <>
-                      <option value="district">📍 District Agents Level Only</option>
-                      <option value="division">🟡 Division Managers Level Only</option>
-                      <option value="pincode">📍 Pincode Agents Level Only</option>
+                      <option value="hierarchy">🌐 State → District → Division → Pincode Hierarchy</option>
+                      <option value="district">📍 District Agents Level</option>
+                      <option value="division">🟡 Division Managers Level</option>
+                      <option value="pincode">📌 Pincode Agents Level</option>
                     </>
                   )}
                   {activeRole === 'district' && (
@@ -587,7 +606,7 @@ export const AgentManagement: React.FC = () => {
                                 <span className="text-xs font-semibold text-slate-400">ID: {dist.registrationId}</span>
                                 {getKycBadge(dist.kycStatus)}
                               </div>
-                              <h3 className="text-base font-black text-[#1b1c1c] mt-1">{dist.name}</h3>
+                              <h3 className="text-base font-black text-[#1b1c1c] mt-1">{formatCleanAgentName(dist.name, 'District Agent', dist.territory?.district)}</h3>
                               <p className="text-xs font-bold text-[#52443a] flex items-center gap-1.5 mt-0.5">
                                 <MapPin className="w-3.5 h-3.5 text-[#864f19]" />
                                 District: {dist.territory?.district || dist.name} ({userState})
@@ -685,7 +704,7 @@ export const AgentManagement: React.FC = () => {
                               <span className="text-[11px] font-semibold text-slate-400">{div.registrationId}</span>
                               {getKycBadge(div.kycStatus)}
                             </div>
-                            <h4 className="text-sm font-bold text-[#1b1c1c] mt-1">{div.name}</h4>
+                            <h4 className="text-sm font-bold text-[#1b1c1c] mt-1">{formatCleanAgentName(div.name, 'Division Manager', div.territory?.division)}</h4>
                             <p className="text-[11px] text-slate-500 font-medium">
                               Division: <span className="font-bold text-slate-700">{div.territory?.division || div.name}</span>
                             </p>

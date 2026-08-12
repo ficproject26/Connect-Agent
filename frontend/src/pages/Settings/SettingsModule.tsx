@@ -220,7 +220,7 @@ export const SettingsModule: React.FC = () => {
               </CardHeader>
               <CardBody className="space-y-3 text-xs font-semibold">
                 <a href="#privacy" className="flex items-center justify-between p-3 hover:bg-[#fbf9f8] rounded-xl text-slate-700 border border-slate-100">
-                  <span>Privacy & Telemetry Policies</span>
+                  <span>Privacy Policy</span>
                   <ChevronRight className="w-4 h-4 text-slate-400" />
                 </a>
                 <a href="#terms" className="flex items-center justify-between p-3 hover:bg-[#fbf9f8] rounded-xl text-slate-700 border border-slate-100">
@@ -236,7 +236,7 @@ export const SettingsModule: React.FC = () => {
                 <Info className="w-4 h-4 text-[#864f19]" />
                 <div>
                   <p className="font-extrabold text-[#1b1c1c]">Connect Agent App</p>
-                  <p className="text-[10px] text-slate-500">v2.4.0 (Pincode Field Agent Build)</p>
+                  <p className="text-[10px] text-slate-500">App Version v2.4.0 (Pincode Field Agent Build)</p>
                 </div>
               </div>
               <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 font-extrabold text-[10px] rounded-lg">
