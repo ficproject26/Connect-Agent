@@ -24,7 +24,7 @@ interface Vendor {
   pincode: string;
   role: string;
   kycStatus: 'approved' | 'pending' | 'rejected';
-  status: 'active' | 'inactive';
+  status: 'active' | 'inactive' | 'pending' | 'under_verification' | 'rejected';
   assignedAgent: string;
   rejectionReason?: string;
   createdAt: string;
@@ -119,7 +119,13 @@ export const VendorsList: React.FC = () => {
           pincode: v.pincode || userPincode,
           role: 'Merchant Partner',
           kycStatus: v.kycStatus || 'pending',
-          status: v.status === 'inactive' ? 'inactive' : 'active',
+          status: (() => {
+            const s = String(v.status || '').toLowerCase().trim();
+            if (s === 'approved' || s === 'active') return 'active';
+            if (s === 'rejected') return 'rejected';
+            if (s === 'inactive' || s === 'suspended') return 'inactive';
+            return 'pending';
+          })(),
           assignedAgent: assignedAgentName,
           createdAt: regDate,
           updatedAt: v.updatedAt ? new Date(v.updatedAt).toISOString().slice(0, 10) : regDate,
@@ -590,11 +596,29 @@ export const VendorsList: React.FC = () => {
   };
 
   const getStatusBadge = (status: string) => {
-    return status === 'active' ? (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-700 font-extrabold text-xs rounded-full border border-emerald-200 whitespace-nowrap">
-        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span> Active
-      </span>
-    ) : (
+    const s = (status || '').toLowerCase().trim();
+    if (s === 'active' || s === 'approved') {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-700 font-extrabold text-xs rounded-full border border-emerald-200 whitespace-nowrap">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span> Active
+        </span>
+      );
+    }
+    if (s === 'pending' || s === 'under_verification' || s === 'in_review' || s === 'pending_approval') {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-700 font-extrabold text-xs rounded-full border border-amber-200 whitespace-nowrap">
+          <Clock className="w-3.5 h-3.5 text-amber-500 shrink-0" /> Pending Review
+        </span>
+      );
+    }
+    if (s === 'rejected') {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-rose-50 text-rose-700 font-extrabold text-xs rounded-full border border-rose-200 whitespace-nowrap">
+          <XCircle className="w-3.5 h-3.5 text-rose-500 shrink-0" /> Rejected
+        </span>
+      );
+    }
+    return (
       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 text-slate-600 font-extrabold text-xs rounded-full border border-slate-300 whitespace-nowrap">
         <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0"></span> Inactive
       </span>
@@ -603,6 +627,19 @@ export const VendorsList: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12">
+      {/* Agent Notification Banner for Pending Vendor Onboardings */}
+      {scopedVendors.some(v => ['pending', 'under_verification', 'in_review'].includes((v.status || '').toLowerCase())) && (
+        <div className="bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 p-4 rounded-2xl flex items-center gap-3 shadow-xs">
+          <Clock className="w-5 h-5 text-amber-600 shrink-0" />
+          <div>
+            <p className="text-xs font-black">Vendor onboarding request is currently under review.</p>
+            <p className="text-[11px] font-semibold text-amber-700/80 dark:text-amber-400/80 mt-0.5">
+              Newly onboarded vendors are pending Admin verification and will become active once approved by the Administration team.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Page Header with Role Hierarchy Scoping Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-[#d7c3b5]/40 shadow-sm">
         <div className="flex items-center gap-3.5">
