@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { z } from 'zod';
 import Vendor from '../models/Vendor';
+import { getAgentTerritoryScope, buildVendorScopeFilter } from '../utils/territoryScope';
 
 const createVendorSchema = z.object({
   businessName: z.string().optional(),
@@ -50,18 +51,26 @@ export const getVendors = async (req: Request, res: Response) => {
     const agentId = (req as any).agent?.agentId;
     if (!agentId) return res.status(401).json({ message: 'Unauthorized' });
 
+    const scope = await getAgentTerritoryScope(agentId);
+    const scopeFilter = buildVendorScopeFilter(scope);
+
     const { page = '1', limit = '50', status, category, search } = req.query;
     const pageNum = parseInt(page as string, 10);
     const limitNum = parseInt(limit as string, 10);
 
-    const filter: Record<string, unknown> = {};
+    const filter: Record<string, unknown> = { ...scopeFilter };
     if (status) filter.status = status;
     if (category) filter.category = category;
     if (search) {
-      filter.$or = [
-        { businessName: { $regex: search as string, $options: 'i' } },
-        { ownerName: { $regex: search as string, $options: 'i' } },
-        { 'location.address': { $regex: search as string, $options: 'i' } }
+      filter.$and = [
+        scopeFilter,
+        {
+          $or: [
+            { businessName: { $regex: search as string, $options: 'i' } },
+            { ownerName: { $regex: search as string, $options: 'i' } },
+            { 'location.address': { $regex: search as string, $options: 'i' } }
+          ]
+        }
       ];
     }
 

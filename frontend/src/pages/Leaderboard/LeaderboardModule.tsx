@@ -64,9 +64,40 @@ export const LeaderboardModule: React.FC = () => {
     }
   });
 
-  // Filtered & Sorted Leaderboard List based on Active 4-Tier Tab
+  const userRole = (user?.role as string) || 'pincode';
+  const userState = (user?.territory?.state || '').toLowerCase();
+  const userDistrict = (user?.territory?.district || '').toLowerCase();
+  const userDivision = (user?.territory?.division || '').toLowerCase();
+  const userPincode = user?.territory?.pincode || '';
+
+  // Filtered & Sorted Leaderboard List based on Active 4-Tier Tab and Territory Scope
   const leaderboardList: LeaderboardItem[] = useMemo(() => {
     let list: LeaderboardItem[] = data?.leaderboard || [];
+
+    // Filter strictly by logged-in agent's role and assigned territory
+    list = list.filter(item => {
+      const itemState = (item.territory?.state || '').toLowerCase();
+      const itemDistrict = (item.territory?.district || '').toLowerCase();
+      const itemDivision = (item.territory?.division || '').toLowerCase();
+      const itemPincode = item.territory?.pincode || '';
+
+      if (userRole === 'state') {
+        return !userState || itemState.includes(userState) || userState.includes(itemState);
+      }
+      if (userRole === 'district') {
+        if (item.role === 'state') return false;
+        return !userDistrict || itemDistrict.includes(userDistrict) || userDistrict.includes(itemDistrict);
+      }
+      if (userRole === 'division') {
+        if (item.role === 'state' || item.role === 'district') return false;
+        return !userDivision || itemDivision.includes(userDivision) || userDivision.includes(itemDivision);
+      }
+      if (userRole === 'pincode') {
+        if (item.role !== 'pincode') return false;
+        return !userPincode || itemPincode === userPincode;
+      }
+      return true;
+    });
 
     // Filter by Tier Tab
     if (tierTab !== 'overall') {
@@ -94,7 +125,7 @@ export const LeaderboardModule: React.FC = () => {
 
     // Re-rank dynamically for the active view
     return list.map((item, idx) => ({ ...item, rank: idx + 1 }));
-  }, [data, tierTab, searchTerm, sortBy]);
+  }, [data, tierTab, searchTerm, sortBy, userRole, userState, userDistrict, userDivision, userPincode]);
 
   const topPerformers = useMemo(() => {
     return leaderboardList.slice(0, 3);

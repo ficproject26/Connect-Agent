@@ -4,12 +4,18 @@ import TargetAssignment from '../models/TargetAssignment';
 import Ticket from '../models/Ticket';
 import Notification from '../models/Notification';
 import Report from '../models/Report';
+import { getAgentTerritoryScope, buildVendorScopeFilter } from '../utils/territoryScope';
 
 // GET /api/dashboard/stats
 export const getDashboardStats = async (req: Request, res: Response) => {
   try {
     const agentId = (req as any).agent?.agentId;
     if (!agentId) return res.status(401).json({ message: 'Unauthorized' });
+
+    const scope = await getAgentTerritoryScope(agentId);
+    const vendorScopeFilter = buildVendorScopeFilter(scope);
+
+    const vendorFilter = Object.keys(vendorScopeFilter).length > 0 ? vendorScopeFilter : { assignedAgent: agentId };
 
     // Run all aggregations in parallel for performance
     const [
@@ -26,9 +32,9 @@ export const getDashboardStats = async (req: Request, res: Response) => {
       recentAssignments,
       recentVendors
     ] = await Promise.all([
-      Vendor.countDocuments({ assignedAgent: agentId }),
-      Vendor.countDocuments({ assignedAgent: agentId, status: 'active' }),
-      Vendor.countDocuments({ assignedAgent: agentId, status: 'pending' }),
+      Vendor.countDocuments(vendorFilter),
+      Vendor.countDocuments({ ...vendorFilter, status: 'active' }),
+      Vendor.countDocuments({ ...vendorFilter, status: 'pending' }),
       TargetAssignment.countDocuments({ assignedTo: agentId }),
       TargetAssignment.countDocuments({ assignedTo: agentId, status: 'completed' }),
       TargetAssignment.countDocuments({ assignedTo: agentId, status: 'overdue' }),
@@ -40,7 +46,7 @@ export const getDashboardStats = async (req: Request, res: Response) => {
         .populate('target', 'title type targetValue')
         .sort({ createdAt: -1 })
         .limit(5),
-      Vendor.find({ assignedAgent: agentId })
+      Vendor.find(vendorFilter)
         .populate('category', 'name')
         .sort({ createdAt: -1 })
         .limit(5)

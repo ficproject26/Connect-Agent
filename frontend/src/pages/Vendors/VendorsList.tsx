@@ -180,11 +180,11 @@ export const VendorsList: React.FC = () => {
       }
 
       if (activeRole === 'division') {
-        return vendor.division === userDivision || vendor.district === userDistrict || vendor.pincode === userPincode;
+        return vendor.division === userDivision;
       }
 
       if (activeRole === 'district') {
-        return vendor.district === userDistrict || vendor.division === userDivision;
+        return vendor.district === userDistrict;
       }
 
       return true; // State Lead sees all vendors within their assigned state

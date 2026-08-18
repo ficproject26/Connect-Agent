@@ -2,12 +2,17 @@ import { Request, Response } from 'express';
 import Agent from '../models/Agent';
 import AuditLog from '../models/AuditLog';
 import Vendor from '../models/Vendor';
+import { getAgentTerritoryScope, buildTerritoryFilter, buildVendorScopeFilter } from '../utils/territoryScope';
 
 // GET /api/admin/registrations
 export const getRegistrations = async (req: Request, res: Response) => {
   try {
+    const requesterId = (req as any).agent?.agentId;
+    const scope = await getAgentTerritoryScope(requesterId);
+    const scopeFilter = buildTerritoryFilter(scope);
+
     const status = req.query.status as string;
-    const filter: any = {};
+    const filter: any = { ...scopeFilter };
     if (status) {
       filter.kycStatus = status;
     }
@@ -119,14 +124,19 @@ export const rejectRegistration = async (req: Request, res: Response) => {
 // GET /api/admin/hierarchy
 export const getHierarchyTree = async (req: Request, res: Response) => {
   try {
+    const requesterId = (req as any).agent?.agentId;
+    const scope = await getAgentTerritoryScope(requesterId);
+    const scopeFilter = buildTerritoryFilter(scope);
+    const vendorScopeFilter = buildVendorScopeFilter(scope);
+
     const statusFilter = req.query.status as string;
-    const filter: any = {};
+    const filter: any = { ...scopeFilter };
     if (statusFilter && statusFilter !== 'all') {
       filter.kycStatus = statusFilter;
     }
     
     const agents = await Agent.find(filter).select('-password').sort({ createdAt: -1 });
-    const allVendors = await Vendor.find({});
+    const allVendors = await Vendor.find(vendorScopeFilter);
 
     const todayStr = new Date().toISOString().slice(0, 10);
     const yesterdayStr = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
@@ -212,7 +222,7 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
         .filter(div => {
           const divDist = div.territory?.district || (div as any).district;
           const divState = div.territory?.state || (div as any).state;
-          if (distState && divState && distState !== divState) return false;
+          if (distState && divState && distState.toLowerCase() !== divState.toLowerCase()) return false;
           return Boolean(divDist && distTerritory && divDist.toLowerCase() === distTerritory.toLowerCase());
         })
         .map(div => {
@@ -343,11 +353,15 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
 // GET /api/admin/leaderboard
 export const getWeeklyLeaderboard = async (req: Request, res: Response) => {
   try {
+    const requesterId = (req as any).agent?.agentId;
+    const scope = await getAgentTerritoryScope(requesterId);
+    const scopeFilter = buildTerritoryFilter(scope);
+
     const roleFilter = req.query.role as string;
     const timeframe = (req.query.timeframe as string) || 'this_week';
     const sortBy = (req.query.sortBy as string) || 'performanceScore';
 
-    const filter: any = {};
+    const filter: any = { ...scopeFilter };
     if (roleFilter && roleFilter !== 'all') {
       filter.role = roleFilter;
     }
