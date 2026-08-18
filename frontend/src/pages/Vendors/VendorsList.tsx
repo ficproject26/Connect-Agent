@@ -857,7 +857,7 @@ export const VendorsList: React.FC = () => {
                   label="Pincode"
                   options={
                     activeRole !== 'pincode'
-                      ? [{ value: 'all', label: 'All Pincodes' }, ...pincodes.map(p => ({ value: p, label: `PIN ${p}` }))]
+                      ? [{ value: 'all', label: 'All Pincode Areas' }, ...pincodes.map(p => ({ value: p, label: `PIN ${p}` }))]
                       : [{ value: userPincode, label: `PIN ${userPincode}` }]
                   }
                   value={activeRole !== 'pincode' ? pincodeFilter : userPincode}

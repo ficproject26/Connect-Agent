@@ -575,7 +575,7 @@ export const FieldVisitsModule: React.FC = () => {
                   onChange={(e) => setPincodeFilter(e.target.value)}
                   className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                 >
-                  <option value="all">📍 All Pincodes</option>
+                  <option value="all">📍 All Pincode Areas</option>
                   <option value="530001">PIN 530001 (Central)</option>
                   <option value="530017">PIN 530017 (MVP Colony)</option>
                   <option value="530018">PIN 530018 (Madhavadhara)</option>

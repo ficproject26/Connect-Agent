@@ -155,19 +155,29 @@ export const ProfileModule: React.FC = () => {
 
             <h3 className="font-extrabold text-base text-forgeGray-900">{user?.name}</h3>
             <p className="text-[10px] text-forgeGray-450 font-semibold uppercase mt-0.5 tracking-wider">
-              {role?.replace('_', ' ')} Portal
+              {(role || user?.role)?.replace('_', ' ')} Portal
             </p>
-            <p className="text-[10px] text-emerald-600 font-bold bg-emerald-100/50 px-2 py-0.5 rounded uppercase mt-2">
-              Account Active
-            </p>
+            <div className="flex flex-col items-center gap-1.5 mt-2">
+              <span className="text-[10px] text-emerald-600 font-bold bg-emerald-100/50 px-2 py-0.5 rounded uppercase">
+                Account Active
+              </span>
+              <span className="text-[10px] text-blue-600 font-bold bg-blue-100/50 px-2.5 py-0.5 rounded uppercase flex items-center gap-1">
+                <ShieldCheck className="w-3 h-3 text-blue-600" /> KYC Verified
+              </span>
+            </div>
 
             <div className="w-full border-t border-forgeGray-100 pt-6 mt-6 space-y-2">
-              <button onClick={() => navigate('/shared/settings')} className="w-full flex items-center justify-between p-2.5 hover:bg-forgeGray-50 text-xs font-semibold rounded-lg text-forgeGray-650">
+              <button type="button" onClick={() => navigate('/shared/settings')} className="w-full flex items-center justify-between p-2.5 hover:bg-forgeGray-50 text-xs font-semibold rounded-lg text-forgeGray-650">
                 <span className="flex items-center"><Settings className="w-4 h-4 mr-2" /> App Preferences</span>
                 <ChevronRight className="w-4 h-4 text-forgeGray-400" />
               </button>
+
+              <button type="button" onClick={() => navigate('/shared/security')} className="w-full flex items-center justify-between p-2.5 hover:bg-forgeGray-50 text-xs font-semibold rounded-lg text-forgeGray-650">
+                <span className="flex items-center"><ShieldCheck className="w-4 h-4 mr-2" /> Security & Password</span>
+                <ChevronRight className="w-4 h-4 text-forgeGray-400" />
+              </button>
               
-              <button onClick={handleLogout} className="w-full flex items-center p-2.5 hover:bg-red-50 text-xs font-semibold rounded-lg text-red-500">
+              <button type="button" onClick={handleLogout} className="w-full flex items-center p-2.5 hover:bg-red-50 text-xs font-semibold rounded-lg text-red-500">
                 <LogOut className="w-4 h-4 mr-2" /> Logout Session
               </button>
             </div>
@@ -211,6 +221,7 @@ export const ProfileModule: React.FC = () => {
                     label="Preferred Language"
                     options={[
                       { value: 'English', label: 'English' },
+                      { value: 'Telugu', label: 'Telugu' },
                       { value: 'Hindi', label: 'Hindi' },
                       { value: 'Kannada', label: 'Kannada' },
                       { value: 'Tamil', label: 'Tamil' },
@@ -248,20 +259,29 @@ export const ProfileModule: React.FC = () => {
                       ACCOUNT ACTIVE
                     </span>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3.5 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 text-xs font-semibold">
-                    <div>
-                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">STATE JURISDICTION</span>
-                      <p className="text-slate-900 font-extrabold mt-0.5">{user?.territory?.state || 'Andhra Pradesh'}</p>
+
+                  {(role === 'state' || user?.role === 'state') ? (
+                    <div className="p-3.5 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 text-xs font-semibold">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">STATE JURISDICTION ONLY</span>
+                      <p className="text-[#864f19] font-black text-sm mt-0.5">{user?.territory?.state || 'Andhra Pradesh'}</p>
+                      <p className="text-slate-500 text-[10px] font-medium mt-1">Full state operational scope covering all downstream Districts, Divisions, and Pincodes.</p>
                     </div>
-                    <div>
-                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">ASSIGNED DISTRICT</span>
-                      <p className="text-slate-900 font-extrabold mt-0.5">{user?.territory?.district || 'Visakhapatnam'}</p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3.5 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 text-xs font-semibold">
+                      <div>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">STATE JURISDICTION</span>
+                        <p className="text-slate-900 font-extrabold mt-0.5">{user?.territory?.state || 'Andhra Pradesh'}</p>
+                      </div>
+                      <div>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">ASSIGNED DISTRICT</span>
+                        <p className="text-slate-900 font-extrabold mt-0.5">{user?.territory?.district || 'Visakhapatnam'}</p>
+                      </div>
+                      <div>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">ASSIGNED DIVISION</span>
+                        <p className="text-[#864f19] font-black mt-0.5">{user?.territory?.division || 'Vizag City Division'}</p>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">ASSIGNED DIVISION</span>
-                      <p className="text-[#864f19] font-black mt-0.5">{user?.territory?.division || 'Vizag City Division'}</p>
-                    </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* Inline Vehicle Details Section */}

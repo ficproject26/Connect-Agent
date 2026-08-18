@@ -129,7 +129,14 @@ export const ReportsModule: React.FC = () => {
     }
   };
 
-  const tabs = [
+  const [drillDistrictFilter, setDrillDistrictFilter] = useState('all');
+  const [drillDivisionFilter, setDrillDivisionFilter] = useState('all');
+
+  const tabs = activeRole === 'state' ? [
+    { id: 'overview', label: 'State Overview' },
+    { id: 'performance', label: 'District/Division/Pincode Performance' },
+    { id: 'reports', label: 'State Reports' },
+  ] : [
     { id: 'overview', label: 'Division Overview' },
     { id: 'performance', label: 'Pincode / Agent Performance' },
     { id: 'reports', label: 'Division Reports' },
@@ -333,21 +340,25 @@ export const ReportsModule: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in text-[#1b1c1c] font-sans">
+    <div className="space-y-4 animate-fade-in text-[#1b1c1c] font-sans">
       
       {/* Top Title HUD Panel */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-6 rounded-[16px] border border-[#eae8e7] shadow-sm gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-5 rounded-[16px] border border-[#eae8e7] shadow-sm gap-4">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-black text-[#1b1c1c] font-sans">
-              Division Operations & Reports Analytics
+              {activeRole === 'state' ? 'State Operations & Reports Analytics' : 'Division Operations & Reports Analytics'}
             </h1>
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-[#864f19] text-white">
-              ROLE: DIVISION AGENT
+              {activeRole === 'state' ? 'ROLE: STATE AGENT' : 'ROLE: DIVISION AGENT'}
             </span>
           </div>
           <p className="text-xs font-semibold text-[#52443a] mt-1">
-            Territory Scope: <strong className="text-[#864f19]">{userState}</strong> → <strong className="text-[#864f19]">{userDistrict}</strong> → <strong className="text-[#864f19]">{userDivision}</strong> (Downstream Pincodes)
+            {activeRole === 'state' ? (
+              <>State Scope: <strong className="text-[#864f19]">{userState}</strong> (All Districts, Divisions & Downstream Pincodes)</>
+            ) : (
+              <>Territory Scope: <strong className="text-[#864f19]">{userState}</strong> → <strong className="text-[#864f19]">{userDistrict}</strong> → <strong className="text-[#864f19]">{userDivision}</strong> (Downstream Pincodes)</>
+            )}
           </p>
         </div>
 
@@ -396,12 +407,15 @@ export const ReportsModule: React.FC = () => {
         </div>
       </div>
 
-      {/* Division-Scoped Metrics KPI Cards Grid */}
+      {/* Tabs Header placed IMMEDIATELY below top title panel so table/content starts immediately below tab header */}
+      <Tabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} variant="underline" className="my-0" />
+
+      {/* Metrics KPI Cards Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">FIELD VISITS</span>
           <p className="text-xl font-black text-[#864f19] mt-1">{fieldVisitsCount}</p>
-          <span className="text-[10px] text-slate-500 font-semibold">Division Scope</span>
+          <span className="text-[10px] text-slate-500 font-semibold">{activeRole === 'state' ? 'State Scope' : 'Division Scope'}</span>
         </div>
 
         <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
@@ -435,8 +449,6 @@ export const ReportsModule: React.FC = () => {
         </div>
       </div>
 
-      <Tabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} variant="underline" className="mb-4" />
-
       {activeTab === 'overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Onboarding Velocity Line Chart */}
@@ -444,7 +456,7 @@ export const ReportsModule: React.FC = () => {
             <CardHeader>
               <div className="flex items-center space-x-2">
                 <TrendingUp className="w-5 h-5 text-[#864f19]" />
-                <CardTitle>Division Merchant Onboarding Curve — {timeframeOptions.find(o => o.value === timeframe)?.label || 'Live Overview'}</CardTitle>
+                <CardTitle>{activeRole === 'state' ? 'State Merchant Onboarding Curve' : 'Division Merchant Onboarding Curve'} — {timeframeOptions.find(o => o.value === timeframe)?.label || 'Live Overview'}</CardTitle>
               </div>
             </CardHeader>
             <CardBody>
@@ -471,10 +483,10 @@ export const ReportsModule: React.FC = () => {
             </CardBody>
           </Card>
 
-          {/* Division Category Shares Doughnut Chart */}
+          {/* Category Shares Doughnut Chart */}
           <Card className="lg:col-span-1">
             <CardHeader>
-              <CardTitle>Division Category Shares</CardTitle>
+              <CardTitle>{activeRole === 'state' ? 'State Category Shares' : 'Division Category Shares'}</CardTitle>
             </CardHeader>
             <CardBody>
               <Charts
@@ -495,18 +507,50 @@ export const ReportsModule: React.FC = () => {
 
       {activeTab === 'performance' && (
         <Card className="animate-fade-in">
-          <CardHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
+          <CardHeader className="pb-3 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div>
-              <CardTitle className="text-sm font-extrabold text-slate-800">Pincode & Agent Performance Ledger</CardTitle>
+              <CardTitle className="text-sm font-extrabold text-slate-800">
+                {activeRole === 'state' ? 'Statewide District, Division & Pincode Performance Ledger' : 'Pincode & Agent Performance Ledger'}
+              </CardTitle>
               <p className="text-[10px] text-slate-400 font-semibold mt-0.5 uppercase tracking-wider">
-                Performance breakdown of downstream Pincode Agents in {userDivision}
+                {activeRole === 'state' ? `Performance breakdown across all Districts, Divisions & Pincode Agents in ${userState}` : `Performance breakdown of downstream Pincode Agents in ${userDivision}`}
               </p>
             </div>
+
+            {activeRole === 'state' && (
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={drillDistrictFilter}
+                  onChange={(e) => setDrillDistrictFilter(e.target.value)}
+                  className="bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl px-2.5 py-1.5 text-xs font-bold text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19] cursor-pointer"
+                >
+                  <option value="all">📍 All Districts ({userState})</option>
+                  <option value="Visakhapatnam">Visakhapatnam District</option>
+                  <option value="NTR">NTR District (Vijayawada)</option>
+                  <option value="Guntur">Guntur District</option>
+                  <option value="Chittoor">Chittoor District</option>
+                </select>
+
+                <select
+                  value={drillDivisionFilter}
+                  onChange={(e) => setDrillDivisionFilter(e.target.value)}
+                  className="bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl px-2.5 py-1.5 text-xs font-bold text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19] cursor-pointer"
+                >
+                  <option value="all">🏢 All Divisions</option>
+                  <option value="Vizag City">Vizag City Division</option>
+                  <option value="Vijayawada Central">Vijayawada Central Division</option>
+                  <option value="Guntur City">Guntur City Division</option>
+                  <option value="Tirupati Central">Tirupati Central Division</option>
+                </select>
+              </div>
+            )}
           </CardHeader>
           <CardBody className="p-0 overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-[#fbf9f8] border-b border-[#eae8e7] text-[10px] font-black text-[#52443a] uppercase tracking-wider">
+                  {activeRole === 'state' && <th className="py-3.5 px-4">District</th>}
+                  {activeRole === 'state' && <th className="py-3.5 px-4">Division</th>}
                   <th className="py-3.5 px-4">Pincode</th>
                   <th className="py-3.5 px-4">Pincode Agent</th>
                   <th className="py-3.5 px-4 text-center">Active Vendors</th>
@@ -516,54 +560,86 @@ export const ReportsModule: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#eae8e7] text-xs font-semibold">
-                <tr className="hover:bg-[#f6f3f2]/40 transition">
-                  <td className="py-3.5 px-4 font-black text-[#864f19]">PIN 530001 (Central)</td>
-                  <td className="py-3.5 px-4 font-extrabold text-slate-900">raki pin</td>
-                  <td className="py-3.5 px-4 text-center font-bold text-slate-800">12 Vendors</td>
-                  <td className="py-3.5 px-4 text-center font-bold text-[#864f19]">8 / 20 Targets</td>
-                  <td className="py-3.5 px-4 text-center font-black text-emerald-700">88.5%</td>
-                  <td className="py-3.5 px-4 text-center">
-                    <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-[10px] rounded-full border border-emerald-200">
-                      Active
-                    </span>
-                  </td>
-                </tr>
-                <tr className="hover:bg-[#f6f3f2]/40 transition">
-                  <td className="py-3.5 px-4 font-black text-[#864f19]">PIN 530017 (MVP Colony)</td>
-                  <td className="py-3.5 px-4 font-extrabold text-slate-900">Kiran Kumar</td>
-                  <td className="py-3.5 px-4 text-center font-bold text-slate-800">10 Vendors</td>
-                  <td className="py-3.5 px-4 text-center font-bold text-[#864f19]">15 / 20 Targets</td>
-                  <td className="py-3.5 px-4 text-center font-black text-emerald-700">88.5%</td>
-                  <td className="py-3.5 px-4 text-center">
-                    <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-[10px] rounded-full border border-emerald-200">
-                      Active
-                    </span>
-                  </td>
-                </tr>
-                <tr className="hover:bg-[#f6f3f2]/40 transition">
-                  <td className="py-3.5 px-4 font-black text-[#864f19]">PIN 530018 (Madhavadhara)</td>
-                  <td className="py-3.5 px-4 font-extrabold text-slate-900">Ramesh Naidu</td>
-                  <td className="py-3.5 px-4 text-center font-bold text-slate-800">8 Vendors</td>
-                  <td className="py-3.5 px-4 text-center font-bold text-[#864f19]">12 / 20 Targets</td>
-                  <td className="py-3.5 px-4 text-center font-black text-emerald-700">88.5%</td>
-                  <td className="py-3.5 px-4 text-center">
-                    <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-[10px] rounded-full border border-emerald-200">
-                      Active
-                    </span>
-                  </td>
-                </tr>
-                <tr className="hover:bg-[#f6f3f2]/40 transition">
-                  <td className="py-3.5 px-4 font-black text-[#864f19]">PIN 530026 (Gajuwaka)</td>
-                  <td className="py-3.5 px-4 font-extrabold text-slate-900">Nageswara Rao</td>
-                  <td className="py-3.5 px-4 text-center font-bold text-slate-800">6 Vendors</td>
-                  <td className="py-3.5 px-4 text-center font-bold text-[#864f19]">10 / 20 Targets</td>
-                  <td className="py-3.5 px-4 text-center font-black text-emerald-700">88.5%</td>
-                  <td className="py-3.5 px-4 text-center">
-                    <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-[10px] rounded-full border border-emerald-200">
-                      Active
-                    </span>
-                  </td>
-                </tr>
+                {activeRole === 'state' ? (
+                  [
+                    { district: 'Visakhapatnam', division: 'Vizag City Division', pincode: 'PIN 530001 (Central)', agent: 'raki pin', vendors: '12 Vendors', targets: '8 / 20 Targets', score: '88.5%', status: 'Active' },
+                    { district: 'Visakhapatnam', division: 'Vizag City Division', pincode: 'PIN 530017 (MVP Colony)', agent: 'Kiran Kumar', vendors: '10 Vendors', targets: '15 / 20 Targets', score: '88.5%', status: 'Active' },
+                    { district: 'Visakhapatnam', division: 'Vizag City Division', pincode: 'PIN 530018 (Madhavadhara)', agent: 'Ramesh Naidu', vendors: '8 Vendors', targets: '12 / 20 Targets', score: '88.5%', status: 'Active' },
+                    { district: 'NTR District', division: 'Vijayawada Central Division', pincode: 'PIN 520001 (Central)', agent: 'Governorpet Agent', vendors: '15 Vendors', targets: '18 / 20 Targets', score: '92.0%', status: 'Active' },
+                    { district: 'NTR District', division: 'Vijayawada Central Division', pincode: 'PIN 520007 (Autonagar)', agent: 'Autonagar Agent', vendors: '11 Vendors', targets: '14 / 20 Targets', score: '85.4%', status: 'Active' },
+                    { district: 'Guntur', division: 'Guntur City Division', pincode: 'PIN 522002 (Kothapet)', agent: 'Guntur Agent', vendors: '9 Vendors', targets: '10 / 20 Targets', score: '78.0%', status: 'Active' },
+                    { district: 'Chittoor', division: 'Tirupati Central Division', pincode: 'PIN 517501 (Tirupati Central)', agent: 'Tirupati Agent', vendors: '14 Vendors', targets: '16 / 20 Targets', score: '90.5%', status: 'Active' },
+                  ]
+                    .filter(item => drillDistrictFilter === 'all' || item.district.toLowerCase().includes(drillDistrictFilter.toLowerCase()))
+                    .filter(item => drillDivisionFilter === 'all' || item.division.toLowerCase().includes(drillDivisionFilter.toLowerCase()))
+                    .map((row, idx) => (
+                      <tr key={idx} className="hover:bg-[#f6f3f2]/40 transition">
+                        <td className="py-3.5 px-4 font-bold text-slate-800">{row.district}</td>
+                        <td className="py-3.5 px-4 font-bold text-[#34647b]">{row.division}</td>
+                        <td className="py-3.5 px-4 font-black text-[#864f19]">{row.pincode}</td>
+                        <td className="py-3.5 px-4 font-extrabold text-slate-900">{row.agent}</td>
+                        <td className="py-3.5 px-4 text-center font-bold text-slate-800">{row.vendors}</td>
+                        <td className="py-3.5 px-4 text-center font-bold text-[#864f19]">{row.targets}</td>
+                        <td className="py-3.5 px-4 text-center font-black text-emerald-700">{row.score}</td>
+                        <td className="py-3.5 px-4 text-center">
+                          <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-[10px] rounded-full border border-emerald-200">
+                            {row.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                ) : (
+                  <>
+                    <tr className="hover:bg-[#f6f3f2]/40 transition">
+                      <td className="py-3.5 px-4 font-black text-[#864f19]">PIN 530001 (Central)</td>
+                      <td className="py-3.5 px-4 font-extrabold text-slate-900">raki pin</td>
+                      <td className="py-3.5 px-4 text-center font-bold text-slate-800">12 Vendors</td>
+                      <td className="py-3.5 px-4 text-center font-bold text-[#864f19]">8 / 20 Targets</td>
+                      <td className="py-3.5 px-4 text-center font-black text-emerald-700">88.5%</td>
+                      <td className="py-3.5 px-4 text-center">
+                        <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-[10px] rounded-full border border-emerald-200">
+                          Active
+                        </span>
+                      </td>
+                    </tr>
+                    <tr className="hover:bg-[#f6f3f2]/40 transition">
+                      <td className="py-3.5 px-4 font-black text-[#864f19]">PIN 530017 (MVP Colony)</td>
+                      <td className="py-3.5 px-4 font-extrabold text-slate-900">Kiran Kumar</td>
+                      <td className="py-3.5 px-4 text-center font-bold text-slate-800">10 Vendors</td>
+                      <td className="py-3.5 px-4 text-center font-bold text-[#864f19]">15 / 20 Targets</td>
+                      <td className="py-3.5 px-4 text-center font-black text-emerald-700">88.5%</td>
+                      <td className="py-3.5 px-4 text-center">
+                        <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-[10px] rounded-full border border-emerald-200">
+                          Active
+                        </span>
+                      </td>
+                    </tr>
+                    <tr className="hover:bg-[#f6f3f2]/40 transition">
+                      <td className="py-3.5 px-4 font-black text-[#864f19]">PIN 530018 (Madhavadhara)</td>
+                      <td className="py-3.5 px-4 font-extrabold text-slate-900">Ramesh Naidu</td>
+                      <td className="py-3.5 px-4 text-center font-bold text-slate-800">8 Vendors</td>
+                      <td className="py-3.5 px-4 text-center font-bold text-[#864f19]">12 / 20 Targets</td>
+                      <td className="py-3.5 px-4 text-center font-black text-emerald-700">88.5%</td>
+                      <td className="py-3.5 px-4 text-center">
+                        <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-[10px] rounded-full border border-emerald-200">
+                          Active
+                        </span>
+                      </td>
+                    </tr>
+                    <tr className="hover:bg-[#f6f3f2]/40 transition">
+                      <td className="py-3.5 px-4 font-black text-[#864f19]">PIN 530026 (Gajuwaka)</td>
+                      <td className="py-3.5 px-4 font-extrabold text-slate-900">Nageswara Rao</td>
+                      <td className="py-3.5 px-4 text-center font-bold text-slate-800">6 Vendors</td>
+                      <td className="py-3.5 px-4 text-center font-bold text-[#864f19]">10 / 20 Targets</td>
+                      <td className="py-3.5 px-4 text-center font-black text-emerald-700">88.5%</td>
+                      <td className="py-3.5 px-4 text-center">
+                        <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-[10px] rounded-full border border-emerald-200">
+                          Active
+                        </span>
+                      </td>
+                    </tr>
+                  </>
+                )}
               </tbody>
             </table>
           </CardBody>
@@ -573,13 +649,15 @@ export const ReportsModule: React.FC = () => {
       {activeTab === 'reports' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in text-xs text-slate-800">
           
-          {/* Submit/Upload Division Field Report Card */}
+          {/* Submit/Upload Field Report Card */}
           <div className="lg:col-span-1 bg-white rounded-[16px] border border-[#eae8e7] p-6 shadow-sm h-fit space-y-4">
             <div className="border-b border-[#eae8e7] pb-3">
               <h3 className="font-extrabold text-sm text-[#1b1c1c] flex items-center gap-1.5">
-                <Upload className="w-4 h-4 text-[#864f19]" /> Submit Division Report
+                <Upload className="w-4 h-4 text-[#864f19]" /> {activeRole === 'state' ? 'Submit State Report' : 'Submit Division Report'}
               </h3>
-              <p className="text-[10px] text-slate-500 mt-0.5 font-medium">Upload signed daily division reports, audit logs, or target performance summaries.</p>
+              <p className="text-[10px] text-slate-500 mt-0.5 font-medium">
+                {activeRole === 'state' ? 'Upload signed daily state operational reports, audit logs, or state performance summaries.' : 'Upload signed daily division reports, audit logs, or target performance summaries.'}
+              </p>
             </div>
 
             {submitError && (
@@ -596,10 +674,21 @@ export const ReportsModule: React.FC = () => {
                   onChange={(e) => setReportType(e.target.value)}
                   className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                 >
-                  <option value="Daily Division Report">Daily Division Report</option>
-                  <option value="Weekly Division Report">Weekly Division Report</option>
-                  <option value="Target Performance Report">Target Performance Report</option>
-                  <option value="Agent/Vendor Performance Report">Agent/Vendor Performance Report</option>
+                  {activeRole === 'state' ? (
+                    <>
+                      <option value="Daily State Report">Daily State Report</option>
+                      <option value="Weekly State Report">Weekly State Report</option>
+                      <option value="District Performance Report">District Performance Report</option>
+                      <option value="State Operational Audit Report">State Operational Audit Report</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="Daily Division Report">Daily Division Report</option>
+                      <option value="Weekly Division Report">Weekly Division Report</option>
+                      <option value="Target Performance Report">Target Performance Report</option>
+                      <option value="Agent/Vendor Performance Report">Agent/Vendor Performance Report</option>
+                    </>
+                  )}
                 </select>
               </div>
 
@@ -623,7 +712,7 @@ export const ReportsModule: React.FC = () => {
                 <textarea
                   value={reportRemarks}
                   onChange={(e) => setReportRemarks(e.target.value)}
-                  placeholder="Summarize division visits, onboardings completed, or key field findings..."
+                  placeholder={activeRole === 'state' ? "Summarize state visits, district performance, onboardings completed, or key state field findings..." : "Summarize division visits, onboardings completed, or key field findings..."}
                   rows={3}
                   className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19] resize-none"
                 />
@@ -670,7 +759,7 @@ export const ReportsModule: React.FC = () => {
                   </>
                 ) : (
                   <>
-                    <Upload className="w-3.5 h-3.5" /> Submit Report
+                    <Upload className="w-3.5 h-3.5" /> {activeRole === 'state' ? 'Submit State Report' : 'Submit Report'}
                   </>
                 )}
               </button>
@@ -681,8 +770,12 @@ export const ReportsModule: React.FC = () => {
           <Card className="lg:col-span-2">
             <CardHeader className="pb-2 border-b border-slate-50 flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-sm font-extrabold text-slate-800">Submitted Division Reports Ledger</CardTitle>
-                <p className="text-[10px] text-slate-450 font-semibold mt-0.5 uppercase tracking-wider">Logs of submitted division reports and review status</p>
+                <CardTitle className="text-sm font-extrabold text-slate-800">
+                  {activeRole === 'state' ? 'Submitted State Reports Ledger' : 'Submitted Division Reports Ledger'}
+                </CardTitle>
+                <p className="text-[10px] text-slate-450 font-semibold mt-0.5 uppercase tracking-wider">
+                  {activeRole === 'state' ? 'Logs of submitted state reports and review status' : 'Logs of submitted division reports and review status'}
+                </p>
               </div>
             </CardHeader>
             <CardBody className="p-0">
@@ -695,7 +788,9 @@ export const ReportsModule: React.FC = () => {
                 <div className="flex flex-col items-center justify-center py-12 text-slate-400 gap-1.5">
                   <FileText className="w-8 h-8 text-slate-300" />
                   <span className="font-bold">No reports submitted yet</span>
-                  <span className="text-[10px] text-slate-450">Upload your first division report using the form on the left</span>
+                  <span className="text-[10px] text-slate-450">
+                    {activeRole === 'state' ? 'Upload your first state report using the form on the left' : 'Upload your first division report using the form on the left'}
+                  </span>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -713,7 +808,7 @@ export const ReportsModule: React.FC = () => {
                       {reports.map((rep) => (
                         <tr key={rep._id || Math.random()} className="hover:bg-[#fbf9f8] transition-colors">
                           <td className="py-3 px-4 font-bold text-[#864f19]">
-                            {rep.reportType || rep.type || 'Division Report'}
+                            {rep.reportType || rep.type || (activeRole === 'state' ? 'State Report' : 'Division Report')}
                           </td>
                           <td className="py-3 px-4 flex items-center gap-1.5 text-slate-700">
                             <FileText className="w-3.5 h-3.5 text-[#864f19]" />
