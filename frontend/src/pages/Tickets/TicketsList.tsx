@@ -22,7 +22,8 @@ interface SupportTicket {
 
 export const TicketsList: React.FC = () => {
   const { user } = useAuth();
-  const activeRole = (user?.role as string) || 'state';
+  const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';
+  const activeRole = (rawRole === 'agent' ? ((user as any)?.level || 'pincode') : rawRole).toLowerCase();
   const userState = user?.territory?.state || 'Andhra Pradesh';
 
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
@@ -290,16 +291,16 @@ export const TicketsList: React.FC = () => {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-black text-[#1b1c1c] font-sans">
-              {activeRole === 'state' ? 'State Support & Escalation Desk' : 'Division Support & Escalation Desk'}
+              {activeRole.charAt(0).toUpperCase() + activeRole.slice(1)} Support & Escalation Desk
             </h1>
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-[#864f19] text-white">
-              {activeRole === 'state' ? 'STATE SCOPE' : 'DIVISION SCOPE'}
+              {activeRole.toUpperCase()} SCOPE
             </span>
           </div>
           <p className="text-xs font-semibold text-[#52443a] mt-1 uppercase tracking-wider">
             {activeRole === 'state'
               ? `MANAGE AND RESOLVE STATE-WIDE ESCALATED SUPPORT TICKETS ACROSS ALL DISTRICTS, DIVISIONS, AND PINCODE AGENTS IN ${userState}.`
-              : 'SUBMIT MERCHANT QUERIES, KYC DOCUMENT DISPUTES, OR ESCALATE TICKETS ACROSS ASSIGNED DIVISION AND DOWNSTREAM PINCODE AGENTS.'}
+              : `SUBMIT MERCHANT QUERIES, KYC DOCUMENT DISPUTES, OR ESCALATE TICKETS ACROSS ASSIGNED ${activeRole.toUpperCase()} TERRITORY.`}
           </p>
         </div>
       </div>
@@ -317,7 +318,7 @@ export const TicketsList: React.FC = () => {
           <Card>
             <CardHeader className="border-b border-slate-50 pb-3 flex flex-row items-center justify-between">
               <CardTitle className="text-sm font-extrabold text-slate-800">
-                {activeRole === 'state' ? 'Statewide Support & Escalation Logs' : 'Support Ticket Logs'}
+                {activeRole.charAt(0).toUpperCase() + activeRole.slice(1)} Support & Escalation Logs
               </CardTitle>
               {activeRole === 'state' && (
                 <span className="text-[10px] font-black text-[#864f19] bg-[#ffdcc2] px-2.5 py-0.5 rounded-full uppercase tracking-wider">

@@ -17,7 +17,8 @@ interface Transaction {
 
 export const WalletDashboard: React.FC = () => {
   const { user } = useAuth();
-  const activeRole = (user?.role as string) || 'state';
+  const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';
+  const activeRole = (rawRole === 'agent' ? ((user as any)?.level || 'pincode') : rawRole).toLowerCase();
   const userState = user?.territory?.state || 'Andhra Pradesh';
 
   const [balance, setBalance] = useState<number>(0);
@@ -305,21 +306,13 @@ export const WalletDashboard: React.FC = () => {
       <div className="bg-white p-6 rounded-[16px] border border-[#eae8e7] shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative overflow-hidden">
         <div className="space-y-1">
           <span className="text-[10px] text-[#864f19] font-bold uppercase tracking-widest block">
-            {activeRole === 'state' ? 'STATE REVENUE & PAYOUT HUB' : 'DIVISION AGENT REVENUE & PAYOUT HUB'}
+            {activeRole.toUpperCase()} AGENT REVENUE & PAYOUT HUB
           </span>
           <h2 className="text-2xl font-black tracking-tight text-[#1b1c1c]">
-            {activeRole === 'state' ? 'State E-Wallet & Earnings' : 'E-Wallet & Earnings'}
+            {activeRole.charAt(0).toUpperCase() + activeRole.slice(1)} E-Wallet & Earnings
           </h2>
           <p className="text-xs text-[#52443a] max-w-xl font-medium">
-            {activeRole === 'state' ? (
-              <>
-                Assigned State Agent: <strong className="text-[#1b1c1c]">{user?.name || 'State Manager'}</strong> (<span className="text-[#864f19] font-bold">State Scope: {userState}</span>) • State Override Commissions & Performance Incentives Only
-              </>
-            ) : (
-              <>
-                Assigned Agent: <strong className="text-[#1b1c1c]">{user?.name || 'Division Manager'}</strong> (<span className="text-[#864f19] font-bold">Division Scope: {user?.territory?.division || 'Vizag City Division'}</span>) • Direct Shop Tie-up Commissions & Performance Incentives Only
-              </>
-            )}
+            Assigned Agent: <strong className="text-[#1b1c1c]">{user?.name || 'Logged Agent'}</strong> (<span className="text-[#864f19] font-bold">{activeRole.charAt(0).toUpperCase() + activeRole.slice(1)} Scope: {activeRole === 'state' ? userState : activeRole === 'district' ? (user?.territory?.district || 'District') : activeRole === 'division' ? (user?.territory?.division || 'Division') : `PIN ${user?.territory?.pincode || 'Pincode'}`}</span>) • Commissions & Performance Incentives
           </p>
         </div>
       </div>

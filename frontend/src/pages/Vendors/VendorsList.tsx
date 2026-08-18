@@ -90,8 +90,8 @@ export const VendorsList: React.FC = () => {
     }
   });
 
-  // Active Role and Territory Scope
-  const activeRole = (user?.role as string) || 'state';
+  const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';
+  const activeRole = (rawRole === 'agent' ? ((user as any)?.level || 'pincode') : rawRole).toLowerCase();
   const userState = user?.territory?.state || 'Andhra Pradesh';
   const userDistrict = user?.territory?.district || 'NTR District';
   const userDivision = user?.territory?.division || 'Vijayawada Central Division';

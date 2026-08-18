@@ -33,7 +33,8 @@ interface FieldVisitRecord {
 export const FieldVisitsModule: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const activeRole = (user?.role as string) || 'state';
+  const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';
+  const activeRole = (rawRole === 'agent' ? ((user as any)?.level || 'pincode') : rawRole).toLowerCase();
   const userState = user?.territory?.state || 'Andhra Pradesh';
   const userDistrict = user?.territory?.district || 'Visakhapatnam';
   const userDivision = user?.territory?.division || 'Vizag City Division';

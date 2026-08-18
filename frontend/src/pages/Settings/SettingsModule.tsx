@@ -22,7 +22,8 @@ export const SettingsModule: React.FC = () => {
     triggerSound,
     logout
   } = useAuth();
-  const activeRole = (user?.role as string) || 'state';
+  const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';
+  const activeRole = (rawRole === 'agent' ? ((user as any)?.level || 'pincode') : rawRole).toLowerCase();
   const userState = user?.territory?.state || 'Andhra Pradesh';
 
   // Pincode Agent Alert Toggles State

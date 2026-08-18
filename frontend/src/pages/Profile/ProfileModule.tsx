@@ -260,28 +260,76 @@ export const ProfileModule: React.FC = () => {
                     </span>
                   </div>
 
-                  {(role === 'state' || user?.role === 'state') ? (
-                    <div className="p-3.5 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 text-xs font-semibold">
-                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">STATE JURISDICTION ONLY</span>
-                      <p className="text-[#864f19] font-black text-sm mt-0.5">{user?.territory?.state || 'Andhra Pradesh'}</p>
-                      <p className="text-slate-500 text-[10px] font-medium mt-1">Full state operational scope covering all downstream Districts, Divisions, and Pincodes.</p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3.5 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 text-xs font-semibold">
-                      <div>
-                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">STATE JURISDICTION</span>
-                        <p className="text-slate-900 font-extrabold mt-0.5">{user?.territory?.state || 'Andhra Pradesh'}</p>
+                  {(() => {
+                    const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';
+                    const uRole = (rawRole === 'agent' ? ((user as any)?.level || 'pincode') : rawRole).toLowerCase();
+
+                    if (uRole === 'state') {
+                      return (
+                        <div className="p-3.5 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 text-xs font-semibold">
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">STATE JURISDICTION ONLY</span>
+                          <p className="text-[#864f19] font-black text-sm mt-0.5">{user?.territory?.state || (user as any)?.state || 'Andhra Pradesh'}</p>
+                          <p className="text-slate-500 text-[10px] font-medium mt-1">Full state operational scope covering all downstream Districts, Divisions, and Pincodes.</p>
+                        </div>
+                      );
+                    }
+
+                    if (uRole === 'district') {
+                      return (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3.5 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 text-xs font-semibold">
+                          <div>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">STATE JURISDICTION</span>
+                            <p className="text-slate-900 font-extrabold mt-0.5">{user?.territory?.state || (user as any)?.state || 'Andhra Pradesh'}</p>
+                          </div>
+                          <div>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">ASSIGNED DISTRICT</span>
+                            <p className="text-[#864f19] font-black mt-0.5">{user?.territory?.district || (user as any)?.district || 'Visakhapatnam'}</p>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    if (uRole === 'division') {
+                      return (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3.5 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 text-xs font-semibold">
+                          <div>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">STATE JURISDICTION</span>
+                            <p className="text-slate-900 font-extrabold mt-0.5">{user?.territory?.state || (user as any)?.state || 'Andhra Pradesh'}</p>
+                          </div>
+                          <div>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">ASSIGNED DISTRICT</span>
+                            <p className="text-slate-900 font-extrabold mt-0.5">{user?.territory?.district || (user as any)?.district || 'Visakhapatnam'}</p>
+                          </div>
+                          <div>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">ASSIGNED DIVISION</span>
+                            <p className="text-[#864f19] font-black mt-0.5">{user?.territory?.division || (user as any)?.division || 'Vizag City Division'}</p>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Pincode Agent
+                    return (
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-3.5 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 text-xs font-semibold">
+                        <div>
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">STATE</span>
+                          <p className="text-slate-900 font-extrabold mt-0.5">{user?.territory?.state || (user as any)?.state || 'Andhra Pradesh'}</p>
+                        </div>
+                        <div>
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">DISTRICT</span>
+                          <p className="text-slate-900 font-extrabold mt-0.5">{user?.territory?.district || (user as any)?.district || 'Visakhapatnam'}</p>
+                        </div>
+                        <div>
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">DIVISION</span>
+                          <p className="text-slate-900 font-extrabold mt-0.5">{user?.territory?.division || (user as any)?.division || 'Vizag City Division'}</p>
+                        </div>
+                        <div>
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">ASSIGNED PINCODE</span>
+                          <p className="text-[#864f19] font-black mt-0.5">PIN {user?.territory?.pincode || (user as any)?.pincode || '530001'}</p>
+                        </div>
                       </div>
-                      <div>
-                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">ASSIGNED DISTRICT</span>
-                        <p className="text-slate-900 font-extrabold mt-0.5">{user?.territory?.district || 'Visakhapatnam'}</p>
-                      </div>
-                      <div>
-                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">ASSIGNED DIVISION</span>
-                        <p className="text-[#864f19] font-black mt-0.5">{user?.territory?.division || 'Vizag City Division'}</p>
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
 
                 {/* Inline Vehicle Details Section */}

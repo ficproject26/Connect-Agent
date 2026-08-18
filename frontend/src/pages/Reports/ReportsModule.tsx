@@ -6,7 +6,14 @@ import api from '../../utils/api';
 
 export const ReportsModule: React.FC = () => {
   const { user, addNotification } = useAuth();
-  const activeRole = (user?.role as string) || 'state';
+  const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';
+  const activeRole = (rawRole === 'agent' ? ((user as any)?.level || 'pincode') : rawRole).toLowerCase();
+
+  const userPincode = user?.territory?.pincode || (user as any)?.assignedPincode || (user as any)?.pincode || '530001';
+  const userDivision = user?.territory?.division || (user as any)?.assignedDivision || (user as any)?.division || 'Vizag City Division';
+  const userDistrict = user?.territory?.district || (user as any)?.assignedDistrict || (user as any)?.district || 'Visakhapatnam';
+  const userState = user?.territory?.state || (user as any)?.assignedState || (user as any)?.state || 'Andhra Pradesh';
+
   const [activeTab, setActiveTab] = useState('overview');
   const [timeframe, setTimeframe] = useState<'today' | 'weekly' | 'monthly' | 'date'>('today');
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().slice(0, 10));
@@ -132,15 +139,34 @@ export const ReportsModule: React.FC = () => {
   const [drillDistrictFilter, setDrillDistrictFilter] = useState('all');
   const [drillDivisionFilter, setDrillDivisionFilter] = useState('all');
 
-  const tabs = activeRole === 'state' ? [
-    { id: 'overview', label: 'State Overview' },
-    { id: 'performance', label: 'District/Division/Pincode Performance' },
-    { id: 'reports', label: 'State Reports' },
-  ] : [
-    { id: 'overview', label: 'Division Overview' },
-    { id: 'performance', label: 'Pincode / Agent Performance' },
-    { id: 'reports', label: 'Division Reports' },
-  ];
+  const tabs = useMemo(() => {
+    if (activeRole === 'state') {
+      return [
+        { id: 'overview', label: 'State Overview' },
+        { id: 'performance', label: 'District/Division/Pincode Performance' },
+        { id: 'reports', label: 'State Reports' },
+      ];
+    }
+    if (activeRole === 'district') {
+      return [
+        { id: 'overview', label: 'District Overview' },
+        { id: 'performance', label: 'Division & Pincode Performance' },
+        { id: 'reports', label: 'District Reports' },
+      ];
+    }
+    if (activeRole === 'division') {
+      return [
+        { id: 'overview', label: 'Division Overview' },
+        { id: 'performance', label: 'Pincode / Agent Performance' },
+        { id: 'reports', label: 'Division Reports' },
+      ];
+    }
+    return [
+      { id: 'overview', label: 'Pincode Overview' },
+      { id: 'performance', label: 'Vendor / Performance' },
+      { id: 'reports', label: 'Pincode Reports' },
+    ];
+  }, [activeRole]);
 
   const timeframeOptions = [
     { value: 'today', label: 'Today (Live Hourly)' },
@@ -153,10 +179,6 @@ export const ReportsModule: React.FC = () => {
   const [realVisits, setRealVisits] = useState<any[]>([]);
   const [realTargets, setRealTargets] = useState<any[]>([]);
   const [realTickets, setRealTickets] = useState<any[]>([]);
-
-  const userDivision = user?.territory?.division || 'Vizag City Division';
-  const userDistrict = user?.territory?.district || 'Visakhapatnam';
-  const userState = user?.territory?.state || 'Andhra Pradesh';
 
   useEffect(() => {
     // Load real vendors
@@ -278,7 +300,7 @@ export const ReportsModule: React.FC = () => {
       const printWindow = window.open('', '_blank');
       if (!printWindow) return;
 
-      const title = `Division_Operations_Report_${new Date().toISOString().slice(0, 10)}`;
+      const title = `${activeRole.toUpperCase()}_Operations_Report_${new Date().toISOString().slice(0, 10)}`;
       
       const htmlContent = `
         <html>
@@ -299,8 +321,8 @@ export const ReportsModule: React.FC = () => {
             <div class="header">
               <div class="logo">CONNECT AGENT PORTAL</div>
               <div class="title">
-                <h1>DIVISION OPERATIONS & ANALYTICS REPORT</h1>
-                <p>Division Scope: ${userDivision} (${userDistrict})</p>
+                <h1>${activeRole.toUpperCase()} OPERATIONS & ANALYTICS REPORT</h1>
+                <p>Scope: ${userState} ${userDistrict ? `→ ${userDistrict}` : ''} ${userDivision ? `→ ${userDivision}` : ''}</p>
               </div>
             </div>
             <div class="meta-grid">
@@ -331,8 +353,8 @@ export const ReportsModule: React.FC = () => {
       printWindow.document.close();
 
       addNotification(
-        'Division Analytics Report Exported',
-        `Successfully generated and printed the ${timeframe.toUpperCase()} division operations report.`,
+        'Analytics Report Exported',
+        `Successfully generated and printed the ${timeframe.toUpperCase()} operations report.`,
         'high',
         'system'
       );
@@ -347,17 +369,27 @@ export const ReportsModule: React.FC = () => {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-black text-[#1b1c1c] font-sans">
-              {activeRole === 'state' ? 'State Operations & Reports Analytics' : 'Division Operations & Reports Analytics'}
+              {activeRole === 'state' && 'State Operations & Reports Analytics'}
+              {activeRole === 'district' && 'District Operations & Reports Analytics'}
+              {activeRole === 'division' && 'Division Operations & Reports Analytics'}
+              {activeRole === 'pincode' && 'Pincode Operations & Reports Analytics'}
             </h1>
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-[#864f19] text-white">
-              {activeRole === 'state' ? 'ROLE: STATE AGENT' : 'ROLE: DIVISION AGENT'}
+              ROLE: {activeRole.toUpperCase()} AGENT
             </span>
           </div>
           <p className="text-xs font-semibold text-[#52443a] mt-1">
-            {activeRole === 'state' ? (
+            {activeRole === 'state' && (
               <>State Scope: <strong className="text-[#864f19]">{userState}</strong> (All Districts, Divisions & Downstream Pincodes)</>
-            ) : (
+            )}
+            {activeRole === 'district' && (
+              <>District Scope: <strong className="text-[#864f19]">{userState}</strong> → <strong className="text-[#864f19]">{userDistrict}</strong> (Downstream Divisions & Pincodes)</>
+            )}
+            {activeRole === 'division' && (
               <>Territory Scope: <strong className="text-[#864f19]">{userState}</strong> → <strong className="text-[#864f19]">{userDistrict}</strong> → <strong className="text-[#864f19]">{userDivision}</strong> (Downstream Pincodes)</>
+            )}
+            {activeRole === 'pincode' && (
+              <>Pincode Scope: <strong className="text-[#864f19]">{userState}</strong> → <strong className="text-[#864f19]">{userDistrict}</strong> → <strong className="text-[#864f19]">{userDivision}</strong> → <strong className="text-[#864f19]">PIN {userPincode}</strong></>
             )}
           </p>
         </div>

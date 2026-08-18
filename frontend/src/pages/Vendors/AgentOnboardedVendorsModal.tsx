@@ -42,7 +42,7 @@ export const AgentOnboardedVendorsModal: React.FC<AgentOnboardedVendorsModalProp
 }) => {
   const { user } = useAuth();
   
-  const rawRole = (user?.role as string) || (user as any)?.level || 'state';
+  const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';
   const effectiveRole = (rawRole === 'agent' ? ((user as any)?.level || 'pincode') : rawRole).toLowerCase();
   const userState = user?.territory?.state || 'Andhra Pradesh';
 
