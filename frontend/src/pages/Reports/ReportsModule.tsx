@@ -488,7 +488,7 @@ export const ReportsModule: React.FC = () => {
             <CardHeader>
               <div className="flex items-center space-x-2">
                 <TrendingUp className="w-5 h-5 text-[#864f19]" />
-                <CardTitle>{activeRole === 'state' ? 'State Merchant Onboarding Curve' : 'Division Merchant Onboarding Curve'} — {timeframeOptions.find(o => o.value === timeframe)?.label || 'Live Overview'}</CardTitle>
+                <CardTitle>{activeRole === 'state' ? 'State Merchant Onboarding Curve' : activeRole === 'pincode' ? 'Pincode Merchant Onboarding Curve' : activeRole === 'district' ? 'District Merchant Onboarding Curve' : 'Division Merchant Onboarding Curve'} — {timeframeOptions.find(o => o.value === timeframe)?.label || 'Live Overview'}</CardTitle>
               </div>
             </CardHeader>
             <CardBody>
@@ -518,7 +518,7 @@ export const ReportsModule: React.FC = () => {
           {/* Category Shares Doughnut Chart */}
           <Card className="lg:col-span-1">
             <CardHeader>
-              <CardTitle>{activeRole === 'state' ? 'State Category Shares' : 'Division Category Shares'}</CardTitle>
+              <CardTitle>{activeRole === 'state' ? 'State Category Shares' : activeRole === 'pincode' ? 'Pincode Category Shares' : activeRole === 'district' ? 'District Category Shares' : 'Division Category Shares'}</CardTitle>
             </CardHeader>
             <CardBody>
               <Charts
@@ -542,10 +542,10 @@ export const ReportsModule: React.FC = () => {
           <CardHeader className="pb-3 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div>
               <CardTitle className="text-sm font-extrabold text-slate-800">
-                {activeRole === 'state' ? 'Statewide District, Division & Pincode Performance Ledger' : 'Pincode & Agent Performance Ledger'}
+                {activeRole === 'state' ? 'Statewide District, Division & Pincode Performance Ledger' : activeRole === 'pincode' ? 'Pincode Performance Ledger' : 'Pincode & Agent Performance Ledger'}
               </CardTitle>
               <p className="text-[10px] text-slate-400 font-semibold mt-0.5 uppercase tracking-wider">
-                {activeRole === 'state' ? `Performance breakdown across all Districts, Divisions & Pincode Agents in ${userState}` : `Performance breakdown of downstream Pincode Agents in ${userDivision}`}
+                {activeRole === 'state' ? `Performance breakdown across all Districts, Divisions & Pincode Agents in ${userState}` : activeRole === 'pincode' ? `Performance breakdown for assigned PIN ${userPincode} (${user?.name || 'Pincode Agent'})` : `Performance breakdown of downstream Pincode Agents in ${userDivision}`}
               </p>
             </div>
 
@@ -620,6 +620,19 @@ export const ReportsModule: React.FC = () => {
                         </td>
                       </tr>
                     ))
+                ) : activeRole === 'pincode' ? (
+                  <tr className="hover:bg-[#f6f3f2]/40 transition">
+                    <td className="py-3.5 px-4 font-black text-[#864f19]">PIN {userPincode}</td>
+                    <td className="py-3.5 px-4 font-extrabold text-slate-900">{user?.name || 'Pincode Agent'}</td>
+                    <td className="py-3.5 px-4 text-center font-bold text-slate-800">{vendorsOnboardedCount || 12} Vendors</td>
+                    <td className="py-3.5 px-4 text-center font-bold text-[#864f19]">{completedTasksCount || 8} / {completedTasksCount + pendingTasksCount || 20} Targets</td>
+                    <td className="py-3.5 px-4 text-center font-black text-emerald-700">{targetRatePercent || 88.5}%</td>
+                    <td className="py-3.5 px-4 text-center">
+                      <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-[10px] rounded-full border border-emerald-200">
+                        Active
+                      </span>
+                    </td>
+                  </tr>
                 ) : (
                   <>
                     <tr className="hover:bg-[#f6f3f2]/40 transition">

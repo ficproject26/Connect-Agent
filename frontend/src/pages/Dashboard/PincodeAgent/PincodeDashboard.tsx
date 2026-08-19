@@ -343,28 +343,50 @@ export const PincodeDashboard: React.FC = () => {
             <p className="text-[10px] text-[#52443a] mt-0.5">Submit merchant disputes or verification issues.</p>
           </div>
           
-          <form onSubmit={handleRaiseTicket} className="space-y-4 flex-grow flex flex-col justify-between">
+          <form onSubmit={handleRaiseTicket} className="space-y-3 flex-grow flex flex-col justify-between">
             <div className="space-y-1">
-              <label className="block text-[9px] font-bold text-[#52443a] uppercase tracking-wider">Ticket Category</label>
+              <label className="block text-[9px] font-bold text-[#52443a] uppercase tracking-wider">Vendor Name *</label>
+              <input
+                type="text"
+                readOnly
+                value={user?.name ? `${user.name} Merchant` : 'Sri Rama Merchant'}
+                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs font-bold text-[#1b1c1c] focus:outline-none"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-[9px] font-bold text-[#52443a] uppercase tracking-wider">Store Name *</label>
+              <input
+                type="text"
+                readOnly
+                value="Sri Rama Supermarket"
+                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs font-bold text-[#864f19] focus:outline-none"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-[9px] font-bold text-[#52443a] uppercase tracking-wider">Ticket Category *</label>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3.5 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
               >
-                <option>Vendor Query</option>
-                <option>KYC Document Issue</option>
-                <option>Portal Account Block</option>
+                <option value="Vendor Query">Vendor Query</option>
+                <option value="KYC Document Issue">KYC Document Issue</option>
+                <option value="Portal Account Block">Portal Account Block</option>
+                <option value="Hardware / QR Standee Request">Hardware / QR Standee Request</option>
               </select>
             </div>
 
             <div className="space-y-1">
-              <label className="block text-[9px] font-bold text-[#52443a] uppercase tracking-wider">Ticket Details</label>
+              <label className="block text-[9px] font-bold text-[#52443a] uppercase tracking-wider">Ticket Details *</label>
               <textarea
+                required
                 value={ticketDesc}
                 onChange={(e) => setTicketDesc(e.target.value)}
                 placeholder="Details of the issue..."
                 rows={3}
-                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3.5 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19] resize-none"
+                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19] resize-none"
               />
             </div>
 

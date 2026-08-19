@@ -606,48 +606,83 @@ export const TicketsList: React.FC = () => {
               </>
             ) : (
               <>
-                <div className="space-y-1">
-                  <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Assigned Merchant Store Name *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Enter merchant / store name..."
-                    value={vendorShopName}
-                    onChange={(e) => setVendorShopName(e.target.value)}
-                    className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                  />
-                </div>
+                {activeRole === 'pincode' ? (
+                  <>
+                    <div className="space-y-1">
+                      <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Vendor Name *</label>
+                      <input
+                        type="text"
+                        readOnly
+                        value={user?.name ? `${user.name} Merchant` : 'Sri Rama Merchant'}
+                        className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs font-bold text-[#1b1c1c] focus:outline-none"
+                      />
+                    </div>
 
-                <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 space-y-1.5 text-[11px]">
-                  <p className="text-[9px] font-black text-[#864f19] uppercase tracking-wider">Territory Location Details (Division Scope)</p>
-                  <p className="text-slate-800">State: <strong>{user?.territory?.state || 'Andhra Pradesh'}</strong></p>
-                  <p className="text-slate-800">District: <strong>{user?.territory?.district || 'Visakhapatnam'}</strong></p>
-                  <p className="text-slate-800">Assigned Division: <strong className="text-[#864f19]">{user?.territory?.division || 'Vizag City Division'}</strong></p>
-                </div>
+                    <div className="space-y-1">
+                      <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Store Name *</label>
+                      <input
+                        type="text"
+                        required
+                        value={vendorShopName || 'Sri Rama Supermarket'}
+                        onChange={(e) => setVendorShopName(e.target.value)}
+                        placeholder="Enter store name..."
+                        className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs font-bold text-[#864f19] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                      />
+                    </div>
 
-                <div className="space-y-1">
-                  <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Select Merchant Pincode *</label>
-                  <select
-                    className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                  >
-                    <option value="530001">530001 (Central Visakhapatnam)</option>
-                    <option value="530017">530017 (MVP Colony)</option>
-                    <option value="530018">530018 (Madhavadhara)</option>
-                    <option value="530026">530026 (Gajuwaka)</option>
-                  </select>
-                </div>
+                    <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 space-y-1.5 text-[11px]">
+                      <p className="text-[9px] font-black text-[#864f19] uppercase tracking-wider">Territory Location Details (Pincode Scope)</p>
+                      <p className="text-slate-800">State: <strong>{user?.territory?.state || 'Andhra Pradesh'}</strong></p>
+                      <p className="text-slate-800">District: <strong>{user?.territory?.district || 'Visakhapatnam'}</strong></p>
+                      <p className="text-slate-800">Assigned Pincode: <strong className="text-[#864f19]">PIN {user?.territory?.pincode || '530001'}</strong></p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="space-y-1">
+                      <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Assigned Merchant Store Name *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Enter merchant / store name..."
+                        value={vendorShopName}
+                        onChange={(e) => setVendorShopName(e.target.value)}
+                        className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                      />
+                    </div>
 
-                <div className="space-y-1">
-                  <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Assigned Pincode Agent</label>
-                  <select
-                    className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                  >
-                    <option value="raki pin">raki pin (Pincode Agent - 530001)</option>
-                    <option value="Kiran Kumar">Kiran Kumar (Pincode Agent - 530017)</option>
-                    <option value="Ramesh Naidu">Ramesh Naidu (Pincode Agent - 530018)</option>
-                    <option value="Nageswara Rao">Nageswara Rao (Pincode Agent - 530026)</option>
-                  </select>
-                </div>
+                    <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 space-y-1.5 text-[11px]">
+                      <p className="text-[9px] font-black text-[#864f19] uppercase tracking-wider">Territory Location Details (Division Scope)</p>
+                      <p className="text-slate-800">State: <strong>{user?.territory?.state || 'Andhra Pradesh'}</strong></p>
+                      <p className="text-slate-800">District: <strong>{user?.territory?.district || 'Visakhapatnam'}</strong></p>
+                      <p className="text-slate-800">Assigned Division: <strong className="text-[#864f19]">{user?.territory?.division || 'Vizag City Division'}</strong></p>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Select Merchant Pincode *</label>
+                      <select
+                        className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                      >
+                        <option value="530001">530001 (Central Visakhapatnam)</option>
+                        <option value="530017">530017 (MVP Colony)</option>
+                        <option value="530018">530018 (Madhavadhara)</option>
+                        <option value="530026">530026 (Gajuwaka)</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Assigned Pincode Agent</label>
+                      <select
+                        className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                      >
+                        <option value="raki pin">raki pin (Pincode Agent - 530001)</option>
+                        <option value="Kiran Kumar">Kiran Kumar (Pincode Agent - 530017)</option>
+                        <option value="Ramesh Naidu">Ramesh Naidu (Pincode Agent - 530018)</option>
+                        <option value="Nageswara Rao">Nageswara Rao (Pincode Agent - 530026)</option>
+                      </select>
+                    </div>
+                  </>
+                )}
               </>
             )}
 
