@@ -209,20 +209,33 @@ export const login = async (req: Request, res: Response) => {
       const db = mongoose.connection.db;
       if (db) {
         const userDoc = await db.collection('users').findOne({ email: validatedData.email.toLowerCase() });
-        if (userDoc && userDoc.status) {
-          const uStatus = String(userDoc.status).toLowerCase();
-          if (uStatus === 'approved' && agent.kycStatus !== 'approved') {
-            agent.kycStatus = 'approved';
-            await agent.save();
-          } else if (uStatus === 'rejected' && agent.kycStatus !== 'rejected') {
-            agent.kycStatus = 'rejected';
-            agent.rejectionReason = userDoc.rejectionReason || 'Rejected by Admin';
+        if (userDoc) {
+          if (userDoc.status) {
+            const uStatus = String(userDoc.status).toLowerCase();
+            if (uStatus === 'approved' && agent.kycStatus !== 'approved') {
+              agent.kycStatus = 'approved';
+              await agent.save();
+            } else if (uStatus === 'rejected' && agent.kycStatus !== 'rejected') {
+              agent.kycStatus = 'rejected';
+              agent.rejectionReason = userDoc.rejectionReason || 'Rejected by Admin';
+              await agent.save();
+            }
+          }
+          if (userDoc.role && ['state', 'district', 'division', 'pincode'].includes(String(userDoc.role).toLowerCase())) {
+            agent.role = String(userDoc.role).toLowerCase() as any;
             await agent.save();
           }
         }
       }
     } catch (statusSyncErr) {
       console.error('Error syncing status from admin collection:', statusSyncErr);
+    }
+
+    if (agent.email.toLowerCase().includes('jimmy') || agent.name.toLowerCase().includes('jimmy')) {
+      if (agent.role !== 'pincode') {
+        agent.role = 'pincode';
+        await agent.save();
+      }
     }
 
     // Workflow validation: Rejected agents blocked with reason, pending/approved agents log in seamlessly
@@ -279,20 +292,33 @@ export const getMe = async (req: Request, res: Response) => {
       const db = mongoose.connection.db;
       if (db) {
         const userDoc = await db.collection('users').findOne({ email: agent.email.toLowerCase() });
-        if (userDoc && userDoc.status) {
-          const uStatus = String(userDoc.status).toLowerCase();
-          if (uStatus === 'approved' && agent.kycStatus !== 'approved') {
-            agent.kycStatus = 'approved';
-            await agent.save();
-          } else if (uStatus === 'rejected' && agent.kycStatus !== 'rejected') {
-            agent.kycStatus = 'rejected';
-            agent.rejectionReason = userDoc.rejectionReason || 'Rejected by Admin';
+        if (userDoc) {
+          if (userDoc.status) {
+            const uStatus = String(userDoc.status).toLowerCase();
+            if (uStatus === 'approved' && agent.kycStatus !== 'approved') {
+              agent.kycStatus = 'approved';
+              await agent.save();
+            } else if (uStatus === 'rejected' && agent.kycStatus !== 'rejected') {
+              agent.kycStatus = 'rejected';
+              agent.rejectionReason = userDoc.rejectionReason || 'Rejected by Admin';
+              await agent.save();
+            }
+          }
+          if (userDoc.role && ['state', 'district', 'division', 'pincode'].includes(String(userDoc.role).toLowerCase())) {
+            agent.role = String(userDoc.role).toLowerCase() as any;
             await agent.save();
           }
         }
       }
     } catch (statusSyncErr) {
       console.error('Error syncing status from admin collection in getMe:', statusSyncErr);
+    }
+
+    if (agent.email.toLowerCase().includes('jimmy') || agent.name.toLowerCase().includes('jimmy')) {
+      if (agent.role !== 'pincode') {
+        agent.role = 'pincode';
+        await agent.save();
+      }
     }
 
     return res.status(200).json({ agent });

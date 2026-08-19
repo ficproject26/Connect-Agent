@@ -286,7 +286,9 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                 >
                   <div className="text-right hidden lg:block text-left">
                     <p className="font-bold text-xs text-[#1b1c1c] leading-none">{user?.name || 'User'}</p>
-                    <p className="text-[10px] text-[#52443a] font-semibold mt-1 capitalize">{user?.role ? `${user.role} Agent` : 'Operations'}</p>
+                    <p className="text-[10px] text-[#52443a] font-semibold mt-1 capitalize">
+                      {effectiveRole ? `${effectiveRole.charAt(0).toUpperCase() + effectiveRole.slice(1)} Agent` : 'Pincode Agent'}
+                    </p>
                   </div>
                   <div className="h-9 w-9 rounded-full border-2 border-white shadow-sm bg-[#ffdcc2] text-[#864f19] font-black text-sm flex items-center justify-center uppercase">
                     {user?.name?.charAt(0) || 'U'}

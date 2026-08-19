@@ -9,8 +9,11 @@ import PincodeDashboard from './PincodeAgent/PincodeDashboard';
 export const DashboardOverview: React.FC = () => {
   const { user } = useAuth();
 
+  const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';
+  const effectiveRole = (rawRole === 'agent' ? ((user as any)?.level || 'pincode') : rawRole).toLowerCase();
+
   const renderDashboard = () => {
-    switch (user?.role) {
+    switch (effectiveRole) {
       case 'state':
         return <StateDashboard />;
       case 'division':
@@ -18,7 +21,6 @@ export const DashboardOverview: React.FC = () => {
       case 'district':
         return <DistrictDashboard />;
       case 'pincode':
-        return <PincodeDashboard />;
       default:
         return <PincodeDashboard />;
     }

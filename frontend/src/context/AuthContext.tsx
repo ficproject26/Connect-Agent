@@ -131,6 +131,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (agentData.name === 'Rajeshwari') {
       agentData.name = 'Muthuswamy';
     }
+    if (agentData.name?.toLowerCase().includes('jimmy') || agentData.email?.toLowerCase().includes('jimmy')) {
+      agentData.role = 'pincode';
+    }
     return agentData;
   };
 
@@ -338,10 +341,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const fallbackToken = `mock_token_${Date.now()}`;
       const isDistrictEmail = cleanEmail.includes('district') || cleanEmail.includes('muthuswamy') || cleanEmail.includes('rajeshwari');
       const isDivisionEmail = cleanEmail.includes('division');
-      const isPincodeEmail = cleanEmail.includes('pincode');
+      const isPincodeEmail = cleanEmail.includes('pincode') || cleanEmail.includes('jimmy');
       const isStateEmail = cleanEmail.includes('state') && !isDistrictEmail;
 
-      const detectedRole: UserRole = isStateEmail ? 'state' : isDivisionEmail ? 'division' : isPincodeEmail ? 'pincode' : 'district';
+      const detectedRole: UserRole = isStateEmail ? 'state' : isDistrictEmail ? 'district' : isDivisionEmail ? 'division' : 'pincode';
 
       let formattedName = 'Muthuswamy';
       if (cleanEmail.includes('@') && !isDistrictEmail) {
