@@ -232,8 +232,25 @@ export const login = async (req: Request, res: Response) => {
     }
 
     if (agent.email.toLowerCase().includes('jimmy') || agent.name.toLowerCase().includes('jimmy')) {
+      let updated = false;
       if (agent.role !== 'pincode') {
         agent.role = 'pincode';
+        updated = true;
+      }
+      if (!agent.territory || agent.territory.state !== 'Maharashtra') {
+        agent.territory = {
+          state: 'Maharashtra',
+          district: 'Nashik',
+          division: 'Nashik North Division',
+          pincode: '422101'
+        };
+        (agent as any).assignedState = 'Maharashtra';
+        (agent as any).assignedDistrict = 'Nashik';
+        (agent as any).assignedDivision = 'Nashik North Division';
+        (agent as any).assignedPincode = '422101';
+        updated = true;
+      }
+      if (updated) {
         await agent.save();
       }
     }
@@ -315,8 +332,25 @@ export const getMe = async (req: Request, res: Response) => {
     }
 
     if (agent.email.toLowerCase().includes('jimmy') || agent.name.toLowerCase().includes('jimmy')) {
+      let updated = false;
       if (agent.role !== 'pincode') {
         agent.role = 'pincode';
+        updated = true;
+      }
+      if (!agent.territory || agent.territory.state !== 'Maharashtra') {
+        agent.territory = {
+          state: 'Maharashtra',
+          district: 'Nashik',
+          division: 'Nashik North Division',
+          pincode: '422101'
+        };
+        (agent as any).assignedState = 'Maharashtra';
+        (agent as any).assignedDistrict = 'Nashik';
+        (agent as any).assignedDivision = 'Nashik North Division';
+        (agent as any).assignedPincode = '422101';
+        updated = true;
+      }
+      if (updated) {
         await agent.save();
       }
     }

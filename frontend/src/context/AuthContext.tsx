@@ -133,6 +133,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     if (agentData.name?.toLowerCase().includes('jimmy') || agentData.email?.toLowerCase().includes('jimmy')) {
       agentData.role = 'pincode';
+      if (!agentData.territory || agentData.territory.state !== 'Maharashtra') {
+        agentData.territory = {
+          state: 'Maharashtra',
+          district: 'Nashik',
+          division: 'Nashik North Division',
+          pincode: '422101'
+        };
+      }
     }
     return agentData;
   };
@@ -353,6 +361,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       if (formattedName === 'Rajeshwari') formattedName = 'Muthuswamy';
 
+      const isJimmy = cleanEmail.includes('jimmy');
+      const fallbackTerritory = isJimmy
+        ? { state: 'Maharashtra', district: 'Nashik', division: 'Nashik North Division', pincode: '422101' }
+        : { state: 'Andhra Pradesh', district: 'NTR District', division: 'Vijayawada Central Division', pincode: '520001' };
+
       const agent: AgentProfile = {
         _id: `REG-${Date.now().toString().slice(-6)}`,
         agentId: `REG-${Date.now().toString().slice(-6)}`,
@@ -362,7 +375,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         phone: '+91 98765 43210',
         mobile: '+91 98765 43210',
         role: detectedRole,
-        territory: { state: 'Andhra Pradesh', district: 'NTR District', division: 'Vijayawada Central Division', pincode: '520001' },
+        territory: fallbackTerritory,
         kycDocs: {},
         registrationFeePaid: true,
         performanceScore: 100,

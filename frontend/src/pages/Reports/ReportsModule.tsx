@@ -447,7 +447,7 @@ export const ReportsModule: React.FC = () => {
         <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">FIELD VISITS</span>
           <p className="text-xl font-black text-[#864f19] mt-1">{fieldVisitsCount}</p>
-          <span className="text-[10px] text-slate-500 font-semibold">{activeRole === 'state' ? 'State Scope' : 'Division Scope'}</span>
+          <span className="text-[10px] text-slate-500 font-semibold">{activeRole === 'state' ? 'State Scope' : activeRole === 'pincode' ? 'Pincode Scope' : activeRole === 'district' ? 'District Scope' : 'Division Scope'}</span>
         </div>
 
         <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
@@ -698,10 +698,10 @@ export const ReportsModule: React.FC = () => {
           <div className="lg:col-span-1 bg-white rounded-[16px] border border-[#eae8e7] p-6 shadow-sm h-fit space-y-4">
             <div className="border-b border-[#eae8e7] pb-3">
               <h3 className="font-extrabold text-sm text-[#1b1c1c] flex items-center gap-1.5">
-                <Upload className="w-4 h-4 text-[#864f19]" /> {activeRole === 'state' ? 'Submit State Report' : 'Submit Division Report'}
+                <Upload className="w-4 h-4 text-[#864f19]" /> {activeRole === 'state' ? 'Submit State Report' : activeRole === 'pincode' ? 'Submit Pincode Report' : activeRole === 'district' ? 'Submit District Report' : 'Submit Division Report'}
               </h3>
               <p className="text-[10px] text-slate-500 mt-0.5 font-medium">
-                {activeRole === 'state' ? 'Upload signed daily state operational reports, audit logs, or state performance summaries.' : 'Upload signed daily division reports, audit logs, or target performance summaries.'}
+                {activeRole === 'state' ? 'Upload signed daily state operational reports, audit logs, or state performance summaries.' : activeRole === 'pincode' ? 'Upload signed daily pincode reports, audit logs, or target performance summaries.' : activeRole === 'district' ? 'Upload signed daily district reports, audit logs, or performance summaries.' : 'Upload signed daily division reports, audit logs, or target performance summaries.'}
               </p>
             </div>
 
@@ -726,6 +726,13 @@ export const ReportsModule: React.FC = () => {
                       <option value="District Performance Report">District Performance Report</option>
                       <option value="State Operational Audit Report">State Operational Audit Report</option>
                     </>
+                  ) : activeRole === 'pincode' ? (
+                    <>
+                      <option value="Daily Pincode Report">Daily Pincode Report</option>
+                      <option value="Weekly Pincode Report">Weekly Pincode Report</option>
+                      <option value="Pincode Target Performance Report">Pincode Target Performance Report</option>
+                      <option value="Pincode Onboarding Audit Report">Pincode Onboarding Audit Report</option>
+                    </>
                   ) : (
                     <>
                       <option value="Daily Division Report">Daily Division Report</option>
@@ -743,13 +750,19 @@ export const ReportsModule: React.FC = () => {
                 <p className="text-slate-800">State: <strong>{userState}</strong></p>
                 {activeRole === 'state' ? (
                   <p className="text-slate-800">Territory Jurisdiction: <strong className="text-[#864f19]">All Districts ({userState})</strong></p>
+                ) : activeRole === 'pincode' ? (
+                  <>
+                    <p className="text-slate-800">District: <strong>{userDistrict}</strong></p>
+                    <p className="text-slate-800">Division: <strong>{userDivision}</strong></p>
+                    <p className="text-slate-800">Assigned Pincode: <strong className="text-[#864f19]">PIN {userPincode}</strong></p>
+                  </>
                 ) : (
                   <>
                     <p className="text-slate-800">District: <strong>{userDistrict}</strong></p>
                     <p className="text-slate-800">Assigned Division: <strong>{userDivision}</strong> (All Downstream Pincodes)</p>
                   </>
                 )}
-                <p className="text-slate-600 text-[10px]">Submitted By: <strong>{user?.name || (activeRole === 'state' ? 'State Agent' : 'Division Agent')}</strong></p>
+                <p className="text-slate-600 text-[10px]">Submitted By: <strong>{user?.name || 'Pincode Agent'}</strong></p>
               </div>
 
               <div className="space-y-1">
@@ -757,7 +770,7 @@ export const ReportsModule: React.FC = () => {
                 <textarea
                   value={reportRemarks}
                   onChange={(e) => setReportRemarks(e.target.value)}
-                  placeholder={activeRole === 'state' ? "Summarize state visits, district performance, onboardings completed, or key state field findings..." : "Summarize division visits, onboardings completed, or key field findings..."}
+                  placeholder={activeRole === 'state' ? "Summarize state visits, district performance, onboardings completed, or key state field findings..." : activeRole === 'pincode' ? "Summarize pincode visits, onboardings completed, or key field findings..." : "Summarize division visits, onboardings completed, or key field findings..."}
                   rows={3}
                   className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19] resize-none"
                 />
@@ -796,7 +809,7 @@ export const ReportsModule: React.FC = () => {
               <button
                 type="submit"
                 disabled={isSubmittingReport}
-                className="w-full py-3 bg-[#864f19] hover:bg-[#a3672f] text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-sm transition-all border-none cursor-pointer flex items-center justify-center gap-2"
+                className="w-full py-3 bg-[#864f19] hover:bg-[#a3672f] text-[#ffffff] rounded-xl text-xs font-bold uppercase tracking-wider shadow-sm transition-all border-none cursor-pointer flex items-center justify-center gap-2"
               >
                 {isSubmittingReport ? (
                   <>
@@ -804,7 +817,7 @@ export const ReportsModule: React.FC = () => {
                   </>
                 ) : (
                   <>
-                    <Upload className="w-3.5 h-3.5" /> {activeRole === 'state' ? 'Submit State Report' : 'Submit Report'}
+                    <Upload className="w-3.5 h-3.5" /> {activeRole === 'state' ? 'Submit State Report' : activeRole === 'pincode' ? 'Submit Pincode Report' : 'Submit Report'}
                   </>
                 )}
               </button>
@@ -816,7 +829,7 @@ export const ReportsModule: React.FC = () => {
             <CardHeader className="pb-2 border-b border-slate-50 flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-sm font-extrabold text-slate-800">
-                  {activeRole === 'state' ? 'Submitted State Reports Ledger' : 'Submitted Division Reports Ledger'}
+                  {activeRole === 'state' ? 'Submitted State Reports Ledger' : activeRole === 'pincode' ? 'Submitted Pincode Reports Ledger' : 'Submitted Division Reports Ledger'}
                 </CardTitle>
                 <p className="text-[10px] text-slate-450 font-semibold mt-0.5 uppercase tracking-wider">
                   {activeRole === 'state' ? 'Logs of submitted state reports and review status' : 'Logs of submitted division reports and review status'}
