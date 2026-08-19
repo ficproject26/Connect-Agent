@@ -197,14 +197,14 @@ export const FieldVisitsModule: React.FC = () => {
   const scopedVisits = useMemo(() => {
     return visits.filter(v => {
       if (activeRole === 'pincode') {
-        return v.territoryPincode === userPincode || v.visitedBy === userName;
+        return !v.territoryPincode || v.territoryPincode === userPincode || v.visitedBy === userName || (v as any).agent?.phone === user?.mobile;
       }
       if (activeRole === 'division') {
         return v.territoryDistrict === userDistrict || v.state === userState;
       }
       return true;
     });
-  }, [visits, activeRole, userPincode, userDistrict, userState, userName]);
+  }, [visits, activeRole, userPincode, userDistrict, userState, userName, user?.mobile]);
 
   // Filtered visits
   const filteredVisits = useMemo(() => {
@@ -569,35 +569,39 @@ export const FieldVisitsModule: React.FC = () => {
                 />
               </div>
 
-              {/* Division-Scoped Pincode & Agent Filter Dropdowns */}
-              <div className="w-full sm:w-44">
-                <select
-                  value={pincodeFilter}
-                  onChange={(e) => setPincodeFilter(e.target.value)}
-                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                >
-                  <option value="all">📍 All Pincode Areas</option>
-                  <option value="530001">PIN 530001 (Central)</option>
-                  <option value="530017">PIN 530017 (MVP Colony)</option>
-                  <option value="530018">PIN 530018 (Madhavadhara)</option>
-                  <option value="530026">PIN 530026 (Gajuwaka)</option>
-                </select>
-              </div>
+              {/* Division & District-Scoped Pincode & Agent Filter Dropdowns */}
+              {activeRole !== 'pincode' && (
+                <>
+                  <div className="w-full sm:w-44">
+                    <select
+                      value={pincodeFilter}
+                      onChange={(e) => setPincodeFilter(e.target.value)}
+                      className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                    >
+                      <option value="all">📍 All Pincode Areas</option>
+                      <option value="530001">PIN 530001 (Central)</option>
+                      <option value="530017">PIN 530017 (MVP Colony)</option>
+                      <option value="530018">PIN 530018 (Madhavadhara)</option>
+                      <option value="530026">PIN 530026 (Gajuwaka)</option>
+                    </select>
+                  </div>
 
-              <div className="w-full sm:w-48">
-                <select
-                  value={agentFilter}
-                  onChange={(e) => setAgentFilter(e.target.value)}
-                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                >
-                  <option value="all">👤 All Agents in Division</option>
-                  <option value={userName}>My Direct Visits (Division Agent)</option>
-                  <option value="raki pin">raki pin (Pincode Agent - 530001)</option>
-                  <option value="Kiran Kumar">Kiran Kumar (Pincode Agent - 530017)</option>
-                  <option value="Ramesh Naidu">Ramesh Naidu (Pincode Agent - 530018)</option>
-                  <option value="Nageswara Rao">Nageswara Rao (Pincode Agent - 530026)</option>
-                </select>
-              </div>
+                  <div className="w-full sm:w-48">
+                    <select
+                      value={agentFilter}
+                      onChange={(e) => setAgentFilter(e.target.value)}
+                      className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                    >
+                      <option value="all">👤 All Agents in Division</option>
+                      <option value={userName}>My Direct Visits (Division Agent)</option>
+                      <option value="raki pin">raki pin (Pincode Agent - 530001)</option>
+                      <option value="Kiran Kumar">Kiran Kumar (Pincode Agent - 530017)</option>
+                      <option value="Ramesh Naidu">Ramesh Naidu (Pincode Agent - 530018)</option>
+                      <option value="Nageswara Rao">Nageswara Rao (Pincode Agent - 530026)</option>
+                    </select>
+                  </div>
+                </>
+              )}
 
               <div className="w-full sm:w-40">
                 <select

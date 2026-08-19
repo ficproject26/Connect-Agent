@@ -852,31 +852,30 @@ export const VendorsList: React.FC = () => {
                 </div>
               )}
 
-              <div>
-                <Select
-                  label="Pincode"
-                  options={
-                    activeRole !== 'pincode'
-                      ? [{ value: 'all', label: 'All Pincode Areas' }, ...pincodes.map(p => ({ value: p, label: `PIN ${p}` }))]
-                      : [{ value: userPincode, label: `PIN ${userPincode}` }]
-                  }
-                  value={activeRole !== 'pincode' ? pincodeFilter : userPincode}
-                  onChange={(e) => setPincodeFilter(e.target.value)}
-                  disabled={activeRole === 'pincode'}
-                />
-              </div>
+              {activeRole !== 'pincode' && (
+                <>
+                  <div>
+                    <Select
+                      label="Pincode"
+                      options={[{ value: 'all', label: 'All Pincode Areas' }, ...pincodes.map(p => ({ value: p, label: `PIN ${p}` }))]}
+                      value={pincodeFilter}
+                      onChange={(e) => setPincodeFilter(e.target.value)}
+                    />
+                  </div>
 
-              <div>
-                <Select
-                  label="Assigned Agent"
-                  options={[
-                    { value: 'all', label: 'All Agents' },
-                    ...agents.map(a => ({ value: a, label: a }))
-                  ]}
-                  value={agentFilter}
-                  onChange={(e) => setAgentFilter(e.target.value)}
-                />
-              </div>
+                  <div>
+                    <Select
+                      label="Assigned Agent"
+                      options={[
+                        { value: 'all', label: 'All Agents' },
+                        ...agents.map(a => ({ value: a, label: a }))
+                      ]}
+                      value={agentFilter}
+                      onChange={(e) => setAgentFilter(e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
 
               <div>
                 <Select
