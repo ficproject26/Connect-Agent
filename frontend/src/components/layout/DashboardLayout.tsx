@@ -3,7 +3,7 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import {
-  Menu, Bell, LogOut, Settings, HelpCircle, Search, X, Laptop,
+  Menu, Bell, LogOut, Settings, HelpCircle, Search, X, Laptop, Clock,
   User, Award, Shield, Users, Target, Ticket, FileText, ChevronDown, Wallet, Calendar, MapPin, GitFork, Trophy
 } from 'lucide-react';
 
@@ -64,6 +64,83 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
 
   const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';
   const effectiveRole = (rawRole === 'agent' ? ((user as any)?.level || 'pincode') : rawRole).toLowerCase();
+
+  const userKycStatus = (user?.kycStatus || 'approved').toLowerCase();
+  const userStatus = String(user?.status || 'active').toLowerCase();
+
+  if (userKycStatus === 'pending' || userStatus === 'pending_approval' || userStatus === 'pending') {
+    return (
+      <div className="min-h-screen bg-[#fbf9f8] flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white rounded-2xl p-8 border border-[#eae8e7] shadow-sm text-center space-y-4">
+          <div className="h-16 w-16 bg-amber-50 rounded-full flex items-center justify-center mx-auto text-amber-600">
+            <Clock className="w-8 h-8 animate-pulse" />
+          </div>
+          <h2 className="text-xl font-black text-[#1b1c1c]">Registration Pending Verification</h2>
+          <p className="text-xs text-slate-600 leading-relaxed font-medium">
+            Your registration request is currently pending Admin verification. Please contact the Administrator for further assistance.
+          </p>
+          <div className="pt-4 border-t border-slate-100 flex flex-col gap-2">
+            <p className="text-[11px] text-slate-400 font-bold">Registration ID: {user?.registrationId || 'N/A'}</p>
+            <button
+              onClick={logout}
+              className="py-2.5 px-4 bg-[#864f19] hover:bg-[#a3672f] text-white text-xs font-bold rounded-xl transition cursor-pointer border-none"
+            >
+              Return to Login
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (userKycStatus === 'rejected' || userStatus === 'rejected') {
+    return (
+      <div className="min-h-screen bg-[#fbf9f8] flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white rounded-2xl p-8 border border-rose-200 shadow-sm text-center space-y-4">
+          <div className="h-16 w-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto text-rose-600">
+            <X className="w-8 h-8 text-rose-600" />
+          </div>
+          <h2 className="text-xl font-black text-rose-800">Registration Application Rejected</h2>
+          <p className="text-xs text-slate-600 leading-relaxed font-medium">
+            Your registration request was rejected by Admin. Reason: <strong>{user?.rejectionReason || 'No reason provided.'}</strong>. Please contact the Administrator for assistance.
+          </p>
+          <div className="pt-4 border-t border-slate-100 flex flex-col gap-2">
+            <p className="text-[11px] text-slate-400 font-bold">Registration ID: {user?.registrationId || 'N/A'}</p>
+            <button
+              onClick={logout}
+              className="py-2.5 px-4 bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold rounded-xl transition cursor-pointer border-none"
+            >
+              Return to Login
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (userStatus === 'suspended' || userStatus === 'inactive') {
+    return (
+      <div className="min-h-screen bg-[#fbf9f8] flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white rounded-2xl p-8 border border-slate-200 shadow-sm text-center space-y-4">
+          <div className="h-16 w-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-600">
+            <Shield className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-black text-slate-800">Account Suspended / Deactivated</h2>
+          <p className="text-xs text-slate-600 leading-relaxed font-medium">
+            Your account has been suspended/deactivated by the Admin. Please contact the Administrator for assistance.
+          </p>
+          <div className="pt-4 border-t border-slate-100 flex flex-col gap-2">
+            <button
+              onClick={logout}
+              className="py-2.5 px-4 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl transition cursor-pointer border-none"
+            >
+              Return to Login
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const visibleSidebarItems = sidebarItems.filter(item => {
     if (item.path === '/agents' && effectiveRole === 'pincode') {

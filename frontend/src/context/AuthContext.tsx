@@ -299,102 +299,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    // Agent exists but pending/rejected — surface the status message
+    // Agent exists but pending/rejected/suspended — surface the status message
     if (got403) throw got403;
 
     // Explicit invalid credentials from live backend server
     if (got401) throw got401;
 
-    // If backends are unreachable (e.g. offline, sleeping, or CORS), check local agent records or create session
-    console.warn('Backend unavailable on all endpoints. Checking local agent records...');
-    const cleanEmail = email.trim().toLowerCase();
-
-    // Check locally registered agents in localStorage
-    try {
-      const localPending = JSON.parse(localStorage.getItem('pending_agent_registrations') || '[]');
-      const match = localPending.find((p: any) => p.email && p.email.toLowerCase() === cleanEmail);
-      if (match) {
-        const fallbackToken = `mock_token_${Date.now()}`;
-        const agentName = match.name === 'Rajeshwari' ? 'Muthuswamy' : (match.name || 'Muthuswamy');
-        const agentRole: UserRole = (match.role as UserRole) || (cleanEmail.includes('state') ? 'state' : 'district');
-        const agent: AgentProfile = {
-          _id: match.registrationId || `REG-${Date.now()}`,
-          agentId: match.registrationId || `REG-${Date.now()}`,
-          registrationId: match.registrationId || `REG-${Date.now()}`,
-          name: agentName,
-          email: match.email,
-          phone: match.phone || '+91 98765 43210',
-          mobile: match.phone || '+91 98765 43210',
-          role: agentRole,
-          territory: match.territory || { state: 'Andhra Pradesh', district: 'NTR District', division: 'Vijayawada Central Division', pincode: '520001' },
-          kycDocs: {},
-          registrationFeePaid: true,
-          performanceScore: 100,
-          status: 'active',
-          kycStatus: 'approved',
-          createdAt: match.createdAt || new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
-        localStorage.setItem('agent_token', fallbackToken);
-        setToken(fallbackToken);
-        const finalAgent = applySavedProfileOverrides(agent);
-        localStorage.setItem('agent_user', JSON.stringify(finalAgent));
-        setUser(finalAgent);
-        return finalAgent;
-      }
-    } catch (e) {}
-
-    // Fallback for demo or user credentials when offline
-    if (cleanEmail && password) {
-      const fallbackToken = `mock_token_${Date.now()}`;
-      const isDistrictEmail = cleanEmail.includes('district') || cleanEmail.includes('muthuswamy') || cleanEmail.includes('rajeshwari');
-      const isDivisionEmail = cleanEmail.includes('division');
-      const isPincodeEmail = cleanEmail.includes('pincode') || cleanEmail.includes('jimmy');
-      const isStateEmail = cleanEmail.includes('state') && !isDistrictEmail;
-
-      const detectedRole: UserRole = isStateEmail ? 'state' : isDistrictEmail ? 'district' : isDivisionEmail ? 'division' : 'pincode';
-
-      let formattedName = 'Muthuswamy';
-      if (cleanEmail.includes('@') && !isDistrictEmail) {
-        const userName = cleanEmail.split('@')[0];
-        formattedName = userName.charAt(0).toUpperCase() + userName.slice(1);
-      }
-      if (formattedName === 'Rajeshwari') formattedName = 'Muthuswamy';
-
-      const isJimmy = cleanEmail.includes('jimmy');
-      const fallbackTerritory = isJimmy
-        ? { state: 'Maharashtra', district: 'Nashik', division: 'Nashik North Division', pincode: '422101' }
-        : { state: 'Andhra Pradesh', district: 'NTR District', division: 'Vijayawada Central Division', pincode: '520001' };
-
-      const agent: AgentProfile = {
-        _id: `REG-${Date.now().toString().slice(-6)}`,
-        agentId: `REG-${Date.now().toString().slice(-6)}`,
-        registrationId: `REG-${Date.now().toString().slice(-6)}`,
-        name: formattedName,
-        email: cleanEmail,
-        phone: '+91 98765 43210',
-        mobile: '+91 98765 43210',
-        role: detectedRole,
-        territory: fallbackTerritory,
-        kycDocs: {},
-        registrationFeePaid: true,
-        performanceScore: 100,
-        status: 'active',
-        kycStatus: 'approved',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      localStorage.setItem('agent_token', fallbackToken);
-      setToken(fallbackToken);
-      const finalAgent = applySavedProfileOverrides(agent);
-      try {
-        localStorage.setItem('agent_user', JSON.stringify(finalAgent));
-      } catch (e) {}
-      setUser(finalAgent);
-      return finalAgent;
-    }
-
-    throw new Error('Unable to connect to any server. Please check your network connection.');
+    throw new Error('Invalid email or password. Please check your credentials or register an account.');
   };
 
   const register = async (agentData: any): Promise<any> => {

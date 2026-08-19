@@ -28,10 +28,10 @@ export const PendingApproval: React.FC = () => {
           </div>
 
           <h2 className="text-2xl font-black font-sans tracking-wide text-white">
-            Application Pending Approval
+            Registration Request Pending Verification
           </h2>
           <p className="text-xs font-semibold text-forgeGray-300 mt-2 max-w-md mx-auto leading-relaxed">
-            Thank you, <span className="font-bold text-white">{user?.name}</span>! Your registration details have been submitted. Our executive operations team is currently reviewing your credentials.
+            Your registration request is currently pending Admin verification. Please contact the Administrator for further assistance.
           </p>
 
           {/* Checklist of verification states */}
