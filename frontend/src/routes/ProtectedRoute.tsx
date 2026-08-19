@@ -22,11 +22,21 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
     return <Navigate to="/login" replace />;
   }
 
-  const isApproved = user.kycStatus === 'approved' || (user.status as string) === 'approved' || user.status === 'active';
+  const userKycStatus = (user.kycStatus || '').toLowerCase();
+  const userStatus = String(user.status || '').toLowerCase();
+
+  const isPending = userKycStatus === 'pending' || userStatus === 'pending_approval' || userStatus === 'pending';
+  const isRejectedOrSuspended = userKycStatus === 'rejected' || userStatus === 'rejected' || userStatus === 'suspended' || userStatus === 'inactive';
+  const isApproved = (userKycStatus === 'approved' || userStatus === 'approved' || userStatus === 'active') && !isPending && !isRejectedOrSuspended;
 
   // Handle pending verification redirects (except for the pending page itself)
-  if (!isApproved && (user.kycStatus === 'pending' || user.status === 'pending_approval') && window.location.pathname !== '/pending') {
+  if (isPending && window.location.pathname !== '/pending') {
     return <Navigate to="/pending" replace />;
+  }
+
+  // Handle rejected/suspended accounts going to dashboard
+  if (isRejectedOrSuspended) {
+    return <Navigate to="/login" replace />;
   }
 
   // Handle active/approved accounts going to pending page

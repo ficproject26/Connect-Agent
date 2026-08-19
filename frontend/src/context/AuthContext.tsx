@@ -152,13 +152,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!agent) {
         throw new Error('No agent profile returned');
       }
-      if (agent.kycStatus === 'rejected') {
-        console.warn('Agent account is rejected. Logging out.');
+
+      const isApproved = agent.kycStatus === 'approved' || agent.status === 'approved' || agent.status === 'active';
+      if (!isApproved && (agent.kycStatus === 'rejected' || agent.status === 'rejected' || agent.status === 'suspended' || agent.status === 'inactive')) {
+        console.warn('Agent account is not active or approved. Logging out.');
         logout();
         return;
       }
+
       // Map kycStatus to status for compatibility
-      agent.status = (agent.kycStatus === 'approved' || agent.status === 'approved' || agent.status === 'active') ? 'active' : 'pending_approval';
+      agent.status = isApproved ? 'active' : 'pending_approval';
       agent.mobile = agent.phone;
       const finalAgent = applySavedProfileOverrides(agent);
       setUser(finalAgent);
@@ -167,33 +170,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (e) {}
       await fetchNotifications();
     } catch (err: any) {
-      if (err?.response?.status === 401) {
-        // Only logout if there is NO valid locally-saved user session.
-        // This prevents login → refetch → 401 → logout loops when using
-        // fallback/mock tokens or when the backend is sleeping.
-        const savedUserStr = localStorage.getItem('agent_user');
-        if (savedUserStr) {
-          try {
-            const savedUser = JSON.parse(savedUserStr);
-            if (savedUser && savedUser._id) {
-              console.warn('Backend returned 401 on /auth/me, but valid local session exists. Keeping session.');
-              setUser(savedUser);
-              return;
-            }
-          } catch (e) {}
-        }
-        console.warn('No valid local session found after 401. Logging out.');
+      console.warn('Backend session verification failed on /auth/me:', err?.response?.data?.message || err.message);
+      // On 401, 403, or invalid session, purge localStorage and log out immediately
+      if (err?.response?.status === 401 || err?.response?.status === 403) {
         logout();
-        return;
-      }
-      console.error('Refetch user error:', err);
-      const savedUserStr = localStorage.getItem('agent_user');
-      if (savedUserStr) {
-        try {
-          const savedUser = JSON.parse(savedUserStr);
-          setUser(savedUser);
-          return;
-        } catch (e) {}
       }
     }
   };
@@ -201,17 +181,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const initializeAuth = async () => {
       const savedUserStr = localStorage.getItem('agent_user');
-      if (savedUserStr) {
-        try {
-          setUser(JSON.parse(savedUserStr));
-        } catch (e) {}
-      }
-      if (token) {
+      const savedToken = localStorage.getItem('agent_token');
+      if (savedToken) {
         try {
           await refetchUser();
         } catch (err) {
           console.error('Session restoration failed:', err);
+          logout();
         }
+      } else {
+        setUser(null);
+        setToken(null);
       }
       setLoading(false);
     };
