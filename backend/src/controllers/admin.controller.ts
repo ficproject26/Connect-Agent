@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import mongoose from 'mongoose';
 import Agent from '../models/Agent';
 import AuditLog from '../models/AuditLog';
 import Vendor from '../models/Vendor';
@@ -11,13 +12,72 @@ export const getRegistrations = async (req: Request, res: Response) => {
     const scope = await getAgentTerritoryScope(requesterId);
     const scopeFilter = buildTerritoryFilter(scope);
 
-    const status = req.query.status as string;
+    const statusQuery = (req.query.status as string || '').toLowerCase();
     const filter: any = { ...scopeFilter };
-    if (status) {
-      filter.kycStatus = status;
+
+    if (statusQuery && statusQuery !== 'all') {
+      if (statusQuery === 'pending' || statusQuery === 'pending_approval') {
+        filter.$or = [
+          { kycStatus: 'pending' },
+          { status: 'pending' },
+          { status: 'pending_approval' }
+        ];
+      } else {
+        filter.kycStatus = statusQuery;
+      }
     }
-    
-    const registrations = await Agent.find(filter).select('-password').sort({ createdAt: -1 });
+
+    let registrations = await Agent.find(filter).select('-password').sort({ createdAt: -1 });
+
+    // Also query 'users' collection in MongoDB for any agent registrations synced directly to users collection
+    try {
+      const db = mongoose.connection.db;
+      if (db) {
+        const userFilter: any = { role: { $in: ['agent', 'state', 'district', 'division', 'pincode'] } };
+        if (statusQuery && statusQuery !== 'all') {
+          if (statusQuery === 'pending' || statusQuery === 'pending_approval') {
+            userFilter.$or = [
+              { status: 'pending' },
+              { kycStatus: 'pending' },
+              { status: 'pending_approval' }
+            ];
+          } else {
+            userFilter.status = statusQuery;
+          }
+        }
+
+        const userDocs = await db.collection('users').find(userFilter).toArray();
+
+        // Merge users docs if not already present in registrations list
+        const existingEmails = new Set(registrations.map(r => r.email.toLowerCase()));
+        for (const uDoc of userDocs) {
+          if (uDoc.email && !existingEmails.has(uDoc.email.toLowerCase())) {
+            registrations.push({
+              _id: uDoc._id,
+              registrationId: uDoc.registrationId || `REG-${Date.now()}`,
+              name: uDoc.name || 'Agent Applicant',
+              email: uDoc.email,
+              phone: uDoc.phone || uDoc.mobile || '+91 98765 43210',
+              role: (uDoc.level || uDoc.role || 'pincode').toLowerCase() as any,
+              territory: uDoc.territory || {
+                state: uDoc.state || uDoc.assignedState || '',
+                district: uDoc.district || uDoc.assignedDistrict || '',
+                division: uDoc.division || uDoc.assignedDivision || '',
+                pincode: uDoc.pincode || uDoc.assignedPincode || ''
+              },
+              kycStatus: uDoc.kycStatus || uDoc.status || 'pending',
+              status: uDoc.status || 'pending',
+              createdAt: uDoc.createdAt || new Date(),
+              updatedAt: uDoc.updatedAt || new Date()
+            } as any);
+            existingEmails.add(uDoc.email.toLowerCase());
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error fetching pending users from users collection:', e);
+    }
+
     return res.status(200).json({ registrations });
   } catch (error) {
     console.error('Get registrations error:', error);
@@ -29,8 +89,18 @@ export const getRegistrations = async (req: Request, res: Response) => {
 export const getRegistrationById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const agent = await Agent.findById(id).select('-password');
+    let agent = await Agent.findById(id).select('-password');
     if (!agent) {
+      // Check users collection
+      try {
+        const db = mongoose.connection.db;
+        if (db) {
+          const userDoc = await db.collection('users').findOne({ _id: id as any });
+          if (userDoc) {
+            return res.status(200).json({ registration: userDoc });
+          }
+        }
+      } catch (e) {}
       return res.status(404).json({ message: 'Registration not found' });
     }
     return res.status(200).json({ registration: agent });
@@ -46,31 +116,52 @@ export const approveRegistration = async (req: Request, res: Response) => {
     const { id } = req.params;
     const { remarks } = req.body;
 
-    const agent = await Agent.findById(id);
-    if (!agent) {
-      return res.status(404).json({ message: 'Agent not found' });
+    let agent = await Agent.findById(id);
+    let agentEmail = agent?.email;
+
+    if (agent) {
+      const oldStatus = agent.kycStatus;
+      agent.kycStatus = 'approved';
+      agent.remarks = remarks || 'Approved by Admin';
+      agent.updatedAt = new Date();
+      await agent.save();
+
+      const adminId = (req as any).agent?.agentId || agent._id;
+      await AuditLog.create({
+        entityId: agent._id,
+        entityType: 'Agent',
+        action: 'approval_change',
+        fieldName: 'kycStatus',
+        oldValue: oldStatus,
+        newValue: 'approved',
+        changedBy: adminId
+      });
     }
 
-    const oldStatus = agent.kycStatus;
-    agent.kycStatus = 'approved';
-    agent.remarks = remarks || 'Approved by Admin';
-    agent.updatedAt = new Date();
-    await agent.save();
-
-    const adminId = (req as any).agent?.agentId || agent._id;
-    await AuditLog.create({
-      entityId: agent._id,
-      entityType: 'Agent',
-      action: 'approval_change',
-      fieldName: 'kycStatus',
-      oldValue: oldStatus,
-      newValue: 'approved',
-      changedBy: adminId
-    });
+    // Sync approval to users collection in MongoDB
+    try {
+      const db = mongoose.connection.db;
+      if (db) {
+        const userQuery = agentEmail ? { email: agentEmail.toLowerCase() } : { _id: id as any };
+        await db.collection('users').updateOne(
+          userQuery,
+          {
+            $set: {
+              status: 'approved',
+              kycStatus: 'approved',
+              isActive: true,
+              updatedAt: new Date()
+            }
+          }
+        );
+      }
+    } catch (e) {
+      console.error('Error syncing approval to users collection:', e);
+    }
 
     return res.status(200).json({
       message: 'Agent registration application approved successfully.',
-      registration: agent
+      registration: agent || { _id: id, status: 'approved', kycStatus: 'approved' }
     });
   } catch (error) {
     console.error('Approve registration error:', error);
@@ -88,32 +179,54 @@ export const rejectRegistration = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Rejection reason is required' });
     }
 
-    const agent = await Agent.findById(id);
-    if (!agent) {
-      return res.status(404).json({ message: 'Agent not found' });
+    let agent = await Agent.findById(id);
+    let agentEmail = agent?.email;
+
+    if (agent) {
+      const oldStatus = agent.kycStatus;
+      agent.kycStatus = 'rejected';
+      agent.rejectionReason = rejectionReason;
+      agent.remarks = remarks || 'Rejected by Admin';
+      agent.updatedAt = new Date();
+      await agent.save();
+
+      const adminId = (req as any).agent?.agentId || agent._id;
+      await AuditLog.create({
+        entityId: agent._id,
+        entityType: 'Agent',
+        action: 'approval_change',
+        fieldName: 'kycStatus',
+        oldValue: oldStatus,
+        newValue: 'rejected',
+        changedBy: adminId
+      });
     }
 
-    const oldStatus = agent.kycStatus;
-    agent.kycStatus = 'rejected';
-    agent.rejectionReason = rejectionReason;
-    agent.remarks = remarks || 'Rejected by Admin';
-    agent.updatedAt = new Date();
-    await agent.save();
-
-    const adminId = (req as any).agent?.agentId || agent._id;
-    await AuditLog.create({
-      entityId: agent._id,
-      entityType: 'Agent',
-      action: 'approval_change',
-      fieldName: 'kycStatus',
-      oldValue: oldStatus,
-      newValue: 'rejected',
-      changedBy: adminId
-    });
+    // Sync rejection to users collection in MongoDB
+    try {
+      const db = mongoose.connection.db;
+      if (db) {
+        const userQuery = agentEmail ? { email: agentEmail.toLowerCase() } : { _id: id as any };
+        await db.collection('users').updateOne(
+          userQuery,
+          {
+            $set: {
+              status: 'rejected',
+              kycStatus: 'rejected',
+              rejectionReason: rejectionReason,
+              isActive: false,
+              updatedAt: new Date()
+            }
+          }
+        );
+      }
+    } catch (e) {
+      console.error('Error syncing rejection to users collection:', e);
+    }
 
     return res.status(200).json({
       message: 'Agent registration application rejected successfully.',
-      registration: agent
+      registration: agent || { _id: id, status: 'rejected', kycStatus: 'rejected' }
     });
   } catch (error) {
     console.error('Reject registration error:', error);
