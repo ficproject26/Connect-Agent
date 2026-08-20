@@ -1,0 +1,1 @@
+{"version":3,"file":"VendorCategory.d.ts","sourceRoot":"","sources":["../../src/models/VendorCategory.ts"],"names":[],"mappings":"AAAA,OAAO,EAAiB,QAAQ,EAAE,MAAM,UAAU,CAAC;AAEnD,MAAM,WAAW,eAAgB,SAAQ,QAAQ;IAC/C,IAAI,EAAE,MAAM,CAAC;IACb,IAAI,EAAE,MAAM,CAAC;IACb,WAAW,CAAC,EAAE,MAAM,CAAC;IACrB,SAAS,EAAE,IAAI,CAAC;CACjB;AASD,eAAO,MAAM,cAAc;;;;OAAiE,CAAC;AAC7F,eAAe,cAAc,CAAC"}
