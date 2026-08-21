@@ -8,7 +8,7 @@ const mongoose_1 = __importDefault(require("mongoose"));
 const dotenv_1 = __importDefault(require("dotenv"));
 // Load environment variables
 dotenv_1.default.config();
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || 8003;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/forge-connect';
 async function startServer() {
     try {
