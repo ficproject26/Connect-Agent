@@ -1,26 +1,10 @@
 import axios from 'axios';
 
 const getAgentBackendUrl = () => {
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    const isLocal = !hostname || 
-      hostname === 'localhost' || 
-      hostname === '127.0.0.1' || 
-      hostname.startsWith('192.168.') || 
-      hostname.startsWith('10.') || 
-      hostname.startsWith('172.');
-      
-    if (!isLocal) {
-      const prodUrl = import.meta.env.VITE_API_URL || import.meta.env.NEXT_PUBLIC_API_URL;
-      if (prodUrl && !prodUrl.includes('localhost')) {
-        return prodUrl.endsWith('/api') ? prodUrl : `${prodUrl}/api`;
-      }
-      return 'https://connect-agent-oy0d.onrender.com/api';
-    }
-  }
-  let url = import.meta.env.VITE_API_URL || import.meta.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api';
+  let url = import.meta.env.VITE_API_URL || import.meta.env.NEXT_PUBLIC_API_URL || 'http://13.203.197.69:8003/api';
+  url = url.trim().replace(/\/+$/, '');
   if (!url.endsWith('/api')) {
-    url = url.endsWith('/') ? `${url}api` : `${url}/api`;
+    url += '/api';
   }
   return url;
 };

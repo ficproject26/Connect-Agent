@@ -234,10 +234,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const endpoints = [
       { url: '/auth/login', useApi: true },
-      { url: 'http://3.110.121.132/api/auth/login', useApi: false },
-      { url: 'http://3.110.121.132:8001/api/auth/login', useApi: false },
-      { url: 'https://connect-agent-oy0d.onrender.com/api/auth/login', useApi: false },
-      { url: 'https://connect-admin-96pc.onrender.com/api/auth/login', useApi: false },
+      { url: 'http://13.203.197.69:8003/api/auth/login', useApi: false },
     ];
 
     // In dev, also try local ports
@@ -351,8 +348,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const regEndpoints = [
       { url: '/auth/register', useApi: true },
-      { url: 'https://connect-agent-oy0d.onrender.com/api/auth/register', useApi: false },
-      { url: 'https://connect-admin-96pc.onrender.com/api/auth/register', useApi: false },
+      { url: 'http://13.203.197.69:8003/api/auth/register', useApi: false },
     ];
 
     // In dev, also try local ports
