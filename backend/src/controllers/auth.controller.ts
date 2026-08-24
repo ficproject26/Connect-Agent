@@ -9,12 +9,18 @@ const registerSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   phone: z.string().min(10, 'Phone must be at least 10 digits'),
+  altPhone: z.string().optional().default(''),
   role: z.enum(['state', 'district', 'division', 'pincode', 'delivery_partner', 'technician']),
   dob: z.string().optional().or(z.date().optional()),
   gender: z.string().optional(),
   qualification: z.string().optional(),
   experience: z.string().optional(),
   previousCompany: z.string().optional(),
+  address: z.string().optional(),
+  fullAddress: z.string().optional(),
+  postOffice: z.string().optional(),
+  aadhaarNumber: z.string().optional(),
+  panNumber: z.string().optional(),
   territory: z.object({
     state: z.string().optional().default(''),
     district: z.string().optional().default(''),
@@ -22,6 +28,8 @@ const registerSchema = z.object({
     pincode: z.string().optional().default('')
   }).optional(),
   kycDocs: z.object({
+    aadhaarNumber: z.string().optional().default(''),
+    panNumber: z.string().optional().default(''),
     aadhaarCard: z.string().optional().default(''),
     panCard: z.string().optional().default(''),
     passportPhoto: z.string().optional().default(''),

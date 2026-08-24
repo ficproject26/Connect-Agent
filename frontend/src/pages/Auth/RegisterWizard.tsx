@@ -488,12 +488,18 @@ export const RegisterWizard: React.FC = () => {
         email: personalInfo.email,
         password: personalInfo.password,
         phone: personalInfo.phone,
+        altPhone: personalInfo.altPhone || '',
+        aadhaarNumber: personalInfo.aadhaarNumber || '',
+        panNumber: personalInfo.panNumber || '',
         role: role,
         dob: personalInfo.dob,
         gender: personalInfo.gender,
         qualification: professionalInfo.qualification,
         experience: professionalInfo.experience,
         previousCompany: professionalInfo.previousCompany,
+        address: address.fullAddress || '',
+        fullAddress: address.fullAddress || '',
+        postOffice: address.postOffice || '',
         territory: {
           state: address.state,
           district: role === 'state' ? '' : address.district,
@@ -501,6 +507,8 @@ export const RegisterWizard: React.FC = () => {
           pincode: role === 'pincode' ? address.pincode : ''
         },
         kycDocs: {
+          aadhaarNumber: personalInfo.aadhaarNumber || '',
+          panNumber: personalInfo.panNumber || '',
           aadhaarCard: documents.aadhaarCard.dataUrl,
           panCard: documents.panCard.dataUrl,
           passportPhoto: documents.passportPhoto.dataUrl,

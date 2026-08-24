@@ -240,6 +240,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // In dev, also try local ports
     if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
       endpoints.push(
+        { url: 'http://localhost:8003/api/auth/login', useApi: false },
+        { url: 'http://127.0.0.1:8003/api/auth/login', useApi: false },
         { url: 'http://localhost:8001/api/auth/login', useApi: false },
         { url: 'http://localhost:5001/api/auth/login', useApi: false },
         { url: 'http://localhost:4000/api/auth/login', useApi: false },
@@ -354,6 +356,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // In dev, also try local ports
     if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
       regEndpoints.push(
+        { url: 'http://localhost:8003/api/auth/register', useApi: false },
+        { url: 'http://127.0.0.1:8003/api/auth/register', useApi: false },
         { url: 'http://localhost:8001/api/auth/register', useApi: false },
         { url: 'http://localhost:5001/api/auth/register', useApi: false },
         { url: 'http://localhost:4000/api/auth/register', useApi: false },
