@@ -5,7 +5,6 @@ import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
-import { SignaturePad } from '../../components/ui/SignaturePad';
 import { ArrowLeft, ArrowRight, Save, Shield, FileText, CheckCircle, Eye, EyeOff, RotateCcw, Trash2 } from 'lucide-react';
 import { AgentNetworkHero } from '../../components/auth/AgentNetworkHero';
 import connectPortalLogo from '../../assets/connect_portal_logo.png';
@@ -1182,22 +1181,6 @@ export const RegisterWizard: React.FC = () => {
                           Remove
                         </button>
                       </div>
-                    )}
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-200">
-                    <p className="text-[11px] font-bold text-slate-500 mb-2">Or draw signature below:</p>
-                    <SignaturePad
-                      onSave={(data) => setDocuments(prev => ({
-                        ...prev,
-                        signature: { fileName: 'digital_signature.png', dataUrl: data, size: data.length }
-                      }))}
-                      onClear={() => removeDocument('signature')}
-                    />
-                    {documents.signature?.fileName && (
-                      <span className="text-[10px] text-emerald-600 font-bold block mt-2">
-                        ✓ Signature confirmed ({documents.signature.fileName})
-                      </span>
                     )}
                   </div>
                 </div>
