@@ -20,6 +20,7 @@ export interface IAgent extends Document {
     pincode: string;
   };
   kycStatus: 'pending' | 'approved' | 'rejected';
+  status?: 'pending' | 'approved' | 'active' | 'rejected' | 'suspended';
   kycDocs: {
     aadhaarCard: string;
     panCard: string;
@@ -76,6 +77,10 @@ const agentSchema = new Schema<IAgent>({
   kycStatus: {
     type: String,
     enum: ['pending', 'approved', 'rejected'],
+    default: 'pending'
+  },
+  status: {
+    type: String,
     default: 'pending'
   },
   kycDocs: {

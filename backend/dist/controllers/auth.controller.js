@@ -280,17 +280,21 @@ const login = async (req, res) => {
             if (db) {
                 const userDoc = await db.collection('users').findOne({ email: cleanEmail });
                 if (userDoc) {
-                    if (userDoc.status) {
-                        const uStatus = String(userDoc.status).toLowerCase();
-                        if (uStatus === 'approved' && agent.kycStatus !== 'approved') {
-                            agent.kycStatus = 'approved';
-                            await agent.save();
-                        }
-                        else if (uStatus === 'rejected' && agent.kycStatus !== 'rejected') {
-                            agent.kycStatus = 'rejected';
-                            agent.rejectionReason = userDoc.rejectionReason || 'Rejected by Admin';
-                            await agent.save();
-                        }
+                    const rawDocStatus = String(userDoc.status || userDoc.kycStatus || '').toLowerCase();
+                    if (rawDocStatus === 'approved' || rawDocStatus === 'active') {
+                        agent.kycStatus = 'approved';
+                        agent.status = 'approved';
+                        await agent.save();
+                    }
+                    else if (rawDocStatus === 'rejected') {
+                        agent.kycStatus = 'rejected';
+                        agent.status = 'rejected';
+                        agent.rejectionReason = userDoc.rejectionReason || 'Rejected by Admin';
+                        await agent.save();
+                    }
+                    else if (rawDocStatus === 'suspended' || rawDocStatus === 'inactive') {
+                        agent.status = 'suspended';
+                        await agent.save();
                     }
                     if (userDoc.role && ['state', 'district', 'division', 'pincode'].includes(String(userDoc.role).toLowerCase())) {
                         agent.role = String(userDoc.role).toLowerCase();
@@ -326,29 +330,30 @@ const login = async (req, res) => {
             }
         }
         // Workflow validation: Status check against MongoDB
-        const currentKycStatus = (agent.kycStatus || 'pending').toLowerCase();
-        const currentStatus = String(agent.status || 'pending').toLowerCase();
-        if (currentKycStatus === 'pending' || currentStatus === 'pending' || currentStatus === 'pending_approval') {
+        const currentKycStatus = (agent.kycStatus || '').toLowerCase();
+        const currentStatus = (agent.status || '').toLowerCase();
+        const isApproved = currentKycStatus === 'approved' || currentStatus === 'approved' || currentStatus === 'active';
+        if (!isApproved) {
+            if (currentKycStatus === 'rejected' || currentStatus === 'rejected') {
+                return res.status(403).json({
+                    message: `Your registration request was rejected by Admin. Reason: ${agent.rejectionReason || 'No reason provided.'}. Please contact the Administrator for assistance.`,
+                    status: 'rejected',
+                    rejectionReason: agent.rejectionReason || 'No reason provided.',
+                    registrationId: agent.registrationId || 'N/A',
+                    role: agent.role
+                });
+            }
+            if (currentStatus === 'suspended' || currentStatus === 'inactive') {
+                return res.status(403).json({
+                    message: 'Your account has been suspended/deactivated by the Admin. Please contact the Administrator for assistance.',
+                    status: 'suspended',
+                    registrationId: agent.registrationId || 'N/A',
+                    role: agent.role
+                });
+            }
             return res.status(403).json({
                 message: 'Your registration request is currently pending Admin verification. Please contact the Administrator for further assistance.',
                 status: 'pending',
-                registrationId: agent.registrationId || 'N/A',
-                role: agent.role
-            });
-        }
-        if (currentKycStatus === 'rejected' || currentStatus === 'rejected') {
-            return res.status(403).json({
-                message: `Your registration request was rejected by Admin. Reason: ${agent.rejectionReason || 'No reason provided.'}. Please contact the Administrator for assistance.`,
-                status: 'rejected',
-                rejectionReason: agent.rejectionReason || 'No reason provided.',
-                registrationId: agent.registrationId || 'N/A',
-                role: agent.role
-            });
-        }
-        if (currentStatus === 'suspended' || currentStatus === 'inactive') {
-            return res.status(403).json({
-                message: 'Your account has been suspended/deactivated by the Admin. Please contact the Administrator for assistance.',
-                status: 'suspended',
                 registrationId: agent.registrationId || 'N/A',
                 role: agent.role
             });
@@ -395,17 +400,21 @@ const getMe = async (req, res) => {
             if (db) {
                 const userDoc = await db.collection('users').findOne({ email: agent.email.toLowerCase() });
                 if (userDoc) {
-                    if (userDoc.status) {
-                        const uStatus = String(userDoc.status).toLowerCase();
-                        if (uStatus === 'approved' && agent.kycStatus !== 'approved') {
-                            agent.kycStatus = 'approved';
-                            await agent.save();
-                        }
-                        else if (uStatus === 'rejected' && agent.kycStatus !== 'rejected') {
-                            agent.kycStatus = 'rejected';
-                            agent.rejectionReason = userDoc.rejectionReason || 'Rejected by Admin';
-                            await agent.save();
-                        }
+                    const rawDocStatus = String(userDoc.status || userDoc.kycStatus || '').toLowerCase();
+                    if (rawDocStatus === 'approved' || rawDocStatus === 'active') {
+                        agent.kycStatus = 'approved';
+                        agent.status = 'approved';
+                        await agent.save();
+                    }
+                    else if (rawDocStatus === 'rejected') {
+                        agent.kycStatus = 'rejected';
+                        agent.status = 'rejected';
+                        agent.rejectionReason = userDoc.rejectionReason || 'Rejected by Admin';
+                        await agent.save();
+                    }
+                    else if (rawDocStatus === 'suspended' || rawDocStatus === 'inactive') {
+                        agent.status = 'suspended';
+                        await agent.save();
                     }
                     if (userDoc.role && ['state', 'district', 'division', 'pincode'].includes(String(userDoc.role).toLowerCase())) {
                         agent.role = String(userDoc.role).toLowerCase();
@@ -440,26 +449,27 @@ const getMe = async (req, res) => {
                 await agent.save();
             }
         }
-        const currentKycStatus = (agent.kycStatus || 'pending').toLowerCase();
-        const currentStatus = String(agent.status || 'pending').toLowerCase();
-        if (currentKycStatus === 'pending' || currentStatus === 'pending' || currentStatus === 'pending_approval') {
+        const currentKycStatus = (agent.kycStatus || '').toLowerCase();
+        const currentStatus = (agent.status || '').toLowerCase();
+        const isApproved = currentKycStatus === 'approved' || currentStatus === 'approved' || currentStatus === 'active';
+        if (!isApproved) {
+            if (currentKycStatus === 'rejected' || currentStatus === 'rejected') {
+                return res.status(403).json({
+                    message: `Your registration request was rejected by Admin. Reason: ${agent.rejectionReason || 'No reason provided.'}. Please contact the Administrator for assistance.`,
+                    status: 'rejected',
+                    rejectionReason: agent.rejectionReason || 'No reason provided.'
+                });
+            }
+            if (currentStatus === 'suspended' || currentStatus === 'inactive') {
+                return res.status(403).json({
+                    message: 'Your account has been suspended/deactivated by the Admin. Please contact the Administrator for assistance.',
+                    status: 'suspended'
+                });
+            }
             return res.status(403).json({
                 message: 'Your registration request is currently pending Admin verification. Please contact the Administrator for further assistance.',
                 status: 'pending',
                 registrationId: agent.registrationId || 'N/A'
-            });
-        }
-        if (currentKycStatus === 'rejected' || currentStatus === 'rejected') {
-            return res.status(403).json({
-                message: `Your registration request was rejected by Admin. Reason: ${agent.rejectionReason || 'No reason provided.'}. Please contact the Administrator for assistance.`,
-                status: 'rejected',
-                rejectionReason: agent.rejectionReason || 'No reason provided.'
-            });
-        }
-        if (currentStatus === 'suspended' || currentStatus === 'inactive') {
-            return res.status(403).json({
-                message: 'Your account has been suspended/deactivated by the Admin. Please contact the Administrator for assistance.',
-                status: 'suspended'
             });
         }
         return res.status(200).json({ agent });

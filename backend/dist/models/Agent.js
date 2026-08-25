@@ -45,6 +45,10 @@ const agentSchema = new mongoose_1.Schema({
         enum: ['pending', 'approved', 'rejected'],
         default: 'pending'
     },
+    status: {
+        type: String,
+        default: 'pending'
+    },
     kycDocs: {
         type: kycDocsSchema,
         default: () => ({})

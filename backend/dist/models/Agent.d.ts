@@ -18,6 +18,7 @@ export interface IAgent extends Document {
         pincode: string;
     };
     kycStatus: 'pending' | 'approved' | 'rejected';
+    status?: 'pending' | 'approved' | 'active' | 'rejected' | 'suspended';
     kycDocs: {
         aadhaarCard: string;
         panCard: string;
