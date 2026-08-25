@@ -20,7 +20,7 @@ const getAgentBackendUrl = () => {
     }
   }
 
-  let url = (typeof import.meta !== 'undefined' && import.meta.env ? (import.meta.env.VITE_API_URL || import.meta.env.NEXT_PUBLIC_API_URL) : null) || 'http://13.203.197.69:8003/api';
+  let url = (typeof import.meta !== 'undefined' && import.meta.env ? (import.meta.env.VITE_API_URL || import.meta.env.NEXT_PUBLIC_API_URL) : null) || 'https://connect-agent-1.onrender.com/api';
   url = url.trim().replace(/\/+$/, '');
   if (!url.endsWith('/api')) {
     url += '/api';

@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const getAgentBackendUrl = () => {
-  let url = import.meta.env.VITE_API_URL || 'http://13.203.197.69:8003/api';
+  let url = import.meta.env.VITE_API_URL || 'https://connect-agent-1.onrender.com/api';
   url = url.trim().replace(/\/+$/, '');
   if (!url.endsWith('/api')) {
     url += '/api';
