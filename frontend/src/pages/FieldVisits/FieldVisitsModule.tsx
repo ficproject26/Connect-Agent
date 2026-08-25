@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 interface FieldVisitRecord {
   _id: string;
@@ -182,9 +183,17 @@ export const FieldVisitsModule: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    fetchVisits();
-  }, []);
+  // Field Visits Auto-Polling Query (5s background refresh)
+  useQuery({
+    queryKey: ['fieldVisitsLive', activeRole],
+    queryFn: async () => {
+      await fetchVisits();
+      return true;
+    },
+    refetchInterval: 5000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true
+  });
 
   // Fetch live browser geolocation
   const handleFetchLocation = () => {

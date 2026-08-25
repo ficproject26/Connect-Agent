@@ -22,5 +22,9 @@ const targetSchema = new Schema<ITarget>({
   timestamps: true
 });
 
+targetSchema.index({ createdBy: 1 });
+targetSchema.index({ type: 1 });
+targetSchema.index({ createdAt: -1 });
+
 export const Target = model<ITarget>('Target', targetSchema);
 export default Target;

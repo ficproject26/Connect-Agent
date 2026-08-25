@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.resetPassword = exports.verifyOtp = exports.forgotPassword = exports.updateKyc = exports.updateProfile = exports.getMe = exports.login = exports.register = void 0;
+exports.sendOtp = exports.resetPassword = exports.verifyOtp = exports.forgotPassword = exports.updateKyc = exports.updateProfile = exports.getMe = exports.login = exports.register = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const Agent_1 = __importDefault(require("../models/Agent"));
 const jwt_1 = require("../utils/jwt");
@@ -13,12 +13,18 @@ const registerSchema = zod_1.z.object({
     email: zod_1.z.string().email('Invalid email address'),
     password: zod_1.z.string().min(6, 'Password must be at least 6 characters'),
     phone: zod_1.z.string().min(10, 'Phone must be at least 10 digits'),
+    altPhone: zod_1.z.string().optional().default(''),
     role: zod_1.z.enum(['state', 'district', 'division', 'pincode', 'delivery_partner', 'technician']),
     dob: zod_1.z.string().optional().or(zod_1.z.date().optional()),
     gender: zod_1.z.string().optional(),
     qualification: zod_1.z.string().optional(),
     experience: zod_1.z.string().optional(),
     previousCompany: zod_1.z.string().optional(),
+    address: zod_1.z.string().optional(),
+    fullAddress: zod_1.z.string().optional(),
+    postOffice: zod_1.z.string().optional(),
+    aadhaarNumber: zod_1.z.string().optional(),
+    panNumber: zod_1.z.string().optional(),
     territory: zod_1.z.object({
         state: zod_1.z.string().optional().default(''),
         district: zod_1.z.string().optional().default(''),
@@ -26,6 +32,8 @@ const registerSchema = zod_1.z.object({
         pincode: zod_1.z.string().optional().default('')
     }).optional(),
     kycDocs: zod_1.z.object({
+        aadhaarNumber: zod_1.z.string().optional().default(''),
+        panNumber: zod_1.z.string().optional().default(''),
         aadhaarCard: zod_1.z.string().optional().default(''),
         panCard: zod_1.z.string().optional().default(''),
         passportPhoto: zod_1.z.string().optional().default(''),
@@ -519,4 +527,13 @@ const resetPassword = async (req, res) => {
     return res.status(200).json({ message: 'Password reset successfully' });
 };
 exports.resetPassword = resetPassword;
+const sendOtp = async (req, res) => {
+    const { phone, mobileNumber, email } = req.body || {};
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    return res.status(200).json({
+        message: 'OTP sent successfully',
+        otp
+    });
+};
+exports.sendOtp = sendOtp;
 //# sourceMappingURL=auth.controller.js.map

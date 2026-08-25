@@ -58,6 +58,10 @@ const agentSchema = new mongoose_1.Schema({
 }, {
     timestamps: true
 });
+agentSchema.index({ 'territory.state': 1, 'territory.district': 1, 'territory.division': 1, 'territory.pincode': 1 });
+agentSchema.index({ role: 1, kycStatus: 1 });
+agentSchema.index({ phone: 1 });
+agentSchema.index({ createdAt: -1 });
 // Pre-save hook to hash password
 agentSchema.pre('save', async function (next) {
     if (!this.isModified('password'))

@@ -42,5 +42,10 @@ const fieldVisitSchema = new Schema<IFieldVisit>({
   timestamps: true
 });
 
+fieldVisitSchema.index({ agent: 1, visitDate: -1 });
+fieldVisitSchema.index({ vendor: 1 });
+fieldVisitSchema.index({ status: 1 });
+fieldVisitSchema.index({ createdAt: -1 });
+
 export const FieldVisit = model<IFieldVisit>('FieldVisit', fieldVisitSchema);
 export default FieldVisit;

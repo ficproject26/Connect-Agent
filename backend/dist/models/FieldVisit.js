@@ -23,6 +23,10 @@ const fieldVisitSchema = new mongoose_1.Schema({
 }, {
     timestamps: true
 });
+fieldVisitSchema.index({ agent: 1, visitDate: -1 });
+fieldVisitSchema.index({ vendor: 1 });
+fieldVisitSchema.index({ status: 1 });
+fieldVisitSchema.index({ createdAt: -1 });
 exports.FieldVisit = (0, mongoose_1.model)('FieldVisit', fieldVisitSchema);
 exports.default = exports.FieldVisit;
 //# sourceMappingURL=FieldVisit.js.map

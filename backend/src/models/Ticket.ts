@@ -28,5 +28,11 @@ const ticketSchema = new Schema<ITicket>({
   timestamps: true
 });
 
+ticketSchema.index({ creator: 1 });
+ticketSchema.index({ assignedTo: 1 });
+ticketSchema.index({ status: 1 });
+ticketSchema.index({ priority: 1 });
+ticketSchema.index({ createdAt: -1 });
+
 export const Ticket = model<ITicket>('Ticket', ticketSchema);
 export default Ticket;

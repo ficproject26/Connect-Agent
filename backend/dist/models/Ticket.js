@@ -16,6 +16,11 @@ const ticketSchema = new mongoose_1.Schema({
 }, {
     timestamps: true
 });
+ticketSchema.index({ creator: 1 });
+ticketSchema.index({ assignedTo: 1 });
+ticketSchema.index({ status: 1 });
+ticketSchema.index({ priority: 1 });
+ticketSchema.index({ createdAt: -1 });
 exports.Ticket = (0, mongoose_1.model)('Ticket', ticketSchema);
 exports.default = exports.Ticket;
 //# sourceMappingURL=Ticket.js.map

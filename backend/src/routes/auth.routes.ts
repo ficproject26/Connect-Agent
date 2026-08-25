@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { register, login, getMe, updateProfile, updateKyc, forgotPassword, verifyOtp, resetPassword } from '../controllers/auth.controller';
+import { register, login, getMe, updateProfile, updateKyc, forgotPassword, verifyOtp, resetPassword, sendOtp } from '../controllers/auth.controller';
 import { authMiddleware } from '../middleware/auth.middleware';
 import { validate } from '../middleware/validate.middleware';
 import { authRateLimiter } from '../middleware/rateLimiter.middleware';
@@ -18,6 +18,11 @@ router.post('/login', authRateLimiter, validate(loginSchema), login);
 router.post('/auth/login', authRateLimiter, validate(loginSchema), login);
 router.post('/api/auth/login', authRateLimiter, validate(loginSchema), login);
 router.post('/api/login', authRateLimiter, validate(loginSchema), login);
+
+// OTP routes
+router.post('/send-otp', sendOtp);
+router.post('/auth/send-otp', sendOtp);
+router.post('/api/auth/send-otp', sendOtp);
 
 // Profile and KYC routes
 router.get('/me', authMiddleware, getMe);

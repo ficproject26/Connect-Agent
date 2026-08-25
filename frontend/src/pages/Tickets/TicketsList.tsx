@@ -3,6 +3,7 @@ import { Card, CardHeader, CardTitle, CardBody } from '../../components/ui';
 import { Ticket, Send, Eye, Loader2, Paperclip, FileText, X, ShieldAlert, ArrowUpRight, CheckCircle2, RotateCcw, UserCheck } from 'lucide-react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 interface SupportTicket {
   _id: string;

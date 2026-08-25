@@ -32,17 +32,27 @@ app.use('/api/auth', auth_routes_1.default);
 app.use('/auth', auth_routes_1.default);
 app.use('/api', auth_routes_1.default);
 app.use('/api/vendors', vendor_routes_1.default);
+app.use('/vendors', vendor_routes_1.default);
 app.use('/api/targets', target_routes_1.default);
+app.use('/targets', target_routes_1.default);
 app.use('/api/tickets', ticket_routes_1.default);
+app.use('/tickets', ticket_routes_1.default);
 app.use('/api/reports', report_routes_1.default);
+app.use('/reports', report_routes_1.default);
 app.use('/api/notifications', notification_routes_1.default);
+app.use('/notifications', notification_routes_1.default);
 app.use('/api/dashboard', dashboard_routes_1.default);
+app.use('/dashboard', dashboard_routes_1.default);
 app.use('/api/admin', admin_routes_1.default);
+app.use('/admin', admin_routes_1.default);
 app.use('/api/wallet', wallet_routes_1.default);
+app.use('/wallet', wallet_routes_1.default);
 app.use('/api/attendance', attendance_routes_1.default);
+app.use('/attendance', attendance_routes_1.default);
 app.use('/api/field-visits', fieldVisit_routes_1.default);
+app.use('/field-visits', fieldVisit_routes_1.default);
 // Detailed health check route with DB connectivity verification
-app.get('/api/health', (req, res) => {
+const healthHandler = (req, res) => {
     const dbState = mongoose_1.default.connection.readyState;
     const dbStatusMap = {
         0: 'disconnected',
@@ -60,7 +70,9 @@ app.get('/api/health', (req, res) => {
         },
         message: 'Forge Connect Backend API is healthy',
     });
-});
+};
+app.get('/api/health', healthHandler);
+app.get('/health', healthHandler);
 // 404 handler
 app.use((req, res) => {
     res.status(404).json({ status: 'fail', message: 'Resource not found' });

@@ -79,7 +79,8 @@ export const getVendors = async (req: Request, res: Response) => {
       .populate('assignedAgent', 'name email role')
       .sort({ createdAt: -1 })
       .skip((pageNum - 1) * limitNum)
-      .limit(limitNum);
+      .limit(limitNum)
+      .lean();
 
     return res.status(200).json({
       vendors,

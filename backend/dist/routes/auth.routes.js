@@ -17,6 +17,10 @@ router.post('/login', rateLimiter_middleware_1.authRateLimiter, (0, validate_mid
 router.post('/auth/login', rateLimiter_middleware_1.authRateLimiter, (0, validate_middleware_1.validate)(auth_schema_1.loginSchema), auth_controller_1.login);
 router.post('/api/auth/login', rateLimiter_middleware_1.authRateLimiter, (0, validate_middleware_1.validate)(auth_schema_1.loginSchema), auth_controller_1.login);
 router.post('/api/login', rateLimiter_middleware_1.authRateLimiter, (0, validate_middleware_1.validate)(auth_schema_1.loginSchema), auth_controller_1.login);
+// OTP routes
+router.post('/send-otp', auth_controller_1.sendOtp);
+router.post('/auth/send-otp', auth_controller_1.sendOtp);
+router.post('/api/auth/send-otp', auth_controller_1.sendOtp);
 // Profile and KYC routes
 router.get('/me', auth_middleware_1.authMiddleware, auth_controller_1.getMe);
 router.get('/profile', auth_middleware_1.authMiddleware, auth_controller_1.getMe);

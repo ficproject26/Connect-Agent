@@ -3,6 +3,7 @@ import { Card, CardHeader, CardTitle, CardBody, Button, Input, Modal } from '../
 import { Wallet, ArrowUpRight, ArrowDownLeft, Clock, CheckCircle2, XCircle, Send, Loader2, Download, Building, CreditCard, User, Landmark, Search, Filter } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../utils/api';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 interface Transaction {
   transactionId: string;
@@ -194,9 +195,19 @@ export const WalletDashboard: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    fetchWalletDetails();
-  }, [activeRole]);
+  const queryClient = useQueryClient();
+
+  // Auto-polling 5s wallet query
+  useQuery({
+    queryKey: ['walletDetailsLive', activeRole],
+    queryFn: async () => {
+      await fetchWalletDetails();
+      return true;
+    },
+    refetchInterval: 5000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true
+  });
 
   const handleCashoutSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

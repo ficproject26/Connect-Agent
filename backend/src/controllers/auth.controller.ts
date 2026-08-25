@@ -564,3 +564,13 @@ export const verifyOtp = async (req: Request, res: Response) => {
 export const resetPassword = async (req: Request, res: Response) => {
   return res.status(200).json({ message: 'Password reset successfully' });
 };
+
+export const sendOtp = async (req: Request, res: Response) => {
+  const { phone, mobileNumber, email } = req.body || {};
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  return res.status(200).json({
+    message: 'OTP sent successfully',
+    otp
+  });
+};
+

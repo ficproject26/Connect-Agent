@@ -19,6 +19,10 @@ const targetAssignmentSchema = new mongoose_1.Schema({
 }, {
     timestamps: true
 });
+targetAssignmentSchema.index({ assignedTo: 1, status: 1 });
+targetAssignmentSchema.index({ target: 1 });
+targetAssignmentSchema.index({ assignedBy: 1 });
+targetAssignmentSchema.index({ createdAt: -1 });
 exports.TargetAssignment = (0, mongoose_1.model)('TargetAssignment', targetAssignmentSchema);
 exports.default = exports.TargetAssignment;
 //# sourceMappingURL=TargetAssignment.js.map

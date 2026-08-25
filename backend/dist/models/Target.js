@@ -13,6 +13,9 @@ const targetSchema = new mongoose_1.Schema({
 }, {
     timestamps: true
 });
+targetSchema.index({ createdBy: 1 });
+targetSchema.index({ type: 1 });
+targetSchema.index({ createdAt: -1 });
 exports.Target = (0, mongoose_1.model)('Target', targetSchema);
 exports.default = exports.Target;
 //# sourceMappingURL=Target.js.map

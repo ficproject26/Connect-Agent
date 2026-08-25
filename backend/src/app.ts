@@ -30,19 +30,39 @@ app.use('/api', apiRateLimiter);
 app.use('/api/auth', authRoutes);
 app.use('/auth', authRoutes);
 app.use('/api', authRoutes);
+
 app.use('/api/vendors', vendorRoutes);
+app.use('/vendors', vendorRoutes);
+
 app.use('/api/targets', targetRoutes);
+app.use('/targets', targetRoutes);
+
 app.use('/api/tickets', ticketRoutes);
+app.use('/tickets', ticketRoutes);
+
 app.use('/api/reports', reportRoutes);
+app.use('/reports', reportRoutes);
+
 app.use('/api/notifications', notificationRoutes);
+app.use('/notifications', notificationRoutes);
+
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/dashboard', dashboardRoutes);
+
 app.use('/api/admin', adminRoutes);
+app.use('/admin', adminRoutes);
+
 app.use('/api/wallet', walletRoutes);
+app.use('/wallet', walletRoutes);
+
 app.use('/api/attendance', attendanceRoutes);
+app.use('/attendance', attendanceRoutes);
+
 app.use('/api/field-visits', fieldVisitRoutes);
+app.use('/field-visits', fieldVisitRoutes);
 
 // Detailed health check route with DB connectivity verification
-app.get('/api/health', (req: Request, res: Response) => {
+const healthHandler = (req: Request, res: Response) => {
   const dbState = mongoose.connection.readyState;
   const dbStatusMap: Record<number, string> = {
     0: 'disconnected',
@@ -61,7 +81,10 @@ app.get('/api/health', (req: Request, res: Response) => {
     },
     message: 'Forge Connect Backend API is healthy',
   });
-});
+};
+
+app.get('/api/health', healthHandler);
+app.get('/health', healthHandler);
 
 // 404 handler
 app.use((req: Request, res: Response) => {

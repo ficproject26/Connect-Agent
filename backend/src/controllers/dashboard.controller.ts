@@ -45,11 +45,13 @@ export const getDashboardStats = async (req: Request, res: Response) => {
       TargetAssignment.find({ assignedTo: agentId })
         .populate('target', 'title type targetValue')
         .sort({ createdAt: -1 })
-        .limit(5),
+        .limit(5)
+        .lean(),
       Vendor.find(vendorFilter)
         .populate('category', 'name')
         .sort({ createdAt: -1 })
         .limit(5)
+        .lean()
     ]);
 
     return res.status(200).json({

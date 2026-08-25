@@ -29,5 +29,10 @@ const targetAssignmentSchema = new Schema<ITargetAssignment>({
   timestamps: true
 });
 
+targetAssignmentSchema.index({ assignedTo: 1, status: 1 });
+targetAssignmentSchema.index({ target: 1 });
+targetAssignmentSchema.index({ assignedBy: 1 });
+targetAssignmentSchema.index({ createdAt: -1 });
+
 export const TargetAssignment = model<ITargetAssignment>('TargetAssignment', targetAssignmentSchema);
 export default TargetAssignment;

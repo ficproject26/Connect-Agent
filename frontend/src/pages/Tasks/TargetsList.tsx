@@ -3,6 +3,7 @@ import { Card, CardHeader, CardTitle, CardBody, Button, Modal } from '../../comp
 import { Target, CheckCircle2, Calendar, Check, MapPin, Loader2, Plus, Users, Award, Eye, Building2 } from 'lucide-react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getDistrictsForState, getDivisionsForDistrict, getPincodesForDivision } from '../../utils/locationData';
 
 interface Allocation {
@@ -170,45 +171,45 @@ export const TargetsList: React.FC = () => {
     }
   }, [isCreateModalOpen, userRole, userDistrict, userDivision, userPincode]);
 
-  const fetchAssignments = async () => {
-    setIsLoading(true);
-    setErrorMsg('');
-    try {
-      const response = await api.get('/targets/assignments/mine');
-      const backendAssignments = response.data.assignments || [];
-      
-      if (backendAssignments.length > 0) {
-        const mapped: Allocation[] = backendAssignments.map((a: any) => ({
-          _id: a._id,
-          vendorName: a.target?.title || 'Merchant Onboarding Target',
-          location: `PIN ${selectedPincode} (${userDivision})`,
-          dueDate: new Date(a.dueDate).toLocaleDateString() + ' ' + new Date(a.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          status: a.status,
-          priority: a.target?.type === 'daily' ? 'high' : 'medium',
-          taskDescription: a.target?.description || 'Achieve merchant onboarding quota target goal.',
-          targetValue: a.target?.targetValue || 20
-        }));
+  // Target Assignments Query (5s automatic real-time background refresh)
+  useQuery({
+    queryKey: ['targetAssignmentsMine', userTargetsKey],
+    queryFn: async () => {
+      try {
+        const response = await api.get('/targets/assignments/mine');
+        const backendAssignments = response.data.assignments || [];
+        
+        if (backendAssignments.length > 0) {
+          const mapped: Allocation[] = backendAssignments.map((a: any) => ({
+            _id: a._id,
+            vendorName: a.target?.title || 'Merchant Onboarding Target',
+            location: `PIN ${userPincode} (${userDivision})`,
+            dueDate: new Date(a.dueDate).toLocaleDateString() + ' ' + new Date(a.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            status: a.status,
+            priority: a.target?.type === 'daily' ? 'high' : 'medium',
+            taskDescription: a.target?.description || 'Achieve merchant onboarding quota target goal.',
+            targetValue: a.target?.targetValue || 20
+          }));
 
-        setAllocations(prev => {
-          const apiIds = new Set(mapped.map(m => m._id));
-          const localOnly = prev.filter(p => !apiIds.has(p._id));
-          const combined = [...localOnly, ...mapped];
-          try {
-            localStorage.setItem(userTargetsKey, JSON.stringify(combined));
-          } catch (e) {}
-          return combined;
-        });
+          setAllocations(prev => {
+            const apiIds = new Set(mapped.map(m => m._id));
+            const localOnly = prev.filter(p => !apiIds.has(p._id));
+            const combined = [...localOnly, ...mapped];
+            try {
+              localStorage.setItem(userTargetsKey, JSON.stringify(combined));
+            } catch (e) {}
+            return combined;
+          });
+        }
+        return response.data;
+      } catch (err: any) {
+        return null;
       }
-    } catch (err: any) {
-      console.log('Using local targets allocations');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchAssignments();
-  }, []);
+    },
+    refetchInterval: 5000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true
+  });
 
   const handleCreateTargetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

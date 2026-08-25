@@ -80,7 +80,8 @@ const getVendors = async (req, res) => {
             .populate('assignedAgent', 'name email role')
             .sort({ createdAt: -1 })
             .skip((pageNum - 1) * limitNum)
-            .limit(limitNum);
+            .limit(limitNum)
+            .lean();
         return res.status(200).json({
             vendors,
             pagination: { page: pageNum, limit: limitNum, total, pages: Math.ceil(total / limitNum) }

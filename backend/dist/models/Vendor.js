@@ -39,6 +39,13 @@ const vendorSchema = new mongoose_1.Schema({
     timestamps: true,
     strict: false
 });
+vendorSchema.index({ state: 1, district: 1, division: 1, pincode: 1 });
+vendorSchema.index({ status: 1, kycStatus: 1 });
+vendorSchema.index({ assignedAgent: 1 });
+vendorSchema.index({ agentId: 1 });
+vendorSchema.index({ onboardedBy: 1 });
+vendorSchema.index({ phone: 1 });
+vendorSchema.index({ createdAt: -1 });
 exports.Vendor = (0, mongoose_1.model)('Vendor', vendorSchema);
 exports.default = exports.Vendor;
 //# sourceMappingURL=Vendor.js.map

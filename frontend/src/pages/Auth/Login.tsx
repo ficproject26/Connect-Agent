@@ -6,8 +6,7 @@ import * as z from 'zod';
 import { useAuth } from '../../context/AuthContext';
 import { AlertCircle, Eye, EyeOff, Smartphone, Mail, ArrowRight } from 'lucide-react';
 import { AgentNetworkHero } from '../../components/auth/AgentNetworkHero';
-import API_BASE_URL from '../../utils/api';
-
+import api from '../../utils/api';
 import connectPortalLogo from '../../assets/connect_portal_logo.png';
 
 const INDIAN_MOBILE_REGEX = /^[6-9][0-9]{9}$/;
@@ -67,12 +66,8 @@ export const Login: React.FC = () => {
 
     try {
       // Send OTP via API
-      const res = await fetch(`${API_BASE_URL}/auth/send-otp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: mobileNumber, mobileNumber })
-      });
-      const data = await res.json();
+      const res = await api.post('/auth/send-otp', { phone: mobileNumber, mobileNumber });
+      const data = res.data || {};
       
       const otpCode = data.otp || Math.floor(100000 + Math.random() * 900000).toString();
       addNotification('OTP Generated', `Your 6-digit OTP for +91 ${mobileNumber} is ${otpCode}`, 'high', 'system');

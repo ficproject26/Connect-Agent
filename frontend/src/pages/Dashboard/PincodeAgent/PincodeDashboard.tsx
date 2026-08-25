@@ -6,17 +6,34 @@ import {
   TrendingUp, Clock, CheckCircle2,
   Plus, Users, Target, Ticket, Send, ShieldAlert, FileText, Camera, Download, Loader2, MessageSquare
 } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../../utils/api';
 
 export const PincodeDashboard: React.FC = () => {
   const { user, addNotification } = useAuth();
   const { showToast } = useToast();
-  
-  // Dashboard Live Stats State
-  const [stats, setStats] = useState<any>(null);
-  const [recentAssignments, setRecentAssignments] = useState<any[]>([]);
-  const [recentVendors, setRecentVendors] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
+
+  // Dashboard Live Stats Query (5s automatic background refresh)
+  const { data: dashboardData, isLoading } = useQuery({
+    queryKey: ['pincodeDashboardStats'],
+    queryFn: async () => {
+      const response = await api.get('/dashboard/stats');
+      return response.data;
+    },
+    refetchInterval: 5000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true
+  });
+
+  const stats = dashboardData?.stats || {
+    targets: { total: 0, completed: 0, completionRate: 0 },
+    vendors: { total: 0, pending: 0 },
+    notifications: { unread: 0 },
+    tickets: { open: 0, resolved: 0 }
+  };
+  const recentVendors = dashboardData?.recentVendors || [];
+  const recentAssignments = dashboardData?.recentAssignments || [];
 
   // Ticket submission state
   const [ticketRaised, setTicketRaised] = useState(false);
@@ -38,47 +55,7 @@ export const PincodeDashboard: React.FC = () => {
     setFieldAlerts(prev => prev.filter(item => item.id !== id));
   };
 
-  const fetchDashboardStats = async () => {
-    try {
-      const response = await api.get('/dashboard/stats');
-      const backendStats = response.data.stats;
-      
-      const defaultStats = {
-        targets: { total: 0, completed: 0, completionRate: 0 },
-        vendors: { total: 0, pending: 0 },
-        notifications: { unread: 0 },
-        tickets: { open: 0, resolved: 0 }
-      };
-
-      if (!backendStats || (backendStats.targets?.total === 0 && backendStats.vendors?.total === 0)) {
-        setStats(defaultStats);
-        setRecentVendors([]);
-        setRecentAssignments([]);
-      } else {
-        setStats(backendStats);
-        setRecentVendors(response.data.recentVendors && response.data.recentVendors.length > 0 ? response.data.recentVendors : []);
-        setRecentAssignments(response.data.recentAssignments && response.data.recentAssignments.length > 0 ? response.data.recentAssignments : []);
-      }
-    } catch (err: any) {
-      if (err?.response?.status !== 401) {
-        console.error('Failed to fetch dashboard stats:', err);
-      }
-      setStats({
-        targets: { total: 0, completed: 0, completionRate: 0 },
-        vendors: { total: 0, pending: 0 },
-        notifications: { unread: 0 },
-        tickets: { open: 0, resolved: 0 }
-      });
-      setRecentVendors([]);
-      setRecentAssignments([]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchDashboardStats();
-    
     // Simulate real-time target assignment notification after 5 seconds
     const timer = setTimeout(() => {
       showToast("New Target Assigned: Validate Aadhaar QR Scan for Sree Balaji Groceries", "info");
@@ -105,7 +82,7 @@ export const PincodeDashboard: React.FC = () => {
         'system'
       );
       showToast(`Support ticket for ${category} successfully raised!`, 'success');
-      fetchDashboardStats(); // Refresh stats counters
+      queryClient.invalidateQueries({ queryKey: ['pincodeDashboardStats'] });
       setTimeout(() => {
         setTicketRaised(false);
       }, 3000);

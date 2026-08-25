@@ -5,7 +5,7 @@ import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { KeyRound, ShieldAlert, ArrowLeft, CheckCircle, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import API_BASE_URL from '../../utils/api';
+import api from '../../utils/api';
 
 export const OTPVerification: React.FC = () => {
   const navigate = useNavigate();
