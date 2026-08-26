@@ -45,7 +45,8 @@ export const getTargets = async (req: Request, res: Response) => {
       .populate('createdBy', 'name email role')
       .sort({ createdAt: -1 })
       .skip((pageNum - 1) * limitNum)
-      .limit(limitNum);
+      .limit(limitNum)
+      .lean();
 
     return res.status(200).json({
       targets,
@@ -237,7 +238,8 @@ export const getMyAssignments = async (req: Request, res: Response) => {
       .populate('assignedBy', 'name email role')
       .sort({ createdAt: -1 })
       .skip((pageNum - 1) * limitNum)
-      .limit(limitNum);
+      .limit(limitNum)
+      .lean();
 
     return res.status(200).json({
       assignments,

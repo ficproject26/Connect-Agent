@@ -41,7 +41,8 @@ const getTickets = async (req, res) => {
             .populate('assignedTo', 'name email role')
             .sort({ createdAt: -1 })
             .skip((pageNum - 1) * limitNum)
-            .limit(limitNum);
+            .limit(limitNum)
+            .lean();
         return res.status(200).json({
             tickets,
             pagination: { page: pageNum, limit: limitNum, total, pages: Math.ceil(total / limitNum) }
@@ -67,7 +68,8 @@ const getTicketById = async (req, res) => {
         }
         const ticket = await Ticket_1.default.findOne(filter)
             .populate('creator', 'name email role phone')
-            .populate('assignedTo', 'name email role phone');
+            .populate('assignedTo', 'name email role phone')
+            .lean();
         if (!ticket)
             return res.status(404).json({ message: 'Ticket not found or access denied' });
         return res.status(200).json({ ticket });

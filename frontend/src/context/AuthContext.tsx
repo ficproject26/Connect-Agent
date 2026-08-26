@@ -226,40 +226,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string): Promise<any> => {
     const loginPayload = { email: email.trim().toLowerCase(), password };
 
-    // Fire all backend login requests IN PARALLEL — fastest success wins (25s timeout for Render wake-up)
-    const makeRequest = (url: string, useApi: boolean) =>
-      useApi
-        ? api.post(url, loginPayload)
-        : axios.post(url, loginPayload, { timeout: 25000, headers: { 'Content-Type': 'application/json' } });
-
-    const endpoints = [
-      { url: '/auth/login', useApi: true },
-      { url: 'https://connect-agent-1.onrender.com/api/auth/login', useApi: false },
-    ];
-
-    // In dev, also try local ports
-    if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-      endpoints.push(
-        { url: 'http://localhost:8003/api/auth/login', useApi: false },
-        { url: 'http://127.0.0.1:8003/api/auth/login', useApi: false },
-        { url: 'http://localhost:8001/api/auth/login', useApi: false },
-        { url: 'http://localhost:5001/api/auth/login', useApi: false },
-        { url: 'http://localhost:4000/api/auth/login', useApi: false },
-      );
-    }
-
-    const results = await Promise.allSettled(
-      endpoints.map(ep => makeRequest(ep.url, ep.useApi))
-    );
-
-    // Check results: find first success with token
-    let got403: any = null;
-    let got401: any = null;
-
-    for (const result of results) {
-      if (result.status === 'fulfilled' && result.value?.data?.token) {
+    try {
+      const response = await api.post('/auth/login', loginPayload);
+      if (response?.data?.token) {
         queryClient.clear();
-        const data = result.value.data;
+        const data = response.data;
         const agent = data.agent || data.user || {};
         agent.status = (agent.kycStatus === 'approved' || agent.status === 'approved' || agent.status === 'active') ? 'active' : 'pending_approval';
         agent.mobile = agent.phone;
@@ -273,18 +244,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setTimeout(() => { fetchNotifications(); }, 100);
         return finalAgent;
       }
-      if (result.status === 'rejected') {
-        const err = result.reason;
-        if (err?.response?.status === 403 && !got403) got403 = err;
-        if (err?.response?.status === 401 && !got401) got401 = err;
+    } catch (err: any) {
+      if (err?.response?.status === 403 || err?.response?.status === 401) {
+        throw err;
       }
     }
-
-    // Agent exists but pending/rejected/suspended — surface the status message
-    if (got403) throw got403;
-
-    // Explicit invalid credentials from live backend server
-    if (got401) throw got401;
 
     // Fallback for known agent accounts if servers are sleeping/offline or timing out
     const cleanEmail = email.trim().toLowerCase();
@@ -342,36 +306,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const register = async (agentData: any): Promise<any> => {
-    // Fire all registration requests IN PARALLEL — fastest success wins
-    const makeRegRequest = (url: string, useApi: boolean) =>
-      useApi
-        ? api.post(url, agentData)
-        : axios.post(url, agentData, { timeout: 30000, headers: { 'Content-Type': 'application/json' } });
-
-    const regEndpoints = [
-      { url: '/auth/register', useApi: true },
-      { url: 'https://connect-agent-1.onrender.com/api/auth/register', useApi: false },
-    ];
-
-    // In dev, also try local ports
-    if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-      regEndpoints.push(
-        { url: 'http://localhost:8003/api/auth/register', useApi: false },
-        { url: 'http://127.0.0.1:8003/api/auth/register', useApi: false },
-        { url: 'http://localhost:8001/api/auth/register', useApi: false },
-        { url: 'http://localhost:5001/api/auth/register', useApi: false },
-        { url: 'http://localhost:4000/api/auth/register', useApi: false },
-      );
-    }
-
-    const regResults = await Promise.allSettled(
-      regEndpoints.map(ep => makeRegRequest(ep.url, ep.useApi))
-    );
-
-    // Find first successful response
-    for (const result of regResults) {
-      if (result.status === 'fulfilled' && result.value?.data) {
-        const data = result.value.data;
+    try {
+      const response = await api.post('/auth/register', agentData);
+      if (response?.data) {
+        const data = response.data;
         const regId = data.registrationId || data.agent?.registrationId || `REG-${Date.now().toString().slice(-6)}`;
         const resultData = {
           ...data,
@@ -389,7 +327,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           localStorage.setItem('agent_user', JSON.stringify(agent));
         }
 
-        // Save registration record locally as backup
         try {
           const existingPending = JSON.parse(localStorage.getItem('pending_agent_registrations') || '[]');
           existingPending.push({
@@ -407,6 +344,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } catch (e) {}
 
         return resultData;
+      }
+    } catch (err: any) {
+      if (err?.response?.data?.message) {
+        throw new Error(err.response.data.message);
       }
     }
 

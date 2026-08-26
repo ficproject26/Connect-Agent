@@ -29,7 +29,7 @@ const getRegistrations = async (req, res) => {
                 filter.kycStatus = statusQuery;
             }
         }
-        let registrations = await Agent_1.default.find(filter).select('-password').sort({ createdAt: -1 });
+        let registrations = await Agent_1.default.find(filter).select('-password').sort({ createdAt: -1 }).lean();
         // Also query 'users' collection in MongoDB for any agent registrations synced directly to users collection
         try {
             const db = mongoose_1.default.connection.db;
@@ -236,8 +236,8 @@ const getHierarchyTree = async (req, res) => {
         if (statusFilter && statusFilter !== 'all') {
             filter.kycStatus = statusFilter;
         }
-        const agents = await Agent_1.default.find(filter).select('-password').sort({ createdAt: -1 });
-        const allVendors = await Vendor_1.default.find(vendorScopeFilter);
+        const agents = await Agent_1.default.find(filter).select('-password').sort({ createdAt: -1 }).lean();
+        const allVendors = await Vendor_1.default.find(vendorScopeFilter).select('_id assignedAgent pincode division district createdAt').lean();
         const todayStr = new Date().toISOString().slice(0, 10);
         const yesterdayStr = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
         // Group agents into multi-tier hierarchy
@@ -452,7 +452,7 @@ const getWeeklyLeaderboard = async (req, res) => {
         if (roleFilter && roleFilter !== 'all') {
             filter.role = roleFilter;
         }
-        const agents = await Agent_1.default.find(filter).select('-password');
+        const agents = await Agent_1.default.find(filter).select('-password').lean();
         // Enrich and compute leaderboard metrics
         let leaderboard = agents.map(agent => {
             const perf = agent.performanceScore || 85;
