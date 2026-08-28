@@ -22,6 +22,8 @@ export interface AgentProfile {
     division?: string;
     district?: string;
     pincode?: string;
+    postOffice?: string;
+    taluk?: string;
   };
   kycStatus: 'pending' | 'approved' | 'rejected';
   status?: 'pending_approval' | 'active' | 'inactive'; // compatibility

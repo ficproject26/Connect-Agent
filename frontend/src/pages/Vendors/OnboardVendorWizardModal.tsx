@@ -56,7 +56,7 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
     email: '',
     buildingNo: '',
     streetName: '',
-    postOffice: user?.territory?.postOffice || 'Vijayawada Head Post Office',
+    postOffice: (user?.territory as any)?.postOffice || 'Vijayawada Head Post Office',
     taluk: user?.territory?.division || 'Vijayawada Urban',
     district: user?.territory?.district || 'NTR District',
     state: user?.territory?.state || 'Andhra Pradesh',
