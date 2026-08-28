@@ -16,6 +16,7 @@ import adminRoutes from './routes/admin.routes';
 import walletRoutes from './routes/wallet.routes';
 import attendanceRoutes from './routes/attendance.routes';
 import fieldVisitRoutes from './routes/fieldVisit.routes';
+import { getCategories } from './controllers/admin.controller';
 
 const app = express();
 
@@ -26,7 +27,11 @@ app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 app.use('/api', apiRateLimiter);
 
+// Public categories endpoint
+app.get(['/api/categories', '/api/public/categories'], getCategories);
+
 // Routes
+
 app.use('/api/auth', authRoutes);
 app.use('/auth', authRoutes);
 app.use('/api', authRoutes);

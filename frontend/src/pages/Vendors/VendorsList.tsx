@@ -11,6 +11,7 @@ import { useAuth } from '../../context/AuthContext';
 import { OnboardVendorWizardModal } from './OnboardVendorWizardModal';
 import { AgentOnboardedVendorsModal } from './AgentOnboardedVendorsModal';
 import { getDistrictsForState, getDivisionsForDistrict, getLocationFromPincode } from '../../utils/locationData';
+import { CANONICAL_MAIN_CATEGORIES } from '../../services/categoryService';
 
 interface Vendor {
   id: string;
@@ -129,7 +130,7 @@ export const VendorsList: React.FC = () => {
           assignedAgent: assignedAgentName,
           createdAt: regDate,
           updatedAt: v.updatedAt ? new Date(v.updatedAt).toISOString().slice(0, 10) : regDate,
-          storeType: v.category?.name || (typeof v.category === 'string' ? v.category : '') || v.storeType || 'Supermarket & Retail',
+          storeType: v.category?.name || (typeof v.category === 'string' ? v.category : '') || v.storeType || 'Services',
           businessGst: v.gst || v.businessGst || '',
           fullAddress: v.location?.address || v.fullAddress || ''
         };
@@ -192,7 +193,7 @@ export const VendorsList: React.FC = () => {
   }, [vendors, activeRole, userState, userDistrict, userDivision, userPincode]);
 
   // Extract unique filter dropdown values strictly scoped to Andhra Pradesh
-  const categories = useMemo(() => Array.from(new Set(scopedVendors.map(v => v.storeType))), [scopedVendors]);
+  const categories = useMemo(() => Array.from(new Set([...CANONICAL_MAIN_CATEGORIES, ...scopedVendors.map(v => v.storeType).filter(Boolean)])), [scopedVendors]);
   const districts = useMemo(() => getDistrictsForState(userState), [userState]);
   const divisions = useMemo(() => getDivisionsForDistrict(districtFilter, userState), [districtFilter, userState]);
   const pincodes = useMemo(() => Array.from(new Set(scopedVendors.map(v => v.pincode).filter(Boolean))), [scopedVendors]);
@@ -400,7 +401,7 @@ export const VendorsList: React.FC = () => {
     district: activeRole === 'district' || activeRole === 'division' || activeRole === 'pincode' ? userDistrict : '',
     postOffice: '',
     role: 'Shop Owner',
-    storeType: 'Supermarket & Retail',
+    storeType: 'Services',
     customCategory: '',
     businessGst: '',
     fullAddress: '',
@@ -574,7 +575,7 @@ export const VendorsList: React.FC = () => {
       district: activeRole === 'district' || activeRole === 'division' || activeRole === 'pincode' ? userDistrict : '',
       postOffice: '',
       role: 'Shop Owner',
-      storeType: 'Supermarket & Retail',
+      storeType: 'Services',
       customCategory: '',
       businessGst: '',
       fullAddress: '',
@@ -1168,8 +1169,8 @@ export const VendorsList: React.FC = () => {
             contactPerson: createdVendor.ownerName || 'Merchant Owner',
             phone: createdVendor.phone || '9876543210',
             email: createdVendor.email,
-            category: createdVendor.storeType || 'Supermarket & Retail',
-            subCategory: createdVendor.storeType || 'Supermarket & Retail',
+            category: createdVendor.storeType || 'Services',
+            subCategory: createdVendor.storeType || 'Services',
             gst: createdVendor.businessGst,
             assignedState: createdVendor.state,
             state: createdVendor.state,

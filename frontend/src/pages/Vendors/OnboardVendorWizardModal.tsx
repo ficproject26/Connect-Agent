@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal, Button, Input, Select } from '../../components/ui';
 import {
   Building, User, FileText, Landmark, CheckCircle2, ChevronRight, ChevronLeft,
@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getLocationFromPincode } from '../../utils/locationData';
+import { fetchAdminCategories, getActiveMainCategories, CANONICAL_MAIN_CATEGORIES } from '../../services/categoryService';
 
 interface OnboardVendorWizardModalProps {
   isOpen: boolean;
@@ -23,6 +24,24 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
   const [errorMsg, setErrorMsg] = useState('');
   const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
 
+  // Main Categories from Admin Category Management
+  const [mainCategories, setMainCategories] = useState<string[]>(CANONICAL_MAIN_CATEGORIES);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetchAdminCategories().then(dbCategories => {
+      if (isMounted) {
+        const activeMains = getActiveMainCategories(dbCategories);
+        if (activeMains && activeMains.length > 0) {
+          setMainCategories(activeMains);
+        }
+      }
+    }).catch(err => {
+      console.warn('Failed to fetch categories from Admin Category Management:', err);
+    });
+    return () => { isMounted = false; };
+  }, []);
+
   // Show/hide password states
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -31,7 +50,7 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
   const [formData, setFormData] = useState({
     // Step 1
     businessName: '',
-    category: 'Supermarket & Retail',
+    category: 'Services',
     customCategory: '',
     phone: '',
     email: '',
@@ -225,7 +244,7 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
       return 'Valid 12-digit Aadhaar Number is required.';
     }
 
-    const isFood = ['Supermarket & Retail', 'Fresh Produce Mart', 'Bakery & Confectionery', 'Organic Food Store', 'Restaurant & Cafe'].includes(formData.category) ||
+    const isFood = ['Food', 'Daily Needs', 'Supermarket & Retail', 'Fresh Produce Mart', 'Bakery & Confectionery', 'Organic Food Store', 'Restaurant & Cafe'].includes(formData.category) ||
       (formData.category === 'Other' && /food|restaurant|bakery|cafe|grocery|produce/i.test(formData.customCategory));
 
     if (isFood) {
@@ -420,15 +439,7 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                 <Select
                   label="Product or Service Category *"
                   options={[
-                    { value: 'Supermarket & Retail', label: 'Supermarket & Retail' },
-                    { value: 'Fresh Produce Mart', label: 'Fresh Produce Mart' },
-                    { value: 'Bakery & Confectionery', label: 'Bakery & Confectionery' },
-                    { value: 'Organic Food Store', label: 'Organic Food Store' },
-                    { value: 'Electronics & Appliances', label: 'Electronics & Appliances' },
-                    { value: 'Pharmacy & Healthcare', label: 'Pharmacy & Healthcare' },
-                    { value: 'Fashion & Clothing', label: 'Fashion & Clothing' },
-                    { value: 'Hardware & Building Supplies', label: 'Hardware & Building Supplies' },
-                    { value: 'Restaurant & Cafe', label: 'Restaurant & Cafe' },
+                    ...mainCategories.map(cat => ({ value: cat, label: cat })),
                     { value: 'Other', label: 'Other (Specify Custom Category)' }
                   ]}
                   value={formData.category}
@@ -717,13 +728,13 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
               {/* FSSAI License / Registration Number */}
               <div>
                 <Input
-                  label={`FSSAI License / Registration Number (14 Digits) ${['Supermarket & Retail', 'Fresh Produce Mart', 'Bakery & Confectionery', 'Organic Food Store', 'Restaurant & Cafe'].includes(formData.category) || (formData.category === 'Other' && /food|restaurant|bakery|cafe|grocery|produce/i.test(formData.customCategory)) ? '*' : '(Optional)'}`}
+                  label={`FSSAI License / Registration Number (14 Digits) ${['Food', 'Daily Needs', 'Supermarket & Retail', 'Fresh Produce Mart', 'Bakery & Confectionery', 'Organic Food Store', 'Restaurant & Cafe'].includes(formData.category) || (formData.category === 'Other' && /food|restaurant|bakery|cafe|grocery|produce/i.test(formData.customCategory)) ? '*' : '(Optional)'}`}
                   placeholder="e.g. 10019043002761 (14-digit registration number)"
                   value={formData.fssaiNumber}
                   onChange={(e) => setFormData({ ...formData, fssaiNumber: e.target.value.replace(/\D/g, '').slice(0, 14) })}
                   maxLength={14}
                   inputMode="numeric"
-                  required={['Supermarket & Retail', 'Fresh Produce Mart', 'Bakery & Confectionery', 'Organic Food Store', 'Restaurant & Cafe'].includes(formData.category)}
+                  required={['Food', 'Daily Needs', 'Supermarket & Retail', 'Fresh Produce Mart', 'Bakery & Confectionery', 'Organic Food Store', 'Restaurant & Cafe'].includes(formData.category)}
                 />
               </div>
 

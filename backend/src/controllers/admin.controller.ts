@@ -531,3 +531,45 @@ export const getWeeklyLeaderboard = async (req: Request, res: Response) => {
     return res.status(500).json({ message: 'Internal server error' });
   }
 };
+
+// GET /api/admin/categories or /api/categories
+export const getCategories = async (req: Request, res: Response) => {
+  try {
+    const db = mongoose.connection.db;
+    let categories: any[] = [];
+    if (db) {
+      categories = await db.collection('categories').find().sort({ sortOrder: 1, name: 1 }).toArray();
+    }
+    
+    // If no categories exist in database, return canonical main categories from Admin Category Management
+    if (!categories || categories.length === 0) {
+      const canonicalMains = ['Services', 'Products', 'Daily Needs', 'Food', 'Stay', 'Travel', 'Jobs'];
+      categories = canonicalMains.map((name, index) => ({
+        _id: String(index + 1),
+        name,
+        level: 'main',
+        isMainCategory: true,
+        isActive: true,
+        sortOrder: index + 1
+      }));
+    }
+
+    return res.status(200).json({
+      success: true,
+      categories
+    });
+  } catch (error) {
+    console.error('Get categories error:', error);
+    const canonicalMains = ['Services', 'Products', 'Daily Needs', 'Food', 'Stay', 'Travel', 'Jobs'];
+    const fallback = canonicalMains.map((name, index) => ({
+      _id: String(index + 1),
+      name,
+      level: 'main',
+      isMainCategory: true,
+      isActive: true,
+      sortOrder: index + 1
+    }));
+    return res.status(200).json({ success: true, categories: fallback });
+  }
+};
+

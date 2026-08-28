@@ -5,13 +5,15 @@ import {
   approveRegistration,
   rejectRegistration,
   getHierarchyTree,
-  getWeeklyLeaderboard
+  getWeeklyLeaderboard,
+  getCategories
 } from '../controllers/admin.controller';
 import { authMiddleware } from '../middleware/auth.middleware';
 
 const router = Router();
 
-// Retrieve registration list and detail
+// Retrieve categories, registration list and detail
+router.get('/categories', getCategories);
 router.get('/registrations', authMiddleware, getRegistrations);
 router.get('/registrations/:id', authMiddleware, getRegistrationById);
 router.get('/hierarchy', authMiddleware, getHierarchyTree);
@@ -22,3 +24,4 @@ router.patch('/registrations/:id/approve', authMiddleware, approveRegistration);
 router.patch('/registrations/:id/reject', authMiddleware, rejectRegistration);
 
 export default router;
+
