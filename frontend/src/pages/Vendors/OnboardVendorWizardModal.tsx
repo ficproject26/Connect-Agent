@@ -54,12 +54,14 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
     customCategory: '',
     phone: '',
     email: '',
-    fullAddress: '',
-    pincode: user?.territory?.pincode || '520001',
-    state: user?.territory?.state || 'Andhra Pradesh',
+    buildingNo: '',
+    streetName: '',
+    postOffice: user?.territory?.postOffice || 'Vijayawada Head Post Office',
+    taluk: user?.territory?.division || 'Vijayawada Urban',
     district: user?.territory?.district || 'NTR District',
+    state: user?.territory?.state || 'Andhra Pradesh',
+    pincode: user?.territory?.pincode || '520001',
     division: user?.territory?.division || 'Vijayawada Central Division',
-    postOffice: 'Vijayawada Head Post Office',
     operatingHours: '09:00 AM - 09:00 PM',
     website: '',
     logoUrl: '',
@@ -101,15 +103,15 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
   const handlePincodeChange = (pin: string) => {
     const cleaned = pin.replace(/\D/g, '').slice(0, 6);
     let state = formData.state;
-    let division = formData.division;
     let district = formData.district;
+    let taluk = formData.taluk;
     let postOffice = formData.postOffice;
 
     if (cleaned.length === 6) {
       const info = getLocationFromPincode(cleaned);
       state = info.state;
       district = info.district;
-      division = info.division;
+      taluk = info.division;
       postOffice = info.postOffice;
     }
 
@@ -117,8 +119,9 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
       ...prev,
       pincode: cleaned,
       state,
-      division,
       district,
+      taluk,
+      division: taluk,
       postOffice
     }));
   };
@@ -217,8 +220,16 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
     if (!formData.businessName.trim()) return 'Business / Shop Name is required.';
     if (!formData.phone || formData.phone.length !== 10) return 'Business Phone Number must be a valid 10-digit mobile number.';
     if (!formData.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) return 'Valid Email Address is required.';
-    if (!formData.fullAddress.trim()) return 'Business Street Address is required.';
-    if (!formData.pincode || formData.pincode.length !== 6) return 'Valid 6-digit Postal Code (Pincode) is required.';
+    
+    // Mandatory Separate Address Fields Validation
+    if (!formData.buildingNo.trim()) return 'Building No / Door No / Shop No is required.';
+    if (!formData.streetName.trim()) return 'Street Name / Area is required.';
+    if (!formData.postOffice.trim()) return 'Post Office is required.';
+    if (!formData.taluk.trim()) return 'Taluk / Sub-District is required.';
+    if (!formData.district.trim()) return 'District is required.';
+    if (!formData.state.trim()) return 'State is required.';
+    if (!formData.pincode || formData.pincode.replace(/\D/g, '').length !== 6) return 'Valid 6-digit Postal Code (Pincode) is required.';
+
     if (!formData.logoUrl) return 'Shop / Brand Logo is required. Please upload your shop logo image.';
     return '';
   };
@@ -323,18 +334,23 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
       ? (formData.customCategory.trim() || 'General Retail')
       : formData.category;
 
+    const constructedAddress = `${formData.buildingNo.trim()}, ${formData.streetName.trim()}, ${formData.postOffice.trim()}, ${formData.taluk.trim()}, ${formData.district.trim()}, ${formData.state.trim()} - ${formData.pincode.trim()}`;
+
     const vendorObject = {
       name: formData.businessName,
       ownerName: formData.ownerName,
       phone: formData.phone,
       email: formData.email,
       storeType: finalCategory,
-      fullAddress: `${formData.fullAddress}, ${formData.district}, ${formData.state} ${formData.pincode}`,
-      pincode: formData.pincode,
-      state: formData.state,
-      district: formData.district,
-      division: formData.division,
-      postOffice: formData.postOffice,
+      buildingNo: formData.buildingNo.trim(),
+      streetName: formData.streetName.trim(),
+      postOffice: formData.postOffice.trim(),
+      taluk: formData.taluk.trim(),
+      district: formData.district.trim(),
+      state: formData.state.trim(),
+      pincode: formData.pincode.trim(),
+      fullAddress: constructedAddress,
+      division: formData.taluk.trim(),
       operatingHours: formData.operatingHours,
       website: formData.website,
       logoUrl: formData.logoUrl,
@@ -481,16 +497,73 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                 />
               </div>
 
-              {/* Business Address & Pincode Lookup */}
+              {/* Business Address & Territory (7 Mandatory Separate Fields) */}
               <div className="space-y-3 p-3.5 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60">
-                <p className="text-[10px] uppercase font-black text-[#864f19]">Business Address & Territory</p>
+                <p className="text-[10px] uppercase font-black text-[#864f19]">Business Address & Territory (All Fields Mandatory)</p>
 
+                {/* Building / Door / Shop No & Street Name */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Input
+                    label="Building No / Door No / Shop No *"
+                    placeholder="e.g. Door #14-2, Shop #5, Commercial Complex"
+                    value={formData.buildingNo}
+                    onChange={(e) => setFormData({ ...formData, buildingNo: e.target.value })}
+                    required
+                  />
+                  <Input
+                    label="Street Name / Area *"
+                    placeholder="e.g. Main Market Road, MG Road Area"
+                    value={formData.streetName}
+                    onChange={(e) => setFormData({ ...formData, streetName: e.target.value })}
+                    required
+                  />
+                </div>
+
+                {/* Post Office & Taluk */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Input
+                    label="Post Office *"
+                    placeholder="e.g. Vijayawada Head Post Office"
+                    value={formData.postOffice}
+                    onChange={(e) => setFormData({ ...formData, postOffice: e.target.value })}
+                    required
+                  />
+                  <Input
+                    label="Taluk / Sub-District *"
+                    placeholder="e.g. Vijayawada Urban Taluk / Hosur Taluk"
+                    value={formData.taluk}
+                    onChange={(e) => setFormData({ ...formData, taluk: e.target.value })}
+                    required
+                  />
+                </div>
+
+                {/* District & State */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Input
+                    label="District *"
+                    placeholder="e.g. NTR District / Visakhapatnam"
+                    value={formData.district}
+                    onChange={(e) => setFormData({ ...formData, district: e.target.value })}
+                    required
+                  />
+                  <Input
+                    label="State *"
+                    placeholder="e.g. Andhra Pradesh / Tamil Nadu"
+                    value={formData.state}
+                    onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                    required
+                  />
+                </div>
+
+                {/* Postal Code & Operating Hours */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Input
                     label="Postal Code (Pincode) *"
-                    placeholder="e.g. 636112"
+                    placeholder="e.g. 520001"
                     value={formData.pincode}
                     onChange={(e) => handlePincodeChange(e.target.value)}
+                    maxLength={6}
+                    inputMode="numeric"
                     required
                   />
                   <Select
@@ -506,14 +579,6 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                     onChange={(e) => setFormData({ ...formData, operatingHours: e.target.value })}
                   />
                 </div>
-
-                <Input
-                  label="Business Street Address (Door No, Shop No, Building, Street) *"
-                  placeholder="e.g. Shop #14, Commercial Plaza, Main Market Road"
-                  value={formData.fullAddress}
-                  onChange={(e) => setFormData({ ...formData, fullAddress: e.target.value })}
-                  required
-                />
 
                 <Input
                   label="Business Website (Optional)"
@@ -952,7 +1017,7 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                   <p className="font-extrabold text-[#1b1c1c] text-sm">{formData.businessName}</p>
                   <p className="text-slate-600">{formData.category} • {formData.operatingHours}</p>
                   <p className="text-slate-600">📞 ••••••{formData.phone.slice(-4)} | ✉️ {formData.email}</p>
-                  <p className="text-slate-500 text-[11px]">{formData.fullAddress}, {formData.district} {formData.pincode}</p>
+                  <p className="text-slate-500 text-[11px]">📍 {formData.buildingNo ? `${formData.buildingNo}, ` : ''}{formData.streetName ? `${formData.streetName}, ` : ''}{formData.postOffice ? `${formData.postOffice}, ` : ''}{formData.taluk ? `${formData.taluk}, ` : ''}{formData.district}, {formData.state} - {formData.pincode}</p>
                 </div>
 
                 {/* Owner Info Summary */}
