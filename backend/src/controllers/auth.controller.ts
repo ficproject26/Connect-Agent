@@ -164,6 +164,28 @@ export const register = async (req: Request, res: Response) => {
           },
           { upsert: true }
         );
+
+        await db.collection('agents').updateOne(
+          { registrationId },
+          {
+            $set: {
+              registrationId,
+              name: validatedData.name,
+              email: validatedData.email.toLowerCase(),
+              phone: validatedData.phone,
+              role: validatedData.role,
+              level: validatedData.role,
+              status: 'pending',
+              kycStatus: 'pending',
+              isActive: false,
+              isApproved: false,
+              territory: cleanTerritory,
+              assignedArea: assignedAreaStr,
+              createdAt: new Date()
+            }
+          },
+          { upsert: true }
+        ).catch(() => {});
       }
     } catch (syncError) {
       console.error('Error syncing user to admin collection:', syncError);
