@@ -6,7 +6,7 @@ import * as z from 'zod';
 import { Mail, ArrowLeft, Send } from 'lucide-react';
 
 const forgotSchema = z.object({
-  email: z.string().email('Please enter a valid email address'),
+  email: z.string().email('Please enter a valid email address').transform(val => val.toLowerCase().trim()),
 });
 
 type ForgotFields = z.infer<typeof forgotSchema>;
@@ -63,8 +63,13 @@ export const ForgotPassword: React.FC = () => {
                 <input
                   type="email"
                   placeholder="email@example.com"
-                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/70 rounded-xl py-3 pl-10 pr-4 text-sm text-[#1b1c1c] placeholder-[#847468] focus:outline-none focus:border-[#864f19] focus:ring-1 focus:ring-[#864f19] transition-all font-medium"
-                  {...register('email')}
+                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/70 rounded-xl py-3 pl-10 pr-4 text-sm text-[#1b1c1c] placeholder-[#847468] focus:outline-none focus:border-[#864f19] focus:ring-1 focus:ring-[#864f19] transition-all font-medium lowercase"
+                  {...register('email', {
+                    onChange: (e) => {
+                      e.target.value = e.target.value.toLowerCase().trim();
+                    },
+                    setValueAs: (v) => (typeof v === 'string' ? v.toLowerCase().trim() : v)
+                  })}
                 />
               </div>
               {errors.email?.message && (

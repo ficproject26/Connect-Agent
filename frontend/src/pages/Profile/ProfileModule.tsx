@@ -93,7 +93,7 @@ export const ProfileModule: React.FC = () => {
       setIsSubmitting(false);
       updateProfile({
         name,
-        email,
+        email: email.toLowerCase().trim(),
         mobile,
         alternateMobile: altMobile,
         preferredLanguage: lang,
@@ -198,7 +198,7 @@ export const ProfileModule: React.FC = () => {
               <CardBody className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Input label="Full Name" value={name} onChange={(e) => setName(e.target.value)} />
-                  <Input label="Email Address" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                  <Input label="Email Address" type="email" value={email} onChange={(e) => setEmail(e.target.value.toLowerCase().trim())} />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -340,7 +340,7 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
       name: formData.businessName,
       ownerName: formData.ownerName,
       phone: formData.phone,
-      email: formData.email,
+      email: (formData.email || '').toLowerCase().trim(),
       storeType: finalCategory,
       buildingNo: formData.buildingNo.trim(),
       streetName: formData.streetName.trim(),
@@ -492,7 +492,7 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                   type="email"
                   placeholder="vendor@example.com"
                   value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value.toLowerCase().trim() })}
                   required
                 />
               </div>

@@ -484,7 +484,7 @@ export const RegisterWizard: React.FC = () => {
     try {
       const payload = {
         name: personalInfo.name,
-        email: personalInfo.email,
+        email: (personalInfo.email || '').toLowerCase().trim(),
         password: personalInfo.password,
         phone: personalInfo.phone,
         altPhone: personalInfo.altPhone || '',
@@ -736,7 +736,7 @@ export const RegisterWizard: React.FC = () => {
                     type="email"
                     placeholder={`e.g. ${sample.email}`}
                     value={personalInfo.email}
-                    onChange={(e) => setPersonalInfo({ ...personalInfo, email: e.target.value })}
+                    onChange={(e) => setPersonalInfo({ ...personalInfo, email: e.target.value.toLowerCase().trim() })}
                   />
 
                   <div>

@@ -12,7 +12,7 @@ import connectPortalLogo from '../../assets/connect_portal_logo.png';
 const INDIAN_MOBILE_REGEX = /^[6-9][0-9]{9}$/;
 
 const loginSchema = z.object({
-  email: z.string().email('Please enter a valid email address'),
+  email: z.string().email('Please enter a valid email address').transform(val => val.toLowerCase().trim()),
   password: z.string().min(6, 'Password must be at least 6 characters long'),
 });
 
@@ -100,7 +100,8 @@ export const Login: React.FC = () => {
     setErrorMsg('');
     setIsLoading(true);
     try {
-      const loggedInUser: any = await login(data.email, data.password);
+      const cleanEmail = (data.email || '').toLowerCase().trim();
+      const loggedInUser: any = await login(cleanEmail, data.password);
       if (loggedInUser) {
         if (loggedInUser.kycStatus === 'pending' || loggedInUser.status === 'pending_approval') {
           navigate('/pending');
@@ -209,8 +210,13 @@ export const Login: React.FC = () => {
                   <input
                     type="email"
                     placeholder="email@example.com"
-                    className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/70 rounded-xl py-3 px-4 text-sm text-[#1b1c1c] placeholder-[#847468] focus:outline-none focus:border-[#864f19] focus:ring-1 focus:ring-[#864f19] transition-all font-medium"
-                    {...formRegister('email')}
+                    className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/70 rounded-xl py-3 px-4 text-sm text-[#1b1c1c] placeholder-[#847468] focus:outline-none focus:border-[#864f19] focus:ring-1 focus:ring-[#864f19] transition-all font-medium lowercase"
+                    {...formRegister('email', {
+                      onChange: (e) => {
+                        e.target.value = e.target.value.toLowerCase().trim();
+                      },
+                      setValueAs: (v) => (typeof v === 'string' ? v.toLowerCase().trim() : v)
+                    })}
                   />
                   {errors.email?.message && (
                     <p className="text-[10px] text-[#ba1a1a] font-bold mt-1">{errors.email.message}</p>

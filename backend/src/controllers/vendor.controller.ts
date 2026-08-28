@@ -118,6 +118,9 @@ export const createVendor = async (req: Request, res: Response) => {
     if (!agentId) return res.status(401).json({ message: 'Unauthorized' });
 
     const data = createVendorSchema.parse(req.body);
+    if (data.email) {
+      data.email = data.email.toLowerCase().trim();
+    }
 
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const randDigits = Math.floor(1000 + Math.random() * 9000);
