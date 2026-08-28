@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { z } from 'zod';
+import bcrypt from 'bcryptjs';
 import Vendor from '../models/Vendor';
 import { getAgentTerritoryScope, buildVendorScopeFilter } from '../utils/territoryScope';
 
@@ -149,6 +150,9 @@ export const createVendor = async (req: Request, res: Response) => {
     try {
       const db = mongoose.connection.db;
       const vendorEmail = data.email ? data.email.toLowerCase() : `vendor_${Date.now()}@connect.app`;
+      const salt = await bcrypt.genSalt(10);
+      const defaultHashedPassword = await bcrypt.hash('Vendor@12345', salt);
+
       if (db) {
         await db.collection('users').updateOne(
           { email: vendorEmail },
@@ -158,7 +162,8 @@ export const createVendor = async (req: Request, res: Response) => {
               businessName: data.businessName || (data as any).name || data.ownerName || 'Merchant Store',
               contactPerson: data.ownerName || (data as any).contactPerson || (data as any).name || 'Owner',
               email: vendorEmail,
-              phone: data.phone || '9876543210',
+              phone: data.phone || undefined,
+              password: defaultHashedPassword,
               role: 'Vendor',
               vendorType: data.category || (data as any).storeType || 'Services',
               category: data.category || (data as any).storeType || 'Services',
@@ -180,7 +185,7 @@ export const createVendor = async (req: Request, res: Response) => {
             }
           },
           { upsert: true }
-        );
+        ).catch(() => {});
       }
     } catch (syncErr) {
       console.error('Error syncing vendor to admin users collection:', syncErr);
