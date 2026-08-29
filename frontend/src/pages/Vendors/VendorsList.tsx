@@ -485,9 +485,7 @@ export const VendorsList: React.FC = () => {
       return;
     }
 
-    const finalStoreType = newVendor.storeType === 'Other'
-      ? (newVendor.customCategory.trim() || 'General Retail & Services')
-      : newVendor.storeType;
+    const finalStoreType = newVendor.storeType;
 
     const createdVendor: Vendor = {
       id: `REG-${Math.floor(1000 + Math.random() * 9000)}`,

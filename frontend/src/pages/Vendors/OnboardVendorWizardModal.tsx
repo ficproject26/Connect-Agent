@@ -255,8 +255,7 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
       return 'Valid 12-digit Aadhaar Number is required.';
     }
 
-    const isFood = ['Food', 'Daily Needs', 'Supermarket & Retail', 'Fresh Produce Mart', 'Bakery & Confectionery', 'Organic Food Store', 'Restaurant & Cafe'].includes(formData.category) ||
-      (formData.category === 'Other' && /food|restaurant|bakery|cafe|grocery|produce/i.test(formData.customCategory));
+    const isFood = ['Food', 'Daily Needs', 'Supermarket & Retail', 'Fresh Produce Mart', 'Bakery & Confectionery', 'Organic Food Store', 'Restaurant & Cafe'].includes(formData.category);
 
     if (isFood) {
       const fssaiClean = formData.fssaiNumber ? formData.fssaiNumber.replace(/\D/g, '') : '';
@@ -330,9 +329,7 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
       return;
     }
 
-    const finalCategory = formData.category === 'Other'
-      ? (formData.customCategory.trim() || 'General Retail')
-      : formData.category;
+    const finalCategory = formData.category;
 
     const constructedAddress = `${formData.buildingNo.trim()}, ${formData.streetName.trim()}, ${formData.postOffice.trim()}, ${formData.taluk.trim()}, ${formData.district.trim()}, ${formData.state.trim()} - ${formData.pincode.trim()}`;
 
@@ -454,24 +451,11 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                 />
                 <Select
                   label="Product or Service Category *"
-                  options={[
-                    ...mainCategories.map(cat => ({ value: cat, label: cat })),
-                    { value: 'Other', label: 'Other (Specify Custom Category)' }
-                  ]}
+                  options={mainCategories.map(cat => ({ value: cat, label: cat }))}
                   value={formData.category}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                 />
               </div>
-
-              {formData.category === 'Other' && (
-                <Input
-                  label="Specify Custom Category *"
-                  placeholder="e.g. Boutique, Furniture, Book Store"
-                  value={formData.customCategory}
-                  onChange={(e) => setFormData({ ...formData, customCategory: e.target.value })}
-                  required
-                />
-              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Input
@@ -793,7 +777,7 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
               {/* FSSAI License / Registration Number */}
               <div>
                 <Input
-                  label={`FSSAI License / Registration Number (14 Digits) ${['Food', 'Daily Needs', 'Supermarket & Retail', 'Fresh Produce Mart', 'Bakery & Confectionery', 'Organic Food Store', 'Restaurant & Cafe'].includes(formData.category) || (formData.category === 'Other' && /food|restaurant|bakery|cafe|grocery|produce/i.test(formData.customCategory)) ? '*' : '(Optional)'}`}
+                  label={`FSSAI License / Registration Number (14 Digits) ${['Food', 'Daily Needs', 'Supermarket & Retail', 'Fresh Produce Mart', 'Bakery & Confectionery', 'Organic Food Store', 'Restaurant & Cafe'].includes(formData.category) ? '*' : '(Optional)'}`}
                   placeholder="e.g. 10019043002761 (14-digit registration number)"
                   value={formData.fssaiNumber}
                   onChange={(e) => setFormData({ ...formData, fssaiNumber: e.target.value.replace(/\D/g, '').slice(0, 14) })}
