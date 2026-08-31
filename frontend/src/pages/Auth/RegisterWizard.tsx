@@ -405,6 +405,10 @@ export const RegisterWizard: React.FC = () => {
     }
 
     if (currentStep === 2) {
+      if (!personalInfo.gender) {
+        setFormErrors('Please select your Gender.');
+        return;
+      }
       if (!personalInfo.dob) {
         setFormErrors('Please select your Date of Birth.');
         return;
@@ -874,6 +878,19 @@ export const RegisterWizard: React.FC = () => {
                       <p className="text-[10px] text-red-500 font-bold mt-1">Under 18 years old dates are disabled. Must be 18+ years old.</p>
                     )}
                   </div>
+
+                  {/* Gender Select Dropdown */}
+                  <Select
+                    label="• Gender (Required)"
+                    options={[
+                      { value: 'male', label: 'Male' },
+                      { value: 'female', label: 'Female' },
+                      { value: 'other', label: 'Other' },
+                      { value: 'prefer_not_to_say', label: 'Prefer Not to Say' }
+                    ]}
+                    value={personalInfo.gender || 'male'}
+                    onChange={(e) => setPersonalInfo({ ...personalInfo, gender: e.target.value })}
+                  />
 
                   {/* 4. Aadhaar Number */}
                   <Input
