@@ -27,38 +27,17 @@ export const PendingApproval: React.FC = () => {
             <Clock className="w-12 h-12" />
           </div>
 
-          <h2 className="text-2xl font-black font-sans tracking-wide text-white">
-            Registration Request Pending Verification
+          <h2 className="text-2xl font-black font-sans tracking-wide text-white uppercase">
+            YOUR REQUEST IS UNDER REVIEW
           </h2>
-          <p className="text-xs font-semibold text-forgeGray-300 mt-2 max-w-md mx-auto leading-relaxed">
-            Your registration request is currently pending Admin verification. Please contact the Administrator for further assistance.
-          </p>
+          <div className="text-xs font-semibold text-forgeGray-300 mt-3 max-w-md mx-auto space-y-2 leading-relaxed">
+            <p>Your agent registration request has been successfully submitted.</p>
+            <p>Your request is currently under review by the administration.</p>
+            <p>Please contact the administration for further assistance.</p>
+          </div>
 
-          {/* Checklist of verification states */}
-          <div className="my-6 max-w-sm mx-auto space-y-3 text-left">
-            <div className="flex items-center space-x-3 p-3 bg-white/5 rounded-xl border border-white/10">
-              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-              <div>
-                <p className="text-xs font-bold text-white">Form Details Completed</p>
-                <p className="text-[9px] text-forgeGray-300">All application fields validated successfully</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center space-x-3 p-3 bg-white/5 rounded-xl border border-white/10">
-              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-              <div>
-                <p className="text-xs font-bold text-white">Verification Selfie Uploaded</p>
-                <p className="text-[9px] text-forgeGray-300">Facial matching verification processed</p>
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-3 p-3 bg-white/5 rounded-xl border border-white/10">
-              <Clock className="w-5 h-5 text-amber-450 shrink-0 animate-spin" />
-              <div>
-                <p className="text-xs font-bold text-white">Background Check Verification</p>
-                <p className="text-[9px] text-forgeGray-300">Identity document lookup in progress (DL/Certificates)</p>
-              </div>
-            </div>
+          <div className="mt-4 inline-block bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-black px-4 py-1.5 rounded-full uppercase tracking-wider">
+            Status: PENDING REVIEW
           </div>
 
           {/* Action triggers */}
