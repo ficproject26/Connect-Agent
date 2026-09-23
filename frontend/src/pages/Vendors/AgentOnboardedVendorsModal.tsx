@@ -62,6 +62,16 @@ export const AgentOnboardedVendorsModal: React.FC<AgentOnboardedVendorsModalProp
       userVendorsKey
     ].filter(Boolean) as string[];
 
+    const getCanonicalItemKey = (v: any) => {
+      const phone = (v.phone || '').replace(/\D/g, '');
+      const pin = (v.pincode || '').trim();
+      const name = (v.name || v.businessName || '').trim().toLowerCase();
+      if (phone && pin && name) {
+        return `VENDOR_${phone}_${pin}_${name}`;
+      }
+      return v.registrationId || v.id || v._id || (name ? `NAME_${name}` : `ID_${Math.random()}`);
+    };
+
     storageKeys.forEach(key => {
       try {
         const raw = localStorage.getItem(key);
@@ -70,7 +80,7 @@ export const AgentOnboardedVendorsModal: React.FC<AgentOnboardedVendorsModalProp
           if (Array.isArray(arr)) {
             arr.forEach((v: any) => {
               if (v && (v.id || v.name)) {
-                const itemKey = v.id || v.registrationId || v.name;
+                const itemKey = getCanonicalItemKey(v);
                 const item: VendorItem = {
                   id: v.id || v.registrationId || `REG-${Math.floor(1000 + Math.random() * 9000)}`,
                   name: v.name || v.businessName || '',
@@ -122,7 +132,7 @@ export const AgentOnboardedVendorsModal: React.FC<AgentOnboardedVendorsModalProp
           ? v.agentName
           : (v.assignedAgent?.name ? v.assignedAgent.name : (typeof v.assignedAgent === 'string' ? v.assignedAgent : 'Field Agent'));
 
-        const itemKey = v.registrationId || v._id || v.businessName || v.name;
+        const itemKey = getCanonicalItemKey(v);
         const item: VendorItem = {
           id: v.registrationId || v._id || `REG-${Math.floor(1000 + Math.random() * 9000)}`,
           name: v.businessName || v.name || '',

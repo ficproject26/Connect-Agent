@@ -29,14 +29,49 @@ interface Vendor {
   assignedAgent: string;
   rejectionReason?: string;
   createdAt: string;
+  rawCreatedAt?: string;
   updatedAt: string;
   storeType: string;
   businessGst: string;
   fullAddress?: string;
 }
 
-const TODAY_DATE = new Date().toISOString().slice(0, 10);
-const YESTERDAY_DATE = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+const formatLocalDate = (d: Date): string => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+export const getVendorCanonicalKey = (v: {
+  id?: string;
+  phone?: string;
+  pincode?: string;
+  name?: string;
+  businessName?: string;
+}): string => {
+  const phone = (v.phone || '').replace(/\D/g, '');
+  const pin = (v.pincode || '').trim();
+  const name = (v.name || v.businessName || '').trim().toLowerCase();
+  if (phone && pin && name) {
+    return `VENDOR_${phone}_${pin}_${name}`;
+  }
+  return v.id ? `ID_${v.id}` : '';
+};
+
+const getVendorTimestamp = (vendor: Vendor): number => {
+  const raw = vendor.rawCreatedAt || vendor.createdAt;
+  if (!raw) return 0;
+  if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const [y, m, d] = raw.split('-').map(Number);
+    return new Date(y, m - 1, d, 12, 0, 0).getTime();
+  }
+  const t = new Date(raw).getTime();
+  return isNaN(t) ? 0 : t;
+};
+
+const TODAY_DATE = formatLocalDate(new Date());
+const YESTERDAY_DATE = formatLocalDate(new Date(Date.now() - 86400000));
 
 export const VendorsList: React.FC = () => {
   const { user, addNotification } = useAuth();
@@ -46,7 +81,22 @@ export const VendorsList: React.FC = () => {
     return user?._id || user?.email ? `connect_portal_custom_vendors_${user._id || user.email?.toLowerCase()}` : 'connect_portal_custom_vendors';
   }, [user]);
 
-  // Initialize vendors from user-scoped localStorage or API
+  // Search and Filters
+  const [searchTerm, setSearchTerm] = useState('');
+  const [dateFilter, setDateFilter] = useState('all'); // all, today, yesterday, 7days, this_month, last_month, this_year
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [districtFilter, setDistrictFilter] = useState('all');
+  const [divisionFilter, setDivisionFilter] = useState('all');
+  const [pincodeFilter, setPincodeFilter] = useState('all');
+  const [agentFilter, setAgentFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all'); // all, active, inactive
+  const [kycFilter, setKycFilter] = useState('all'); // all, pending, approved, rejected
+  const [quickChip, setQuickChip] = useState('all');
+
+  const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Initialize vendors from user-scoped localStorage
   const [vendors, setVendors] = useState<Vendor[]>(() => {
     try {
       const userKey = user?._id || user?.email ? `connect_portal_custom_vendors_${user._id || user.email?.toLowerCase()}` : 'connect_portal_custom_vendors';
@@ -71,12 +121,21 @@ export const VendorsList: React.FC = () => {
     } catch (e) {}
   }, [userVendorsKey]);
 
-  // Fetch live backend vendors from API /api/vendors
+  // Fetch live backend vendors from API /api/vendors with active date filtering
   const { data: apiVendorsData, refetch: refetchVendors } = useQuery({
-    queryKey: ['liveVendorsBackend'],
+    queryKey: ['liveVendorsBackend', dateFilter],
     queryFn: async () => {
       try {
-        const res = await api.get('/vendors');
+        const now = new Date();
+        const params: any = { limit: 1000 };
+        if (dateFilter !== 'all') {
+          params.dateFilter = dateFilter;
+          if (dateFilter === 'this_month') {
+            params.startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0).toISOString();
+            params.endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999).toISOString();
+          }
+        }
+        const res = await api.get('/vendors', { params });
         return res.data?.vendors || [];
       } catch (err: any) {
         if (err?.response?.status !== 401) {
@@ -98,7 +157,7 @@ export const VendorsList: React.FC = () => {
   const userDivision = user?.territory?.division || 'Vijayawada Central Division';
   const userPincode = user?.territory?.pincode || '520001';
 
-  // Sync API backend vendors into state
+  // Sync API backend vendors into state with strict canonical deduplication
   useEffect(() => {
     if (apiVendorsData && apiVendorsData.length > 0) {
       const mappedApiVendors: Vendor[] = apiVendorsData.map((v: any) => {
@@ -106,7 +165,7 @@ export const VendorsList: React.FC = () => {
           ? `${v.assignedAgent.name}${v.assignedAgent.role ? ` (${v.assignedAgent.role.charAt(0).toUpperCase() + v.assignedAgent.role.slice(1)} Agent)` : ''}`
           : (typeof v.assignedAgent === 'string' && v.assignedAgent ? v.assignedAgent : (user?.name ? `${user.name} (Field Agent)` : 'Field Agent'));
 
-        const regDate = v.createdAt ? new Date(v.createdAt).toISOString().slice(0, 10) : TODAY_DATE;
+        const regDate = v.createdAt ? formatLocalDate(new Date(v.createdAt)) : formatLocalDate(new Date());
 
         return {
           id: v.registrationId || v.id || v._id || `REG-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -129,7 +188,8 @@ export const VendorsList: React.FC = () => {
           })(),
           assignedAgent: assignedAgentName,
           createdAt: regDate,
-          updatedAt: v.updatedAt ? new Date(v.updatedAt).toISOString().slice(0, 10) : regDate,
+          rawCreatedAt: v.createdAt || new Date().toISOString(),
+          updatedAt: v.updatedAt ? formatLocalDate(new Date(v.updatedAt)) : regDate,
           storeType: v.category?.name || (typeof v.category === 'string' ? v.category : '') || v.storeType || 'Services',
           businessGst: v.gst || v.businessGst || '',
           fullAddress: v.location?.address || v.fullAddress || ''
@@ -137,36 +197,34 @@ export const VendorsList: React.FC = () => {
       });
 
       setVendors(prev => {
-        const apiMap = new Map(mappedApiVendors.map(item => [item.id, item]));
-        // Update existing items with latest server data while preserving local-only items
-        const updated = prev.map(item => apiMap.has(item.id) ? { ...item, ...apiMap.get(item.id)! } : item);
-        const existingIds = new Set(prev.map(item => item.id));
-        const newItems = mappedApiVendors.filter(item => !existingIds.has(item.id));
-        return [...newItems, ...updated];
+        const serverKeys = new Set(mappedApiVendors.map(getVendorCanonicalKey));
+        const serverIds = new Set(mappedApiVendors.map(v => v.id));
+
+        // Preserve truly offline/local-only items that do NOT match any server item by ID or canonical key
+        const localOnly = prev.filter(item => {
+          if (serverIds.has(item.id)) return false;
+          const key = getVendorCanonicalKey(item);
+          if (key && serverKeys.has(key)) return false;
+          return true;
+        });
+
+        const reconciled = [...mappedApiVendors, ...localOnly];
+
+        // Update localStorage to remove any stale duplicate records
+        try {
+          localStorage.setItem(userVendorsKey, JSON.stringify(reconciled));
+        } catch (e) {}
+
+        return reconciled;
       });
 
       setSelectedVendor(prev => {
         if (!prev) return prev;
-        const matching = mappedApiVendors.find(v => v.id === prev.id);
+        const matching = mappedApiVendors.find(v => v.id === prev.id || getVendorCanonicalKey(v) === getVendorCanonicalKey(prev));
         return matching ? { ...prev, ...matching } : prev;
       });
     }
-  }, [apiVendorsData, user?.name, userState, userDistrict, userDivision, userPincode]);
-
-  // Search and Filters
-  const [searchTerm, setSearchTerm] = useState('');
-  const [dateFilter, setDateFilter] = useState('all'); // all, today, yesterday, 7days, 30days
-  const [categoryFilter, setCategoryFilter] = useState('all');
-  const [districtFilter, setDistrictFilter] = useState('all');
-  const [divisionFilter, setDivisionFilter] = useState('all');
-  const [pincodeFilter, setPincodeFilter] = useState('all');
-  const [agentFilter, setAgentFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all'); // all, active, inactive
-  const [kycFilter, setKycFilter] = useState('all'); // all, pending, approved, rejected
-  const [quickChip, setQuickChip] = useState('all');
-
-  const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  }, [apiVendorsData, user?.name, userState, userDistrict, userDivision, userPincode, userVendorsKey]);
 
   // Reset divisionFilter if districtFilter changes to an incompatible value
   useEffect(() => {
@@ -208,19 +266,35 @@ export const VendorsList: React.FC = () => {
   const pincodes = useMemo(() => Array.from(new Set(scopedVendors.map(v => v.pincode).filter(Boolean))), [scopedVendors]);
   const agents = useMemo(() => Array.from(new Set(scopedVendors.map(v => v.assignedAgent).filter(Boolean))), [scopedVendors]);
 
-  // Compute 6 KPI Card Metrics from SCOPED vendors list
+  // Compute 6 KPI Card Metrics from SCOPED vendors list with dynamic calendar boundaries
   const metrics = useMemo(() => {
-    const todayOnboard = scopedVendors.filter(v => v.createdAt === TODAY_DATE).length;
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth();
+    const curDate = now.getDate();
+
+    const startOfToday = new Date(curYear, curMonth, curDate, 0, 0, 0, 0).getTime();
+    const endOfToday = new Date(curYear, curMonth, curDate, 23, 59, 59, 999).getTime();
+    const startOfYesterday = new Date(curYear, curMonth, curDate - 1, 0, 0, 0, 0).getTime();
+    const last7DaysStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).getTime();
+
+    const todayOnboard = scopedVendors.filter(v => {
+      const t = getVendorTimestamp(v);
+      return t >= startOfToday && t <= endOfToday;
+    }).length;
+
     const weekOnboard = scopedVendors.filter(v => {
-      const created = new Date(v.createdAt).getTime();
-      const weekAgo = new Date('2026-07-16').getTime();
-      return created >= weekAgo;
+      const t = getVendorTimestamp(v);
+      return t >= last7DaysStart;
     }).length;
 
     const pendingKyc = scopedVendors.filter(v => v.kycStatus === 'pending').length;
     const activeCount = scopedVendors.filter(v => v.status === 'active').length;
     const inactiveCount = scopedVendors.filter(v => v.status === 'inactive').length;
-    const recentlyUpdated = scopedVendors.filter(v => v.updatedAt === TODAY_DATE || v.updatedAt === YESTERDAY_DATE).length;
+    const recentlyUpdated = scopedVendors.filter(v => {
+      const t = getVendorTimestamp(v);
+      return t >= startOfYesterday;
+    }).length;
 
     return {
       todayOnboard,
@@ -234,6 +308,33 @@ export const VendorsList: React.FC = () => {
 
   // Filter Logic with Advanced Search & Quick Chips applied on SCOPED vendors
   const filteredVendors = useMemo(() => {
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth();
+    const curDate = now.getDate();
+
+    // Calendar boundaries using exact local timezone definitions
+    const startOfToday = new Date(curYear, curMonth, curDate, 0, 0, 0, 0).getTime();
+    const endOfToday = new Date(curYear, curMonth, curDate, 23, 59, 59, 999).getTime();
+
+    const startOfYesterday = new Date(curYear, curMonth, curDate - 1, 0, 0, 0, 0).getTime();
+    const endOfYesterday = new Date(curYear, curMonth, curDate - 1, 23, 59, 59, 999).getTime();
+
+    const last7DaysStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).getTime();
+    const last30DaysStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).getTime();
+
+    // "This Month": from 1st day of current month at 00:00:00 through last day at 23:59:59.999
+    const startOfThisMonth = new Date(curYear, curMonth, 1, 0, 0, 0, 0).getTime();
+    const endOfThisMonth = new Date(curYear, curMonth + 1, 0, 23, 59, 59, 999).getTime();
+
+    // "Last Month": from 1st day of previous month at 00:00:00 through last day of previous month at 23:59:59.999
+    const startOfLastMonth = new Date(curYear, curMonth - 1, 1, 0, 0, 0, 0).getTime();
+    const endOfLastMonth = new Date(curYear, curMonth, 0, 23, 59, 59, 999).getTime();
+
+    // "This Year": from Jan 1 00:00:00 through Dec 31 23:59:59.999
+    const startOfThisYear = new Date(curYear, 0, 1, 0, 0, 0, 0).getTime();
+    const endOfThisYear = new Date(curYear, 11, 31, 23, 59, 59, 999).getTime();
+
     return scopedVendors.filter(vendor => {
       // Search across: Vendor Name, Registration ID, Phone, GSTIN, Owner Name
       const q = searchTerm.toLowerCase().trim();
@@ -245,12 +346,14 @@ export const VendorsList: React.FC = () => {
         (vendor.businessGst && vendor.businessGst.toLowerCase().includes(q))
       );
 
+      const vTime = getVendorTimestamp(vendor);
+
       // Quick Chips Override Handler
       let matchesChip = true;
-      if (quickChip === 'today') matchesChip = vendor.createdAt === TODAY_DATE;
-      else if (quickChip === 'yesterday') matchesChip = vendor.createdAt === YESTERDAY_DATE;
-      else if (quickChip === '7days') matchesChip = new Date(vendor.createdAt).getTime() >= new Date('2026-07-16').getTime();
-      else if (quickChip === '30days') matchesChip = new Date(vendor.createdAt).getTime() >= new Date('2026-06-23').getTime();
+      if (quickChip === 'today') matchesChip = vTime >= startOfToday && vTime <= endOfToday;
+      else if (quickChip === 'yesterday') matchesChip = vTime >= startOfYesterday && vTime <= endOfYesterday;
+      else if (quickChip === '7days') matchesChip = vTime >= last7DaysStart;
+      else if (quickChip === '30days') matchesChip = vTime >= last30DaysStart;
       else if (quickChip === 'pending') matchesChip = vendor.kycStatus === 'pending';
       else if (quickChip === 'verified') matchesChip = vendor.kycStatus === 'approved';
       else if (quickChip === 'active') matchesChip = vendor.status === 'active';
@@ -259,19 +362,19 @@ export const VendorsList: React.FC = () => {
       // Dropdown Filters
       let matchesDate = true;
       if (dateFilter === 'today') {
-        matchesDate = vendor.createdAt === TODAY_DATE;
+        matchesDate = vTime >= startOfToday && vTime <= endOfToday;
       } else if (dateFilter === 'yesterday') {
-        matchesDate = vendor.createdAt === YESTERDAY_DATE;
+        matchesDate = vTime >= startOfYesterday && vTime <= endOfYesterday;
       } else if (dateFilter === '7days') {
-        matchesDate = new Date(vendor.createdAt).getTime() >= new Date('2026-07-16').getTime();
+        matchesDate = vTime >= last7DaysStart;
       } else if (dateFilter === '30days') {
-        matchesDate = new Date(vendor.createdAt).getTime() >= new Date('2026-06-23').getTime();
+        matchesDate = vTime >= last30DaysStart;
       } else if (dateFilter === 'this_month') {
-        matchesDate = vendor.createdAt.startsWith('2026-07');
+        matchesDate = vTime >= startOfThisMonth && vTime <= endOfThisMonth;
       } else if (dateFilter === 'last_month') {
-        matchesDate = vendor.createdAt.startsWith('2026-06');
+        matchesDate = vTime >= startOfLastMonth && vTime <= endOfLastMonth;
       } else if (dateFilter === 'this_year') {
-        matchesDate = vendor.createdAt.startsWith('2026');
+        matchesDate = vTime >= startOfThisYear && vTime <= endOfThisYear;
       }
 
       const matchesCategory = categoryFilter === 'all' || vendor.storeType === categoryFilter;
@@ -1132,69 +1235,32 @@ export const VendorsList: React.FC = () => {
           const targetDivision = wizardData.division || userDivision;
           const targetPincode = wizardData.pincode || userPincode;
 
-          const createdVendor: Vendor = {
-            id: `REG-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
-            name: wizardData.name,
-            ownerName: wizardData.ownerName || 'Merchant Owner',
-            phone: wizardData.phone,
-            email: (wizardData.email ? wizardData.email.toLowerCase().trim() : `${wizardData.name.toLowerCase().replace(/\s+/g, '')}@example.com`),
-            state: targetState,
-            division: targetDivision,
-            district: targetDistrict,
-            pincode: targetPincode,
-            role: 'Merchant Partner',
-            kycStatus: 'pending',
-            status: 'pending',
-            assignedAgent: user?.name ? `${user.name} (${activeRole.charAt(0).toUpperCase() + activeRole.slice(1)} Agent)` : 'Logged Agent',
-            createdAt: TODAY_DATE,
-            updatedAt: TODAY_DATE,
-            storeType: wizardData.storeType || 'General Retail & Services',
-            businessGst: wizardData.businessGst || '',
-            fullAddress: wizardData.fullAddress || `${targetDistrict}, ${targetState} - ${targetPincode}`
-          };
-
-          setVendors(prev => {
-            const updated = [createdVendor, ...prev];
-            try {
-              const customOnly = updated.filter(v => v.id.startsWith('REG-'));
-              localStorage.setItem(userVendorsKey, JSON.stringify(customOnly));
-
-              // Store in pending onboardings for Admin review & approval
-              const pendingList = JSON.parse(localStorage.getItem('connect_portal_pending_vendor_onboardings') || '[]');
-              const updatedPending = [createdVendor, ...pendingList.filter((p: any) => p.id !== createdVendor.id)];
-              localStorage.setItem('connect_portal_pending_vendor_onboardings', JSON.stringify(updatedPending));
-              localStorage.setItem('pending_merchant_onboardings', JSON.stringify(updatedPending));
-            } catch (e) {
-              console.error('Failed to save vendor to localStorage:', e);
-            }
-            return updated;
-          });
-
           // Post to backend API so Admin backend receives pending request
           const vendorPayload = {
-            businessName: createdVendor.name || 'Merchant Store',
-            name: createdVendor.name || 'Merchant Store',
-            ownerName: createdVendor.ownerName || 'Merchant Owner',
-            contactPerson: createdVendor.ownerName || 'Merchant Owner',
-            phone: createdVendor.phone || '9876543210',
-            email: createdVendor.email,
-            category: createdVendor.storeType || 'Services',
-            subCategory: createdVendor.storeType || 'Services',
-            gst: createdVendor.businessGst,
-            assignedState: createdVendor.state,
-            state: createdVendor.state,
-            assignedDistrict: createdVendor.district,
-            district: createdVendor.district,
-            assignedDivision: createdVendor.division,
-            division: createdVendor.division,
-            pincode: createdVendor.pincode,
+            businessName: wizardData.name || 'Merchant Store',
+            name: wizardData.name || 'Merchant Store',
+            ownerName: wizardData.ownerName || 'Merchant Owner',
+            contactPerson: wizardData.ownerName || 'Merchant Owner',
+            phone: wizardData.phone || '9876543210',
+            email: wizardData.email ? wizardData.email.toLowerCase().trim() : '',
+            category: wizardData.storeType || 'Services',
+            subCategory: wizardData.storeType || 'Services',
+            storeType: wizardData.storeType || 'Services',
+            gst: wizardData.businessGst || '',
+            assignedState: targetState,
+            state: targetState,
+            assignedDistrict: targetDistrict,
+            district: targetDistrict,
+            assignedDivision: targetDivision,
+            division: targetDivision,
+            pincode: targetPincode,
             buildingNo: wizardData.buildingNo || '',
             streetName: wizardData.streetName || '',
             postOffice: wizardData.postOffice || '',
             taluk: wizardData.taluk || '',
             panNumber: wizardData.panNumber || '',
             aadhaarNumber: wizardData.aadhaarNumber || '',
-            address: createdVendor.fullAddress,
+            address: wizardData.fullAddress || `${targetDistrict}, ${targetState} - ${targetPincode}`,
             status: 'pending',
             kycStatus: 'pending',
             joiningType: 'agent',
@@ -1205,20 +1271,63 @@ export const VendorsList: React.FC = () => {
             agentName: user?.name || 'Field Agent',
             agentRegistrationId: user?.registrationId || 'AG-PIN-1001',
             location: {
-              address: createdVendor.fullAddress,
+              address: wizardData.fullAddress || `${targetDistrict}, ${targetState} - ${targetPincode}`,
               latitude: 12.9716,
               longitude: 77.5946
             }
           };
 
-          // 1. Post to Agent App backend
-          api.post('/vendors', vendorPayload).then(() => {
+          // 1. Post to Agent App backend and adopt canonical server registration ID
+          api.post('/vendors', vendorPayload).then((res) => {
+            const serverVendor = res.data?.vendor;
+            const officialId = serverVendor?.registrationId || serverVendor?._id || `REG-${Date.now()}`;
+            const officialRegDate = serverVendor?.createdAt ? formatLocalDate(new Date(serverVendor.createdAt)) : formatLocalDate(new Date());
+
+            const officialVendor: Vendor = {
+              id: officialId,
+              name: serverVendor?.businessName || wizardData.name,
+              ownerName: serverVendor?.ownerName || wizardData.ownerName || 'Merchant Owner',
+              phone: serverVendor?.phone || wizardData.phone,
+              email: serverVendor?.email || wizardData.email,
+              state: targetState,
+              division: targetDivision,
+              district: targetDistrict,
+              pincode: targetPincode,
+              role: 'Merchant Partner',
+              kycStatus: serverVendor?.kycStatus || 'pending',
+              status: serverVendor?.status || 'pending',
+              assignedAgent: user?.name ? `${user.name} (${activeRole.charAt(0).toUpperCase() + activeRole.slice(1)} Agent)` : 'Logged Agent',
+              createdAt: officialRegDate,
+              rawCreatedAt: serverVendor?.createdAt || new Date().toISOString(),
+              updatedAt: officialRegDate,
+              storeType: wizardData.storeType || 'General Retail & Services',
+              businessGst: wizardData.businessGst || '',
+              fullAddress: wizardData.fullAddress || `${targetDistrict}, ${targetState} - ${targetPincode}`
+            };
+
+            setVendors(prev => {
+              const targetKey = getVendorCanonicalKey(officialVendor);
+              const filtered = prev.filter(v => v.id !== officialId && getVendorCanonicalKey(v) !== targetKey);
+              const updated = [officialVendor, ...filtered];
+              try {
+                localStorage.setItem(userVendorsKey, JSON.stringify(updated));
+
+                // Store in pending onboardings for Admin review & approval
+                const pendingList = JSON.parse(localStorage.getItem('connect_portal_pending_vendor_onboardings') || '[]');
+                const updatedPending = [officialVendor, ...pendingList.filter((p: any) => p.id !== officialVendor.id && getVendorCanonicalKey(p) !== targetKey)];
+                localStorage.setItem('connect_portal_pending_vendor_onboardings', JSON.stringify(updatedPending));
+                localStorage.setItem('pending_merchant_onboardings', JSON.stringify(updatedPending));
+              } catch (e) {
+                console.error('Failed to save vendor to localStorage:', e);
+              }
+              return updated;
+            });
+
             refetchVendors();
-            window.dispatchEvent(new CustomEvent('vendorOnboarded', { detail: createdVendor }));
+            window.dispatchEvent(new CustomEvent('vendorOnboarded', { detail: officialVendor }));
           }).catch(err => {
             console.warn('Backend API /vendors POST sync warning:', err);
             refetchVendors();
-            window.dispatchEvent(new CustomEvent('vendorOnboarded', { detail: createdVendor }));
           });
 
           // 2. Direct sync to Admin backend agent-onboard endpoint for guaranteed real-time availability
@@ -1230,7 +1339,7 @@ export const VendorsList: React.FC = () => {
 
           addNotification(
             'Merchant Onboarded & Submitted to Admin!',
-            `${createdVendor.name} has been submitted for Admin review and added to your dashboard under PIN ${createdVendor.pincode}.`,
+            `${wizardData.name} has been submitted for Admin review and added to your dashboard under PIN ${targetPincode}.`,
             'high',
             'system'
           );

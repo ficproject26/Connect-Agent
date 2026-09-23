@@ -49,7 +49,7 @@ const updateVendorSchema = zod_1.z.object({
         longitude: zod_1.z.number().optional()
     }).optional()
 });
-// GET /api/vendors — paginated list with optional filters
+// GET /api/vendors — paginated list with optional filters and date range
 const getVendors = async (req, res) => {
     try {
         const agentId = req.agent?.agentId;
@@ -57,35 +57,125 @@ const getVendors = async (req, res) => {
             return res.status(401).json({ message: 'Unauthorized' });
         const scope = await (0, territoryScope_1.getAgentTerritoryScope)(agentId);
         const scopeFilter = (0, territoryScope_1.buildVendorScopeFilter)(scope);
-        const { page = '1', limit = '50', status, category, search } = req.query;
+        const { page = '1', limit = '50', status, category, search, startDate, endDate, dateFilter } = req.query;
         const pageNum = parseInt(page, 10);
         const limitNum = parseInt(limit, 10);
-        const filter = { ...scopeFilter };
-        if (status)
-            filter.status = status;
-        if (category)
-            filter.category = category;
-        if (search) {
-            filter.$and = [
-                scopeFilter,
-                {
-                    $or: [
-                        { businessName: { $regex: search, $options: 'i' } },
-                        { ownerName: { $regex: search, $options: 'i' } },
-                        { 'location.address': { $regex: search, $options: 'i' } }
-                    ]
-                }
-            ];
+        const filterConditions = [scopeFilter];
+        if (status && status !== 'all') {
+            filterConditions.push({ status: { $regex: new RegExp(`^${status}$`, 'i') } });
         }
-        const total = await Vendor_1.default.countDocuments(filter);
-        const vendors = await Vendor_1.default.find(filter)
+        if (category && category !== 'all') {
+            filterConditions.push({
+                $or: [
+                    { category: { $regex: new RegExp(`^${category}$`, 'i') } },
+                    { storeType: { $regex: new RegExp(`^${category}$`, 'i') } }
+                ]
+            });
+        }
+        if (search) {
+            const s = String(search).trim();
+            filterConditions.push({
+                $or: [
+                    { businessName: { $regex: s, $options: 'i' } },
+                    { ownerName: { $regex: s, $options: 'i' } },
+                    { phone: { $regex: s, $options: 'i' } },
+                    { registrationId: { $regex: s, $options: 'i' } },
+                    { gst: { $regex: s, $options: 'i' } },
+                    { 'location.address': { $regex: s, $options: 'i' } }
+                ]
+            });
+        }
+        // Date Range Period filtering on createdAt
+        const dateConditions = {};
+        if (startDate) {
+            const s = new Date(startDate);
+            if (!isNaN(s.getTime()))
+                dateConditions.$gte = s;
+        }
+        if (endDate) {
+            const e = new Date(endDate);
+            if (!isNaN(e.getTime()))
+                dateConditions.$lte = e;
+        }
+        if (!startDate && !endDate && dateFilter && dateFilter !== 'all') {
+            const now = new Date();
+            if (dateFilter === 'today') {
+                const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+                const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+                dateConditions.$gte = startOfToday;
+                dateConditions.$lte = endOfToday;
+            }
+            else if (dateFilter === 'yesterday') {
+                const startOfYesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0, 0);
+                const endOfYesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
+                dateConditions.$gte = startOfYesterday;
+                dateConditions.$lte = endOfYesterday;
+            }
+            else if (dateFilter === '7days') {
+                dateConditions.$gte = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            }
+            else if (dateFilter === '30days') {
+                dateConditions.$gte = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            }
+            else if (dateFilter === 'this_month') {
+                // First day of current calendar month at 00:00:00 through last day of current calendar month at 23:59:59.999
+                const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+                const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+                dateConditions.$gte = startOfMonth;
+                dateConditions.$lte = endOfMonth;
+            }
+            else if (dateFilter === 'last_month') {
+                const startOfLast = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+                const endOfLast = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+                dateConditions.$gte = startOfLast;
+                dateConditions.$lte = endOfLast;
+            }
+            else if (dateFilter === 'this_year') {
+                const startOfYear = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+                const endOfYear = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+                dateConditions.$gte = startOfYear;
+                dateConditions.$lte = endOfYear;
+            }
+        }
+        if (Object.keys(dateConditions).length > 0) {
+            filterConditions.push({ createdAt: dateConditions });
+        }
+        const finalFilter = filterConditions.length === 1 ? filterConditions[0] : { $and: filterConditions };
+        const rawVendors = await Vendor_1.default.find(finalFilter)
             .populate('assignedAgent', 'name email role')
             .sort({ createdAt: -1 })
-            .skip((pageNum - 1) * limitNum)
-            .limit(limitNum)
             .lean();
+        // Deduplicate vendor records that represent the exact same vendor registration,
+        // ensuring the application returns the canonical record.
+        const canonicalMap = new Map();
+        for (const v of rawVendors) {
+            const gst = v.gst ? v.gst.trim().toUpperCase() : '';
+            const phone = v.phone ? v.phone.replace(/\D/g, '') : '';
+            const pin = v.pincode ? v.pincode.trim() : '';
+            const name = (v.businessName || v.name || '').trim().toLowerCase();
+            // Canonical key for a single business establishment registration:
+            // Preserves separate valid registrations for different branches/locations
+            const canonicalKey = (phone && pin && name)
+                ? `VENDOR_${phone}_${pin}_${name}`
+                : (v.registrationId ? `REG_${v.registrationId}` : `ID_${v._id}`);
+            if (!canonicalMap.has(canonicalKey)) {
+                canonicalMap.set(canonicalKey, v);
+            }
+            else {
+                // If duplicate records exist in the DB, prefer active / approved status or earlier registration
+                const existing = canonicalMap.get(canonicalKey);
+                const isExistingApproved = (existing.status || '').toLowerCase() === 'active' || existing.kycStatus === 'approved';
+                const isCurrentApproved = (v.status || '').toLowerCase() === 'active' || v.kycStatus === 'approved';
+                if (!isExistingApproved && isCurrentApproved) {
+                    canonicalMap.set(canonicalKey, v);
+                }
+            }
+        }
+        const deduplicated = Array.from(canonicalMap.values());
+        const total = deduplicated.length;
+        const paginatedVendors = deduplicated.slice((pageNum - 1) * limitNum, pageNum * limitNum);
         return res.status(200).json({
-            vendors,
+            vendors: paginatedVendors,
             pagination: { page: pageNum, limit: limitNum, total, pages: Math.ceil(total / limitNum) }
         });
     }
@@ -159,6 +249,29 @@ const createVendor = async (req, res) => {
         });
         if (!geoConsistency.consistent) {
             return res.status(400).json({ message: geoConsistency.error });
+        }
+        // 5. Prevent duplicate vendor registration insertion
+        const normPhone = (data.phone || '').replace(/\D/g, '');
+        const normPin = (data.pincode || '').trim();
+        const normName = (data.businessName || data.name || '').trim();
+        const normGst = (data.gst || '').trim().toUpperCase();
+        let existingVendor = null;
+        if (normGst && normPin) {
+            existingVendor = await Vendor_1.default.findOne({ gst: normGst, pincode: normPin }).populate('assignedAgent', 'name email role');
+        }
+        if (!existingVendor && normPhone && normPin && normName) {
+            existingVendor = await Vendor_1.default.findOne({
+                phone: normPhone,
+                pincode: normPin,
+                businessName: { $regex: new RegExp(`^${normName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+            }).populate('assignedAgent', 'name email role');
+        }
+        if (existingVendor) {
+            return res.status(200).json({
+                message: 'Vendor already registered with this jurisdiction details',
+                vendor: existingVendor,
+                isExisting: true
+            });
         }
         const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
         const randDigits = Math.floor(1000 + Math.random() * 9000);
