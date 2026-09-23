@@ -10,7 +10,8 @@ module.exports = {
       max_memory_restart: '1G',
       env: {
         NODE_ENV: 'production',
-        PORT: 8003
+        PORT: 8083,
+        BACKEND_URL: 'http://3.110.88.42:8083'
       }
     }
   ]

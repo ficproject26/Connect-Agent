@@ -38,12 +38,12 @@ mongod
 
 # 4. Start dev server
 npm run dev
-# → API running at http://localhost:4000
+# → API running at http://localhost:8083 (Production: http://3.110.88.42:8083)
 ```
 
 ## API Base URL
 ```
-http://localhost:4000/api
+http://3.110.88.42:8083/api
 ```
 
 ## Key Endpoints (to be implemented)

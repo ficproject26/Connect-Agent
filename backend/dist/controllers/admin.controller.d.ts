@@ -5,4 +5,5 @@ export declare const approveRegistration: (req: Request, res: Response) => Promi
 export declare const rejectRegistration: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const getHierarchyTree: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const getWeeklyLeaderboard: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const getCategories: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 //# sourceMappingURL=admin.controller.d.ts.map

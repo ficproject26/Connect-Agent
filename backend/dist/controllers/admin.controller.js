@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getWeeklyLeaderboard = exports.getHierarchyTree = exports.rejectRegistration = exports.approveRegistration = exports.getRegistrationById = exports.getRegistrations = void 0;
+exports.getCategories = exports.getWeeklyLeaderboard = exports.getHierarchyTree = exports.rejectRegistration = exports.approveRegistration = exports.getRegistrationById = exports.getRegistrations = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const Agent_1 = __importDefault(require("../models/Agent"));
 const AuditLog_1 = __importDefault(require("../models/AuditLog"));
@@ -503,4 +503,44 @@ const getWeeklyLeaderboard = async (req, res) => {
     }
 };
 exports.getWeeklyLeaderboard = getWeeklyLeaderboard;
+// GET /api/admin/categories or /api/categories
+const getCategories = async (req, res) => {
+    try {
+        const db = mongoose_1.default.connection.db;
+        let categories = [];
+        if (db) {
+            categories = await db.collection('categories').find().sort({ sortOrder: 1, name: 1 }).toArray();
+        }
+        // If no categories exist in database, return canonical main categories from Admin Category Management
+        if (!categories || categories.length === 0) {
+            const canonicalMains = ['Services', 'Products', 'Daily Needs', 'Food', 'Stay', 'Travel', 'Jobs'];
+            categories = canonicalMains.map((name, index) => ({
+                _id: String(index + 1),
+                name,
+                level: 'main',
+                isMainCategory: true,
+                isActive: true,
+                sortOrder: index + 1
+            }));
+        }
+        return res.status(200).json({
+            success: true,
+            categories
+        });
+    }
+    catch (error) {
+        console.error('Get categories error:', error);
+        const canonicalMains = ['Services', 'Products', 'Daily Needs', 'Food', 'Stay', 'Travel', 'Jobs'];
+        const fallback = canonicalMains.map((name, index) => ({
+            _id: String(index + 1),
+            name,
+            level: 'main',
+            isMainCategory: true,
+            isActive: true,
+            sortOrder: index + 1
+        }));
+        return res.status(200).json({ success: true, categories: fallback });
+    }
+};
+exports.getCategories = getCategories;
 //# sourceMappingURL=admin.controller.js.map

@@ -20,6 +20,7 @@ const admin_routes_1 = __importDefault(require("./routes/admin.routes"));
 const wallet_routes_1 = __importDefault(require("./routes/wallet.routes"));
 const attendance_routes_1 = __importDefault(require("./routes/attendance.routes"));
 const fieldVisit_routes_1 = __importDefault(require("./routes/fieldVisit.routes"));
+const admin_controller_1 = require("./controllers/admin.controller");
 const app = (0, express_1.default)();
 // Security and standard middlewares
 app.use((0, helmet_1.default)());
@@ -27,6 +28,8 @@ app.use((0, cors_1.default)());
 app.use(express_1.default.json({ limit: '100mb' }));
 app.use(express_1.default.urlencoded({ limit: '100mb', extended: true }));
 app.use('/api', rateLimiter_middleware_1.apiRateLimiter);
+// Public categories endpoint
+app.get(['/api/categories', '/api/public/categories'], admin_controller_1.getCategories);
 // Routes
 app.use('/api/auth', auth_routes_1.default);
 app.use('/auth', auth_routes_1.default);

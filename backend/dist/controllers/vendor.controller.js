@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.updateVendorStatus = exports.updateVendor = exports.createVendor = exports.getVendorById = exports.getVendors = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const zod_1 = require("zod");
+const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const Vendor_1 = __importDefault(require("../models/Vendor"));
 const territoryScope_1 = require("../utils/territoryScope");
 const createVendorSchema = zod_1.z.object({
@@ -119,6 +120,9 @@ const createVendor = async (req, res) => {
         if (!agentId)
             return res.status(401).json({ message: 'Unauthorized' });
         const data = createVendorSchema.parse(req.body);
+        if (data.email) {
+            data.email = data.email.toLowerCase().trim();
+        }
         const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
         const randDigits = Math.floor(1000 + Math.random() * 9000);
         const generatedRegId = `REG-${dateStr}-${randDigits}`;
@@ -147,6 +151,8 @@ const createVendor = async (req, res) => {
         try {
             const db = mongoose_1.default.connection.db;
             const vendorEmail = data.email ? data.email.toLowerCase() : `vendor_${Date.now()}@connect.app`;
+            const salt = await bcryptjs_1.default.genSalt(10);
+            const defaultHashedPassword = await bcryptjs_1.default.hash('Vendor@12345', salt);
             if (db) {
                 await db.collection('users').updateOne({ email: vendorEmail }, {
                     $set: {
@@ -154,10 +160,11 @@ const createVendor = async (req, res) => {
                         businessName: data.businessName || data.name || data.ownerName || 'Merchant Store',
                         contactPerson: data.ownerName || data.contactPerson || data.name || 'Owner',
                         email: vendorEmail,
-                        phone: data.phone || '9876543210',
+                        phone: data.phone || undefined,
+                        password: defaultHashedPassword,
                         role: 'Vendor',
-                        vendorType: data.category || data.storeType || 'Supermarket & Retail',
-                        category: data.category || data.storeType || 'Supermarket & Retail',
+                        vendorType: data.category || data.storeType || 'Services',
+                        category: data.category || data.storeType || 'Services',
                         status: 'pending',
                         kycStatus: 'pending',
                         joiningType: 'agent',
@@ -174,7 +181,7 @@ const createVendor = async (req, res) => {
                         registrationId: vendor.registrationId || `REG-${Date.now().toString().slice(-6)}-${Math.floor(1000 + Math.random() * 9000)}`,
                         createdAt: new Date()
                     }
-                }, { upsert: true });
+                }, { upsert: true }).catch(() => { });
             }
         }
         catch (syncErr) {

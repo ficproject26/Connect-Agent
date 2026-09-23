@@ -1,26 +1,12 @@
 import axios from 'axios';
 
 const getAgentBackendUrl = () => {
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    const isLocalDev =
-      !hostname ||
-      hostname === 'localhost' ||
-      hostname === '127.0.0.1' ||
-      hostname.startsWith('192.168.') ||
-      hostname.startsWith('10.') ||
-      hostname.startsWith('172.');
+  const envUrl =
+    typeof import.meta !== 'undefined' && import.meta.env
+      ? (import.meta.env.VITE_API_URL || import.meta.env.NEXT_PUBLIC_API_URL)
+      : null;
 
-    if (isLocalDev) {
-      const envUrl = typeof import.meta !== 'undefined' && import.meta.env ? (import.meta.env.VITE_API_URL || import.meta.env.NEXT_PUBLIC_API_URL) : null;
-      if (envUrl && envUrl.includes('localhost')) {
-        return envUrl.endsWith('/api') ? envUrl : `${envUrl.replace(/\/$/, '')}/api`;
-      }
-      return 'http://localhost:8003/api';
-    }
-  }
-
-  let url = (typeof import.meta !== 'undefined' && import.meta.env ? (import.meta.env.VITE_API_URL || import.meta.env.NEXT_PUBLIC_API_URL) : null) || 'https://connect-agent-1.onrender.com/api';
+  let url = envUrl || 'http://3.110.88.42:8083/api';
   url = url.trim().replace(/\/+$/, '');
   if (!url.endsWith('/api')) {
     url += '/api';
