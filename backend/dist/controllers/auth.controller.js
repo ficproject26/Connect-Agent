@@ -22,6 +22,8 @@ const registerSchema = zod_1.z.object({
     previousCompany: zod_1.z.string().optional(),
     address: zod_1.z.string().optional(),
     fullAddress: zod_1.z.string().optional(),
+    buildingNo: zod_1.z.string().optional(),
+    streetName: zod_1.z.string().optional(),
     postOffice: zod_1.z.string().optional(),
     aadhaarNumber: zod_1.z.string().optional(),
     panNumber: zod_1.z.string().optional(),

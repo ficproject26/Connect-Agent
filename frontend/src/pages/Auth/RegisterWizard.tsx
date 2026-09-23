@@ -177,6 +177,8 @@ export const RegisterWizard: React.FC = () => {
     district: '',
     pincode: '',
     postOffice: '',
+    buildingNo: '',
+    streetName: '',
     fullAddress: ''
   });
 
@@ -237,7 +239,7 @@ export const RegisterWizard: React.FC = () => {
     setCurrentStep(1);
     setRole('state');
     setPersonalInfo({ name: '', phone: '', altPhone: '', email: '', password: '', confirmPassword: '', dob: '', gender: 'male', aadhaarNumber: '', panNumber: '' });
-    setAddress({ state: '', division: '', district: '', pincode: '', postOffice: '', fullAddress: '' });
+    setAddress({ state: '', division: '', district: '', pincode: '', postOffice: '', buildingNo: '', streetName: '', fullAddress: '' });
     setProfessionalInfo({ qualification: '', experience: 'fresher', previousCompany: '' });
     setDocuments({
       aadhaarCard: { fileName: '', dataUrl: '', size: 0 },
@@ -437,16 +439,20 @@ export const RegisterWizard: React.FC = () => {
         setFormErrors('Please select your assigned District.');
         return;
       }
-      if ((role === 'division' || role === 'pincode') && !address.division) {
+      if (!address.division) {
         setFormErrors('Please select your assigned Division.');
         return;
       }
-      if (role === 'pincode' && !address.pincode) {
-        setFormErrors('Please enter your assigned 6-digit Pincode.');
+      if (!address.pincode || address.pincode.replace(/\D/g, '').length !== 6) {
+        setFormErrors('Please enter your 6-digit Pincode.');
         return;
       }
-      if (!address.fullAddress) {
-        setFormErrors('Please enter your full street/building address.');
+      if (!address.buildingNo.trim()) {
+        setFormErrors('Building No / Door No / Shop No is required.');
+        return;
+      }
+      if (!address.streetName.trim()) {
+        setFormErrors('Street Name / Area is required.');
         return;
       }
     }
@@ -500,14 +506,16 @@ export const RegisterWizard: React.FC = () => {
         qualification: professionalInfo.qualification,
         experience: professionalInfo.experience,
         previousCompany: professionalInfo.previousCompany,
-        address: address.fullAddress || '',
-        fullAddress: address.fullAddress || '',
+        address: `${address.buildingNo ? `${address.buildingNo.trim()}, ` : ''}${address.streetName ? `${address.streetName.trim()}, ` : ''}${address.division ? `${address.division}, ` : ''}${address.district ? `${address.district}, ` : ''}${address.state} - ${address.pincode}`.trim(),
+        fullAddress: `${address.buildingNo ? `${address.buildingNo.trim()}, ` : ''}${address.streetName ? `${address.streetName.trim()}, ` : ''}${address.division ? `${address.division}, ` : ''}${address.district ? `${address.district}, ` : ''}${address.state} - ${address.pincode}`.trim(),
+        buildingNo: address.buildingNo.trim(),
+        streetName: address.streetName.trim(),
         postOffice: address.postOffice || '',
         territory: {
           state: address.state,
           district: role === 'state' ? '' : address.district,
-          division: (role === 'state' || role === 'district') ? '' : address.division,
-          pincode: role === 'pincode' ? address.pincode : ''
+          division: address.division,
+          pincode: address.pincode
         },
         kycDocs: {
           aadhaarNumber: personalInfo.aadhaarNumber || '',
@@ -689,9 +697,11 @@ export const RegisterWizard: React.FC = () => {
                     setAddress(prev => ({
                       state: prev.state,
                       district: newRole === 'state' ? '' : prev.district,
-                      division: (newRole === 'state' || newRole === 'district') ? '' : prev.division,
-                      pincode: newRole === 'pincode' ? prev.pincode : '',
-                      postOffice: newRole === 'pincode' ? prev.postOffice : '',
+                      division: prev.division,
+                      pincode: prev.pincode,
+                      postOffice: prev.postOffice,
+                      buildingNo: prev.buildingNo,
+                      streetName: prev.streetName,
                       fullAddress: prev.fullAddress
                     }));
                   }}
@@ -938,7 +948,7 @@ export const RegisterWizard: React.FC = () => {
                       }}
                     />
 
-                    {role !== 'state' && (
+                    {role !== 'state' ? (
                       <Select
                         label="District (Required)"
                         disabled={!address.state}
@@ -959,28 +969,21 @@ export const RegisterWizard: React.FC = () => {
                           setFormErrors('');
                         }}
                       />
-                    )}
-
-                    {(role === 'division' || role === 'pincode') && (
+                    ) : (
                       <Select
-                        label="Division (Required)"
-                        disabled={!address.district}
+                        label="District (Optional for State Agent)"
+                        disabled={!address.state}
                         options={[
-                          { value: '', label: address.district ? '-- Select Assigned Division --' : 'Select District First' },
-                          ...(DISTRICT_DIVISIONS[address.district] || [
-                            `${address.district} Central Division`,
-                            `${address.district} North Division`,
-                            `${address.district} South Division`,
-                            `${address.district} East Division`,
-                            `${address.district} West Division`
-                          ]).map(div => ({ value: div, label: div }))
+                          { value: '', label: address.state ? '-- Select District (Optional) --' : 'Select State First' },
+                          ...(STATE_DISTRICTS[address.state] || []).map(d => ({ value: d, label: d }))
                         ]}
-                        value={address.division}
+                        value={address.district}
                         onChange={(e) => {
-                          const selDiv = e.target.value;
+                          const selDistrict = e.target.value;
                           setAddress({
                             ...address,
-                            division: selDiv,
+                            district: selDistrict,
+                            division: '',
                             pincode: '',
                             postOffice: ''
                           });
@@ -989,35 +992,69 @@ export const RegisterWizard: React.FC = () => {
                       />
                     )}
 
-                    {role === 'pincode' && (
-                      <>
-                        <Input
-                          label="Pincode (6 Digits)"
-                          maxLength={6}
-                          placeholder="Enter 6-digit Pincode (e.g. 635109)"
-                          value={address.pincode}
-                          onChange={(e) => handlePincodeChange(e.target.value)}
-                        />
+                    <Select
+                      label="Division (Required)"
+                      disabled={!address.district && role !== 'state'}
+                      options={[
+                        { value: '', label: address.district ? '-- Select Assigned Division --' : (address.state ? '-- Select Division --' : 'Select District First') },
+                        ...(DISTRICT_DIVISIONS[address.district] || [
+                          `${address.district || 'Central'} Central Division`,
+                          `${address.district || 'North'} North Division`,
+                          `${address.district || 'South'} South Division`,
+                          `${address.district || 'East'} East Division`,
+                          `${address.district || 'West'} West Division`
+                        ]).map(div => ({ value: div, label: div }))
+                      ]}
+                      value={address.division}
+                      onChange={(e) => {
+                        const selDiv = e.target.value;
+                        setAddress({
+                          ...address,
+                          division: selDiv,
+                          pincode: '',
+                          postOffice: ''
+                        });
+                        setFormErrors('');
+                      }}
+                    />
 
-                        {address.postOffice && (
-                          <Input
-                            label="Post Office Branch"
-                            value={address.postOffice}
-                            disabled
-                            className="bg-slate-50 cursor-not-allowed opacity-80"
-                            placeholder="Auto-populated"
-                          />
-                        )}
-                      </>
+                    <Input
+                      label="Pincode (6 Digits - Required)"
+                      maxLength={6}
+                      inputMode="numeric"
+                      placeholder="Enter 6-digit Pincode (e.g. 636903)"
+                      value={address.pincode}
+                      onChange={(e) => handlePincodeChange(e.target.value)}
+                    />
+
+                    {address.postOffice && (
+                      <div className="md:col-span-2">
+                        <Input
+                          label="Post Office Branch"
+                          value={address.postOffice}
+                          disabled
+                          className="bg-slate-50 cursor-not-allowed opacity-80"
+                          placeholder="Auto-populated"
+                        />
+                      </div>
                     )}
                   </div>
 
-                  <div className="mt-3">
+                  {/* Building No / Door No / Shop No * & Street Name / Area * */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
                     <Input
-                      label="Full Street Address (Required)"
-                      placeholder="Street name, landmark, building number"
-                      value={address.fullAddress}
-                      onChange={(e) => setAddress({ ...address, fullAddress: e.target.value })}
+                      label="Building No / Door No / Shop No *"
+                      placeholder="e.g. Door #14-2, Shop #5, Commercial Complex"
+                      value={address.buildingNo || ''}
+                      onChange={(e) => setAddress({ ...address, buildingNo: e.target.value })}
+                      required
+                    />
+                    <Input
+                      label="Street Name / Area *"
+                      placeholder="e.g. Main Market Road, Bus Stand Area"
+                      value={address.streetName || ''}
+                      onChange={(e) => setAddress({ ...address, streetName: e.target.value })}
+                      required
                     />
                   </div>
                 </div>
