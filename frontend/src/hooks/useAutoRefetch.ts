@@ -1,10 +1,10 @@
 import { useQuery, UseQueryOptions, QueryKey } from '@tanstack/react-query';
 import { queryClient } from '../utils/queryClient';
 
-export const DEFAULT_REFETCH_INTERVAL = 5000; // 5 seconds
+export const DEFAULT_REFETCH_INTERVAL = 30000; // 30 seconds moderate background refresh
 
 /**
- * Standard auto-refetching query hook with 5s background polling,
+ * Standard auto-refetching query hook with background polling,
  * automatic tab-visibility pausing/resuming, and fast initial caching.
  */
 export function useAutoRefetch<TData = any, TError = any>(
@@ -17,8 +17,8 @@ export function useAutoRefetch<TData = any, TError = any>(
     queryFn,
     refetchInterval: DEFAULT_REFETCH_INTERVAL,
     refetchIntervalInBackground: false,
-    refetchOnWindowFocus: true,
-    staleTime: 2000,
+    refetchOnWindowFocus: false,
+    staleTime: 30000,
     ...options,
   });
 }

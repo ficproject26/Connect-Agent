@@ -53,40 +53,22 @@ export const TicketsList: React.FC = () => {
   const [stateResponseText, setStateResponseText] = useState('');
   const [assignedAgentTarget, setAssignedAgentTarget] = useState('');
 
-  // Load assigned vendors for logged in agent
-  useEffect(() => {
-    const fetchVendors = async () => {
-      try {
-        const res = await api.get('/vendors');
-        const list = res.data.vendors || [];
-        setAssignedVendors(list);
-      } catch (err) {
-        setAssignedVendors([]);
-      }
-    };
-    fetchVendors();
-  }, []);
-
-  const handleAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      setAttachment({
-        fileName: file.name,
-        dataUrl: ev.target?.result as string
-      });
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const fetchTickets = async () => {
-    setIsLoading(true);
+  const loadTicketData = async (isInitial = false) => {
+    if (isInitial && tickets.length === 0) {
+      setIsLoading(true);
+    }
     setErrorMsg('');
     try {
-      const response = await api.get('/tickets');
-      const backendTickets = response.data.tickets || [];
-      
+      const [vRes, tRes] = await Promise.all([
+        api.get('/vendors').catch(() => ({ data: { vendors: [] } })),
+        api.get('/tickets').catch(() => ({ data: { tickets: [] } }))
+      ]);
+
+      if (vRes?.data?.vendors) {
+        setAssignedVendors(vRes.data.vendors);
+      }
+
+      const backendTickets = tRes?.data?.tickets || [];
       const mapped: SupportTicket[] = backendTickets.map((t: any) => ({
         _id: t._id || `TK-${Math.floor(1000 + Math.random() * 9000)}`,
         ticketId: t.ticketId || `TKT-${Math.floor(10000 + Math.random() * 90000)}`,
@@ -109,24 +91,24 @@ export const TicketsList: React.FC = () => {
             _id: 'ST-101',
             ticketId: 'TKT-91042',
             territory: 'Visakhapatnam → Vizag City → 530001',
-            vendorName: 'Sri Rama Supermarket',
-            raisedBy: 'raki pin (Pincode Agent)',
-            category: 'KYC',
-            description: 'Vendor GST certificate mismatch during state onboarding audit.',
+            vendorName: 'Sri Venkateswara Traders',
+            raisedBy: 'Ravi Teja (Pincode Agent)',
+            category: 'Vendor',
+            description: 'Merchant KYC verification delayed beyond SLA period of 48 hours.',
             priority: 'high',
             status: 'open',
             createdAt: new Date().toLocaleDateString('en-GB'),
-            remarks: 'Pending State Agent review',
-            assignedAgent: 'raki pin (Pincode Agent)'
+            remarks: 'Under review by State Admin desk',
+            assignedAgent: 'Ravi Teja (Pincode Agent)'
           },
           {
             _id: 'ST-102',
-            ticketId: 'TKT-82915',
+            ticketId: 'TKT-82914',
             territory: 'NTR District → Vijayawada Central → 520001',
-            vendorName: 'Governorpet Electronics',
+            vendorName: 'Durga Groceries',
             raisedBy: 'Kiran Kumar (Division Agent)',
-            category: 'Payment',
-            description: 'Payout processing delay for onboarded merchant tie-up commission.',
+            category: 'Payout/Commission',
+            description: 'Commission calculation mismatch for 15 onboarded retail merchants.',
             priority: 'critical',
             status: 'in_progress',
             createdAt: new Date(Date.now() - 86400000).toLocaleDateString('en-GB'),
@@ -175,8 +157,21 @@ export const TicketsList: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchTickets();
+    loadTicketData(true);
   }, [activeRole]);
+
+  const handleAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setAttachment({
+        fileName: file.name,
+        dataUrl: ev.target?.result as string
+      });
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleRaiseTicket = async (e: React.FormEvent) => {
     e.preventDefault();

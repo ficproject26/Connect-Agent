@@ -87,29 +87,38 @@ export const AppRoutes: React.FC = () => {
             path="/*"
             element={
               <DashboardLayout>
-                <Routes>
-                  {/* Dynamic role dashboard rendering */}
-                  <Route path="dashboard" element={<DashboardOverview />} />
-                  
-                  {/* Common Agent pages */}
-                  <Route path="agents" element={<AgentManagement />} />
-                  <Route path="leaderboard" element={<LeaderboardModule />} />
-                  <Route path="kyc" element={<KycVerification />} />
-                  <Route path="vendors" element={<VendorsList />} />
-                  <Route path="targets" element={<TargetsList />} />
-                  <Route path="tickets" element={<TicketsList />} />
-                  <Route path="wallet" element={<WalletDashboard />} />
-                  <Route path="reports" element={<ReportsModule />} />
-                  
-                  {/* Shared Profile & Settings */}
-                  <Route path="shared/profile" element={<ProfileModule />} />
-                  <Route path="shared/settings" element={<SettingsModule />} />
-                  <Route path="shared/notifications" element={<NotificationCenter />} />
-                  <Route path="field-visits" element={<FieldVisitsModule />} />
+                <Suspense
+                  fallback={
+                    <div className="flex flex-col items-center justify-center min-h-[40vh] space-y-3">
+                      <div className="animate-spin rounded-full h-8 w-8 border-3 border-[#864f19] border-t-transparent" />
+                      <span className="text-xs font-semibold text-slate-400 font-sans tracking-wide">Loading module...</span>
+                    </div>
+                  }
+                >
+                  <Routes>
+                    {/* Dynamic role dashboard rendering */}
+                    <Route path="dashboard" element={<DashboardOverview />} />
+                    
+                    {/* Common Agent pages */}
+                    <Route path="agents" element={<AgentManagement />} />
+                    <Route path="leaderboard" element={<LeaderboardModule />} />
+                    <Route path="kyc" element={<KycVerification />} />
+                    <Route path="vendors" element={<VendorsList />} />
+                    <Route path="targets" element={<TargetsList />} />
+                    <Route path="tickets" element={<TicketsList />} />
+                    <Route path="wallet" element={<WalletDashboard />} />
+                    <Route path="reports" element={<ReportsModule />} />
+                    
+                    {/* Shared Profile & Settings */}
+                    <Route path="shared/profile" element={<ProfileModule />} />
+                    <Route path="shared/settings" element={<SettingsModule />} />
+                    <Route path="shared/notifications" element={<NotificationCenter />} />
+                    <Route path="field-visits" element={<FieldVisitsModule />} />
 
-                  {/* Fallback to dashboard */}
-                  <Route path="*" element={<Navigate to="/dashboard" replace />} />
-                </Routes>
+                    {/* Fallback to dashboard */}
+                    <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                  </Routes>
+                </Suspense>
               </DashboardLayout>
             }
           />

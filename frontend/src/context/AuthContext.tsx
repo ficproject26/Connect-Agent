@@ -88,7 +88,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   });
   const [token, setToken] = useState<string | null>(localStorage.getItem('agent_token'));
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(() => {
+    // If valid token and user are already present in localStorage, render immediately
+    try {
+      return !(localStorage.getItem('agent_token') && localStorage.getItem('agent_user'));
+    } catch (e) {
+      return false;
+    }
+  });
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [soundProfile, setSoundProfile] = useState<'chirp' | 'melody' | 'siren'>('chirp');
   const [soundVolume, setSoundVolume] = useState<number>(0.5);
@@ -170,7 +177,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         localStorage.setItem('agent_user', JSON.stringify(finalAgent));
       } catch (e) {}
-      await fetchNotifications();
+      // Fetch notifications in background without blocking session verification
+      fetchNotifications().catch(() => {});
     } catch (err: any) {
       console.warn('Backend session verification failed on /auth/me:', err?.response?.data?.message || err.message);
       // On 401, 403, or invalid session, purge localStorage and log out immediately
@@ -182,15 +190,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const initializeAuth = async () => {
-      const savedUserStr = localStorage.getItem('agent_user');
       const savedToken = localStorage.getItem('agent_token');
       if (savedToken) {
-        try {
-          await refetchUser();
-        } catch (err) {
+        // Silently verify session in background, app shell is already interactive
+        refetchUser().catch((err) => {
           console.error('Session restoration failed:', err);
-          logout();
-        }
+        });
       } else {
         setUser(null);
         setToken(null);
@@ -206,16 +211,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const newToken = localStorage.getItem('agent_token');
         const newUserStr = localStorage.getItem('agent_user');
         
-        queryClient.clear();
-        setToken(newToken);
-        if (newUserStr) {
-          try {
-            setUser(JSON.parse(newUserStr));
-          } catch (err) {
-            setUser(null);
-          }
-        } else {
+        if (!newToken) {
+          queryClient.clear();
           setUser(null);
+          setToken(null);
+        } else {
+          setToken(newToken);
+          if (newUserStr) {
+            try {
+              setUser(JSON.parse(newUserStr));
+            } catch (err) {
+              setUser(null);
+            }
+          }
         }
       }
     };
@@ -231,7 +239,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const response = await api.post('/auth/login', loginPayload);
       if (response?.data?.token) {
-        queryClient.clear();
         const data = response.data;
         const agent = data.agent || data.user || {};
         agent.status = (agent.kycStatus === 'approved' || agent.status === 'approved' || agent.status === 'active') ? 'active' : 'pending_approval';
@@ -243,7 +250,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           localStorage.setItem('agent_user', JSON.stringify(finalAgent));
         } catch (e) {}
         setUser(finalAgent);
-        setTimeout(() => { fetchNotifications(); }, 100);
+        setLoading(false);
+        // Non-blocking background notification refresh
+        fetchNotifications().catch(() => {});
         return finalAgent;
       }
     } catch (err: any) {

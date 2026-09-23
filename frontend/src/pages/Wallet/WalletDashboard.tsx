@@ -49,12 +49,16 @@ export const WalletDashboard: React.FC = () => {
   const [cashoutLoading, setCashoutLoading] = useState(false);
   const [cashoutSuccess, setCashoutSuccess] = useState(false);
 
-  const fetchWalletDetails = async () => {
-    setIsLoading(true);
+  const fetchWalletDetails = async (isInitial = false) => {
+    if (isInitial && transactions.length === 0) {
+      setIsLoading(true);
+    }
     setErrorMsg('');
     try {
-      const balanceRes = await api.get('/wallet/balance');
-      const txRes = await api.get('/wallet/transactions');
+      const [balanceRes, txRes] = await Promise.all([
+        api.get('/wallet/balance').catch(() => ({ data: { balance: 0 } })),
+        api.get('/wallet/transactions').catch(() => ({ data: { transactions: [] } }))
+      ]);
       
       const mappedTx: Transaction[] = (txRes.data.transactions || []).map((t: any) => ({
         transactionId: t.transactionId,
@@ -197,16 +201,17 @@ export const WalletDashboard: React.FC = () => {
 
   const queryClient = useQueryClient();
 
-  // Auto-polling 5s wallet query
+  // Cached wallet query with gentle 30s background refresh
   useQuery({
     queryKey: ['walletDetailsLive', activeRole],
     queryFn: async () => {
-      await fetchWalletDetails();
+      await fetchWalletDetails(false);
       return true;
     },
-    refetchInterval: 5000,
+    staleTime: 60000,
+    refetchInterval: 30000,
     refetchIntervalInBackground: false,
-    refetchOnWindowFocus: true
+    refetchOnWindowFocus: false
   });
 
   const handleCashoutSubmit = async (e: React.FormEvent) => {

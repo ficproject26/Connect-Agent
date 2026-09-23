@@ -47,7 +47,7 @@ const getRegistrations = async (req, res) => {
                         userFilter.status = statusQuery;
                     }
                 }
-                const userDocs = await db.collection('users').find(userFilter).toArray();
+                const userDocs = await db.collection('users').find(userFilter).limit(50).maxTimeMS(4000).toArray();
                 // Merge users docs if not already present in registrations list
                 const existingEmails = new Set(registrations.map(r => r.email.toLowerCase()));
                 for (const uDoc of userDocs) {

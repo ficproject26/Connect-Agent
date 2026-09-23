@@ -14,16 +14,18 @@ export const PincodeDashboard: React.FC = () => {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
 
-  // Dashboard Live Stats Query (5s automatic background refresh)
+  // Dashboard Live Stats Query (cached with gentle 30s background refresh)
   const { data: dashboardData, isLoading } = useQuery({
     queryKey: ['pincodeDashboardStats'],
     queryFn: async () => {
       const response = await api.get('/dashboard/stats');
       return response.data;
     },
-    refetchInterval: 5000,
+    staleTime: 60000, // 1 min fresh cache
+    refetchInterval: 30000, // gentle 30s background poll
     refetchIntervalInBackground: false,
-    refetchOnWindowFocus: true
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData
   });
 
   const stats = dashboardData?.stats || {
@@ -122,15 +124,6 @@ export const PincodeDashboard: React.FC = () => {
     }, 1000);
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 text-slate-450 gap-2">
-        <Loader2 className="w-8 h-8 animate-spin text-[#864f19]" />
-        <span className="font-bold text-xs font-sans">Syncing portal execution metrics...</span>
-      </div>
-    );
-  }
-
   const remainingTasks = (stats?.targets?.total || 0) - (stats?.targets?.completed || 0);
 
   return (
@@ -189,7 +182,11 @@ export const PincodeDashboard: React.FC = () => {
           <div key={idx} className="bg-white p-5 rounded-[16px] border border-[#eae8e7] flex items-center justify-between shadow-sm relative overflow-hidden group">
             <div className="space-y-1">
               <span className="text-[9px] font-bold text-[#52443a] uppercase tracking-wider block">{card.label}</span>
-              <span className="text-base font-extrabold text-[#1b1c1c]">{card.val}</span>
+              {isLoading && !dashboardData ? (
+                <div className="h-5 w-16 bg-slate-100 animate-pulse rounded my-0.5" />
+              ) : (
+                <span className="text-base font-extrabold text-[#1b1c1c]">{card.val}</span>
+              )}
             </div>
             <div className={`h-8 w-8 rounded-lg ${card.bg} flex items-center justify-center`}>
               {card.icon}

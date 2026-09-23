@@ -202,16 +202,15 @@ export const ReportsModule: React.FC = () => {
       if (saved) setRealTargets(JSON.parse(saved));
     } catch (e) {}
 
-    // Fetch API data for tickets & vendors if available
+    // Fetch API data for tickets & vendors in parallel
     const loadSystemData = async () => {
       try {
-        const vRes = await api.get('/vendors');
-        if (vRes.data.vendors && vRes.data.vendors.length > 0) setRealVendors(vRes.data.vendors);
-      } catch (e) {}
-
-      try {
-        const tRes = await api.get('/tickets');
-        if (tRes.data.tickets && tRes.data.tickets.length > 0) setRealTickets(tRes.data.tickets);
+        const [vRes, tRes] = await Promise.all([
+          api.get('/vendors').catch(() => ({ data: { vendors: [] } })),
+          api.get('/tickets').catch(() => ({ data: { tickets: [] } }))
+        ]);
+        if (vRes?.data?.vendors && vRes.data.vendors.length > 0) setRealVendors(vRes.data.vendors);
+        if (tRes?.data?.tickets && tRes.data.tickets.length > 0) setRealTickets(tRes.data.tickets);
       } catch (e) {}
     };
     loadSystemData();

@@ -206,9 +206,10 @@ export const TargetsList: React.FC = () => {
         return null;
       }
     },
-    refetchInterval: 5000,
+    staleTime: 60000,
+    refetchInterval: 30000,
     refetchIntervalInBackground: false,
-    refetchOnWindowFocus: true
+    refetchOnWindowFocus: false
   });
 
   const handleCreateTargetSubmit = async (e: React.FormEvent) => {

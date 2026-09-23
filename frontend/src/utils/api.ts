@@ -11,7 +11,7 @@ const getAgentBackendUrl = () => {
 
 const api = axios.create({
   baseURL: getAgentBackendUrl(),
-  timeout: 60000, // 60s timeout for large KYC document uploads
+  timeout: 15000, // 15s timeout for fast failover and responsive UI
   headers: {
     'Content-Type': 'application/json'
   }

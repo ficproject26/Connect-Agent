@@ -183,16 +183,17 @@ export const FieldVisitsModule: React.FC = () => {
     }
   };
 
-  // Field Visits Auto-Polling Query (5s background refresh)
+  // Field Visits Query with gentle 30s background refresh
   useQuery({
     queryKey: ['fieldVisitsLive', activeRole],
     queryFn: async () => {
       await fetchVisits();
       return true;
     },
-    refetchInterval: 5000,
+    staleTime: 60000,
+    refetchInterval: 30000,
     refetchIntervalInBackground: false,
-    refetchOnWindowFocus: true
+    refetchOnWindowFocus: false
   });
 
   // Fetch live browser geolocation
