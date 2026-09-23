@@ -381,11 +381,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return resultData;
       }
     } catch (err: any) {
+      // Always propagate registration errors to the caller.
+      // NEVER fall through to the local fallback — it creates phantom REG-IDs
+      // stored only in localStorage that are never persisted to the database,
+      // making the Admin Onboarding Requests always appear empty.
+      if (err?.response?.data?.errors && Array.isArray(err.response.data.errors)) {
+        const msgs = (err.response.data.errors as any[]).map((e: any) => e.message || String(e)).join('. ');
+        throw new Error(msgs);
+      }
       if (err?.response?.data?.message) {
         throw new Error(err.response.data.message);
       }
+      if (err?.response?.data?.msg) {
+        throw new Error(err.response.data.msg);
+      }
+      if (err?.response?.status) {
+        throw new Error(`Registration failed (HTTP ${err.response.status}). Please check your details and try again.`);
+      }
+      // True network error with no HTTP response — re-throw so the form shows a real error
+      throw err;
     }
 
+    // DISABLED: This local fallback previously created phantom registrations in localStorage.
+    // These phantom entries were never saved to the database, making Admin Onboarding
+    // Requests show empty even after a successful-looking registration.
+    /* BEGIN DISABLED LOCAL FALLBACK
     // If all remote endpoints failed, generate fallback registration entry locally
     console.warn('Backend unavailable on all endpoints. Registering agent locally...');
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -412,12 +432,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('pending_agent_registrations', JSON.stringify(existingPending));
     } catch (e) { }
 
-    return {
-      message: 'Agent registration submitted successfully',
-      registrationId,
-      role: newRegistration.role,
-      status: newRegistration.status
-    };
+    // END DISABLED LOCAL FALLBACK */
+    // This line is now unreachable — all registration errors are thrown above.
+    throw new Error('Unexpected registration state. Please try again.');
   };
 
   const logout = () => {
