@@ -57,10 +57,10 @@ export const AgentManagement: React.FC = () => {
   const activeRole = effectiveRole;
 
   // Logged-in Agent's Territory Parameters
-  const userState = user?.territory?.state || 'Tamil Nadu';
-  const userDistrict = user?.territory?.district || 'Krishnagiri District';
-  const userDivision = user?.territory?.division || 'Hosur Division';
-  const userPincode = user?.territory?.pincode || '635109';
+  const userState = user?.territory?.state || '';
+  const userDistrict = user?.territory?.district || '';
+  const userDivision = user?.territory?.division || '';
+  const userPincode = user?.territory?.pincode || '';
 
   // Search & Filter controls
   const [searchTerm, setSearchTerm] = useState('');
@@ -115,12 +115,12 @@ export const AgentManagement: React.FC = () => {
     const targetState = userState.toLowerCase();
     const found = allStates.find(s => {
       const sState = (s.territory?.state || s.name || '').toLowerCase();
-      return sState.includes(targetState) || targetState.includes(sState);
+      return targetState && (sState.includes(targetState) || targetState.includes(sState));
     });
 
     const stateFilteredDistricts = (hierarchyData?.districts || []).filter((d: any) => {
       const st = (d.territory?.state || d.state || userState).toLowerCase();
-      return st.includes(targetState) || targetState.includes(st);
+      return targetState && (st.includes(targetState) || targetState.includes(st));
     });
 
     if (found) {
@@ -155,13 +155,18 @@ export const AgentManagement: React.FC = () => {
   // 2. DISTRICT AGENT SCOPING: Strictly isolate assigned District
   const assignedDistrictNode = useMemo(() => {
     const targetDist = userDistrict.toLowerCase();
-    const allDistricts = assignedStateNode.districts || allStates.flatMap(s => s.districts || []);
+    const allDistricts = hierarchyData?.districts || assignedStateNode.districts || [];
     const found = allDistricts.find(d => {
       const dDist = (d.territory?.district || d.name || '').toLowerCase();
-      return dDist.includes(targetDist) || targetDist.includes(dDist);
+      return targetDist && (dDist.includes(targetDist) || targetDist.includes(dDist));
     });
 
-    if (found) return found;
+    if (found) {
+      return {
+        ...found,
+        divisions: (found.divisions && found.divisions.length > 0) ? found.divisions : (hierarchyData?.divisions || [])
+      };
+    }
 
     return {
       _id: user?._id || 'dist-user-assigned',
@@ -180,20 +185,25 @@ export const AgentManagement: React.FC = () => {
       territory: { state: userState, district: userDistrict },
       plusPoints: ['KYC Verified', 'Assigned District Lead'],
       minusPoints: [],
-      divisions: []
+      divisions: hierarchyData?.divisions || []
     };
-  }, [assignedStateNode, allStates, userDistrict, userState, user]);
+  }, [hierarchyData, assignedStateNode, userDistrict, userState, user]);
 
   // 3. DIVISION AGENT SCOPING: Strictly isolate assigned Division
   const assignedDivisionNode = useMemo(() => {
     const targetDiv = userDivision.toLowerCase();
-    const allDivisions = assignedDistrictNode.divisions || allStates.flatMap(s => s.districts?.flatMap(d => d.divisions || []) || []);
+    const allDivisions = assignedDistrictNode.divisions || hierarchyData?.divisions || [];
     const found = allDivisions.find(div => {
       const divName = (div.territory?.division || div.name || '').toLowerCase();
-      return divName.includes(targetDiv) || targetDiv.includes(divName);
+      return targetDiv && (divName.includes(targetDiv) || targetDiv.includes(divName));
     });
 
-    if (found) return found;
+    if (found) {
+      return {
+        ...found,
+        pincodes: (found.pincodes && found.pincodes.length > 0) ? found.pincodes : (hierarchyData?.pincodes || [])
+      };
+    }
 
     return {
       _id: user?._id || 'div-user-assigned',
@@ -212,14 +222,14 @@ export const AgentManagement: React.FC = () => {
       territory: { state: userState, district: userDistrict, division: userDivision },
       plusPoints: ['KYC Verified', 'Assigned Division Manager'],
       minusPoints: [],
-      pincodes: []
+      pincodes: hierarchyData?.pincodes || []
     };
-  }, [assignedDistrictNode, allStates, userDivision, userDistrict, userState, user]);
+  }, [assignedDistrictNode, hierarchyData, userDivision, userDistrict, userState, user]);
 
   // 4. PINCODE AGENT SCOPING: Strictly isolate assigned Pincode
   const assignedPincodeNode = useMemo(() => {
     const targetPin = userPincode;
-    const allPincodes = assignedDivisionNode.pincodes || allStates.flatMap(s => s.districts?.flatMap(d => d.divisions?.flatMap(p => p.pincodes || []) || []) || []);
+    const allPincodes = assignedDivisionNode.pincodes || hierarchyData?.pincodes || [];
     const found = allPincodes.find(pin => pin.territory?.pincode === targetPin);
 
     if (found) return found;
@@ -242,7 +252,7 @@ export const AgentManagement: React.FC = () => {
       plusPoints: ['KYC Verified', 'Assigned Pincode Agent'],
       minusPoints: []
     };
-  }, [assignedDivisionNode, allStates, userPincode, userDivision, userDistrict, userState, user]);
+  }, [assignedDivisionNode, hierarchyData, userPincode, userDivision, userDistrict, userState, user]);
 
   // Currently Selected District object for Drill-down
   const activeDistrictNode = useMemo(() => {
@@ -1031,15 +1041,15 @@ export const AgentManagement: React.FC = () => {
               <div className="flex flex-wrap items-center gap-4 border-t border-amber-200/60 pt-3">
                 <div className="text-left">
                   <p className="text-[9px] uppercase font-extrabold text-amber-800">Pincodes</p>
-                  <p className="text-base font-black text-amber-950">{assignedDivisionNode.pincodes?.length || 4} Pincodes</p>
+                  <p className="text-base font-black text-amber-950">{assignedDivisionNode.pincodes?.length || 0} Pincodes</p>
                 </div>
                 <div className="text-left border-l border-amber-200 pl-4">
                   <p className="text-[9px] uppercase font-extrabold text-amber-800">Pincode Agents</p>
-                  <p className="text-base font-black text-amber-950">{assignedDivisionNode.pincodes?.length || 4} Agents</p>
+                  <p className="text-base font-black text-amber-950">{assignedDivisionNode.pincodes?.length || 0} Agents</p>
                 </div>
                 <div className="text-left border-l border-amber-200 pl-4">
                   <p className="text-[9px] uppercase font-extrabold text-amber-800">Active Agents</p>
-                  <p className="text-base font-black text-amber-950">{assignedDivisionNode.pincodes?.length || 4} Active</p>
+                  <p className="text-base font-black text-amber-950">{assignedDivisionNode.pincodes?.length || 0} Active</p>
                 </div>
               </div>
             </div>
@@ -1072,7 +1082,7 @@ export const AgentManagement: React.FC = () => {
                           <div className="flex items-center gap-2">
                             <span className="font-extrabold text-xs text-[#1b1c1c]">{pin.name}</span>
                             <span className="px-2 py-0.5 bg-slate-800 text-white text-[10px] font-black rounded">
-                              PIN: {pin.territory?.pincode || '530001'}
+                              PIN: {pin.territory?.pincode || 'N/A'}
                             </span>
                             <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-[10px] rounded">
                               Active

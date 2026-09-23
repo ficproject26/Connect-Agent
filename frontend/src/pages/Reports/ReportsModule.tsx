@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardHeader, CardTitle, CardBody, Tabs, Select, Button, Charts, Input } from '../../components/ui';
 import { BarChart3, TrendingUp, Download, CheckCircle2, Ticket, Users, Upload, FileText, Loader2, Calendar } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -53,33 +54,35 @@ export const ReportsModule: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSubmittingReport, setIsSubmittingReport] = useState(false);
   const [submitError, setSubmitError] = useState('');
-
-  const fetchSubmittedReports = async () => {
-    setIsFetchingReports(true);
-    try {
-      const response = await api.get('/reports');
-      const apiReports = response.data.reports || [];
-      if (apiReports.length > 0) {
-        setReports(prev => {
-          const apiIds = new Set(apiReports.map((r: any) => r._id));
-          const localOnly = prev.filter(p => !apiIds.has(p._id));
-          const combined = [...localOnly, ...apiReports];
-          try {
-            localStorage.setItem(userReportsKey, JSON.stringify(combined));
-          } catch (e) {}
-          return combined;
-        });
+  // Silent 45s background auto-refresh for reports with tab visibility management
+  useQuery({
+    queryKey: ['submittedReportsLive', userReportsKey],
+    queryFn: async () => {
+      try {
+        const response = await api.get('/reports');
+        const apiReports = response.data?.reports || [];
+        if (apiReports.length > 0) {
+          setReports(prev => {
+            const apiIds = new Set(apiReports.map((r: any) => r._id));
+            const localOnly = prev.filter(p => !apiIds.has(p._id));
+            const combined = [...localOnly, ...apiReports];
+            try {
+              localStorage.setItem(userReportsKey, JSON.stringify(combined));
+            } catch (e) {}
+            return combined;
+          });
+        }
+        return response.data;
+      } catch (err) {
+        console.warn('Failed to load reports in background:', err);
+        return null;
       }
-    } catch (err) {
-      console.error('Failed to load reports:', err);
-    } finally {
-      setIsFetchingReports(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchSubmittedReports();
-  }, [userReportsKey]);
+    },
+    staleTime: 30000,
+    refetchInterval: 45000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true
+  });
 
   const handleReportSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import Attendance from '../models/Attendance';
 import Agent from '../models/Agent';
+import { getAgentTerritoryScope, buildTerritoryFilter } from '../utils/territoryScope';
 
 const checkInSchema = z.object({
   comments: z.string().optional(),
@@ -135,18 +136,14 @@ export const getSubordinateAttendance = async (req: Request, res: Response) => {
     const { roleFilter, searchQuery, date } = req.query;
     const dateFilter = (date as string) || new Date().toISOString().slice(0, 10);
 
-    // Find subordinates based on role hierarchy
-    let subordinateQuery: Record<string, unknown> = {};
-    if (userRole === 'state') {
-      subordinateQuery.role = { $in: ['district', 'division', 'pincode'] };
-    } else if (userRole === 'district') {
-      subordinateQuery.role = { $in: ['division', 'pincode'] };
-    } else if (userRole === 'division') {
-      subordinateQuery.role = 'pincode';
-    } else {
+    const scope = await getAgentTerritoryScope(agentId);
+    if (!scope || scope.role === 'pincode') {
       // Pincode agents don't have subordinates
       return res.status(200).json({ records: [] });
     }
+
+    const territoryFilter = buildTerritoryFilter(scope);
+    const subordinateQuery: any = { ...territoryFilter };
 
     if (roleFilter && roleFilter !== 'all') {
       subordinateQuery.role = roleFilter;
@@ -165,7 +162,9 @@ export const getSubordinateAttendance = async (req: Request, res: Response) => {
       const queryLower = (searchQuery as string).toLowerCase();
       filteredRecords = attendanceRecords.filter((rec: any) => {
         const agentName = rec.agent?.name?.toLowerCase() || '';
-        const territory = rec.agent?.territory?.name?.toLowerCase() || '';
+        const territory = typeof rec.agent?.territory === 'object'
+          ? `${rec.agent.territory.pincode || ''} ${rec.agent.territory.division || ''} ${rec.agent.territory.district || ''} ${rec.agent.territory.state || ''}`.toLowerCase()
+          : (rec.agent?.territory?.toLowerCase() || '');
         return agentName.includes(queryLower) || territory.includes(queryLower);
       });
     }

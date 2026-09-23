@@ -26,10 +26,10 @@ export const TargetsList: React.FC = () => {
 
   const isManager = userRole === 'state' || userRole === 'district' || userRole === 'division';
 
-  const userState = user?.territory?.state || (user as any)?.assignedState || (user as any)?.state || 'Andhra Pradesh';
-  const userDistrict = user?.territory?.district || (user as any)?.assignedDistrict || (user as any)?.district || 'Visakhapatnam';
-  const userDivision = user?.territory?.division || (user as any)?.assignedDivision || (user as any)?.division || 'Vizag City Division';
-  const userPincode = user?.territory?.pincode || (user as any)?.assignedPincode || (user as any)?.pincode || '530001';
+  const userState = user?.territory?.state || (user as any)?.assignedState || (user as any)?.state || '';
+  const userDistrict = user?.territory?.district || (user as any)?.assignedDistrict || (user as any)?.district || '';
+  const userDivision = user?.territory?.division || (user as any)?.assignedDivision || (user as any)?.division || '';
+  const userPincode = user?.territory?.pincode || (user as any)?.assignedPincode || (user as any)?.pincode || '';
 
   const userTargetsKey = useMemo(() => {
     return user?._id || user?.email ? `connect_portal_target_allocations_${user._id || user.email?.toLowerCase()}` : 'connect_portal_target_allocations';
@@ -126,40 +126,43 @@ export const TargetsList: React.FC = () => {
     }
   }, [availablePincodes, selectedPincode]);
 
-  // Dynamic AP Agent list based on selected Agent Type & Territory Scope
-  const apAgents = useMemo(() => {
-    if (agentType === 'district') {
-      const dist = selectedDistrict || userDistrict;
-      return [
-        { id: 'agt-d1', name: 'Anu', role: 'District Agent', territory: `${dist} (${userState})` },
-        { id: 'agt-d2', name: 'Rajesh Varma', role: 'District Agent', territory: `East Godavari (${userState})` },
-        { id: 'agt-d3', name: 'Srinivas Rao', role: 'District Agent', territory: `Krishna District (${userState})` },
-        { id: 'agt-d4', name: 'Prakash Naidu', role: 'District Agent', territory: `Guntur District (${userState})` }
-      ];
-    } else if (agentType === 'division') {
-      const div = selectedDivision || userDivision;
-      return [
-        { id: 'agt-v1', name: 'goidhamma div', role: 'Division Agent', territory: `${div} (${selectedDistrict || userDistrict})` },
-        { id: 'agt-v2', name: 'Ravi Manager', role: 'Division Agent', territory: `Gajuwaka Division (${selectedDistrict || userDistrict})` },
-        { id: 'agt-v3', name: 'Kiran Division', role: 'Division Agent', territory: `Anakapalle Division (${selectedDistrict || userDistrict})` },
-        { id: 'agt-v4', name: 'Suresh Division', role: 'Division Agent', territory: `Vijayawada Central Division (${selectedDistrict || userDistrict})` }
-      ];
-    } else {
-      const pin = selectedPincode || userPincode;
-      return [
-        { id: 'agt-p1', name: 'raki pin', role: 'Pincode Agent', territory: `PIN ${pin} (${selectedDivision || userDivision})` },
-        { id: 'agt-p2', name: 'Kiran Kumar', role: 'Pincode Agent', territory: `PIN 530017 (${selectedDivision || userDivision})` },
-        { id: 'agt-p3', name: 'Ramesh Naidu', role: 'Pincode Agent', territory: `PIN 530018 (${selectedDivision || userDivision})` },
-        { id: 'agt-p4', name: 'Nageswara Rao', role: 'Pincode Agent', territory: `PIN 530026 (${selectedDivision || userDivision})` }
-      ];
-    }
-  }, [agentType, selectedDistrict, selectedDivision, selectedPincode, userDistrict, userDivision, userState, userPincode]);
+  // Fetch real subordinates strictly scoped to user's assigned territory
+  const { data: subordinatesData } = useQuery({
+    queryKey: ['targetSubordinates', user?._id],
+    queryFn: async () => {
+      if (!isManager) return [];
+      try {
+        const res = await api.get('/targets/subordinates');
+        return res.data?.subordinates || [];
+      } catch (err) {
+        return [];
+      }
+    },
+    enabled: isManager,
+    staleTime: 60000
+  });
+
+  // Dynamic Agent list strictly based on selected Agent Type & User's Territory Scope
+  const candidateAgents = useMemo(() => {
+    const subs: any[] = Array.isArray(subordinatesData) ? subordinatesData : [];
+    const matched = subs.filter((s: any) => (s.role || '').toLowerCase() === agentType);
+    return matched.map((s: any) => ({
+      id: s._id,
+      name: s.name,
+      role: `${s.role || agentType} Agent`,
+      territory: typeof s.territory === 'object'
+        ? (s.territory?.division ? `${s.territory.division}${s.territory.pincode ? ` (${s.territory.pincode})` : ''}` : (s.territory?.district || s.territory?.state || 'Assigned Territory'))
+        : (s.territory || 'Assigned Territory')
+    }));
+  }, [subordinatesData, agentType]);
 
   useEffect(() => {
-    if (apAgents.length > 0) {
-      setSelectedAgent(apAgents[0].name);
+    if (candidateAgents.length > 0) {
+      setSelectedAgent(candidateAgents[0].name);
+    } else {
+      setSelectedAgent('');
     }
-  }, [apAgents]);
+  }, [candidateAgents]);
 
   useEffect(() => {
     if (isCreateModalOpen) {
@@ -206,10 +209,10 @@ export const TargetsList: React.FC = () => {
         return null;
       }
     },
-    staleTime: 60000,
-    refetchInterval: 30000,
+    staleTime: 30000,
+    refetchInterval: 45000,
     refetchIntervalInBackground: false,
-    refetchOnWindowFocus: false
+    refetchOnWindowFocus: true
   });
 
   const handleCreateTargetSubmit = async (e: React.FormEvent) => {
@@ -217,7 +220,7 @@ export const TargetsList: React.FC = () => {
     if (!title || !isManager) return;
 
     setIsSubmitting(true);
-    const assignedAgentObj = apAgents.find(a => a.name === selectedAgent) || apAgents[0];
+    const assignedAgentObj = candidateAgents.find(a => a.name === selectedAgent) || candidateAgents[0] || { name: selectedAgent || 'Agent', role: agentType + ' Agent', territory: 'Assigned Territory' };
 
     const newAlloc: Allocation = {
       _id: `TSK-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -718,11 +721,15 @@ export const TargetsList: React.FC = () => {
                       onChange={(e) => setSelectedAgent(e.target.value)}
                       className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                     >
-                      {apAgents.map(agt => (
-                        <option key={agt.id} value={agt.name}>
-                          {agt.name} ({agt.territory})
-                        </option>
-                      ))}
+                      {candidateAgents.length > 0 ? (
+                        candidateAgents.map(agt => (
+                          <option key={agt.id} value={agt.name}>
+                            {agt.name} ({agt.territory})
+                          </option>
+                        ))
+                      ) : (
+                        <option value="">No district agents found in territory</option>
+                      )}
                     </select>
                   </div>
                 </div>
@@ -765,11 +772,15 @@ export const TargetsList: React.FC = () => {
                       onChange={(e) => setSelectedAgent(e.target.value)}
                       className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                     >
-                      {apAgents.map(agt => (
-                        <option key={agt.id} value={agt.name}>
-                          {agt.name} ({agt.territory})
-                        </option>
-                      ))}
+                      {candidateAgents.length > 0 ? (
+                        candidateAgents.map(agt => (
+                          <option key={agt.id} value={agt.name}>
+                            {agt.name} ({agt.territory})
+                          </option>
+                        ))
+                      ) : (
+                        <option value="">No division agents found in territory</option>
+                      )}
                     </select>
                   </div>
                 </div>
@@ -826,11 +837,15 @@ export const TargetsList: React.FC = () => {
                         onChange={(e) => setSelectedAgent(e.target.value)}
                         className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                       >
-                        {apAgents.map(agt => (
-                          <option key={agt.id} value={agt.name}>
-                            {agt.name} ({agt.territory})
-                          </option>
-                        ))}
+                        {candidateAgents.length > 0 ? (
+                          candidateAgents.map(agt => (
+                            <option key={agt.id} value={agt.name}>
+                              {agt.name} ({agt.territory})
+                            </option>
+                          ))
+                        ) : (
+                          <option value="">No pincode agents found in territory</option>
+                        )}
                       </select>
                     </div>
                   </div>

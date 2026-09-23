@@ -6,20 +6,33 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getAgentTerritoryScope = getAgentTerritoryScope;
 exports.buildTerritoryFilter = buildTerritoryFilter;
 exports.buildVendorScopeFilter = buildVendorScopeFilter;
+const mongoose_1 = __importDefault(require("mongoose"));
 const Agent_1 = __importDefault(require("../models/Agent"));
+/**
+ * Fetch territory scope of the authenticated agent.
+ * Checks both Agent model and fallback users collection.
+ */
 async function getAgentTerritoryScope(agentId) {
     if (!agentId)
         return null;
     try {
-        const agent = await Agent_1.default.findById(agentId);
+        let agent = await Agent_1.default.findById(agentId);
+        if (!agent) {
+            const db = mongoose_1.default.connection.db;
+            if (db) {
+                agent = await db.collection('users').findOne({ _id: agentId });
+            }
+        }
         if (!agent)
             return null;
+        const rawRole = (agent.role || agent.level || 'pincode').toLowerCase();
+        const normalizedRole = rawRole === 'agent' ? (agent.level || 'pincode').toLowerCase() : rawRole;
         return {
-            role: agent.role,
-            state: agent.territory?.state || '',
-            district: agent.territory?.district || '',
-            division: agent.territory?.division || '',
-            pincode: agent.territory?.pincode || '',
+            role: normalizedRole,
+            state: (agent.territory?.state || agent.state || agent.assignedState || '').trim(),
+            district: (agent.territory?.district || agent.district || agent.assignedDistrict || '').trim(),
+            division: (agent.territory?.division || agent.division || agent.assignedDivision || '').trim(),
+            pincode: (agent.territory?.pincode || agent.pincode || agent.assignedPincode || '').trim(),
             agentId: agent._id.toString()
         };
     }
@@ -28,76 +41,174 @@ async function getAgentTerritoryScope(agentId) {
         return null;
     }
 }
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const exactRegex = (str) => new RegExp(`^\\s*${escapeRegex(str.trim())}\\s*$`, 'i');
+const containsRegex = (str) => new RegExp(escapeRegex(str.trim()), 'i');
+/**
+ * Build territory filter for Agent model and agent directory queries.
+ * Strictly enforces State -> District -> Division -> Pincode visibility hierarchy.
+ * Returns { _id: null } when required territory information is missing.
+ */
 function buildTerritoryFilter(scope) {
+    // Empty or missing scope must NEVER fall back to showing all agents
     if (!scope)
-        return {};
-    const filter = {};
-    const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return { _id: null };
     if (scope.role === 'state') {
-        if (scope.state) {
-            filter['territory.state'] = new RegExp(escapeRegex(scope.state), 'i');
-        }
+        if (!scope.state)
+            return { _id: null };
+        return {
+            role: { $in: ['district', 'division', 'pincode'] },
+            $or: [
+                { 'territory.state': exactRegex(scope.state) },
+                { state: exactRegex(scope.state) }
+            ]
+        };
     }
-    else if (scope.role === 'district') {
-        filter.role = { $ne: 'state' };
-        if (scope.district) {
-            filter['territory.district'] = new RegExp(escapeRegex(scope.district), 'i');
-        }
+    if (scope.role === 'district') {
+        if (!scope.district)
+            return { _id: null };
+        const stateConditions = scope.state ? [
+            {
+                $or: [
+                    { 'territory.state': exactRegex(scope.state) },
+                    { state: exactRegex(scope.state) }
+                ]
+            }
+        ] : [];
+        return {
+            role: { $in: ['division', 'pincode'] },
+            $and: [
+                {
+                    $or: [
+                        { 'territory.district': exactRegex(scope.district) },
+                        { district: exactRegex(scope.district) }
+                    ]
+                },
+                ...stateConditions
+            ]
+        };
     }
-    else if (scope.role === 'division') {
-        filter.role = { $nin: ['state', 'district'] };
-        if (scope.division) {
-            filter['territory.division'] = new RegExp(escapeRegex(scope.division), 'i');
-        }
+    if (scope.role === 'division') {
+        if (!scope.division)
+            return { _id: null };
+        const districtConditions = scope.district ? [
+            {
+                $or: [
+                    { 'territory.district': exactRegex(scope.district) },
+                    { district: exactRegex(scope.district) }
+                ]
+            }
+        ] : [];
+        const stateConditions = scope.state ? [
+            {
+                $or: [
+                    { 'territory.state': exactRegex(scope.state) },
+                    { state: exactRegex(scope.state) }
+                ]
+            }
+        ] : [];
+        return {
+            role: 'pincode',
+            $and: [
+                {
+                    $or: [
+                        { 'territory.division': containsRegex(scope.division) },
+                        { division: containsRegex(scope.division) }
+                    ]
+                },
+                ...districtConditions,
+                ...stateConditions
+            ]
+        };
     }
-    else if (scope.role === 'pincode') {
-        filter.role = 'pincode';
-        if (scope.pincode) {
-            filter['territory.pincode'] = scope.pincode;
-        }
+    if (scope.role === 'pincode') {
+        if (!scope.pincode)
+            return { _id: null };
+        return {
+            role: 'pincode',
+            $or: [
+                { _id: scope.agentId },
+                { 'territory.pincode': scope.pincode },
+                { pincode: scope.pincode }
+            ]
+        };
     }
-    return filter;
+    return { _id: null };
 }
+/**
+ * Build territory filter for Vendor queries.
+ * Strictly enforces State -> District -> Division -> Pincode vendor isolation.
+ */
 function buildVendorScopeFilter(scope) {
     if (!scope)
-        return {};
-    const filter = {};
-    const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return { _id: null };
     if (scope.role === 'state') {
-        if (scope.state) {
-            filter.$or = [
-                { state: new RegExp(escapeRegex(scope.state), 'i') },
-                { 'location.address': new RegExp(escapeRegex(scope.state), 'i') }
-            ];
-        }
+        if (!scope.state)
+            return { _id: null };
+        return {
+            $or: [
+                { state: exactRegex(scope.state) },
+                { 'location.address': containsRegex(scope.state) }
+            ]
+        };
     }
-    else if (scope.role === 'district') {
-        if (scope.district) {
-            filter.$or = [
-                { district: new RegExp(escapeRegex(scope.district), 'i') },
-                { 'location.address': new RegExp(escapeRegex(scope.district), 'i') }
-            ];
-        }
+    if (scope.role === 'district') {
+        if (!scope.district)
+            return { _id: null };
+        const stateConditions = scope.state ? [
+            {
+                $or: [
+                    { state: exactRegex(scope.state) },
+                    { 'location.address': containsRegex(scope.state) }
+                ]
+            }
+        ] : [];
+        return {
+            $and: [
+                {
+                    $or: [
+                        { district: exactRegex(scope.district) },
+                        { 'location.address': containsRegex(scope.district) }
+                    ]
+                },
+                ...stateConditions
+            ]
+        };
     }
-    else if (scope.role === 'division') {
-        if (scope.division) {
-            filter.$or = [
-                { division: new RegExp(escapeRegex(scope.division), 'i') },
-                { 'location.address': new RegExp(escapeRegex(scope.division), 'i') }
-            ];
-        }
+    if (scope.role === 'division') {
+        if (!scope.division)
+            return { _id: null };
+        const districtConditions = scope.district ? [
+            {
+                $or: [
+                    { district: exactRegex(scope.district) },
+                    { 'location.address': containsRegex(scope.district) }
+                ]
+            }
+        ] : [];
+        return {
+            $and: [
+                {
+                    $or: [
+                        { division: containsRegex(scope.division) },
+                        { 'location.address': containsRegex(scope.division) }
+                    ]
+                },
+                ...districtConditions
+            ]
+        };
     }
-    else if (scope.role === 'pincode') {
+    if (scope.role === 'pincode') {
         if (scope.pincode) {
-            filter.$or = [
-                { pincode: scope.pincode },
-                { assignedAgent: scope.agentId }
-            ];
+            return {
+                $or: [
+                    { pincode: scope.pincode },
+                    { assignedAgent: scope.agentId }
+                ]
+            };
         }
-        else {
-            filter.assignedAgent = scope.agentId;
-        }
+        return { assignedAgent: scope.agentId };
     }
-    return filter;
+    return { _id: null };
 }
 //# sourceMappingURL=territoryScope.js.map

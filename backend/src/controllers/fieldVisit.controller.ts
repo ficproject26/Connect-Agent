@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import FieldVisit from '../models/FieldVisit';
 import Vendor from '../models/Vendor';
+import Agent from '../models/Agent';
+import { getAgentTerritoryScope, buildTerritoryFilter } from '../utils/territoryScope';
 
 const startVisitSchema = z.object({
   vendorId: z.string().min(1, 'Vendor ID is required'),
@@ -103,8 +105,14 @@ export const getFieldVisits = async (req: Request, res: Response) => {
     const limitNum = parseInt(limit as string, 10);
 
     const filter: Record<string, unknown> = {};
+    const scope = await getAgentTerritoryScope(agentId);
     if (agentRole === 'pincode' || agentRole === 'delivery_partner' || agentRole === 'technician') {
       filter.agent = agentId;
+    } else {
+      const territoryFilter = buildTerritoryFilter(scope);
+      const subordinates = await Agent.find(territoryFilter).select('_id');
+      const allowedAgentIds = [agentId, ...subordinates.map(s => s._id.toString())];
+      filter.agent = { $in: allowedAgentIds };
     }
     if (status) filter.status = status;
     if (vendorId) filter.vendor = vendorId;

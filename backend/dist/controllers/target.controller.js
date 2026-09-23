@@ -9,6 +9,7 @@ const Target_1 = __importDefault(require("../models/Target"));
 const TargetAssignment_1 = __importDefault(require("../models/TargetAssignment"));
 const Agent_1 = __importDefault(require("../models/Agent"));
 const Notification_1 = __importDefault(require("../models/Notification"));
+const territoryScope_1 = require("../utils/territoryScope");
 const createTargetSchema = zod_1.z.object({
     title: zod_1.z.string().min(2, 'Title required'),
     description: zod_1.z.string().optional(),
@@ -86,13 +87,24 @@ const allocateTarget = async (req, res) => {
         if (!agentId)
             return res.status(401).json({ message: 'Unauthorized' });
         const data = allocateTargetSchema.parse(req.body);
+        const scope = await (0, territoryScope_1.getAgentTerritoryScope)(agentId);
+        const territoryFilter = (0, territoryScope_1.buildTerritoryFilter)(scope);
         let targetAgentId = data.assignedTo;
         let recipientName = data.divisionName || 'Division Agent';
-        if (!targetAgentId && data.divisionName) {
+        if (targetAgentId) {
+            const allowedAgent = await Agent_1.default.findOne({ _id: targetAgentId, ...territoryFilter });
+            if (!allowedAgent) {
+                return res.status(403).json({ message: 'Target cannot be allocated to an agent outside authorized territory' });
+            }
+            recipientName = allowedAgent.name;
+        }
+        else if (data.divisionName) {
             const matchedAgent = await Agent_1.default.findOne({
+                ...territoryFilter,
                 $or: [
                     { name: new RegExp(data.divisionName, 'i') },
-                    { 'territory.name': new RegExp(data.divisionName, 'i') }
+                    { 'territory.division': new RegExp(data.divisionName, 'i') },
+                    { division: new RegExp(data.divisionName, 'i') }
                 ]
             });
             if (matchedAgent) {
@@ -150,23 +162,11 @@ const getSubordinates = async (req, res) => {
         const agentId = req.agent?.agentId;
         if (!agentId)
             return res.status(401).json({ message: 'Unauthorized' });
-        const currentAgent = await Agent_1.default.findById(agentId);
-        const userRole = currentAgent?.role || req.agent?.role || 'district';
-        const subordinateQuery = {};
-        if (userRole === 'state') {
-            subordinateQuery.role = { $in: ['district', 'division', 'pincode'] };
-        }
-        else if (userRole === 'district') {
-            subordinateQuery.role = { $in: ['division', 'pincode'] };
-        }
-        else if (userRole === 'division') {
-            subordinateQuery.role = 'pincode';
-        }
-        else {
-            subordinateQuery.role = 'pincode';
-        }
-        const subordinates = await Agent_1.default.find(subordinateQuery)
-            .select('_id name role territory email phone')
+        const scope = await (0, territoryScope_1.getAgentTerritoryScope)(agentId);
+        const filter = (0, territoryScope_1.buildTerritoryFilter)(scope);
+        const subordinates = await Agent_1.default.find(filter)
+            .select('_id name role territory email phone status')
+            .sort({ createdAt: -1 })
             .lean();
         return res.status(200).json({ subordinates });
     }
@@ -184,6 +184,12 @@ const assignTarget = async (req, res) => {
             return res.status(401).json({ message: 'Unauthorized' });
         const { id: targetId } = req.params;
         const data = assignTargetSchema.parse(req.body);
+        const scope = await (0, territoryScope_1.getAgentTerritoryScope)(agentId);
+        const territoryFilter = (0, territoryScope_1.buildTerritoryFilter)(scope);
+        const allowedAgent = await Agent_1.default.findOne({ _id: data.assignedTo, ...territoryFilter });
+        if (!allowedAgent) {
+            return res.status(403).json({ message: 'Target cannot be assigned to an agent outside authorized territory' });
+        }
         const target = await Target_1.default.findById(targetId);
         if (!target)
             return res.status(404).json({ message: 'Target not found' });

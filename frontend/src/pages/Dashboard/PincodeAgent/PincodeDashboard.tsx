@@ -21,10 +21,10 @@ export const PincodeDashboard: React.FC = () => {
       const response = await api.get('/dashboard/stats');
       return response.data;
     },
-    staleTime: 60000, // 1 min fresh cache
-    refetchInterval: 30000, // gentle 30s background poll
+    staleTime: 30000,
+    refetchInterval: 45000,
     refetchIntervalInBackground: false,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
     placeholderData: (previousData) => previousData
   });
 

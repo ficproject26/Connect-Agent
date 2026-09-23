@@ -52,6 +52,35 @@ const getRegistrations = async (req, res) => {
                 const existingEmails = new Set(registrations.map(r => r.email.toLowerCase()));
                 for (const uDoc of userDocs) {
                     if (uDoc.email && !existingEmails.has(uDoc.email.toLowerCase())) {
+                        const uRole = (uDoc.level || uDoc.role || 'pincode').toLowerCase();
+                        const uState = (uDoc.territory?.state || uDoc.state || uDoc.assignedState || '').trim().toLowerCase();
+                        const uDist = (uDoc.territory?.district || uDoc.district || uDoc.assignedDistrict || '').trim().toLowerCase();
+                        const uDiv = (uDoc.territory?.division || uDoc.division || uDoc.assignedDivision || '').trim().toLowerCase();
+                        const uPin = (uDoc.territory?.pincode || uDoc.pincode || uDoc.assignedPincode || '').trim();
+                        if (scope?.role === 'state') {
+                            if (scope.state && !uState.includes(scope.state.toLowerCase()))
+                                continue;
+                        }
+                        else if (scope?.role === 'district') {
+                            if (uRole === 'state')
+                                continue;
+                            if (scope.state && !uState.includes(scope.state.toLowerCase()))
+                                continue;
+                            if (scope.district && !uDist.includes(scope.district.toLowerCase()))
+                                continue;
+                        }
+                        else if (scope?.role === 'division') {
+                            if (uRole === 'state' || uRole === 'district')
+                                continue;
+                            if (scope.division && !uDiv.includes(scope.division.toLowerCase()))
+                                continue;
+                        }
+                        else if (scope?.role === 'pincode') {
+                            if (uRole !== 'pincode')
+                                continue;
+                            if (scope.pincode && uPin !== scope.pincode)
+                                continue;
+                        }
                         registrations.push({
                             _id: uDoc._id,
                             registrationId: uDoc.registrationId || `REG-${Date.now()}`,
@@ -394,32 +423,59 @@ const getHierarchyTree = async (req, res) => {
         });
         const enrichedPincodes = pincodeAgents.map(pin => enrichAgentData(pin));
         // Nest districts strictly under their matching state
+        let finalDistricts = enrichedDistricts;
+        let finalDivisions = enrichedDivisions;
+        if (scope?.role === 'district' && districtAgents.length === 0) {
+            const requesterAgent = await Agent_1.default.findById(requesterId).lean();
+            if (requesterAgent) {
+                const enrichedReq = enrichAgentData(requesterAgent);
+                enrichedReq.divisions = enrichedDivisions;
+                enrichedReq.teamSize = enrichedDivisions.reduce((acc, d) => acc + 1 + (d.teamSize || 0), 0);
+                enrichedReq.teamEarnings = enrichedDivisions.reduce((acc, d) => acc + (d.teamEarnings || 0), 0) + enrichedReq.earnings;
+                enrichedReq.teamPendingKyc = enrichedDivisions.reduce((acc, d) => acc + (d.teamPendingKyc || 0), 0) + (enrichedReq.kycStatus === 'pending' ? 1 : 0);
+                enrichedReq.teamApprovedKyc = enrichedDivisions.reduce((acc, d) => acc + (d.teamApprovedKyc || 0), 0) + (enrichedReq.kycStatus === 'approved' ? 1 : 0);
+                finalDistricts = [enrichedReq];
+            }
+        }
+        else if (scope?.role === 'division' && divisionAgents.length === 0) {
+            const requesterAgent = await Agent_1.default.findById(requesterId).lean();
+            if (requesterAgent) {
+                const enrichedReq = enrichAgentData(requesterAgent);
+                enrichedReq.pincodes = enrichedPincodes;
+                enrichedReq.teamSize = enrichedPincodes.length;
+                enrichedReq.teamEarnings = enrichedPincodes.reduce((acc, p) => acc + p.earnings, 0) + enrichedReq.earnings;
+                finalDivisions = [enrichedReq];
+            }
+        }
         let tree = [];
         if (stateAgents.length > 0) {
             tree = stateAgents.map(state => {
                 const stateTerritory = state.territory?.state || state.state;
                 const enrichedState = enrichAgentData(state);
-                const stateDistricts = enrichedDistricts.filter(d => {
+                const stateDistricts = finalDistricts.filter(d => {
                     const dState = d.territory?.state || d.state;
                     return Boolean(dState && stateTerritory && dState.toLowerCase() === stateTerritory.toLowerCase());
                 });
                 return {
                     ...enrichedState,
                     districts: stateDistricts,
-                    teamSize: stateDistricts.reduce((acc, d) => acc + 1 + d.teamSize, 0),
-                    teamEarnings: stateDistricts.reduce((acc, d) => acc + d.teamEarnings, 0) + enrichedState.earnings,
-                    teamPendingKyc: stateDistricts.reduce((acc, d) => acc + d.teamPendingKyc, 0) + (enrichedState.kycStatus === 'pending' ? 1 : 0)
+                    teamSize: stateDistricts.reduce((acc, d) => acc + 1 + (d.teamSize || 0), 0),
+                    teamEarnings: stateDistricts.reduce((acc, d) => acc + (d.teamEarnings || 0), 0) + enrichedState.earnings,
+                    teamPendingKyc: stateDistricts.reduce((acc, d) => acc + (d.teamPendingKyc || 0), 0) + (enrichedState.kycStatus === 'pending' ? 1 : 0)
                 };
             });
         }
+        else if (finalDistricts.length > 0) {
+            tree = finalDistricts;
+        }
         else {
-            tree = enrichedDistricts;
+            tree = finalDivisions;
         }
         return res.status(200).json({
             tree,
             states: tree,
-            districts: enrichedDistricts,
-            divisions: enrichedDivisions,
+            districts: finalDistricts,
+            divisions: finalDivisions,
             pincodes: enrichedPincodes,
             totalAgents: agents.length,
             metrics: {

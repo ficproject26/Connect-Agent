@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../../context/AuthContext';
 import { targetService } from '../../../api';
 import { Modal, Button } from '../../../components/ui';
@@ -26,10 +27,10 @@ interface PincodeSubordinate {
 
 export const DivisionDashboard: React.FC = () => {
   const { user } = useAuth();
-  const userState = user?.territory?.state || 'Andhra Pradesh';
-  const userDistrict = user?.territory?.district || 'Visakhapatnam';
-  const userDivision = user?.territory?.division || 'Vizag City Division';
-  const userPincode = user?.territory?.pincode || '530001';
+  const userState = user?.territory?.state || '';
+  const userDistrict = user?.territory?.district || '';
+  const userDivision = user?.territory?.division || '';
+  const userPincode = user?.territory?.pincode || '';
 
   const [pincodeAgentsList, setPincodeAgentsList] = useState<PincodeSubordinate[]>([]);
   const [targetTitle, setTargetTitle] = useState('');
@@ -44,29 +45,12 @@ export const DivisionDashboard: React.FC = () => {
   const [selectedAgent, setSelectedAgent] = useState<PincodeSubordinate | null>(null);
 
   const divisionPincodesList = React.useMemo(() => {
-    if (userDivision.toLowerCase().includes('vizag') || userDistrict.toLowerCase().includes('visakha')) {
-      return [
-        { name: 'Vizag City Central (530001)', code: '530001', score: '94% completed' },
-        { name: 'MVP Colony (530017)', code: '530017', score: '88% completed' },
-        { name: 'Madhavadhara (530018)', code: '530018', score: '72% completed' },
-        { name: 'Gajuwaka (530026)', code: '530026', score: '64% completed' }
-      ];
-    } else if (userDivision.toLowerCase().includes('vijayawada') || userDistrict.toLowerCase().includes('ntr')) {
-      return [
-        { name: 'Vijayawada Central (520001)', code: '520001', score: '94% completed' },
-        { name: 'Governorpet (520002)', code: '520002', score: '88% completed' },
-        { name: 'Autonagar (520007)', code: '520007', score: '72% completed' },
-        { name: 'Labbipet (520010)', code: '520010', score: '64% completed' }
-      ];
+    if (!userDivision) return [];
+    if (userPincode) {
+      return [{ name: `${userDivision} (${userPincode})`, code: userPincode, score: 'Assigned Pincode' }];
     }
-    const basePin = parseInt(userPincode || '530001');
-    return [
-      { name: `${userDivision} Sector 1 (${basePin})`, code: `${basePin}`, score: '94% completed' },
-      { name: `${userDivision} Sector 2 (${basePin + 1})`, code: `${basePin + 1}`, score: '88% completed' },
-      { name: `${userDivision} Sector 3 (${basePin + 2})`, code: `${basePin + 2}`, score: '72% completed' },
-      { name: `${userDivision} Sector 4 (${basePin + 3})`, code: `${basePin + 3}`, score: '64% completed' }
-    ];
-  }, [userDivision, userDistrict, userPincode]);
+    return [{ name: `${userDivision} Division Sector`, code: userDivision, score: 'Assigned Division' }];
+  }, [userDivision, userPincode]);
 
   useEffect(() => {
     if (divisionPincodesList.length > 0 && !selectedPincode) {
@@ -74,16 +58,31 @@ export const DivisionDashboard: React.FC = () => {
     }
   }, [divisionPincodesList, selectedPincode]);
 
-  useEffect(() => {
-    const fetchSubordinates = async () => {
+  // Silent 45s background auto-refresh for subordinates with tab visibility management
+  useQuery({
+    queryKey: ['divisionSubordinates', userDivision],
+    queryFn: async () => {
       try {
         const res = await targetService.getSubordinates();
-        if (res.data?.subordinates && res.data.subordinates.length > 0) {
-          const mapped: PincodeSubordinate[] = res.data.subordinates.map((s: any) => ({
+        if (res.data?.subordinates) {
+          const rawSubs = Array.isArray(res.data.subordinates) ? res.data.subordinates : [];
+          // Defensive territory isolation: only allow pincode agents belonging to this division
+          const uDiv = (userDivision || '').trim().toLowerCase();
+          const filteredSubs = rawSubs.filter((s: any) => {
+            const sRole = (s.role || '').toLowerCase();
+            if (sRole !== 'pincode') return false;
+            if (uDiv) {
+              const sDiv = (typeof s.territory === 'object' ? s.territory?.division : s.division || '').trim().toLowerCase();
+              if (sDiv && !sDiv.includes(uDiv) && !uDiv.includes(sDiv)) return false;
+            }
+            return true;
+          });
+
+          const mapped: PincodeSubordinate[] = filteredSubs.map((s: any) => ({
             id: s._id,
             name: s.name,
-            pincode: s.territory?.pincode || s.pincode || divisionPincodesList[0].code,
-            territory: typeof s.territory === 'object' ? s.territory?.division || userDivision : (s.territory || userDivision),
+            pincode: (typeof s.territory === 'object' ? s.territory?.pincode : s.pincode) || '',
+            territory: (typeof s.territory === 'object' ? s.territory?.division : s.division) || userDivision || 'Division Sector',
             phone: s.phone || 'N/A',
             email: s.email || 'N/A',
             assignedTargets: s.assignedTargets || 0,
@@ -94,14 +93,19 @@ export const DivisionDashboard: React.FC = () => {
             checkIn: s.checkIn || '09:00 AM'
           }));
           setPincodeAgentsList(mapped);
-          if (mapped.length > 0) setSelectedAgentId(mapped[0].id);
+          setSelectedAgentId(prev => prev && mapped.some(m => m.id === prev) ? prev : (mapped[0]?.id || ''));
         }
+        return res.data;
       } catch (err) {
-        console.warn('Subordinates fetch error:', err);
+        console.warn('Subordinates fetch fallback:', err);
+        return null;
       }
-    };
-    fetchSubordinates();
-  }, [userDivision, divisionPincodesList]);
+    },
+    staleTime: 30000,
+    refetchInterval: 45000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true
+  });
 
   const handleAssign = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -302,37 +306,8 @@ export const DivisionDashboard: React.FC = () => {
                   <span>Inspect Action</span>
                 </div>
                 {pincodeAgentsList.length === 0 ? (
-                  <div className="py-3 flex justify-between items-center text-xs font-semibold">
-                    <div>
-                      <span className="font-bold text-[#1b1c1c] block">raki pin</span>
-                      <span className="text-[10px] text-[#864f19] uppercase font-black">PIN: {divisionPincodesList[0].code}</span>
-                    </div>
-                    <div>
-                      <span className="text-[#52443a] block font-bold">8 / 20 Targets</span>
-                      <span className="inline-block text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">
-                        In Progress
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedAgent({
-                        id: 'raki-1',
-                        name: 'raki pin',
-                        pincode: divisionPincodesList[0].code,
-                        territory: userDivision,
-                        phone: '6789098653',
-                        email: 'raki@gmail.com',
-                        assignedTargets: 20,
-                        completedTargets: 8,
-                        earnings: 0,
-                        totalOnboardedShops: 0,
-                        status: 'present',
-                        checkIn: '09:00 AM'
-                      })}
-                      className="py-1 px-3 bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 text-[#864f19] text-[10px] font-extrabold uppercase tracking-wider rounded-lg transition cursor-pointer flex items-center gap-1"
-                    >
-                      <Eye className="w-3.5 h-3.5" /> Inspect
-                    </button>
+                  <div className="py-12 text-center text-xs font-semibold text-[#847468]">
+                    No Pincode Agents found in {userDivision || 'assigned'} Division.
                   </div>
                 ) : (
                   pincodeAgentsList.map((agent) => (

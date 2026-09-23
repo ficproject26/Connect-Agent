@@ -137,9 +137,18 @@ export const VendorsList: React.FC = () => {
       });
 
       setVendors(prev => {
+        const apiMap = new Map(mappedApiVendors.map(item => [item.id, item]));
+        // Update existing items with latest server data while preserving local-only items
+        const updated = prev.map(item => apiMap.has(item.id) ? { ...item, ...apiMap.get(item.id)! } : item);
         const existingIds = new Set(prev.map(item => item.id));
-        const newFromApi = mappedApiVendors.filter(item => !existingIds.has(item.id));
-        return [...newFromApi, ...prev];
+        const newItems = mappedApiVendors.filter(item => !existingIds.has(item.id));
+        return [...newItems, ...updated];
+      });
+
+      setSelectedVendor(prev => {
+        if (!prev) return prev;
+        const matching = mappedApiVendors.find(v => v.id === prev.id);
+        return matching ? { ...prev, ...matching } : prev;
       });
     }
   }, [apiVendorsData, user?.name, userState, userDistrict, userDivision, userPincode]);

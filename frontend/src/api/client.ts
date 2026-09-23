@@ -48,4 +48,31 @@ api.interceptors.response.use(
   }
 );
 
+// In-flight GET request deduplication map to prevent multiple identical requests
+const inFlightRequests = new Map<string, Promise<any>>();
+
+const originalRequest = api.request.bind(api);
+api.request = function (configOrUrl: any, maybeConfig?: any) {
+  const config = typeof configOrUrl === 'string'
+    ? { ...(maybeConfig || {}), url: configOrUrl }
+    : { ...(configOrUrl || {}) };
+  const method = (config.method || 'get').toLowerCase();
+
+  if (method === 'get') {
+    const key = `${config.baseURL || ''}:${config.url || ''}:${config.params ? JSON.stringify(config.params) : ''}`;
+    const existing = inFlightRequests.get(key);
+    if (existing) {
+      return existing;
+    }
+
+    const requestPromise = originalRequest(config).finally(() => {
+      inFlightRequests.delete(key);
+    });
+    inFlightRequests.set(key, requestPromise);
+    return requestPromise;
+  }
+
+  return originalRequest(config);
+};
+
 export default api;

@@ -7,6 +7,7 @@ exports.getSubordinateAttendance = exports.getMyAttendance = exports.checkOut = 
 const zod_1 = require("zod");
 const Attendance_1 = __importDefault(require("../models/Attendance"));
 const Agent_1 = __importDefault(require("../models/Agent"));
+const territoryScope_1 = require("../utils/territoryScope");
 const checkInSchema = zod_1.z.object({
     comments: zod_1.z.string().optional(),
     latitude: zod_1.z.number().optional(),
@@ -128,21 +129,13 @@ const getSubordinateAttendance = async (req, res) => {
             return res.status(401).json({ message: 'Unauthorized' });
         const { roleFilter, searchQuery, date } = req.query;
         const dateFilter = date || new Date().toISOString().slice(0, 10);
-        // Find subordinates based on role hierarchy
-        let subordinateQuery = {};
-        if (userRole === 'state') {
-            subordinateQuery.role = { $in: ['district', 'division', 'pincode'] };
-        }
-        else if (userRole === 'district') {
-            subordinateQuery.role = { $in: ['division', 'pincode'] };
-        }
-        else if (userRole === 'division') {
-            subordinateQuery.role = 'pincode';
-        }
-        else {
+        const scope = await (0, territoryScope_1.getAgentTerritoryScope)(agentId);
+        if (!scope || scope.role === 'pincode') {
             // Pincode agents don't have subordinates
             return res.status(200).json({ records: [] });
         }
+        const territoryFilter = (0, territoryScope_1.buildTerritoryFilter)(scope);
+        const subordinateQuery = { ...territoryFilter };
         if (roleFilter && roleFilter !== 'all') {
             subordinateQuery.role = roleFilter;
         }
@@ -157,7 +150,9 @@ const getSubordinateAttendance = async (req, res) => {
             const queryLower = searchQuery.toLowerCase();
             filteredRecords = attendanceRecords.filter((rec) => {
                 const agentName = rec.agent?.name?.toLowerCase() || '';
-                const territory = rec.agent?.territory?.name?.toLowerCase() || '';
+                const territory = typeof rec.agent?.territory === 'object'
+                    ? `${rec.agent.territory.pincode || ''} ${rec.agent.territory.division || ''} ${rec.agent.territory.district || ''} ${rec.agent.territory.state || ''}`.toLowerCase()
+                    : (rec.agent?.territory?.toLowerCase() || '');
                 return agentName.includes(queryLower) || territory.includes(queryLower);
             });
         }

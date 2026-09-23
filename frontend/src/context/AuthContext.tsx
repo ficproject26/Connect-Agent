@@ -233,6 +233,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Silent background notification auto-refresh (every 45s, visibility-aware)
+  useEffect(() => {
+    if (!token) return;
+
+    const intervalId = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchNotifications().catch(() => {});
+      }
+    }, 45000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchNotifications().catch(() => {});
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [token]);
+
   const login = async (email: string, password: string): Promise<any> => {
     const loginPayload = { email: email.trim().toLowerCase(), password };
 

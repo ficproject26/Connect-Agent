@@ -146,11 +146,20 @@ export const TicketsList: React.FC = () => {
         ];
         const combined = [...mapped.filter(m => !stateInitialTickets.some(s => s.ticketId === m.ticketId)), ...stateInitialTickets];
         setTickets(combined);
+        if (selectedTicket) {
+          const fresh = combined.find(t => t._id === selectedTicket._id || t.ticketId === selectedTicket.ticketId);
+          if (fresh) setSelectedTicket(prev => prev ? { ...prev, ...fresh } : fresh);
+        }
       } else {
         setTickets(mapped);
+        if (selectedTicket) {
+          const fresh = mapped.find(t => t._id === selectedTicket._id || t.ticketId === selectedTicket.ticketId);
+          if (fresh) setSelectedTicket(prev => prev ? { ...prev, ...fresh } : fresh);
+        }
       }
     } catch (err: any) {
-      setTickets([]);
+      // Retain existing working data on temporary API/network failure
+      console.warn('Background ticket refresh fallback:', err);
     } finally {
       setIsLoading(false);
     }
@@ -159,6 +168,19 @@ export const TicketsList: React.FC = () => {
   useEffect(() => {
     loadTicketData(true);
   }, [activeRole]);
+
+  // Silent 45s background auto-refresh with tab visibility management
+  useQuery({
+    queryKey: ['ticketsListLive', activeRole],
+    queryFn: async () => {
+      await loadTicketData(false);
+      return true;
+    },
+    staleTime: 30000,
+    refetchInterval: 45000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true
+  });
 
   const handleAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

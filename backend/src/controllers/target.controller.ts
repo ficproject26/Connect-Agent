@@ -4,6 +4,7 @@ import Target from '../models/Target';
 import TargetAssignment from '../models/TargetAssignment';
 import Agent from '../models/Agent';
 import Notification from '../models/Notification';
+import { getAgentTerritoryScope, buildTerritoryFilter } from '../utils/territoryScope';
 
 const createTargetSchema = z.object({
   title: z.string().min(2, 'Title required'),
@@ -88,14 +89,25 @@ export const allocateTarget = async (req: Request, res: Response) => {
 
     const data = allocateTargetSchema.parse(req.body);
 
+    const scope = await getAgentTerritoryScope(agentId);
+    const territoryFilter = buildTerritoryFilter(scope);
+
     let targetAgentId = data.assignedTo;
     let recipientName = data.divisionName || 'Division Agent';
 
-    if (!targetAgentId && data.divisionName) {
+    if (targetAgentId) {
+      const allowedAgent = await Agent.findOne({ _id: targetAgentId, ...territoryFilter });
+      if (!allowedAgent) {
+        return res.status(403).json({ message: 'Target cannot be allocated to an agent outside authorized territory' });
+      }
+      recipientName = allowedAgent.name;
+    } else if (data.divisionName) {
       const matchedAgent = await Agent.findOne({
+        ...territoryFilter,
         $or: [
           { name: new RegExp(data.divisionName, 'i') },
-          { 'territory.name': new RegExp(data.divisionName, 'i') }
+          { 'territory.division': new RegExp(data.divisionName, 'i') },
+          { division: new RegExp(data.divisionName, 'i') }
         ]
       });
       if (matchedAgent) {
@@ -157,22 +169,12 @@ export const getSubordinates = async (req: Request, res: Response) => {
     const agentId = (req as any).agent?.agentId;
     if (!agentId) return res.status(401).json({ message: 'Unauthorized' });
 
-    const currentAgent = await Agent.findById(agentId);
-    const userRole = currentAgent?.role || (req as any).agent?.role || 'district';
+    const scope = await getAgentTerritoryScope(agentId);
+    const filter = buildTerritoryFilter(scope);
 
-    const subordinateQuery: Record<string, unknown> = {};
-    if (userRole === 'state') {
-      subordinateQuery.role = { $in: ['district', 'division', 'pincode'] };
-    } else if (userRole === 'district') {
-      subordinateQuery.role = { $in: ['division', 'pincode'] };
-    } else if (userRole === 'division') {
-      subordinateQuery.role = 'pincode';
-    } else {
-      subordinateQuery.role = 'pincode';
-    }
-
-    const subordinates = await Agent.find(subordinateQuery)
-      .select('_id name role territory email phone')
+    const subordinates = await Agent.find(filter)
+      .select('_id name role territory email phone status')
+      .sort({ createdAt: -1 })
       .lean();
 
     return res.status(200).json({ subordinates });
@@ -190,6 +192,13 @@ export const assignTarget = async (req: Request, res: Response) => {
 
     const { id: targetId } = req.params;
     const data = assignTargetSchema.parse(req.body);
+
+    const scope = await getAgentTerritoryScope(agentId);
+    const territoryFilter = buildTerritoryFilter(scope);
+    const allowedAgent = await Agent.findOne({ _id: data.assignedTo, ...territoryFilter });
+    if (!allowedAgent) {
+      return res.status(403).json({ message: 'Target cannot be assigned to an agent outside authorized territory' });
+    }
 
     const target = await Target.findById(targetId);
     if (!target) return res.status(404).json({ message: 'Target not found' });

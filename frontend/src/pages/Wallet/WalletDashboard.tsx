@@ -208,10 +208,10 @@ export const WalletDashboard: React.FC = () => {
       await fetchWalletDetails(false);
       return true;
     },
-    staleTime: 60000,
-    refetchInterval: 30000,
+    staleTime: 30000,
+    refetchInterval: 45000,
     refetchIntervalInBackground: false,
-    refetchOnWindowFocus: false
+    refetchOnWindowFocus: true
   });
 
   const handleCashoutSubmit = async (e: React.FormEvent) => {

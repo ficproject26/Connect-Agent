@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../../context/AuthContext';
 import { targetService } from '../../../api';
 import { Modal, Button } from '../../../components/ui';
@@ -36,17 +37,37 @@ export const DistrictDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'schedule' | 'followups' | 'visits' | 'subordinates'>('subordinates');
   const [selectedAgent, setSelectedAgent] = useState<SubordinateAgent | null>(null);
 
-  // Load real subordinates from backend if available
-  useEffect(() => {
-    const fetchSubordinates = async () => {
+  // Silent 45s background auto-refresh for subordinates with tab visibility management
+  useQuery({
+    queryKey: ['districtSubordinates', user?.territory?.district || 'district'],
+    queryFn: async () => {
       try {
         const res = await targetService.getSubordinates();
-        if (res.data?.subordinates && res.data.subordinates.length > 0) {
-          const mapped: SubordinateAgent[] = res.data.subordinates.map((s: any) => ({
+        if (res.data?.subordinates) {
+          const uDist = (user?.territory?.district || '').trim().toLowerCase();
+          const uState = (user?.territory?.state || '').trim().toLowerCase();
+
+          // Strict territory filtering: only allow division and pincode agents within this assigned district and state
+          const filteredSubs = res.data.subordinates.filter((s: any) => {
+            const sRole = (s.role || '').toLowerCase();
+            if (sRole !== 'division' && sRole !== 'pincode') return false;
+
+            const sState = (typeof s.territory === 'object' ? s.territory?.state : s.state || '').trim().toLowerCase();
+            const sDist = (typeof s.territory === 'object' ? s.territory?.district : s.district || '').trim().toLowerCase();
+
+            if (uState && sState && !sState.includes(uState) && !uState.includes(sState)) return false;
+            if (uDist && sDist && !sDist.includes(uDist) && !uDist.includes(sDist)) return false;
+
+            return true;
+          });
+
+          const mapped: SubordinateAgent[] = filteredSubs.map((s: any) => ({
             id: s._id,
             name: s.name,
             role: s.role || 'pincode',
-            territory: typeof s.territory === 'object' ? s.territory?.name || s.territory?.state || 'Assigned Territory' : (s.territory || 'Division Sector'),
+            territory: typeof s.territory === 'object'
+              ? (s.territory?.division ? `${s.territory.division}${s.territory.pincode ? ` (${s.territory.pincode})` : ''}` : (s.territory?.district || s.territory?.state || 'Assigned Territory'))
+              : (s.territory || 'Division Sector'),
             phone: s.phone || 'N/A',
             email: s.email || 'N/A',
             assignedTargets: s.assignedTargets || s.targetValue || 0,
@@ -57,13 +78,22 @@ export const DistrictDashboard: React.FC = () => {
             checkIn: s.checkIn || '09:00 AM'
           }));
           setSubordinatesList(mapped);
+          if (selectedAgent) {
+            const fresh = mapped.find(m => m.id === selectedAgent.id);
+            setSelectedAgent(fresh || null);
+          }
         }
+        return res.data;
       } catch (err) {
         console.warn('Subordinates fetch fallback:', err);
+        return null;
       }
-    };
-    fetchSubordinates();
-  }, []);
+    },
+    staleTime: 30000,
+    refetchInterval: 45000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true
+  });
 
   // Alerts Stack State
   const [districtAlerts, setDistrictAlerts] = useState<any[]>([]);
@@ -266,29 +296,35 @@ export const DistrictDashboard: React.FC = () => {
                   <span>Territory & Status</span>
                   <span>Inspect Action</span>
                 </div>
-                {subordinatesList.map((sub) => (
-                  <div key={sub.id} className="py-3 flex justify-between items-center text-xs font-semibold">
-                    <div>
-                      <span className="font-bold text-[#1b1c1c] block">{sub.name}</span>
-                      <span className="text-[10px] text-[#864f19] uppercase font-black">{sub.role} Agent</span>
+                {subordinatesList.length > 0 ? (
+                  subordinatesList.map((sub) => (
+                    <div key={sub.id} className="py-3 flex justify-between items-center text-xs font-semibold">
+                      <div>
+                        <span className="font-bold text-[#1b1c1c] block">{sub.name}</span>
+                        <span className="text-[10px] text-[#864f19] uppercase font-black">{sub.role} Agent</span>
+                      </div>
+                      <div>
+                        <span className="text-[#52443a] block">{sub.territory} ({sub.assignedTargets} Targets)</span>
+                        <span className={`inline-block text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded ${
+                          sub.status === 'present' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
+                        }`}>
+                          {sub.status}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedAgent(sub)}
+                        className="py-1 px-3 bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 text-[#864f19] text-[10px] font-extrabold uppercase tracking-wider rounded-lg transition cursor-pointer flex items-center gap-1"
+                      >
+                        <Eye className="w-3.5 h-3.5" /> Inspect
+                      </button>
                     </div>
-                    <div>
-                      <span className="text-[#52443a] block">{sub.territory} ({sub.assignedTargets} Targets)</span>
-                      <span className={`inline-block text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded ${
-                        sub.status === 'present' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
-                      }`}>
-                        {sub.status}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedAgent(sub)}
-                      className="py-1 px-3 bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 text-[#864f19] text-[10px] font-extrabold uppercase tracking-wider rounded-lg transition cursor-pointer flex items-center gap-1"
-                    >
-                      <Eye className="w-3.5 h-3.5" /> Inspect
-                    </button>
+                  ))
+                ) : (
+                  <div className="py-12 text-center text-xs font-semibold text-[#847468]">
+                    No Division or Pincode Agents found in {user?.territory?.district || 'assigned'} District.
                   </div>
-                ))}
+                )}
               </>
             )}
             {activeTab === 'schedule' && (

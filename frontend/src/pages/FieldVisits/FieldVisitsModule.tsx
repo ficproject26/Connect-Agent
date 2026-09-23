@@ -190,10 +190,10 @@ export const FieldVisitsModule: React.FC = () => {
       await fetchVisits();
       return true;
     },
-    staleTime: 60000,
-    refetchInterval: 30000,
+    staleTime: 30000,
+    refetchInterval: 45000,
     refetchIntervalInBackground: false,
-    refetchOnWindowFocus: false
+    refetchOnWindowFocus: true
   });
 
   // Fetch live browser geolocation

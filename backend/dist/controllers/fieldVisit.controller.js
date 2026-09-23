@@ -7,6 +7,8 @@ exports.getFieldVisits = exports.completeFieldVisit = exports.startFieldVisit = 
 const zod_1 = require("zod");
 const FieldVisit_1 = __importDefault(require("../models/FieldVisit"));
 const Vendor_1 = __importDefault(require("../models/Vendor"));
+const Agent_1 = __importDefault(require("../models/Agent"));
+const territoryScope_1 = require("../utils/territoryScope");
 const startVisitSchema = zod_1.z.object({
     vendorId: zod_1.z.string().min(1, 'Vendor ID is required'),
     latitude: zod_1.z.number({ required_error: 'Latitude required' }),
@@ -102,8 +104,15 @@ const getFieldVisits = async (req, res) => {
         const pageNum = parseInt(page, 10);
         const limitNum = parseInt(limit, 10);
         const filter = {};
+        const scope = await (0, territoryScope_1.getAgentTerritoryScope)(agentId);
         if (agentRole === 'pincode' || agentRole === 'delivery_partner' || agentRole === 'technician') {
             filter.agent = agentId;
+        }
+        else {
+            const territoryFilter = (0, territoryScope_1.buildTerritoryFilter)(scope);
+            const subordinates = await Agent_1.default.find(territoryFilter).select('_id');
+            const allowedAgentIds = [agentId, ...subordinates.map(s => s._id.toString())];
+            filter.agent = { $in: allowedAgentIds };
         }
         if (status)
             filter.status = status;

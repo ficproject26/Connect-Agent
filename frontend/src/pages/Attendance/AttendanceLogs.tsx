@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardHeader, CardTitle, CardBody, Button, StatusChip, Modal } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
 import { Calendar, Clock, CheckCircle2, UserCheck, Search, Users, ShieldAlert, ArrowRight, Download, FileText, Eye, Wallet, Target, Award, MapPin, Phone, Mail } from 'lucide-react';
@@ -72,6 +73,45 @@ export const AttendanceLogs: React.FC = () => {
     }
   }, [userPrefix]);
 
+  // Silent 45s background auto-refresh for personal attendance history
+  useQuery({
+    queryKey: ['myAttendanceLive', userPrefix],
+    queryFn: async () => {
+      try {
+        const res = await api.get('/attendance/mine');
+        const apiRecords = res.data?.records || [];
+        if (apiRecords.length > 0) {
+          const mapped: AttendanceRecord[] = apiRecords.map((r: any) => ({
+            id: r._id,
+            date: r.date,
+            checkIn: r.checkIn ? new Date(r.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '---',
+            checkOut: r.checkOut ? new Date(r.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '---',
+            duration: r.duration || (r.checkOut ? 'Completed' : 'Active'),
+            status: r.status || 'present',
+            comments: r.comments || ''
+          }));
+          setPersonalHistory(prev => {
+            const apiDates = new Set(mapped.map(m => m.date));
+            const localOnly = prev.filter(p => !apiDates.has(p.date));
+            const combined = [...mapped, ...localOnly];
+            try {
+              localStorage.setItem(`agent_personal_history${userPrefix}`, JSON.stringify(combined));
+            } catch (e) {}
+            return combined;
+          });
+        }
+        return res.data;
+      } catch (err) {
+        console.warn('Attendance history fetch fallback:', err);
+        return null;
+      }
+    },
+    staleTime: 30000,
+    refetchInterval: 45000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true
+  });
+
   // Subordinates log desk
   const [subordinateLogs, setSubordinateLogs] = useState<SubordinateRecord[]>(() => {
     const saved = localStorage.getItem('agent_subordinate_logs');
@@ -79,6 +119,47 @@ export const AttendanceLogs: React.FC = () => {
       try { return JSON.parse(saved); } catch (e) {}
     }
     return [];
+  });
+
+  // Silent 45s background auto-refresh for subordinate attendance logs
+  useQuery({
+    queryKey: ['subordinatesAttendanceLive', user?._id],
+    queryFn: async () => {
+      if (!isManager) return null;
+      try {
+        const res = await api.get('/attendance/subordinates');
+        const list = res.data?.records || [];
+        if (Array.isArray(list)) {
+          const mapped: SubordinateRecord[] = list.map((r: any) => ({
+            id: r._id || r.agent?._id,
+            name: r.agent?.name || 'Agent',
+            role: r.agent?.role || 'pincode',
+            territory: typeof r.agent?.territory === 'object'
+              ? (r.agent?.territory?.division ? `${r.agent?.territory?.division}${r.agent?.territory?.pincode ? ` (${r.agent.territory.pincode})` : ''}` : (r.agent?.territory?.district || r.agent?.territory?.state || 'Territory'))
+              : (r.agent?.territory || 'Territory'),
+            date: r.date || todayStr,
+            checkIn: r.checkIn ? new Date(r.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '09:00 AM',
+            checkOut: r.checkOut ? new Date(r.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
+            status: r.status || 'present',
+            comments: r.comments || '',
+            phone: r.agent?.phone || 'N/A',
+            email: r.agent?.email || 'N/A'
+          }));
+          setSubordinateLogs(mapped);
+          try {
+            localStorage.setItem('agent_subordinate_logs', JSON.stringify(mapped));
+          } catch (e) {}
+        }
+        return res.data;
+      } catch (err) {
+        console.warn('Subordinate attendance fetch fallback:', err);
+        return null;
+      }
+    },
+    staleTime: 30000,
+    refetchInterval: 45000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true
   });
 
   const handleCheckIn = async () => {
