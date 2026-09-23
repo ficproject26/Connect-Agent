@@ -1086,11 +1086,9 @@ export const VendorsList: React.FC = () => {
             </div>
 
             <div className="space-y-1 text-xs">
-              <p className="text-[10px] uppercase font-black text-slate-400">Full Business Address</p>
+              <p className="text-[10px] uppercase font-black text-slate-400">Full Business Address & Administrative Location</p>
               <p className="font-bold text-slate-700 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
-                {selectedVendor.fullAddress && !selectedVendor.fullAddress.toLowerCase().includes('salem')
-                  ? selectedVendor.fullAddress
-                  : `${selectedVendor.name}, ${selectedVendor.division || userDivision}, ${selectedVendor.district || userDistrict}, ${selectedVendor.state || userState} - ${selectedVendor.pincode || userPincode}`}
+                {selectedVendor.fullAddress || `${selectedVendor.name}, ${selectedVendor.division || userDivision}, ${selectedVendor.district || userDistrict}, ${selectedVendor.state || userState} - ${selectedVendor.pincode || userPincode}`}
               </p>
             </div>
 
@@ -1119,8 +1117,12 @@ export const VendorsList: React.FC = () => {
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         onSuccess={(wizardData) => {
-          // Guarantee state territory matches logged in agent's state
-          const targetState = userState || wizardData.state || 'Tamil Nadu';
+          // Use verified territory from wizardData or fallback to agent's territory
+          const targetState = wizardData.state || userState || 'Tamil Nadu';
+          const targetDistrict = wizardData.district || userDistrict;
+          const targetDivision = wizardData.division || userDivision;
+          const targetPincode = wizardData.pincode || userPincode;
+
           const createdVendor: Vendor = {
             id: `REG-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
             name: wizardData.name,
@@ -1128,9 +1130,9 @@ export const VendorsList: React.FC = () => {
             phone: wizardData.phone,
             email: (wizardData.email ? wizardData.email.toLowerCase().trim() : `${wizardData.name.toLowerCase().replace(/\s+/g, '')}@example.com`),
             state: targetState,
-            division: wizardData.division || userDivision,
-            district: wizardData.district || userDistrict,
-            pincode: wizardData.pincode || userPincode,
+            division: targetDivision,
+            district: targetDistrict,
+            pincode: targetPincode,
             role: 'Merchant Partner',
             kycStatus: 'pending',
             status: 'pending',
@@ -1139,7 +1141,7 @@ export const VendorsList: React.FC = () => {
             updatedAt: TODAY_DATE,
             storeType: wizardData.storeType || 'General Retail & Services',
             businessGst: wizardData.businessGst || '',
-            fullAddress: wizardData.fullAddress || `${wizardData.district || userDistrict}, ${targetState} ${wizardData.pincode || userPincode}`
+            fullAddress: wizardData.fullAddress || `${targetDistrict}, ${targetState} - ${targetPincode}`
           };
 
           setVendors(prev => {
@@ -1177,6 +1179,12 @@ export const VendorsList: React.FC = () => {
             assignedDivision: createdVendor.division,
             division: createdVendor.division,
             pincode: createdVendor.pincode,
+            buildingNo: wizardData.buildingNo || '',
+            streetName: wizardData.streetName || '',
+            postOffice: wizardData.postOffice || '',
+            taluk: wizardData.taluk || '',
+            panNumber: wizardData.panNumber || '',
+            aadhaarNumber: wizardData.aadhaarNumber || '',
             address: createdVendor.fullAddress,
             status: 'pending',
             kycStatus: 'pending',

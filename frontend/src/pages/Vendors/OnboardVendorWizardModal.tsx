@@ -1,11 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Modal, Button, Input, Select } from '../../components/ui';
 import {
   Building, User, FileText, Landmark, CheckCircle2, ChevronRight, ChevronLeft,
-  Upload, Eye, EyeOff, X, AlertCircle, ShieldCheck, Check, Info, FileCode, Plus
+  Upload, Eye, EyeOff, X, AlertCircle, ShieldCheck, Check, Info, FileCode, Plus, Lock, MapPin
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { getLocationFromPincode } from '../../utils/locationData';
+import {
+  getLocationFromPincode,
+  getDistrictsForState,
+  getDivisionsForDistrict,
+  getPincodesForDivision,
+  validateTerritoryBelongsToAgent
+} from '../../utils/locationData';
 import { fetchAdminCategories, getActiveMainCategories, CANONICAL_MAIN_CATEGORIES } from '../../services/categoryService';
 
 interface OnboardVendorWizardModalProps {
@@ -46,6 +52,17 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  // Determine logged-in Agent role and approved territory
+  const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';
+  const activeRole = (rawRole === 'agent' ? ((user as any)?.level || 'pincode') : rawRole).toLowerCase();
+
+  const agentState = user?.territory?.state || 'Tamil Nadu';
+  const agentDistrict = user?.territory?.district || 'Dharmapuri';
+  const agentDivision = user?.territory?.division || 'Harur Division';
+  const agentPincode = (user?.territory?.pincode || '636903').trim();
+  const agentPostOffice = (user?.territory as any)?.postOffice || '';
+  const agentTaluk = (user?.territory as any)?.taluk || '';
+
   // Step 1: Business Info
   const [formData, setFormData] = useState({
     // Step 1
@@ -56,12 +73,12 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
     email: '',
     buildingNo: '',
     streetName: '',
-    postOffice: (user?.territory as any)?.postOffice || 'Vijayawada Head Post Office',
-    taluk: user?.territory?.division || 'Vijayawada Urban',
-    district: user?.territory?.district || 'NTR District',
-    state: user?.territory?.state || 'Andhra Pradesh',
-    pincode: user?.territory?.pincode || '520001',
-    division: user?.territory?.division || 'Vijayawada Central Division',
+    postOffice: agentPostOffice || 'Harur Head Post Office',
+    taluk: agentTaluk || 'Harur',
+    district: agentDistrict,
+    state: agentState,
+    pincode: agentPincode,
+    division: agentDivision,
     operatingHours: '09:00 AM - 09:00 PM',
     website: '',
     logoUrl: '',
@@ -99,31 +116,168 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
     termsAccepted: false
   });
 
-  // Pincode auto-lookup handler
-  const handlePincodeChange = (pin: string) => {
-    const cleaned = pin.replace(/\D/g, '').slice(0, 6);
-    let state = formData.state;
-    let district = formData.district;
-    let taluk = formData.taluk;
-    let postOffice = formData.postOffice;
-
-    if (cleaned.length === 6) {
-      const info = getLocationFromPincode(cleaned);
-      state = info.state;
-      district = info.district;
-      taluk = info.division;
-      postOffice = info.postOffice;
+  // Dynamic available options strictly derived from agent jurisdiction
+  const availableDistricts = useMemo(() => {
+    if (activeRole === 'state') {
+      return getDistrictsForState(formData.state || agentState);
     }
+    return [formData.district || agentDistrict];
+  }, [activeRole, formData.state, agentState, formData.district, agentDistrict]);
+
+  const availableDivisions = useMemo(() => {
+    if (activeRole === 'state' || activeRole === 'district') {
+      return getDivisionsForDistrict(formData.district || agentDistrict, formData.state || agentState);
+    }
+    return [formData.division || agentDivision];
+  }, [activeRole, formData.district, agentDistrict, formData.state, agentState, formData.division, agentDivision]);
+
+  const availablePincodes = useMemo(() => {
+    if (activeRole === 'pincode') {
+      return [agentPincode];
+    }
+    return getPincodesForDivision(formData.division || agentDivision, agentPincode);
+  }, [activeRole, formData.division, agentDivision, agentPincode]);
+
+  // Synchronize form territory with logged in agent when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setErrorMsg('');
+      const defaultState = agentState;
+      let defaultDistrict = agentDistrict;
+      let defaultDivision = agentDivision;
+      let defaultPin = agentPincode;
+
+      if (activeRole === 'state') {
+        const districts = getDistrictsForState(defaultState);
+        defaultDistrict = agentDistrict && districts.includes(agentDistrict) ? agentDistrict : (districts[0] || 'Dharmapuri');
+        const divisions = getDivisionsForDistrict(defaultDistrict, defaultState);
+        defaultDivision = agentDivision && divisions.includes(agentDivision) ? agentDivision : (divisions[0] || 'Harur Division');
+        const pins = getPincodesForDivision(defaultDivision, agentPincode);
+        defaultPin = pins[0] || agentPincode;
+      } else if (activeRole === 'district') {
+        defaultDistrict = agentDistrict;
+        const divisions = getDivisionsForDistrict(defaultDistrict, defaultState);
+        defaultDivision = agentDivision && divisions.includes(agentDivision) ? agentDivision : (divisions[0] || 'Harur Division');
+        const pins = getPincodesForDivision(defaultDivision, agentPincode);
+        defaultPin = pins[0] || agentPincode;
+      } else if (activeRole === 'division') {
+        defaultDistrict = agentDistrict;
+        defaultDivision = agentDivision;
+        const pins = getPincodesForDivision(defaultDivision, agentPincode);
+        defaultPin = agentPincode && pins.includes(agentPincode) ? agentPincode : (pins[0] || agentPincode);
+      } else {
+        // Pincode Agent: strictly locked to agent territory
+        defaultDistrict = agentDistrict;
+        defaultDivision = agentDivision;
+        defaultPin = agentPincode;
+      }
+
+      const loc = getLocationFromPincode(defaultPin, {
+        state: defaultState,
+        district: defaultDistrict,
+        division: defaultDivision,
+        taluk: agentTaluk,
+        postOffice: agentPostOffice
+      });
+
+      setFormData(prev => ({
+        ...prev,
+        state: defaultState,
+        district: defaultDistrict,
+        division: defaultDivision,
+        pincode: defaultPin,
+        taluk: agentTaluk || loc.taluk || defaultDivision.replace(' Division', ''),
+        postOffice: agentPostOffice || loc.postOffice,
+        agentCode: user?.name ? `${user.name} (${user.registrationId || 'AGENT-REF'})` : 'Self Registered'
+      }));
+    }
+  }, [isOpen, user, activeRole, agentState, agentDistrict, agentDivision, agentPincode, agentPostOffice, agentTaluk]);
+
+  // Handle District selection (State Agent only)
+  const handleDistrictSelect = (newDistrict: string) => {
+    const divs = getDivisionsForDistrict(newDistrict, formData.state);
+    const defaultDiv = divs[0] || `${newDistrict} Division`;
+    const pins = getPincodesForDivision(defaultDiv);
+    const defaultPin = pins[0] || '636903';
+    const loc = getLocationFromPincode(defaultPin, {
+      state: formData.state,
+      district: newDistrict,
+      division: defaultDiv
+    });
 
     setFormData(prev => ({
       ...prev,
-      pincode: cleaned,
-      state,
-      district,
-      taluk,
-      division: taluk,
-      postOffice
+      district: newDistrict,
+      division: defaultDiv,
+      taluk: loc.taluk || defaultDiv.replace(' Division', ''),
+      pincode: defaultPin,
+      postOffice: loc.postOffice
     }));
+  };
+
+  // Handle Division selection (State & District Agents)
+  const handleDivisionSelect = (newDiv: string) => {
+    const pins = getPincodesForDivision(newDiv);
+    const defaultPin = pins[0] || '636903';
+    const loc = getLocationFromPincode(defaultPin, {
+      state: formData.state,
+      district: formData.district,
+      division: newDiv
+    });
+
+    setFormData(prev => ({
+      ...prev,
+      division: newDiv,
+      taluk: loc.taluk || newDiv.replace(' Division', ''),
+      pincode: defaultPin,
+      postOffice: loc.postOffice
+    }));
+  };
+
+  // Handle Pincode selection (Division, District, State Agents)
+  const handlePincodeSelect = (newPin: string) => {
+    const loc = getLocationFromPincode(newPin, {
+      state: formData.state,
+      district: formData.district,
+      division: formData.division
+    });
+
+    setFormData(prev => ({
+      ...prev,
+      pincode: newPin,
+      postOffice: loc.postOffice,
+      taluk: loc.taluk || formData.division.replace(' Division', ''),
+      district: loc.district || formData.district,
+      state: loc.state || formData.state,
+      division: loc.division || formData.division
+    }));
+  };
+
+  // Phone Number formatting & numeric-only input (starts with 6, 7, 8, 9)
+  const handlePhoneInput = (val: string, field: 'phone' | 'alternatePhone') => {
+    const digits = val.replace(/\D/g, '');
+    if (digits.length > 0 && !/^[6-9]/.test(digits)) {
+      // Reject invalid starting digit immediately
+      return;
+    }
+    setFormData(prev => ({ ...prev, [field]: digits.slice(0, 10) }));
+  };
+
+  // Email formatting & whitespace removal
+  const handleEmailInput = (val: string) => {
+    setFormData(prev => ({ ...prev, email: val.replace(/\s+/g, '').toLowerCase() }));
+  };
+
+  // Aadhaar input (digits only, max 12)
+  const handleAadhaarInput = (val: string) => {
+    const digits = val.replace(/\D/g, '').slice(0, 12);
+    setFormData(prev => ({ ...prev, aadhaarNumber: digits }));
+  };
+
+  // PAN input (uppercase alphanumeric, max 10)
+  const handlePanInput = (val: string) => {
+    const clean = val.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+    setFormData(prev => ({ ...prev, panNumber: clean }));
   };
 
   // Handle Logo Upload Validation
@@ -216,27 +370,60 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
   };
 
   // Validation logic per step
-  const validateStep1 = () => {
+  const validateStep1 = (): string => {
     if (!formData.businessName.trim()) return 'Business / Shop Name is required.';
-    if (!formData.phone || formData.phone.length !== 10) return 'Business Phone Number must be a valid 10-digit mobile number.';
-    if (!formData.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) return 'Valid Email Address is required.';
     
-    // Mandatory Separate Address Fields Validation
+    // Mobile validation: exactly 10 digits, starts with 6, 7, 8, 9
+    const cleanPhone = formData.phone.replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length !== 10 || !/^[6-9]\d{9}$/.test(cleanPhone)) {
+      return 'Business Phone Number must be a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.';
+    }
+
+    // Email validation: standard email format, no spaces
+    const cleanEmail = formData.email.trim();
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!cleanEmail || cleanEmail.includes(' ') || !emailRegex.test(cleanEmail)) {
+      return 'Valid Email Address is required (e.g. name@example.com). Spaces and invalid formats are not allowed.';
+    }
+    
+    // Mandatory Address Fields
     if (!formData.buildingNo.trim()) return 'Building No / Door No / Shop No is required.';
     if (!formData.streetName.trim()) return 'Street Name / Area is required.';
     if (!formData.postOffice.trim()) return 'Post Office is required.';
     if (!formData.taluk.trim()) return 'Taluk / Sub-District is required.';
     if (!formData.district.trim()) return 'District is required.';
     if (!formData.state.trim()) return 'State is required.';
-    if (!formData.pincode || formData.pincode.replace(/\D/g, '').length !== 6) return 'Valid 6-digit Postal Code (Pincode) is required.';
+    if (!formData.pincode || formData.pincode.replace(/\D/g, '').length !== 6) {
+      return 'Valid 6-digit Postal Code (Pincode) is required.';
+    }
+
+    // Territory Jurisdiction Check against Logged-in Agent's Approved Territory
+    const territoryCheck = validateTerritoryBelongsToAgent(activeRole, user?.territory, formData);
+    if (!territoryCheck.valid) {
+      return territoryCheck.reason || 'Selected territory is outside your approved jurisdiction.';
+    }
 
     if (!formData.logoUrl) return 'Shop / Brand Logo is required. Please upload your shop logo image.';
     return '';
   };
 
-  const validateStep2 = () => {
+  const validateStep2 = (): string => {
     if (!formData.ownerName.trim()) return 'Owner / Contact Person Name is required.';
-    if (formData.alternatePhone && formData.alternatePhone.length !== 10) return 'Alternate Phone Number must be 10 digits.';
+    
+    // Owner Phone: exactly 10 digits, starts with 6, 7, 8, 9
+    const cleanPhone = formData.phone.replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length !== 10 || !/^[6-9]\d{9}$/.test(cleanPhone)) {
+      return 'Owner Phone Number must be a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.';
+    }
+
+    // Alternate Phone (optional, but if provided must be 10 digits starting with 6-9)
+    if (formData.alternatePhone) {
+      const altClean = formData.alternatePhone.replace(/\D/g, '');
+      if (altClean.length !== 10 || !/^[6-9]\d{9}$/.test(altClean)) {
+        return 'Alternate Phone Number must be a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.';
+      }
+    }
+
     if (!formData.password) return 'Account Password is required.';
     if (!passwordCriteria.length || !passwordCriteria.uppercase || !passwordCriteria.number) {
       return 'Password does not meet required criteria (min 8 chars, 1 uppercase, 1 number).';
@@ -245,14 +432,18 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
     return '';
   };
 
-  const validateStep3 = () => {
+  const validateStep3 = (): string => {
+    // PAN: 5 uppercase letters, 4 digits, 1 uppercase letter
     const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
-    if (!formData.panNumber || !panRegex.test(formData.panNumber.toUpperCase())) {
-      return 'Valid 10-character PAN Number (e.g. ABCDE1234F) is required.';
+    const cleanPan = formData.panNumber.trim().toUpperCase();
+    if (!cleanPan || !panRegex.test(cleanPan)) {
+      return 'Valid 10-character PAN Number (e.g. ABCDE1234F - 5 uppercase letters, 4 digits, 1 uppercase letter) is required.';
     }
+
+    // Aadhaar: exactly 12 numeric digits
     const aadhaarClean = formData.aadhaarNumber.replace(/\D/g, '');
-    if (aadhaarClean.length !== 12) {
-      return 'Valid 12-digit Aadhaar Number is required.';
+    if (!aadhaarClean || aadhaarClean.length !== 12 || !/^\d{12}$/.test(aadhaarClean)) {
+      return 'Valid 12-digit Aadhaar Number is required (numeric only, no spaces or special characters).';
     }
 
     const isFood = ['Food', 'Daily Needs', 'Supermarket & Retail', 'Fresh Produce Mart', 'Bakery & Confectionery', 'Organic Food Store', 'Restaurant & Cafe'].includes(formData.category);
@@ -276,7 +467,7 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
     return '';
   };
 
-  const validateStep4 = () => {
+  const validateStep4 = (): string => {
     if (!formData.accountHolderName.trim()) return 'Account Holder Name is required.';
     if (!formData.branch.trim()) return 'Bank Branch Name is required.';
     if (!formData.bankCity.trim()) return 'Bank City is required.';
@@ -320,6 +511,19 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
     e.preventDefault();
     setErrorMsg('');
 
+    // Pre-submission validation across all sections without clearing form data
+    const err1 = validateStep1();
+    if (err1) { setErrorMsg(err1); setCurrentStep(1); return; }
+
+    const err2 = validateStep2();
+    if (err2) { setErrorMsg(err2); setCurrentStep(2); return; }
+
+    const err3 = validateStep3();
+    if (err3) { setErrorMsg(err3); setCurrentStep(3); return; }
+
+    const err4 = validateStep4();
+    if (err4) { setErrorMsg(err4); setCurrentStep(4); return; }
+
     if (!formData.bankAccurateDeclared) {
       setErrorMsg('Please confirm the Bank Details Accuracy Declaration checkbox.');
       return;
@@ -329,16 +533,23 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
       return;
     }
 
-    const finalCategory = formData.category;
+    const cleanAadhaar = formData.aadhaarNumber.replace(/\D/g, '');
+    const cleanPan = formData.panNumber.trim().toUpperCase();
+    const cleanPhone = formData.phone.replace(/\D/g, '');
+    const cleanEmail = formData.email.trim().toLowerCase();
 
+    // Construct full geographical address
     const constructedAddress = `${formData.buildingNo.trim()}, ${formData.streetName.trim()}, ${formData.postOffice.trim()}, ${formData.taluk.trim()}, ${formData.district.trim()}, ${formData.state.trim()} - ${formData.pincode.trim()}`;
 
     const vendorObject = {
-      name: formData.businessName,
-      ownerName: formData.ownerName,
-      phone: formData.phone,
-      email: (formData.email || '').toLowerCase().trim(),
-      storeType: finalCategory,
+      name: formData.businessName.trim(),
+      businessName: formData.businessName.trim(),
+      ownerName: formData.ownerName.trim(),
+      contactPerson: formData.ownerName.trim(),
+      phone: cleanPhone,
+      email: cleanEmail,
+      storeType: formData.category,
+      category: formData.category,
       buildingNo: formData.buildingNo.trim(),
       streetName: formData.streetName.trim(),
       postOffice: formData.postOffice.trim(),
@@ -347,28 +558,30 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
       state: formData.state.trim(),
       pincode: formData.pincode.trim(),
       fullAddress: constructedAddress,
-      division: formData.taluk.trim(),
+      division: formData.division.trim(),
       operatingHours: formData.operatingHours,
-      website: formData.website,
+      website: formData.website.trim(),
       logoUrl: formData.logoUrl,
       businessImages: formData.businessImages,
-      alternatePhone: formData.alternatePhone,
+      alternatePhone: formData.alternatePhone.replace(/\D/g, ''),
       agentCode: formData.agentCode,
-      fssaiNumber: formData.fssaiNumber,
-      panNumber: formData.panNumber.toUpperCase(),
-      aadhaarNumber: formData.aadhaarNumber,
+      fssaiNumber: formData.fssaiNumber ? formData.fssaiNumber.replace(/\D/g, '') : '',
+      panNumber: cleanPan,
+      pan: cleanPan,
+      aadhaarNumber: cleanAadhaar,
+      aadhaar: cleanAadhaar,
       businessLicenseName: formData.businessLicenseName,
       gstStatus: formData.gstStatus,
-      businessGst: formData.gstStatus === 'GST Registered' ? formData.gstNumber.toUpperCase() : '',
+      businessGst: formData.gstStatus === 'GST Registered' ? formData.gstNumber.toUpperCase().trim() : '',
       msmeStatus: formData.msmeStatus,
       bankDetails: {
-        accountHolderName: formData.accountHolderName,
+        accountHolderName: formData.accountHolderName.trim(),
         bankName: formData.bankName,
-        branch: formData.branch,
-        bankStreetAddress: formData.bankStreetAddress,
-        bankCity: formData.bankCity,
-        accountNumber: formData.accountNumber,
-        ifscCode: formData.ifscCode.toUpperCase()
+        branch: formData.branch.trim(),
+        bankStreetAddress: formData.bankStreetAddress.trim(),
+        bankCity: formData.bankCity.trim(),
+        accountNumber: formData.accountNumber.trim(),
+        ifscCode: formData.ifscCode.toUpperCase().trim()
       }
     };
 
@@ -437,14 +650,23 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
           {/* STEP 1: BUSINESS INFO */}
           {currentStep === 1 && (
             <div className="space-y-4 animate-fade-in text-xs font-semibold">
-              <h3 className="font-extrabold text-sm text-[#864f19] uppercase tracking-wider flex items-center gap-1.5">
-                <Building className="w-4 h-4" /> Step 1: Business & Store Information
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="font-extrabold text-sm text-[#864f19] uppercase tracking-wider flex items-center gap-1.5">
+                  <Building className="w-4 h-4" /> Step 1: Business & Store Information
+                </h3>
+                <span className="text-[10px] font-extrabold px-2.5 py-1 rounded-full bg-[#ffdcc2] text-[#864f19] border border-[#864f19]/30 flex items-center gap-1">
+                  <Lock className="w-3 h-3" />
+                  {activeRole === 'pincode' ? `Pincode Agent: PIN ${agentPincode} (Locked)` :
+                   activeRole === 'division' ? `Division Agent: ${agentDivision} (Locked)` :
+                   activeRole === 'district' ? `District Agent: ${agentDistrict} (Locked)` :
+                   `State Agent: ${agentState} (Locked)`}
+                </span>
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Input
                   label="Business / Shop Name *"
-                  placeholder="e.g. Hosur Supermarket"
+                  placeholder="e.g. Harur Supermarket"
                   value={formData.businessName}
                   onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
                   required
@@ -459,14 +681,10 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Input
-                  label="Business Phone Number (10 Digits) *"
-                  placeholder="10-digit mobile number"
+                  label="Business Phone Number (10 Digits, 6-9 Start) *"
+                  placeholder="e.g. 9876543210"
                   value={formData.phone}
-                  onChange={(e) => {
-                    let clean = e.target.value.replace(/\D/g, '');
-                    if (clean.length > 0 && !/^[6-9]/.test(clean)) clean = '';
-                    setFormData({ ...formData, phone: clean.slice(0, 10) });
-                  }}
+                  onChange={(e) => handlePhoneInput(e.target.value, 'phone')}
                   maxLength={10}
                   inputMode="numeric"
                   required
@@ -476,14 +694,21 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                   type="email"
                   placeholder="vendor@example.com"
                   value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value.toLowerCase().trim() })}
+                  onChange={(e) => handleEmailInput(e.target.value)}
                   required
                 />
               </div>
 
-              {/* Business Address & Territory (7 Mandatory Separate Fields) */}
+              {/* Business Address & Territory Controlled by Logged-in Agent Jurisdiction */}
               <div className="space-y-3 p-3.5 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60">
-                <p className="text-[10px] uppercase font-black text-[#864f19]">Business Address & Territory (All Fields Mandatory)</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] uppercase font-black text-[#864f19] flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5" /> Business Address & Territory (All Fields Mandatory)
+                  </p>
+                  <span className="text-[9px] font-bold text-slate-500 uppercase">
+                    Admin Approved Territory
+                  </span>
+                </div>
 
                 {/* Building / Door / Shop No & Street Name */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -496,60 +721,135 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                   />
                   <Input
                     label="Street Name / Area *"
-                    placeholder="e.g. Main Market Road, MG Road Area"
+                    placeholder="e.g. Main Market Road, Bus Stand Area"
                     value={formData.streetName}
                     onChange={(e) => setFormData({ ...formData, streetName: e.target.value })}
                     required
                   />
                 </div>
 
-                {/* Post Office & Taluk */}
+                {/* State & District */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Input
-                    label="Post Office *"
-                    placeholder="e.g. Vijayawada Head Post Office"
-                    value={formData.postOffice}
-                    onChange={(e) => setFormData({ ...formData, postOffice: e.target.value })}
-                    required
-                  />
-                  <Input
-                    label="Taluk / Sub-District *"
-                    placeholder="e.g. Vijayawada Urban Taluk / Hosur Taluk"
-                    value={formData.taluk}
-                    onChange={(e) => setFormData({ ...formData, taluk: e.target.value })}
-                    required
-                  />
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-extrabold text-slate-700 uppercase">
+                      State (Locked to Agent Jurisdiction) *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.state}
+                      disabled
+                      readOnly
+                      className="w-full bg-slate-100 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 cursor-not-allowed select-none"
+                    />
+                  </div>
+
+                  {activeRole === 'state' ? (
+                    <Select
+                      label="District (Select within Assigned State) *"
+                      options={availableDistricts.map(d => ({ value: d, label: d }))}
+                      value={formData.district}
+                      onChange={(e) => handleDistrictSelect(e.target.value)}
+                    />
+                  ) : (
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-extrabold text-slate-700 uppercase">
+                        District (Locked to Approved Jurisdiction) *
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.district}
+                        disabled
+                        readOnly
+                        className="w-full bg-slate-100 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 cursor-not-allowed select-none"
+                      />
+                    </div>
+                  )}
                 </div>
 
-                {/* District & State */}
+                {/* Division & Pincode */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Input
-                    label="District *"
-                    placeholder="e.g. NTR District / Visakhapatnam"
-                    value={formData.district}
-                    onChange={(e) => setFormData({ ...formData, district: e.target.value })}
-                    required
-                  />
-                  <Input
-                    label="State *"
-                    placeholder="e.g. Andhra Pradesh / Tamil Nadu"
-                    value={formData.state}
-                    onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                    required
-                  />
+                  {activeRole === 'state' || activeRole === 'district' ? (
+                    <Select
+                      label="Division / Sub-District Territory *"
+                      options={availableDivisions.map(div => ({ value: div, label: div }))}
+                      value={formData.division}
+                      onChange={(e) => handleDivisionSelect(e.target.value)}
+                    />
+                  ) : (
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-extrabold text-slate-700 uppercase">
+                        Division (Locked to Assigned Division) *
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.division}
+                        disabled
+                        readOnly
+                        className="w-full bg-slate-100 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 cursor-not-allowed select-none"
+                      />
+                    </div>
+                  )}
+
+                  {activeRole === 'pincode' ? (
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-extrabold text-slate-700 uppercase flex items-center justify-between">
+                        <span>Postal Code (Pincode) *</span>
+                        <span className="text-[9px] text-[#864f19] font-black">LOCKED</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.pincode}
+                        disabled
+                        readOnly
+                        className="w-full bg-slate-100 border border-slate-300 rounded-xl px-3 py-2 text-xs font-black text-[#864f19] cursor-not-allowed select-none"
+                      />
+                    </div>
+                  ) : (
+                    <Select
+                      label={`Postal Code (Pincodes in ${formData.division || 'Division'}) *`}
+                      options={availablePincodes.map(p => ({
+                        value: p,
+                        label: `${p} — ${getLocationFromPincode(p).postOffice}`
+                      }))}
+                      value={formData.pincode}
+                      onChange={(e) => handlePincodeSelect(e.target.value)}
+                    />
+                  )}
                 </div>
 
-                {/* Postal Code & Operating Hours */}
+                {/* Post Office & Taluk (Automatically populated from Selected Pincode) */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Input
-                    label="Postal Code (Pincode) *"
-                    placeholder="e.g. 520001"
-                    value={formData.pincode}
-                    onChange={(e) => handlePincodeChange(e.target.value)}
-                    maxLength={6}
-                    inputMode="numeric"
-                    required
-                  />
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-extrabold text-slate-700 uppercase flex items-center justify-between">
+                      <span>Post Office (Auto-Populated from Pincode) *</span>
+                      <span className="text-[9px] text-emerald-700 font-bold">MATCHED</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.postOffice}
+                      disabled
+                      readOnly
+                      className="w-full bg-slate-100 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 cursor-not-allowed select-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-extrabold text-slate-700 uppercase flex items-center justify-between">
+                      <span>Taluk / Administrative Area *</span>
+                      <span className="text-[9px] text-emerald-700 font-bold">MATCHED</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.taluk}
+                      disabled
+                      readOnly
+                      className="w-full bg-slate-100 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 cursor-not-allowed select-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Operating Hours & Website */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Select
                     label="Business Operating Hours *"
                     options={[
@@ -562,14 +862,13 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                     value={formData.operatingHours}
                     onChange={(e) => setFormData({ ...formData, operatingHours: e.target.value })}
                   />
+                  <Input
+                    label="Business Website (Optional)"
+                    placeholder="https://www.mybusiness.com"
+                    value={formData.website}
+                    onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                  />
                 </div>
-
-                <Input
-                  label="Business Website (Optional)"
-                  placeholder="https://www.mybusiness.com"
-                  value={formData.website}
-                  onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-                />
               </div>
 
               {/* Logo Upload Section (Required) */}
@@ -646,14 +945,10 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                   required
                 />
                 <Input
-                  label="Owner Phone Number (Primary) *"
-                  placeholder="10-digit mobile number"
+                  label="Owner Phone Number (10 Digits, 6-9 Start) *"
+                  placeholder="e.g. 9876543210"
                   value={formData.phone}
-                  onChange={(e) => {
-                    let clean = e.target.value.replace(/\D/g, '');
-                    if (clean.length > 0 && !/^[6-9]/.test(clean)) clean = '';
-                    setFormData({ ...formData, phone: clean.slice(0, 10) });
-                  }}
+                  onChange={(e) => handlePhoneInput(e.target.value, 'phone')}
                   maxLength={10}
                   inputMode="numeric"
                   required
@@ -662,21 +957,16 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Input
-                  label="Alternate Phone Number (Optional)"
+                  label="Alternate Phone Number (Optional, 10 Digits)"
                   placeholder="10-digit secondary contact"
                   value={formData.alternatePhone}
-                  onChange={(e) => {
-                    let clean = e.target.value.replace(/\D/g, '');
-                    if (clean.length > 0 && !/^[6-9]/.test(clean)) clean = '';
-                    setFormData({ ...formData, alternatePhone: clean.slice(0, 10) });
-                  }}
+                  onChange={(e) => handlePhoneInput(e.target.value, 'alternatePhone')}
                   maxLength={10}
                   inputMode="numeric"
                 />
                 <Input
                   label="Registered By Agent (Read-Only)"
                   value={formData.agentCode}
-                  onChange={(e) => setFormData({ ...formData, agentCode: e.target.value })}
                   disabled
                 />
               </div>
@@ -756,18 +1046,18 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Input
-                  label="PAN Number (10 Characters) *"
+                  label="PAN Number (10 Characters: 5 Letters, 4 Digits, 1 Letter) *"
                   placeholder="e.g. ABCDE1234F"
                   value={formData.panNumber}
-                  onChange={(e) => setFormData({ ...formData, panNumber: e.target.value.toUpperCase().slice(0, 10) })}
+                  onChange={(e) => handlePanInput(e.target.value)}
                   maxLength={10}
                   required
                 />
                 <Input
-                  label="Aadhaar Number (12 Digits) *"
+                  label="Aadhaar Number (Exactly 12 Digits) *"
                   placeholder="12-digit Aadhaar number"
                   value={formData.aadhaarNumber}
-                  onChange={(e) => setFormData({ ...formData, aadhaarNumber: e.target.value.replace(/\D/g, '').slice(0, 12) })}
+                  onChange={(e) => handleAadhaarInput(e.target.value)}
                   maxLength={12}
                   inputMode="numeric"
                   required
@@ -890,14 +1180,11 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
 
                     if (ifsc.length >= 4) {
                       const prefix = ifsc.slice(0, 4);
-                      if (prefix === 'SBIN') { bankName = 'State Bank of India'; branch = 'Hosur Main Branch'; bankCity = 'Hosur / Salem'; }
-                      else if (prefix === 'HDFC') { bankName = 'HDFC Bank'; branch = 'Vizag City Branch'; bankCity = 'Visakhapatnam'; }
-                      else if (prefix === 'ICIC') { bankName = 'ICICI Bank'; branch = 'Central Commercial Branch'; bankCity = 'Chennai'; }
+                      if (prefix === 'SBIN') { bankName = 'State Bank of India'; branch = 'Harur Main Branch'; bankCity = 'Harur / Dharmapuri'; }
+                      else if (prefix === 'HDFC') { bankName = 'HDFC Bank'; branch = 'City Center Branch'; bankCity = 'Dharmapuri'; }
+                      else if (prefix === 'ICIC') { bankName = 'ICICI Bank'; branch = 'Commercial Branch'; bankCity = 'Salem'; }
                       else if (prefix === 'UTIB' || prefix === 'AXIS') { bankName = 'Axis Bank'; branch = 'MG Road Branch'; bankCity = 'Bengaluru'; }
-                      else if (prefix === 'PUNB') { bankName = 'Punjab National Bank'; branch = 'GT Road Branch'; bankCity = 'Delhi'; }
-                      else if (prefix === 'CNRB') { bankName = 'Canara Bank'; branch = 'Town Market Branch'; bankCity = 'Coimbatore'; }
-                      else if (prefix === 'BARB') { bankName = 'Bank of Baroda'; branch = 'Station Road Branch'; bankCity = 'Mumbai'; }
-                      else if (prefix === 'KKBK') { bankName = 'Kotak Mahindra Bank'; branch = 'Financial District Branch'; bankCity = 'Hyderabad'; }
+                      else if (prefix === 'CNRB') { bankName = 'Canara Bank'; branch = 'Town Market Branch'; bankCity = 'Krishnagiri'; }
                     }
 
                     setFormData({
@@ -923,41 +1210,23 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                     { value: 'HDFC Bank', label: 'HDFC Bank' },
                     { value: 'ICICI Bank', label: 'ICICI Bank' },
                     { value: 'Axis Bank', label: 'Axis Bank' },
-                    { value: 'Punjab National Bank', label: 'Punjab National Bank' },
                     { value: 'Canara Bank', label: 'Canara Bank' },
                     { value: 'Bank of Baroda', label: 'Bank of Baroda' },
+                    { value: 'Punjab National Bank', label: 'Punjab National Bank' },
                     { value: 'Kotak Mahindra Bank', label: 'Kotak Mahindra Bank' },
-                    { value: 'Union Bank of India', label: 'Union Bank of India' },
-                    { value: 'Indian Overseas Bank', label: 'Indian Overseas Bank' },
-                    { value: 'IndusInd Bank', label: 'IndusInd Bank' },
-                    { value: 'Yes Bank', label: 'Yes Bank' },
-                    { value: 'IDFC FIRST Bank', label: 'IDFC FIRST Bank' },
-                    { value: 'Federal Bank', label: 'Federal Bank' },
-                    { value: 'Central Bank of India', label: 'Central Bank of India' },
                     { value: 'Indian Bank', label: 'Indian Bank' },
-                    { value: 'UCO Bank', label: 'UCO Bank' },
-                    { value: 'Bank of Maharashtra', label: 'Bank of Maharashtra' },
-                    { value: 'Punjab & Sind Bank', label: 'Punjab & Sind Bank' },
-                    { value: 'Bandhan Bank', label: 'Bandhan Bank' },
-                    { value: 'South Indian Bank', label: 'South Indian Bank' },
+                    { value: 'Indian Overseas Bank', label: 'Indian Overseas Bank' },
+                    { value: 'Union Bank of India', label: 'Union Bank of India' },
+                    { value: 'IDFC FIRST Bank', label: 'IDFC FIRST Bank' },
                     { value: 'Karur Vysya Bank', label: 'Karur Vysya Bank' },
-                    { value: 'City Union Bank', label: 'City Union Bank' },
-                    { value: 'IDBI Bank', label: 'IDBI Bank' },
-                    { value: 'Karnataka Bank', label: 'Karnataka Bank' },
-                    { value: 'Jammu & Kashmir Bank', label: 'Jammu & Kashmir Bank' },
-                    { value: 'RBL Bank', label: 'RBL Bank' },
-                    { value: 'Tamilnad Mercantile Bank', label: 'Tamilnad Mercantile Bank' },
-                    { value: 'AU Small Finance Bank', label: 'AU Small Finance Bank' },
-                    { value: 'Equitas Small Finance Bank', label: 'Equitas Small Finance Bank' },
-                    { value: 'Airtel Payments Bank', label: 'Airtel Payments Bank' },
-                    { value: 'PayTM Payments Bank', label: 'PayTM Payments Bank' }
+                    { value: 'Tamilnad Mercantile Bank', label: 'Tamilnad Mercantile Bank' }
                   ]}
                   value={formData.bankName}
                   onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
                 />
                 <Input
                   label="Account Holder Name *"
-                  placeholder="e.g. Ramesh Kumar / Hosur Supermarket"
+                  placeholder="e.g. Ramesh Kumar / Harur Supermarket"
                   value={formData.accountHolderName}
                   onChange={(e) => setFormData({ ...formData, accountHolderName: e.target.value })}
                   required
@@ -967,14 +1236,14 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Input
                   label="Bank Branch Name *"
-                  placeholder="e.g. Hosur Main Market Branch"
+                  placeholder="e.g. Harur Main Branch"
                   value={formData.branch}
                   onChange={(e) => setFormData({ ...formData, branch: e.target.value })}
                   required
                 />
                 <Input
                   label="Bank City *"
-                  placeholder="e.g. Hosur / Salem"
+                  placeholder="e.g. Harur / Dharmapuri"
                   value={formData.bankCity}
                   onChange={(e) => setFormData({ ...formData, bankCity: e.target.value })}
                   required
@@ -993,38 +1262,47 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
               {/* Summary Cards Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* Business Info Summary */}
-                <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#eae8e7] space-y-1">
+                <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#eae8e7] space-y-1.5">
                   <div className="flex justify-between items-center">
-                    <span className="text-[10px] uppercase font-black text-[#864f19]">Business Info</span>
+                    <span className="text-[10px] uppercase font-black text-[#864f19]">Business & Territory</span>
                     <button type="button" onClick={() => setCurrentStep(1)} className="text-[10px] font-bold text-blue-700 hover:underline bg-transparent border-none cursor-pointer">Edit</button>
                   </div>
                   <p className="font-extrabold text-[#1b1c1c] text-sm">{formData.businessName}</p>
                   <p className="text-slate-600">{formData.category} • {formData.operatingHours}</p>
-                  <p className="text-slate-600">📞 ••••••{formData.phone.slice(-4)} | ✉️ {formData.email}</p>
-                  <p className="text-slate-500 text-[11px]">📍 {formData.buildingNo ? `${formData.buildingNo}, ` : ''}{formData.streetName ? `${formData.streetName}, ` : ''}{formData.postOffice ? `${formData.postOffice}, ` : ''}{formData.taluk ? `${formData.taluk}, ` : ''}{formData.district}, {formData.state} - {formData.pincode}</p>
+                  <p className="text-slate-600">📞 +91 {formData.phone} | ✉️ {formData.email}</p>
+                  <div className="text-slate-600 text-[11px] space-y-0.5 mt-1 bg-white p-2 rounded-lg border border-[#eae8e7]">
+                    <p><strong className="text-slate-800">Business Address:</strong> {formData.buildingNo}, {formData.streetName}</p>
+                    <p><strong className="text-slate-800">Post Office:</strong> {formData.postOffice}</p>
+                    <p><strong className="text-slate-800">Taluk:</strong> {formData.taluk} | <strong className="text-slate-800">Division:</strong> {formData.division}</p>
+                    <p><strong className="text-slate-800">District:</strong> {formData.district} | <strong className="text-slate-800">State:</strong> {formData.state}</p>
+                    <p><strong className="text-slate-800">Postal Code (PIN):</strong> <span className="font-black text-[#864f19]">{formData.pincode}</span></p>
+                  </div>
                 </div>
 
                 {/* Owner Info Summary */}
-                <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#eae8e7] space-y-1">
+                <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#eae8e7] space-y-1.5">
                   <div className="flex justify-between items-center">
                     <span className="text-[10px] uppercase font-black text-[#864f19]">Owner Credentials</span>
                     <button type="button" onClick={() => setCurrentStep(2)} className="text-[10px] font-bold text-blue-700 hover:underline bg-transparent border-none cursor-pointer">Edit</button>
                   </div>
                   <p className="font-extrabold text-[#1b1c1c] text-sm">{formData.ownerName}</p>
-                  <p className="text-slate-600">Registered By Agent: {formData.agentCode}</p>
+                  <p className="text-slate-600">Primary Mobile: <strong>+91 {formData.phone}</strong></p>
+                  {formData.alternatePhone && <p className="text-slate-600">Alternate: +91 {formData.alternatePhone}</p>}
+                  <p className="text-slate-600">Registered By Agent: <strong>{formData.agentCode}</strong></p>
+                  <p className="text-slate-500 text-[10px] uppercase font-bold mt-1">Jurisdiction Level: {activeRole.toUpperCase()} AGENT</p>
                 </div>
 
                 {/* Legal & Docs Summary */}
                 <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#eae8e7] space-y-1">
                   <div className="flex justify-between items-center">
-                    <span className="text-[10px] uppercase font-black text-[#864f19]">Legal & Documents</span>
+                    <span className="text-[10px] uppercase font-black text-[#864f19]">Legal & Identification</span>
                     <button type="button" onClick={() => setCurrentStep(3)} className="text-[10px] font-bold text-blue-700 hover:underline bg-transparent border-none cursor-pointer">Edit</button>
                   </div>
-                  <p className="text-slate-700">PAN: <strong>{formData.panNumber.toUpperCase()}</strong></p>
+                  <p className="text-slate-700">PAN Card: <strong>{formData.panNumber.toUpperCase()}</strong></p>
                   <p className="text-slate-700">Aadhaar: <strong>•••• •••• {formData.aadhaarNumber.slice(-4)}</strong></p>
                   {formData.fssaiNumber && <p className="text-slate-700">FSSAI License: <strong>{formData.fssaiNumber}</strong></p>}
                   <p className="text-slate-700">GST Status: <strong>{formData.gstStatus}</strong> {formData.gstNumber && `(${formData.gstNumber.toUpperCase()})`}</p>
-                  <p className="text-slate-700">MSME: <strong>{formData.msmeStatus}</strong></p>
+                  <p className="text-slate-700">Trade Document: <strong>{formData.businessLicenseName}</strong></p>
                 </div>
 
                 {/* Bank Details Summary */}
@@ -1034,8 +1312,9 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                     <button type="button" onClick={() => setCurrentStep(4)} className="text-[10px] font-bold text-blue-700 hover:underline bg-transparent border-none cursor-pointer">Edit</button>
                   </div>
                   <p className="font-extrabold text-[#1b1c1c]">{formData.bankName}</p>
-                  <p className="text-slate-600">Holder: {formData.accountHolderName}</p>
+                  <p className="text-slate-600">Account Holder: {formData.accountHolderName}</p>
                   <p className="text-slate-600">A/C: ••••••{formData.accountNumber.slice(-4)} | IFSC: {formData.ifscCode.toUpperCase()}</p>
+                  <p className="text-slate-500 text-[11px]">{formData.branch}, {formData.bankCity}</p>
                 </div>
               </div>
 

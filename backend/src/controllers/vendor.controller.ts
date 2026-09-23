@@ -4,6 +4,11 @@ import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import Vendor from '../models/Vendor';
 import { getAgentTerritoryScope, buildVendorScopeFilter } from '../utils/territoryScope';
+import {
+  validateAgentJurisdiction,
+  validateGeographicConsistency,
+  validateVendorFieldFormats
+} from '../utils/territoryValidation';
 
 const createVendorSchema = z.object({
   businessName: z.string().optional(),
@@ -122,6 +127,46 @@ export const createVendor = async (req: Request, res: Response) => {
       data.email = data.email.toLowerCase().trim();
     }
 
+    // 1. Strict field format validation
+    const fieldValidation = validateVendorFieldFormats({
+      phone: data.phone,
+      email: data.email,
+      panNumber: (data as any).panNumber || (data as any).pan,
+      aadhaarNumber: (data as any).aadhaarNumber || (data as any).aadhaar,
+      pincode: data.pincode
+    });
+    if (!fieldValidation.valid) {
+      return res.status(400).json({ message: fieldValidation.error });
+    }
+
+    // 2. Fetch Logged-in Agent's Approved Territory Scope
+    const scope = await getAgentTerritoryScope(agentId);
+    if (!scope) {
+      return res.status(403).json({ message: 'Agent territory profile could not be determined.' });
+    }
+
+    // 3. Security Check: Verify Requested Territory Belongs to Agent's Allowed Jurisdiction
+    const jurisdiction = validateAgentJurisdiction(scope, {
+      state: data.state,
+      district: data.district,
+      division: (data as any).division,
+      pincode: data.pincode
+    });
+    if (!jurisdiction.valid) {
+      return res.status(403).json({ message: jurisdiction.error });
+    }
+
+    // 4. Geographic Consistency Check
+    const geoConsistency = validateGeographicConsistency({
+      state: data.state,
+      district: data.district,
+      division: (data as any).division,
+      pincode: data.pincode
+    });
+    if (!geoConsistency.consistent) {
+      return res.status(400).json({ message: geoConsistency.error });
+    }
+
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const randDigits = Math.floor(1000 + Math.random() * 9000);
     const generatedRegId = `REG-${dateStr}-${randDigits}`;
@@ -131,7 +176,7 @@ export const createVendor = async (req: Request, res: Response) => {
       businessName: data.businessName || (data as any).name || 'Merchant Store',
       ownerName: data.ownerName || (data as any).contactPerson || 'Merchant Owner',
       location: {
-        address: data.location?.address || `${data.district || ''}, ${data.state || ''} ${data.pincode || ''}`,
+        address: data.location?.address || `${(data as any).buildingNo ? `${(data as any).buildingNo}, ` : ''}${(data as any).streetName ? `${(data as any).streetName}, ` : ''}${(data as any).postOffice ? `${(data as any).postOffice}, ` : ''}${(data as any).taluk ? `${(data as any).taluk}, ` : ''}${data.district || ''}, ${data.state || ''} - ${data.pincode || ''}`,
         latitude: data.location?.latitude || 0,
         longitude: data.location?.longitude || 0
       },

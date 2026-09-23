@@ -399,9 +399,12 @@ export const AgentOnboardedVendorsModal: React.FC<AgentOnboardedVendorsModalProp
                       <span className="flex items-center gap-1"><User className="w-3.5 h-3.5 text-slate-400" /> {vendor.ownerName}</span>
                       <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5 text-slate-400" /> {vendor.phone ? `+91 ${vendor.phone}` : 'N/A'}</span>
                       {vendor.email && <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5 text-slate-400" /> {vendor.email}</span>}
-                      <span className="flex items-center gap-1 text-purple-700 font-bold">
-                        <MapPin className="w-3.5 h-3.5 text-purple-600" />
-                        District: {vendor.district} • Division: {vendor.division} • PIN: {vendor.pincode}
+                    </div>
+
+                    <div className="text-[11px] text-slate-700 bg-slate-50 border border-slate-200/80 p-2 rounded-xl flex items-start gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-purple-600 shrink-0 mt-0.5" />
+                      <span className="font-bold">
+                        {vendor.fullAddress || `District: ${vendor.district}, Division: ${vendor.division}, ${vendor.state} - PIN: ${vendor.pincode}`}
                       </span>
                     </div>
 

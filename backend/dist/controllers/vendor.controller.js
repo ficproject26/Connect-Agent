@@ -9,6 +9,7 @@ const zod_1 = require("zod");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const Vendor_1 = __importDefault(require("../models/Vendor"));
 const territoryScope_1 = require("../utils/territoryScope");
+const territoryValidation_1 = require("../utils/territoryValidation");
 const createVendorSchema = zod_1.z.object({
     businessName: zod_1.z.string().optional(),
     name: zod_1.z.string().optional(),
@@ -123,6 +124,42 @@ const createVendor = async (req, res) => {
         if (data.email) {
             data.email = data.email.toLowerCase().trim();
         }
+        // 1. Strict field format validation
+        const fieldValidation = (0, territoryValidation_1.validateVendorFieldFormats)({
+            phone: data.phone,
+            email: data.email,
+            panNumber: data.panNumber || data.pan,
+            aadhaarNumber: data.aadhaarNumber || data.aadhaar,
+            pincode: data.pincode
+        });
+        if (!fieldValidation.valid) {
+            return res.status(400).json({ message: fieldValidation.error });
+        }
+        // 2. Fetch Logged-in Agent's Approved Territory Scope
+        const scope = await (0, territoryScope_1.getAgentTerritoryScope)(agentId);
+        if (!scope) {
+            return res.status(403).json({ message: 'Agent territory profile could not be determined.' });
+        }
+        // 3. Security Check: Verify Requested Territory Belongs to Agent's Allowed Jurisdiction
+        const jurisdiction = (0, territoryValidation_1.validateAgentJurisdiction)(scope, {
+            state: data.state,
+            district: data.district,
+            division: data.division,
+            pincode: data.pincode
+        });
+        if (!jurisdiction.valid) {
+            return res.status(403).json({ message: jurisdiction.error });
+        }
+        // 4. Geographic Consistency Check
+        const geoConsistency = (0, territoryValidation_1.validateGeographicConsistency)({
+            state: data.state,
+            district: data.district,
+            division: data.division,
+            pincode: data.pincode
+        });
+        if (!geoConsistency.consistent) {
+            return res.status(400).json({ message: geoConsistency.error });
+        }
         const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
         const randDigits = Math.floor(1000 + Math.random() * 9000);
         const generatedRegId = `REG-${dateStr}-${randDigits}`;
@@ -131,7 +168,7 @@ const createVendor = async (req, res) => {
             businessName: data.businessName || data.name || 'Merchant Store',
             ownerName: data.ownerName || data.contactPerson || 'Merchant Owner',
             location: {
-                address: data.location?.address || `${data.district || ''}, ${data.state || ''} ${data.pincode || ''}`,
+                address: data.location?.address || `${data.buildingNo ? `${data.buildingNo}, ` : ''}${data.streetName ? `${data.streetName}, ` : ''}${data.postOffice ? `${data.postOffice}, ` : ''}${data.taluk ? `${data.taluk}, ` : ''}${data.district || ''}, ${data.state || ''} - ${data.pincode || ''}`,
                 latitude: data.location?.latitude || 0,
                 longitude: data.location?.longitude || 0
             },
