@@ -217,18 +217,31 @@ const assignTarget = async (req, res) => {
     }
 };
 exports.assignTarget = assignTarget;
-// GET /api/targets/assignments/mine — list assignments for the current agent
+// GET /api/targets/assignments/mine — list assignments for the current agent and authorized territory
 const getMyAssignments = async (req, res) => {
     try {
         const agentId = req.agent?.agentId;
         if (!agentId)
             return res.status(401).json({ message: 'Unauthorized' });
-        const { page = '1', limit = '20', status } = req.query;
-        const pageNum = parseInt(page, 10);
-        const limitNum = parseInt(limit, 10);
-        const filter = {
+        const { page = '1', limit = '50', status } = req.query;
+        const pageNum = parseInt(page, 10) || 1;
+        const limitNum = parseInt(limit, 10) || 50;
+        let filter = {
             $or: [{ assignedTo: agentId }, { assignedBy: agentId }]
         };
+        const scope = await (0, territoryScope_1.getAgentTerritoryScope)(agentId);
+        if (scope && ['state', 'district', 'division'].includes(scope.role)) {
+            const territoryFilter = (0, territoryScope_1.buildTerritoryFilter)(scope);
+            const subordinates = await Agent_1.default.find(territoryFilter).select('_id').lean();
+            const subordinateIds = subordinates.map(s => s._id);
+            filter = {
+                $or: [
+                    { assignedTo: agentId },
+                    { assignedBy: agentId },
+                    { assignedTo: { $in: subordinateIds } }
+                ]
+            };
+        }
         if (status)
             filter.status = status;
         const total = await TargetAssignment_1.default.countDocuments(filter);

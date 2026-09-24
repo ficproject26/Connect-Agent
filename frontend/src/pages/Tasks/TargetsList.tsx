@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardBody, Button, Modal } from '../../components/ui';
-import { Target, CheckCircle2, Calendar, Check, MapPin, Loader2, Plus, Users, Award, Eye, Building2 } from 'lucide-react';
+import { Target, CheckCircle2, Calendar, Check, MapPin, Loader2, Plus, Users, Award, Eye, Building2, RotateCcw, AlertCircle } from 'lucide-react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -16,6 +16,8 @@ interface Allocation {
   taskDescription: string;
   targetValue?: number;
   achievedValue?: number;
+  assignedToRole?: string;
+  assignedToName?: string;
 }
 
 export const TargetsList: React.FC = () => {
@@ -37,9 +39,62 @@ export const TargetsList: React.FC = () => {
   }, [user]);
 
   const queryClient = useQueryClient();
-  const [allocations, setAllocations] = useState<Allocation[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMsg, setErrorMsg] = useState('');
+
+  // Target Assignments Query with full lifecycle (Loading -> Success / Empty / Error)
+  const {
+    data: assignmentsData,
+    isLoading,
+    isFetching,
+    isError,
+    error: queryError,
+    refetch
+  } = useQuery({
+    queryKey: ['targetAssignmentsMine', user?._id],
+    queryFn: async () => {
+      try {
+        const response = await api.get('/targets/assignments/mine');
+        return response.data?.assignments || [];
+      } catch (err: any) {
+        console.error('Target assignments fetch error:', err?.response?.data || err.message);
+        throw err;
+      }
+    },
+    staleTime: 15000,
+    refetchInterval: 45000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true
+  });
+
+  // Map real backend API data to UI Allocation format
+  const allocations: Allocation[] = useMemo(() => {
+    if (!assignmentsData || !Array.isArray(assignmentsData)) return [];
+
+    return assignmentsData.map((a: any) => {
+      const isMine = String(a.assignedTo?._id || a.assignedTo) === String(user?._id);
+      const assigneeName = a.assignedTo?.name ? `${a.assignedTo.name} (${a.assignedTo.role || 'Agent'})` : '';
+      const loc = isMine
+        ? `PIN ${userPincode || a.assignedTo?.territory?.pincode || ''} (${userDivision || a.assignedTo?.territory?.division || ''})`
+        : `Assigned to: ${assigneeName}`;
+
+      const assignedRole = (a.assignedTo?.role || '').toLowerCase();
+
+      return {
+        _id: a._id,
+        vendorName: a.target?.title || 'Merchant Onboarding Target',
+        location: loc,
+        dueDate: a.dueDate
+          ? `${new Date(a.dueDate).toLocaleDateString()} ${new Date(a.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+          : 'Ongoing',
+        status: a.status || 'assigned',
+        priority: a.target?.type === 'daily' ? 'high' : 'medium',
+        taskDescription: a.target?.description || `Quota goal of ${a.target?.targetValue || 20} shops.`,
+        targetValue: a.target?.targetValue || 20,
+        achievedValue: a.status === 'completed' ? (a.target?.targetValue || 20) : (a.achievedValue || 0),
+        assignedToRole: assignedRole,
+        assignedToName: a.assignedTo?.name || ''
+      };
+    });
+  }, [assignmentsData, user?._id, userPincode, userDivision]);
 
   // Modals state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -154,47 +209,6 @@ export const TargetsList: React.FC = () => {
     }
   }, [isCreateModalOpen, userRole, userDistrict, userDivision, userPincode]);
 
-  // Target Assignments Query
-  useQuery({
-    queryKey: ['targetAssignmentsMine', user?._id],
-    queryFn: async () => {
-      try {
-        const response = await api.get('/targets/assignments/mine');
-        const backendAssignments = response.data?.assignments || [];
-        
-        const mapped: Allocation[] = backendAssignments.map((a: any) => {
-          const isMine = String(a.assignedTo?._id || a.assignedTo) === String(user?._id);
-          const assigneeName = a.assignedTo?.name ? `${a.assignedTo.name} (${a.assignedTo.role || 'Agent'})` : '';
-          const loc = isMine
-            ? `PIN ${userPincode || a.assignedTo?.territory?.pincode || ''} (${userDivision || a.assignedTo?.territory?.division || ''})`
-            : `Assigned to: ${assigneeName}`;
-          return {
-            _id: a._id,
-            vendorName: a.target?.title || 'Merchant Onboarding Target',
-            location: loc,
-            dueDate: a.dueDate ? (new Date(a.dueDate).toLocaleDateString() + ' ' + new Date(a.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })) : 'Ongoing',
-            status: a.status || 'assigned',
-            priority: a.target?.type === 'daily' ? 'high' : 'medium',
-            taskDescription: a.target?.description || `Quota goal of ${a.target?.targetValue || 20} shops.`,
-            targetValue: a.target?.targetValue || 20,
-            achievedValue: a.status === 'completed' ? (a.target?.targetValue || 20) : (a.achievedValue || 0)
-          };
-        });
-
-        setAllocations(mapped);
-        setIsLoading(false);
-        return response.data;
-      } catch (err: any) {
-        setIsLoading(false);
-        return null;
-      }
-    },
-    staleTime: 30000,
-    refetchInterval: 45000,
-    refetchIntervalInBackground: false,
-    refetchOnWindowFocus: true
-  });
-
   const handleCreateTargetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title || !isManager) return;
@@ -213,17 +227,16 @@ export const TargetsList: React.FC = () => {
         dueDate: endDate
       });
       await queryClient.invalidateQueries({ queryKey: ['targetAssignmentsMine'] });
-    } catch (e) {
-      console.error('Target allocation error:', e);
+      setIsCreateModalOpen(false);
+      setTitle('');
+      setDescription('');
+      setTargetValue(20);
+    } catch (e: any) {
+      console.error('Target allocation error:', e?.response?.data || e.message);
+      alert(e?.response?.data?.message || 'Failed to allocate target. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setIsCreateModalOpen(false);
-    setIsSubmitting(false);
-    
-    // Reset form
-    setTitle('');
-    setDescription('');
-    setTargetValue(20);
   };
 
   const [activeTab, setActiveTab] = useState<string>(() => {
@@ -235,25 +248,35 @@ export const TargetsList: React.FC = () => {
 
   const [selectedTargetProgress, setSelectedTargetProgress] = useState<Allocation | null>(null);
 
-  const getFilteredAllocations = () => {
+  const currentTasks = useMemo(() => {
     if (activeTab === 'completed') {
       return allocations.filter(a => a.status === 'completed');
     }
     if (activeTab === 'district_allocations') {
-      return allocations.filter(a => a.status !== 'completed' && (a.taskDescription?.toLowerCase().includes('district') || a.location?.toLowerCase().includes('district')));
+      return allocations.filter(a => a.status !== 'completed' && (
+        a.assignedToRole === 'district' ||
+        a.taskDescription?.toLowerCase().includes('district') ||
+        a.location?.toLowerCase().includes('district')
+      ));
     }
     if (activeTab === 'division_allocations') {
-      return allocations.filter(a => a.status !== 'completed' && (a.taskDescription?.toLowerCase().includes('division') || a.location?.toLowerCase().includes('division')));
+      return allocations.filter(a => a.status !== 'completed' && (
+        a.assignedToRole === 'division' ||
+        a.taskDescription?.toLowerCase().includes('division') ||
+        a.location?.toLowerCase().includes('division')
+      ));
     }
     if (activeTab === 'my_pincode_targets') {
       return allocations.filter(a => a.status !== 'completed');
     }
     // Default: pincode_allocations
-    return allocations.filter(a => a.status !== 'completed' && !a.taskDescription?.toLowerCase().includes('district agent') && !a.taskDescription?.toLowerCase().includes('division agent'));
-  };
+    return allocations.filter(a => a.status !== 'completed' && (
+      a.assignedToRole === 'pincode' ||
+      (!a.assignedToRole && !a.taskDescription?.toLowerCase().includes('district') && !a.taskDescription?.toLowerCase().includes('division'))
+    ));
+  }, [allocations, activeTab]);
 
-  const currentTasks = getFilteredAllocations();
-  const completedCount = allocations.filter(a => a.status === 'completed').length;
+  const completedCount = useMemo(() => allocations.filter(a => a.status === 'completed').length, [allocations]);
   const progressPercent = allocations.length ? Math.round((completedCount / allocations.length) * 100) : 0;
 
   return (
@@ -304,6 +327,18 @@ export const TargetsList: React.FC = () => {
               <span className="absolute text-[10px] font-black text-slate-800">{progressPercent}</span>
             </div>
           </div>
+
+          {/* Refresh Button */}
+          <button
+            type="button"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-[#864f19] bg-[#fbf9f8] hover:bg-[#eae8e7] border border-[#d7c3b5] rounded-xl transition cursor-pointer disabled:opacity-60"
+            title="Refresh allocations"
+          >
+            <RotateCcw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
+          </button>
 
           {/* Only Managers can assign new targets. Pincode Agents cannot create or assign targets */}
           {isManager && (
@@ -375,10 +410,30 @@ export const TargetsList: React.FC = () => {
         </button>
       </div>
 
-      {/* Task Cards Grid */}
+      {/* Task Content / Error / Empty States */}
       {isLoading ? (
-        <div className="flex justify-center items-center py-12">
+        <div className="flex flex-col justify-center items-center py-16 space-y-3">
           <Loader2 className="w-8 h-8 text-[#864f19] animate-spin" />
+          <p className="text-xs text-slate-500 font-semibold">Loading target allocations...</p>
+        </div>
+      ) : isError ? (
+        <div className="bg-red-50/80 border border-red-200 p-8 rounded-[20px] text-center space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mx-auto">
+            <AlertCircle className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="text-sm font-black text-red-900">Unable to load targets</p>
+            <p className="text-xs text-red-600 mt-1 font-medium">
+              We encountered a problem fetching your target allocations. Please check your connection and try again.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            onClick={() => refetch()}
+            className="mt-2 text-xs font-bold text-red-700 border-red-300 hover:bg-red-100/60 inline-flex items-center gap-1.5 cursor-pointer"
+          >
+            <RotateCcw className="w-3.5 h-3.5" /> Retry
+          </Button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -388,9 +443,13 @@ export const TargetsList: React.FC = () => {
                 <Target className="w-6 h-6" />
               </div>
               <div>
-                <p className="text-sm font-black text-slate-800">No target allocations found for this view.</p>
+                <p className="text-sm font-black text-slate-800">
+                  {allocations.length === 0 ? 'No Targets Assigned' : 'No target allocations found for this view.'}
+                </p>
                 <p className="text-xs text-slate-500 font-medium mt-1">
-                  {isManager ? 'Assign shop tie-up targets to downstream agents across your authorized territory.' : 'Your assigned quota goals will be listed here once allocated by your Division Manager.'}
+                  {allocations.length === 0
+                    ? "You don't have any active targets or task allocations yet."
+                    : (isManager ? 'No allocations found in this category. You can assign new targets using the button above.' : 'No active targets found in this view.')}
                 </p>
               </div>
             </div>

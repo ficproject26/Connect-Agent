@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
+import mongoose from 'mongoose';
 import Target from '../models/Target';
 import TargetAssignment from '../models/TargetAssignment';
 import Agent from '../models/Agent';
@@ -228,19 +229,35 @@ export const assignTarget = async (req: Request, res: Response) => {
   }
 };
 
-// GET /api/targets/assignments/mine — list assignments for the current agent
+// GET /api/targets/assignments/mine — list assignments for the current agent and authorized territory
 export const getMyAssignments = async (req: Request, res: Response) => {
   try {
     const agentId = (req as any).agent?.agentId;
     if (!agentId) return res.status(401).json({ message: 'Unauthorized' });
 
-    const { page = '1', limit = '20', status } = req.query;
-    const pageNum = parseInt(page as string, 10);
-    const limitNum = parseInt(limit as string, 10);
+    const { page = '1', limit = '50', status } = req.query;
+    const pageNum = parseInt(page as string, 10) || 1;
+    const limitNum = parseInt(limit as string, 10) || 50;
 
-    const filter: Record<string, unknown> = {
+    let filter: Record<string, unknown> = {
       $or: [{ assignedTo: agentId }, { assignedBy: agentId }]
     };
+
+    const scope = await getAgentTerritoryScope(agentId);
+    if (scope && ['state', 'district', 'division'].includes(scope.role)) {
+      const territoryFilter = buildTerritoryFilter(scope);
+      const subordinates = await Agent.find(territoryFilter).select('_id').lean();
+      const subordinateIds = subordinates.map(s => s._id);
+
+      filter = {
+        $or: [
+          { assignedTo: agentId },
+          { assignedBy: agentId },
+          { assignedTo: { $in: subordinateIds } }
+        ]
+      };
+    }
+
     if (status) filter.status = status;
 
     const total = await TargetAssignment.countDocuments(filter);
