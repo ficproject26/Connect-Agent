@@ -11,28 +11,10 @@ const generateTxId = () => `TXN-${Math.random().toString(36).substr(2, 9).toUppe
 const getOrCreateWallet = async (agentId) => {
     let wallet = await Wallet_1.default.findOne({ agent: agentId });
     if (!wallet) {
-        // Let's seed a new wallet with ₹5,000 balance and some initial credit transactions so they see data
         wallet = new Wallet_1.default({
             agent: agentId,
-            balance: 5000,
-            transactions: [
-                {
-                    transactionId: generateTxId(),
-                    amount: 3000,
-                    type: 'credit',
-                    description: 'Weekly merchant onboarding target completion bonus',
-                    status: 'completed',
-                    createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) // 3 days ago
-                },
-                {
-                    transactionId: generateTxId(),
-                    amount: 2000,
-                    type: 'credit',
-                    description: 'Onboarding reward bonus',
-                    status: 'completed',
-                    createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000) // 5 days ago
-                }
-            ]
+            balance: 0,
+            transactions: []
         });
         await wallet.save();
     }

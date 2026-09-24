@@ -25,6 +25,9 @@ export interface AgentNode {
   tieupsToday?: number;
   tieupsYesterday?: number;
   totalTieups?: number;
+  totalOnboardedShops?: number;
+  completedTargets?: number;
+  assignedTargets?: number;
   districtAgentsCount?: number;
   divisionAgentsCount?: number;
   pincodeAgentsCount?: number;
@@ -1096,7 +1099,7 @@ export const AgentManagement: React.FC = () => {
                       <div className="flex flex-wrap items-center gap-4">
                         <div className="text-right">
                           <p className="text-[8px] uppercase font-bold text-slate-400">Vendors</p>
-                          <p className="text-xs font-black text-slate-800">{pin.totalOnboardedShops || metrics.totalVendors || 0} Vendors</p>
+                          <p className="text-xs font-black text-slate-800">{pin.totalOnboardedShops || pin.totalTieups || metrics.totalTieups || 0} Vendors</p>
                         </div>
                         <div className="text-right border-l border-slate-200 pl-3">
                           <p className="text-[8px] uppercase font-bold text-slate-400">Target Progress</p>
@@ -1248,11 +1251,11 @@ export const AgentManagement: React.FC = () => {
                       </div>
                       <div className="bg-amber-50/70 p-3.5 rounded-2xl border border-amber-200">
                         <p className="text-[9px] uppercase font-extrabold text-amber-800">Pincodes Managed</p>
-                        <p className="text-base font-black text-amber-950 mt-0.5">{selMetrics.pinCount || 4} Pincodes</p>
+                        <p className="text-base font-black text-amber-950 mt-0.5">{selMetrics.pinCount || 0} Pincodes</p>
                       </div>
                       <div className="bg-blue-50/70 p-3.5 rounded-2xl border border-blue-200">
                         <p className="text-[9px] uppercase font-extrabold text-blue-800">Pincode Agents</p>
-                        <p className="text-base font-black text-blue-950 mt-0.5">{selMetrics.pinCount || 4} Agents</p>
+                        <p className="text-base font-black text-blue-950 mt-0.5">{selMetrics.pinCount || 0} Agents</p>
                       </div>
                       <div className="bg-[#fbf9f8] p-3.5 rounded-2xl border border-[#d7c3b5]/30">
                         <p className="text-[9px] uppercase font-extrabold text-[#52443a]">Targets Achieved</p>

@@ -15,6 +15,7 @@ interface Allocation {
   priority: 'high' | 'medium' | 'low';
   taskDescription: string;
   targetValue?: number;
+  achievedValue?: number;
 }
 
 export const TargetsList: React.FC = () => {
@@ -35,29 +36,8 @@ export const TargetsList: React.FC = () => {
     return user?._id || user?.email ? `connect_portal_target_allocations_${user._id || user.email?.toLowerCase()}` : 'connect_portal_target_allocations';
   }, [user]);
 
-  const [allocations, setAllocations] = useState<Allocation[]>(() => {
-    try {
-      const userKey = user?._id || user?.email ? `connect_portal_target_allocations_${user._id || user.email?.toLowerCase()}` : 'connect_portal_target_allocations';
-      const saved = localStorage.getItem(userKey);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {}
-    return [];
-  });
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(userTargetsKey);
-      if (saved) {
-        setAllocations(JSON.parse(saved));
-      } else {
-        setAllocations([]);
-      }
-    } catch (e) {}
-  }, [userTargetsKey]);
-
+  const queryClient = useQueryClient();
+  const [allocations, setAllocations] = useState<Allocation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -174,38 +154,38 @@ export const TargetsList: React.FC = () => {
     }
   }, [isCreateModalOpen, userRole, userDistrict, userDivision, userPincode]);
 
-  // Target Assignments Query (5s automatic real-time background refresh)
+  // Target Assignments Query
   useQuery({
-    queryKey: ['targetAssignmentsMine', userTargetsKey],
+    queryKey: ['targetAssignmentsMine', user?._id],
     queryFn: async () => {
       try {
         const response = await api.get('/targets/assignments/mine');
-        const backendAssignments = response.data.assignments || [];
+        const backendAssignments = response.data?.assignments || [];
         
-        if (backendAssignments.length > 0) {
-          const mapped: Allocation[] = backendAssignments.map((a: any) => ({
+        const mapped: Allocation[] = backendAssignments.map((a: any) => {
+          const isMine = String(a.assignedTo?._id || a.assignedTo) === String(user?._id);
+          const assigneeName = a.assignedTo?.name ? `${a.assignedTo.name} (${a.assignedTo.role || 'Agent'})` : '';
+          const loc = isMine
+            ? `PIN ${userPincode || a.assignedTo?.territory?.pincode || ''} (${userDivision || a.assignedTo?.territory?.division || ''})`
+            : `Assigned to: ${assigneeName}`;
+          return {
             _id: a._id,
             vendorName: a.target?.title || 'Merchant Onboarding Target',
-            location: `PIN ${userPincode} (${userDivision})`,
-            dueDate: new Date(a.dueDate).toLocaleDateString() + ' ' + new Date(a.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            status: a.status,
+            location: loc,
+            dueDate: a.dueDate ? (new Date(a.dueDate).toLocaleDateString() + ' ' + new Date(a.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })) : 'Ongoing',
+            status: a.status || 'assigned',
             priority: a.target?.type === 'daily' ? 'high' : 'medium',
-            taskDescription: a.target?.description || 'Achieve merchant onboarding quota target goal.',
-            targetValue: a.target?.targetValue || 20
-          }));
+            taskDescription: a.target?.description || `Quota goal of ${a.target?.targetValue || 20} shops.`,
+            targetValue: a.target?.targetValue || 20,
+            achievedValue: a.status === 'completed' ? (a.target?.targetValue || 20) : (a.achievedValue || 0)
+          };
+        });
 
-          setAllocations(prev => {
-            const apiIds = new Set(mapped.map(m => m._id));
-            const localOnly = prev.filter(p => !apiIds.has(p._id));
-            const combined = [...localOnly, ...mapped];
-            try {
-              localStorage.setItem(userTargetsKey, JSON.stringify(combined));
-            } catch (e) {}
-            return combined;
-          });
-        }
+        setAllocations(mapped);
+        setIsLoading(false);
         return response.data;
       } catch (err: any) {
+        setIsLoading(false);
         return null;
       }
     },
@@ -220,43 +200,23 @@ export const TargetsList: React.FC = () => {
     if (!title || !isManager) return;
 
     setIsSubmitting(true);
-    const assignedAgentObj = candidateAgents.find(a => a.name === selectedAgent) || candidateAgents[0] || { name: selectedAgent || 'Agent', role: agentType + ' Agent', territory: 'Assigned Territory' };
-
-    const newAlloc: Allocation = {
-      _id: `TSK-${Math.floor(1000 + Math.random() * 9000)}`,
-      vendorName: title,
-      location: `Assigned to: ${assignedAgentObj.name} (${assignedAgentObj.territory})`,
-      dueDate: `${startDate} to ${endDate}`,
-      status: 'assigned',
-      priority: type === 'daily' ? 'high' : 'medium',
-      taskDescription: description || `${targetMetric === 'shop_tieups' ? 'Shop Tie-ups' : 'Vendor Onboarding'} quota goal of ${targetValue} shops. Assigned to ${assignedAgentObj.name} (${assignedAgentObj.role}).`,
-      targetValue
-    };
+    const assignedAgentObj = candidateAgents.find(a => a.name === selectedAgent) || candidateAgents[0];
 
     try {
-      await api.post('/targets', {
+      await api.post('/targets/allocate', {
         title,
-        description,
+        description: description || `${targetMetric === 'shop_tieups' ? 'Shop Tie-ups' : 'Vendor Onboarding'} quota goal of ${targetValue} shops.`,
         type,
         targetValue,
-        assignedAgent: assignedAgentObj.name,
-        agentRole: assignedAgentObj.role,
-        agentTerritory: assignedAgentObj.territory,
-        pincode: selectedPincode,
-        startDate,
-        endDate
+        assignedTo: assignedAgentObj?.id,
+        divisionName: selectedDivision,
+        dueDate: endDate
       });
+      await queryClient.invalidateQueries({ queryKey: ['targetAssignmentsMine'] });
     } catch (e) {
-      console.log('Simulated local target creation');
+      console.error('Target allocation error:', e);
     }
 
-    setAllocations(prev => {
-      const updated = [newAlloc, ...prev];
-      try {
-        localStorage.setItem(userTargetsKey, JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
     setIsCreateModalOpen(false);
     setIsSubmitting(false);
     
@@ -437,9 +397,9 @@ export const TargetsList: React.FC = () => {
           ) : (
             currentTasks.map((task) => {
               const assignedVal = task.targetValue || 20;
-              const achievedVal = task.status === 'completed' ? assignedVal : Math.min(8, assignedVal);
+              const achievedVal = task.status === 'completed' ? assignedVal : (task.achievedValue || 0);
               const remainingVal = Math.max(0, assignedVal - achievedVal);
-              const pctVal = Math.round((achievedVal / assignedVal) * 100);
+              const pctVal = assignedVal > 0 ? Math.round((achievedVal / assignedVal) * 100) : 0;
 
               return (
                 <Card key={task._id} className="relative overflow-hidden flex flex-col justify-between">
@@ -537,19 +497,27 @@ export const TargetsList: React.FC = () => {
             <div className="grid grid-cols-4 gap-2 text-center">
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
                 <span className="text-[9px] uppercase font-bold text-slate-400 block">Assigned</span>
-                <span className="text-lg font-black text-slate-900">{selectedTargetProgress.targetValue || 20}</span>
+                <span className="text-lg font-black text-slate-900">{selectedTargetProgress.targetValue || 0}</span>
               </div>
               <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-200">
                 <span className="text-[9px] uppercase font-bold text-emerald-700 block">Achieved</span>
-                <span className="text-lg font-black text-emerald-800">8</span>
+                <span className="text-lg font-black text-emerald-800">
+                  {selectedTargetProgress.status === 'completed' ? (selectedTargetProgress.targetValue || 0) : (selectedTargetProgress.achievedValue || 0)}
+                </span>
               </div>
               <div className="bg-amber-50 p-3 rounded-xl border border-amber-200">
                 <span className="text-[9px] uppercase font-bold text-amber-700 block">Remaining</span>
-                <span className="text-lg font-black text-amber-800">12</span>
+                <span className="text-lg font-black text-amber-800">
+                  {Math.max(0, (selectedTargetProgress.targetValue || 0) - (selectedTargetProgress.status === 'completed' ? (selectedTargetProgress.targetValue || 0) : (selectedTargetProgress.achievedValue || 0)))}
+                </span>
               </div>
               <div className="bg-blue-50 p-3 rounded-xl border border-blue-200">
                 <span className="text-[9px] uppercase font-bold text-blue-700 block">Progress</span>
-                <span className="text-lg font-black text-blue-800">40%</span>
+                <span className="text-lg font-black text-blue-800">
+                  {(selectedTargetProgress.targetValue || 0) > 0
+                    ? `${Math.round(((selectedTargetProgress.status === 'completed' ? (selectedTargetProgress.targetValue || 0) : (selectedTargetProgress.achievedValue || 0)) / (selectedTargetProgress.targetValue || 1)) * 100)}%`
+                    : '0%'}
+                </span>
               </div>
             </div>
 

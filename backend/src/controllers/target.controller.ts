@@ -238,13 +238,16 @@ export const getMyAssignments = async (req: Request, res: Response) => {
     const pageNum = parseInt(page as string, 10);
     const limitNum = parseInt(limit as string, 10);
 
-    const filter: Record<string, unknown> = { assignedTo: agentId };
+    const filter: Record<string, unknown> = {
+      $or: [{ assignedTo: agentId }, { assignedBy: agentId }]
+    };
     if (status) filter.status = status;
 
     const total = await TargetAssignment.countDocuments(filter);
     const assignments = await TargetAssignment.find(filter)
       .populate('target', 'title description type targetValue')
       .populate('assignedBy', 'name email role')
+      .populate('assignedTo', 'name email role territory')
       .sort({ createdAt: -1 })
       .skip((pageNum - 1) * limitNum)
       .limit(limitNum)
