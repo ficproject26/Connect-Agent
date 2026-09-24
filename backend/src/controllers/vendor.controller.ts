@@ -4,6 +4,7 @@ import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import Vendor from '../models/Vendor';
 import { getAgentTerritoryScope, buildVendorScopeFilter } from '../utils/territoryScope';
+import { cacheService } from '../services/cache.service';
 import {
   validateAgentJurisdiction,
   validateGeographicConsistency,
@@ -143,6 +144,7 @@ export const getVendors = async (req: Request, res: Response) => {
     const finalFilter = filterConditions.length === 1 ? filterConditions[0] : { $and: filterConditions };
 
     const rawVendors = await Vendor.find(finalFilter)
+      .select('businessName ownerName phone email category storeType gst state district division pincode kycStatus location status documents assignedAgent joiningType createdVia registrationSource agentId onboardedBy agentName agentRegistrationId registrationId role createdAt updatedAt')
       .populate('assignedAgent', 'name email role')
       .sort({ createdAt: -1 })
       .lean();
@@ -355,6 +357,12 @@ export const createVendor = async (req: Request, res: Response) => {
     } catch (syncErr) {
       console.error('Error syncing vendor to admin users collection:', syncErr);
     }
+    // Invalidate dashboard and hierarchy caches on new vendor onboarding
+    await Promise.all([
+      cacheService.delByPrefix('dashboard:'),
+      cacheService.delByPrefix('hierarchy:')
+    ]);
+
     return res.status(201).json({ message: 'Vendor created successfully', vendor });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
@@ -380,6 +388,13 @@ export const updateVendor = async (req: Request, res: Response) => {
     ).populate('category', 'name');
 
     if (!vendor) return res.status(404).json({ message: 'Vendor not found' });
+
+    // Invalidate dashboard and hierarchy caches
+    await Promise.all([
+      cacheService.delByPrefix('dashboard:'),
+      cacheService.delByPrefix('hierarchy:')
+    ]);
+
     return res.status(200).json({ message: 'Vendor updated', vendor });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
@@ -409,6 +424,13 @@ export const updateVendorStatus = async (req: Request, res: Response) => {
     ).populate('category', 'name');
 
     if (!vendor) return res.status(404).json({ message: 'Vendor not found' });
+
+    // Invalidate dashboard and hierarchy caches
+    await Promise.all([
+      cacheService.delByPrefix('dashboard:'),
+      cacheService.delByPrefix('hierarchy:')
+    ]);
+
     return res.status(200).json({ message: 'Vendor status updated', vendor });
   } catch (error) {
     console.error('Update vendor status error:', error);

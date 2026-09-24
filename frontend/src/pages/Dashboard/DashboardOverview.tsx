@@ -1,10 +1,10 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { useAuth } from '../../context/AuthContext';
 
-import StateDashboard from './StateAgent/StateDashboard';
-import DivisionDashboard from './DivisionAgent/DivisionDashboard';
-import DistrictDashboard from './DistrictAgent/DistrictDashboard';
-import PincodeDashboard from './PincodeAgent/PincodeDashboard';
+const StateDashboard = lazy(() => import('./StateAgent/StateDashboard'));
+const DivisionDashboard = lazy(() => import('./DivisionAgent/DivisionDashboard'));
+const DistrictDashboard = lazy(() => import('./DistrictAgent/DistrictDashboard'));
+const PincodeDashboard = lazy(() => import('./PincodeAgent/PincodeDashboard'));
 
 export const DashboardOverview: React.FC = () => {
   const { user } = useAuth();
@@ -28,7 +28,18 @@ export const DashboardOverview: React.FC = () => {
 
   return (
     <div className="w-full">
-      {renderDashboard()}
+      <Suspense
+        fallback={
+          <div className="flex flex-col items-center justify-center min-h-[40vh] space-y-3">
+            <div className="animate-spin rounded-full h-8 w-8 border-3 border-[#864f19] border-t-transparent" />
+            <span className="text-xs font-semibold text-slate-400 font-sans tracking-wide">
+              Loading dashboard overview...
+            </span>
+          </div>
+        }
+      >
+        {renderDashboard()}
+      </Suspense>
     </div>
   );
 };

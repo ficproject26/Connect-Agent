@@ -102,21 +102,17 @@ export const TicketsList: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    loadTicketData(true);
-  }, [activeRole]);
-
-  // Silent 45s background auto-refresh with tab visibility management
-  useQuery({
+  // Coordinated useQuery for tickets fetching and caching, eliminating duplicate mount requests
+  const { refetch: refetchTickets } = useQuery({
     queryKey: ['ticketsListLive', activeRole],
     queryFn: async () => {
-      await loadTicketData(false);
+      await loadTicketData(tickets.length === 0);
       return true;
     },
-    staleTime: 30000,
-    refetchInterval: 45000,
+    staleTime: 60000,
+    refetchInterval: false,
     refetchIntervalInBackground: false,
-    refetchOnWindowFocus: true
+    refetchOnWindowFocus: false
   });
 
   const handleAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {

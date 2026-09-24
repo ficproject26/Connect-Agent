@@ -110,7 +110,7 @@ export const getFieldVisits = async (req: Request, res: Response) => {
       filter.agent = agentId;
     } else {
       const territoryFilter = buildTerritoryFilter(scope);
-      const subordinates = await Agent.find(territoryFilter).select('_id');
+      const subordinates = await Agent.find(territoryFilter).select('_id').lean();
       const allowedAgentIds = [agentId, ...subordinates.map(s => s._id.toString())];
       filter.agent = { $in: allowedAgentIds };
     }
@@ -123,7 +123,8 @@ export const getFieldVisits = async (req: Request, res: Response) => {
       .populate('vendor', 'storeName contactPerson phone pincode address district division state')
       .sort({ createdAt: -1 })
       .skip((pageNum - 1) * limitNum)
-      .limit(limitNum);
+      .limit(limitNum)
+      .lean();
 
     return res.status(200).json({
       visits,

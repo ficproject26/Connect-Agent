@@ -3,31 +3,62 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.invalidateAgentTerritoryScope = invalidateAgentTerritoryScope;
 exports.getAgentTerritoryScope = getAgentTerritoryScope;
 exports.buildTerritoryFilter = buildTerritoryFilter;
 exports.buildVendorScopeFilter = buildVendorScopeFilter;
 const mongoose_1 = __importDefault(require("mongoose"));
 const Agent_1 = __importDefault(require("../models/Agent"));
+const cache_service_1 = require("../services/cache.service");
+/**
+ * Invalidate cached territory scope when agent details change
+ */
+async function invalidateAgentTerritoryScope(agentId) {
+    if (!agentId)
+        return;
+    await cache_service_1.cacheService.del(`scope:${agentId}`);
+}
 /**
  * Fetch territory scope of the authenticated agent.
- * Checks both Agent model and fallback users collection.
+ * Checks cache first, then Agent model and fallback users collection using tight projections.
  */
 async function getAgentTerritoryScope(agentId) {
     if (!agentId)
         return null;
+    const cacheKey = `scope:${agentId}`;
     try {
-        let agent = await Agent_1.default.findById(agentId);
+        const cachedScope = await cache_service_1.cacheService.get(cacheKey);
+        if (cachedScope) {
+            return cachedScope;
+        }
+        let agent = await Agent_1.default.findById(agentId)
+            .select('role level territory state district division pincode assignedState assignedDistrict assignedDivision assignedPincode')
+            .lean();
         if (!agent) {
             const db = mongoose_1.default.connection.db;
             if (db) {
-                agent = await db.collection('users').findOne({ _id: agentId });
+                agent = await db.collection('users').findOne({ _id: agentId }, {
+                    projection: {
+                        role: 1,
+                        level: 1,
+                        territory: 1,
+                        state: 1,
+                        district: 1,
+                        division: 1,
+                        pincode: 1,
+                        assignedState: 1,
+                        assignedDistrict: 1,
+                        assignedDivision: 1,
+                        assignedPincode: 1
+                    }
+                });
             }
         }
         if (!agent)
             return null;
         const rawRole = (agent.role || agent.level || 'pincode').toLowerCase();
         const normalizedRole = rawRole === 'agent' ? (agent.level || 'pincode').toLowerCase() : rawRole;
-        return {
+        const scope = {
             role: normalizedRole,
             state: (agent.territory?.state || agent.state || agent.assignedState || '').trim(),
             district: (agent.territory?.district || agent.district || agent.assignedDistrict || '').trim(),
@@ -35,6 +66,9 @@ async function getAgentTerritoryScope(agentId) {
             pincode: (agent.territory?.pincode || agent.pincode || agent.assignedPincode || '').trim(),
             agentId: agent._id.toString()
         };
+        // Cache scope for 60 seconds
+        await cache_service_1.cacheService.set(cacheKey, scope, 60);
+        return scope;
     }
     catch (error) {
         console.error('Error fetching agent territory scope:', error);

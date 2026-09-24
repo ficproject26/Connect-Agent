@@ -9,6 +9,7 @@ const zod_1 = require("zod");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const Vendor_1 = __importDefault(require("../models/Vendor"));
 const territoryScope_1 = require("../utils/territoryScope");
+const cache_service_1 = require("../services/cache.service");
 const territoryValidation_1 = require("../utils/territoryValidation");
 const createVendorSchema = zod_1.z.object({
     businessName: zod_1.z.string().optional(),
@@ -142,6 +143,7 @@ const getVendors = async (req, res) => {
         }
         const finalFilter = filterConditions.length === 1 ? filterConditions[0] : { $and: filterConditions };
         const rawVendors = await Vendor_1.default.find(finalFilter)
+            .select('businessName ownerName phone email category storeType gst state district division pincode kycStatus location status documents assignedAgent joiningType createdVia registrationSource agentId onboardedBy agentName agentRegistrationId registrationId role createdAt updatedAt')
             .populate('assignedAgent', 'name email role')
             .sort({ createdAt: -1 })
             .lean();
@@ -337,6 +339,11 @@ const createVendor = async (req, res) => {
         catch (syncErr) {
             console.error('Error syncing vendor to admin users collection:', syncErr);
         }
+        // Invalidate dashboard and hierarchy caches on new vendor onboarding
+        await Promise.all([
+            cache_service_1.cacheService.delByPrefix('dashboard:'),
+            cache_service_1.cacheService.delByPrefix('hierarchy:')
+        ]);
         return res.status(201).json({ message: 'Vendor created successfully', vendor });
     }
     catch (error) {
@@ -358,6 +365,11 @@ const updateVendor = async (req, res) => {
         const vendor = await Vendor_1.default.findByIdAndUpdate(req.params.id, { ...data, updatedAt: new Date() }, { new: true, runValidators: true }).populate('category', 'name');
         if (!vendor)
             return res.status(404).json({ message: 'Vendor not found' });
+        // Invalidate dashboard and hierarchy caches
+        await Promise.all([
+            cache_service_1.cacheService.delByPrefix('dashboard:'),
+            cache_service_1.cacheService.delByPrefix('hierarchy:')
+        ]);
         return res.status(200).json({ message: 'Vendor updated', vendor });
     }
     catch (error) {
@@ -383,6 +395,11 @@ const updateVendorStatus = async (req, res) => {
         const vendor = await Vendor_1.default.findByIdAndUpdate(req.params.id, { status, updatedAt: new Date() }, { new: true }).populate('category', 'name');
         if (!vendor)
             return res.status(404).json({ message: 'Vendor not found' });
+        // Invalidate dashboard and hierarchy caches
+        await Promise.all([
+            cache_service_1.cacheService.delByPrefix('dashboard:'),
+            cache_service_1.cacheService.delByPrefix('hierarchy:')
+        ]);
         return res.status(200).json({ message: 'Vendor status updated', vendor });
     }
     catch (error) {

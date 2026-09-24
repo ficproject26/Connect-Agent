@@ -29,8 +29,12 @@ const ticketSchema = new mongoose_1.Schema({
     timestamps: true
 });
 ticketSchema.index({ creator: 1 });
+ticketSchema.index({ creator: 1, status: 1, createdAt: -1 });
 ticketSchema.index({ assignedTo: 1 });
-ticketSchema.index({ status: 1 });
+ticketSchema.index({ assignedTo: 1, status: 1, createdAt: -1 });
+ticketSchema.index({ status: 1, createdAt: -1 });
+ticketSchema.index({ state: 1, status: 1, createdAt: -1 });
+ticketSchema.index({ district: 1, status: 1, createdAt: -1 });
 ticketSchema.index({ priority: 1 });
 ticketSchema.index({ state: 1, district: 1, pincode: 1 });
 ticketSchema.index({ createdAt: -1 });

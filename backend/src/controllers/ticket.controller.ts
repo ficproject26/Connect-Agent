@@ -3,6 +3,7 @@ import { z } from 'zod';
 import Ticket from '../models/Ticket';
 import Agent from '../models/Agent';
 import { getAgentTerritoryScope } from '../utils/territoryScope';
+import { cacheService } from '../services/cache.service';
 
 // Simple unique ticket ID generator — format TKT-XXXXXX
 const generateTicketId = () =>
@@ -80,6 +81,7 @@ export const getTickets = async (req: Request, res: Response) => {
 
     const total = await Ticket.countDocuments(filter);
     const tickets = await Ticket.find(filter)
+      .select('ticketId creator creatorRole creatorName assignedTo assignedAgent vendorName storeName state district division pincode territory category description priority status attachmentName attachmentUrl resolutionDetails createdAt updatedAt')
       .populate('creator', 'name email role phone')
       .populate('assignedTo', 'name email role phone')
       .sort({ createdAt: -1 })
@@ -169,6 +171,9 @@ export const createTicket = async (req: Request, res: Response) => {
     await ticket.save();
     await ticket.populate('creator', 'name email role phone');
 
+    // Invalidate dashboard stats cache
+    await cacheService.delByPrefix('dashboard:');
+
     return res.status(201).json({ message: 'Support ticket created successfully', ticket });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
@@ -214,6 +219,9 @@ export const updateTicketStatus = async (req: Request, res: Response) => {
       { path: 'creator', select: 'name email role phone' },
       { path: 'assignedTo', select: 'name email role phone' }
     ]);
+
+    // Invalidate dashboard stats cache
+    await cacheService.delByPrefix('dashboard:');
 
     return res.status(200).json({ message: 'Ticket status updated', ticket });
   } catch (error) {

@@ -1,5 +1,5 @@
 import React from 'react';
-import agentHeroPng from '../../assets/agent_network_hero.png';
+import agentHeroWebp from '../../assets/agent_network_hero.webp';
 
 export const AgentNetworkHero: React.FC = () => {
   return (
@@ -10,7 +10,7 @@ export const AgentNetworkHero: React.FC = () => {
         loop
         muted
         playsInline
-        poster={agentHeroPng}
+        poster={agentHeroWebp}
         className="max-w-[85%] max-h-[85%] rounded-2xl object-contain block shadow-lg"
       />
     </div>

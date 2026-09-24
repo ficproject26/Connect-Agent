@@ -79,10 +79,10 @@ export const ReportsModule: React.FC = () => {
         return null;
       }
     },
-    staleTime: 30000,
-    refetchInterval: 45000,
+    staleTime: 60000,
+    refetchInterval: false,
     refetchIntervalInBackground: false,
-    refetchOnWindowFocus: true
+    refetchOnWindowFocus: false
   });
 
   const handleReportSubmit = async (e: React.FormEvent) => {

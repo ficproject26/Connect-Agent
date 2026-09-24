@@ -8,6 +8,7 @@ const zod_1 = require("zod");
 const Ticket_1 = __importDefault(require("../models/Ticket"));
 const Agent_1 = __importDefault(require("../models/Agent"));
 const territoryScope_1 = require("../utils/territoryScope");
+const cache_service_1 = require("../services/cache.service");
 // Simple unique ticket ID generator — format TKT-XXXXXX
 const generateTicketId = () => `TKT-${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
 const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -68,6 +69,7 @@ const getTickets = async (req, res) => {
             filter.priority = priority;
         const total = await Ticket_1.default.countDocuments(filter);
         const tickets = await Ticket_1.default.find(filter)
+            .select('ticketId creator creatorRole creatorName assignedTo assignedAgent vendorName storeName state district division pincode territory category description priority status attachmentName attachmentUrl resolutionDetails createdAt updatedAt')
             .populate('creator', 'name email role phone')
             .populate('assignedTo', 'name email role phone')
             .sort({ createdAt: -1 })
@@ -151,6 +153,8 @@ const createTicket = async (req, res) => {
         });
         await ticket.save();
         await ticket.populate('creator', 'name email role phone');
+        // Invalidate dashboard stats cache
+        await cache_service_1.cacheService.delByPrefix('dashboard:');
         return res.status(201).json({ message: 'Support ticket created successfully', ticket });
     }
     catch (error) {
@@ -197,6 +201,8 @@ const updateTicketStatus = async (req, res) => {
             { path: 'creator', select: 'name email role phone' },
             { path: 'assignedTo', select: 'name email role phone' }
         ]);
+        // Invalidate dashboard stats cache
+        await cache_service_1.cacheService.delByPrefix('dashboard:');
         return res.status(200).json({ message: 'Ticket status updated', ticket });
     }
     catch (error) {

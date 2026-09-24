@@ -3,7 +3,8 @@ import mongoose from 'mongoose';
 import Agent from '../models/Agent';
 import AuditLog from '../models/AuditLog';
 import Vendor from '../models/Vendor';
-import { getAgentTerritoryScope, buildTerritoryFilter, buildVendorScopeFilter } from '../utils/territoryScope';
+import { getAgentTerritoryScope, buildTerritoryFilter, buildVendorScopeFilter, invalidateAgentTerritoryScope } from '../utils/territoryScope';
+import { cacheService } from '../services/cache.service';
 
 // GET /api/admin/registrations
 export const getRegistrations = async (req: Request, res: Response) => {
@@ -27,7 +28,10 @@ export const getRegistrations = async (req: Request, res: Response) => {
       }
     }
 
-    let registrations = await Agent.find(filter).select('-password').sort({ createdAt: -1 }).lean();
+    let registrations = await Agent.find(filter)
+      .select('_id name email phone role registrationId territory kycStatus status remarks rejectionReason createdAt updatedAt')
+      .sort({ createdAt: -1 })
+      .lean();
 
     // Also query 'users' collection in MongoDB for any agent registrations synced directly to users collection
     try {
@@ -179,6 +183,13 @@ export const approveRegistration = async (req: Request, res: Response) => {
       console.error('Error syncing approval to users collection:', e);
     }
 
+    // Invalidate hierarchy, dashboard, and territory caches
+    await Promise.all([
+      cacheService.delByPrefix('hierarchy:'),
+      cacheService.delByPrefix('dashboard:'),
+      invalidateAgentTerritoryScope(id)
+    ]);
+
     return res.status(200).json({
       message: 'Agent registration application approved successfully.',
       registration: agent || { _id: id, status: 'approved', kycStatus: 'approved' }
@@ -244,6 +255,13 @@ export const rejectRegistration = async (req: Request, res: Response) => {
       console.error('Error syncing rejection to users collection:', e);
     }
 
+    // Invalidate hierarchy, dashboard, and territory caches
+    await Promise.all([
+      cacheService.delByPrefix('hierarchy:'),
+      cacheService.delByPrefix('dashboard:'),
+      invalidateAgentTerritoryScope(id)
+    ]);
+
     return res.status(200).json({
       message: 'Agent registration application rejected successfully.',
       registration: agent || { _id: id, status: 'rejected', kycStatus: 'rejected' }
@@ -258,18 +276,67 @@ export const rejectRegistration = async (req: Request, res: Response) => {
 export const getHierarchyTree = async (req: Request, res: Response) => {
   try {
     const requesterId = (req as any).agent?.agentId;
+    const statusFilter = (req.query.status as string) || 'all';
+    const cacheKey = `hierarchy:${requesterId}:${statusFilter}`;
+
+    // Return cached hierarchy if available
+    const cachedTree = await cacheService.get(cacheKey);
+    if (cachedTree) {
+      return res.status(200).json(cachedTree);
+    }
+
     const scope = await getAgentTerritoryScope(requesterId);
     const scopeFilter = buildTerritoryFilter(scope);
     const vendorScopeFilter = buildVendorScopeFilter(scope);
 
-    const statusFilter = req.query.status as string;
     const filter: any = { ...scopeFilter };
     if (statusFilter && statusFilter !== 'all') {
       filter.kycStatus = statusFilter;
     }
-    
-    const agents = await Agent.find(filter).select('-password').sort({ createdAt: -1 }).lean();
-    const allVendors = await Vendor.find(vendorScopeFilter).select('_id assignedAgent pincode division district createdAt').lean();
+
+    // Safely execute independent queries in parallel with field projections
+    const [agents, allVendors] = await Promise.all([
+      Agent.find(filter)
+        .select('_id name email phone registrationId role kycStatus registrationFeePaid performanceScore territory createdAt')
+        .sort({ createdAt: -1 })
+        .lean(),
+      Vendor.find(vendorScopeFilter)
+        .select('_id assignedAgent pincode division district createdAt')
+        .lean()
+    ]);
+
+    // Pre-index vendors by agent, pincode, division, district into O(1) Map lookups
+    const vendorsByAgent = new Map<string, any[]>();
+    const vendorsByPincode = new Map<string, any[]>();
+    const vendorsByDivision = new Map<string, any[]>();
+    const vendorsByDistrict = new Map<string, any[]>();
+
+    for (const v of allVendors) {
+      if (v.assignedAgent) {
+        const idStr = String(v.assignedAgent);
+        const list = vendorsByAgent.get(idStr) || [];
+        list.push(v);
+        vendorsByAgent.set(idStr, list);
+      }
+      if (v.pincode) {
+        const pin = String(v.pincode).trim();
+        const list = vendorsByPincode.get(pin) || [];
+        list.push(v);
+        vendorsByPincode.set(pin, list);
+      }
+      if (v.division) {
+        const div = String(v.division).trim().toLowerCase();
+        const list = vendorsByDivision.get(div) || [];
+        list.push(v);
+        vendorsByDivision.set(div, list);
+      }
+      if (v.district) {
+        const dist = String(v.district).trim().toLowerCase();
+        const list = vendorsByDistrict.get(dist) || [];
+        list.push(v);
+        vendorsByDistrict.set(dist, list);
+      }
+    }
 
     const todayStr = new Date().toISOString().slice(0, 10);
     const yesterdayStr = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
@@ -287,18 +354,33 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
       const kyc = agent.kycStatus || 'pending';
 
       const agentIdStr = String(agent._id);
-      const agentDistrictLower = (agent.territory?.district || (agent as any).district || '').toLowerCase();
-      const agentDivisionLower = (agent.territory?.division || (agent as any).division || '').toLowerCase();
-      const agentPincode = agent.territory?.pincode || (agent as any).pincode;
+      const agentDistrictLower = (agent.territory?.district || (agent as any).district || '').trim().toLowerCase();
+      const agentDivisionLower = (agent.territory?.division || (agent as any).division || '').trim().toLowerCase();
+      const agentPincode = (agent.territory?.pincode || (agent as any).pincode || '').trim();
 
-      // Filter real vendors belonging to this agent or territory
-      const assignedVendors = allVendors.filter((v: any) => {
-        if (v.assignedAgent && String(v.assignedAgent) === agentIdStr) return true;
-        if (agent.role === 'pincode' && agentPincode && v.pincode === agentPincode) return true;
-        if (agent.role === 'division' && agentDivisionLower && v.division && v.division.toLowerCase().includes(agentDivisionLower)) return true;
-        if (agent.role === 'district' && agentDistrictLower && v.district && v.district.toLowerCase().includes(agentDistrictLower)) return true;
-        return false;
-      });
+      // Look up vendors for this agent using pre-indexed lookup maps
+      let candidateVendors: any[] = [];
+      if (vendorsByAgent.has(agentIdStr)) {
+        candidateVendors = candidateVendors.concat(vendorsByAgent.get(agentIdStr) || []);
+      }
+      if (agent.role === 'pincode' && agentPincode && vendorsByPincode.has(agentPincode)) {
+        candidateVendors = candidateVendors.concat(vendorsByPincode.get(agentPincode) || []);
+      } else if (agent.role === 'division' && agentDivisionLower && vendorsByDivision.has(agentDivisionLower)) {
+        candidateVendors = candidateVendors.concat(vendorsByDivision.get(agentDivisionLower) || []);
+      } else if (agent.role === 'district' && agentDistrictLower && vendorsByDistrict.has(agentDistrictLower)) {
+        candidateVendors = candidateVendors.concat(vendorsByDistrict.get(agentDistrictLower) || []);
+      }
+
+      // Fast deduplication
+      const assignedVendors: any[] = [];
+      const seenIds = new Set<string>();
+      for (const v of candidateVendors) {
+        const vId = String(v._id);
+        if (!seenIds.has(vId)) {
+          seenIds.add(vId);
+          assignedVendors.push(v);
+        }
+      }
 
       const tieupsToday = assignedVendors.filter((v: any) => {
         const dStr = v.createdAt ? new Date(v.createdAt).toISOString().slice(0, 10) : '';
@@ -487,7 +569,7 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
       tree = finalDivisions;
     }
 
-    return res.status(200).json({
+    const responseData = {
       tree,
       states: tree,
       districts: finalDistricts,
@@ -503,7 +585,12 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
         approvedKycCount: agents.filter(a => a.kycStatus === 'approved').length,
         totalEarnings: (tree.length > 0 ? tree : enrichedDistricts).reduce((acc, d) => acc + (d.teamEarnings || d.earnings), 0)
       }
-    });
+    };
+
+    // Cache computed hierarchy for 60 seconds
+    await cacheService.set(cacheKey, responseData, 60);
+
+    return res.status(200).json(responseData);
   } catch (error) {
     console.error('Get hierarchy tree error:', error);
     return res.status(500).json({ message: 'Internal server error' });
@@ -526,7 +613,9 @@ export const getWeeklyLeaderboard = async (req: Request, res: Response) => {
       filter.role = roleFilter;
     }
 
-    const agents = await Agent.find(filter).select('-password').lean();
+    const agents = await Agent.find(filter)
+      .select('_id name email phone registrationId role kycStatus registrationFeePaid performanceScore territory createdAt')
+      .lean();
 
     // Enrich and compute leaderboard metrics
     let leaderboard = agents.map(agent => {
@@ -583,6 +672,15 @@ export const getWeeklyLeaderboard = async (req: Request, res: Response) => {
 // GET /api/admin/categories or /api/categories
 export const getCategories = async (req: Request, res: Response) => {
   try {
+    const cacheKey = 'categories:all';
+    const cachedCategories = await cacheService.get<any[]>(cacheKey);
+    if (cachedCategories) {
+      return res.status(200).json({
+        success: true,
+        categories: cachedCategories
+      });
+    }
+
     const db = mongoose.connection.db;
     let categories: any[] = [];
     if (db) {
@@ -601,6 +699,9 @@ export const getCategories = async (req: Request, res: Response) => {
         sortOrder: index + 1
       }));
     }
+
+    // Cache categories for 5 minutes (300s)
+    await cacheService.set(cacheKey, categories, 300);
 
     return res.status(200).json({
       success: true,

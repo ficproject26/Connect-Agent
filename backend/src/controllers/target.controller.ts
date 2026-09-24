@@ -6,6 +6,7 @@ import TargetAssignment from '../models/TargetAssignment';
 import Agent from '../models/Agent';
 import Notification from '../models/Notification';
 import { getAgentTerritoryScope, buildTerritoryFilter } from '../utils/territoryScope';
+import { cacheService } from '../services/cache.service';
 
 const createTargetSchema = z.object({
   title: z.string().min(2, 'Title required'),
@@ -148,6 +149,8 @@ export const allocateTarget = async (req: Request, res: Response) => {
         priority: 'high',
         category: 'target_assigned'
       });
+      // Invalidate dashboard stats cache
+      await cacheService.delByPrefix('dashboard:');
     }
 
     return res.status(201).json({
@@ -219,6 +222,9 @@ export const assignTarget = async (req: Request, res: Response) => {
       { path: 'assignedBy', select: 'name email role' }
     ]);
 
+    // Invalidate dashboard stats cache
+    await cacheService.delByPrefix('dashboard:');
+
     return res.status(201).json({ message: 'Target assigned successfully', assignment });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
@@ -262,6 +268,7 @@ export const getMyAssignments = async (req: Request, res: Response) => {
 
     const total = await TargetAssignment.countDocuments(filter);
     const assignments = await TargetAssignment.find(filter)
+      .select('target assignedTo assignedBy dueDate status completedAt createdAt updatedAt')
       .populate('target', 'title description type targetValue')
       .populate('assignedBy', 'name email role')
       .populate('assignedTo', 'name email role territory')
@@ -304,6 +311,9 @@ export const updateAssignmentStatus = async (req: Request, res: Response) => {
       { path: 'target', select: 'title type targetValue' },
       { path: 'assignedBy', select: 'name email role' }
     ]);
+
+    // Invalidate dashboard stats cache
+    await cacheService.delByPrefix('dashboard:');
 
     return res.status(200).json({ message: 'Assignment status updated', assignment });
   } catch (error) {

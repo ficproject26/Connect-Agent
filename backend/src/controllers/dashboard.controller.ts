@@ -5,6 +5,7 @@ import Ticket from '../models/Ticket';
 import Notification from '../models/Notification';
 import Report from '../models/Report';
 import { getAgentTerritoryScope, buildVendorScopeFilter } from '../utils/territoryScope';
+import { cacheService } from '../services/cache.service';
 
 // GET /api/dashboard/stats
 export const getDashboardStats = async (req: Request, res: Response) => {
@@ -12,12 +13,18 @@ export const getDashboardStats = async (req: Request, res: Response) => {
     const agentId = (req as any).agent?.agentId;
     if (!agentId) return res.status(401).json({ message: 'Unauthorized' });
 
+    const cacheKey = `dashboard:${agentId}`;
+    const cachedStats = await cacheService.get(cacheKey);
+    if (cachedStats) {
+      return res.status(200).json(cachedStats);
+    }
+
     const scope = await getAgentTerritoryScope(agentId);
     const vendorScopeFilter = buildVendorScopeFilter(scope);
 
     const vendorFilter = Object.keys(vendorScopeFilter).length > 0 ? vendorScopeFilter : { assignedAgent: agentId };
 
-    // Run all aggregations in parallel for performance
+    // Run all aggregations in parallel for performance with field projections
     const [
       totalVendors,
       activeVendors,
@@ -43,18 +50,20 @@ export const getDashboardStats = async (req: Request, res: Response) => {
       Notification.countDocuments({ receiver: agentId, read: false }),
       Report.countDocuments({ agent: agentId }),
       TargetAssignment.find({ assignedTo: agentId })
+        .select('target assignedTo assignedBy status dueDate completedAt createdAt')
         .populate('target', 'title type targetValue')
         .sort({ createdAt: -1 })
         .limit(5)
         .lean(),
       Vendor.find(vendorFilter)
+        .select('businessName ownerName phone category status location state district pincode createdAt')
         .populate('category', 'name')
         .sort({ createdAt: -1 })
         .limit(5)
         .lean()
     ]);
 
-    return res.status(200).json({
+    const resultPayload = {
       stats: {
         vendors: {
           total: totalVendors,
@@ -82,7 +91,12 @@ export const getDashboardStats = async (req: Request, res: Response) => {
       },
       recentAssignments,
       recentVendors
-    });
+    };
+
+    // Cache dashboard summary for 20 seconds
+    await cacheService.set(cacheKey, resultPayload, 20);
+
+    return res.status(200).json(resultPayload);
   } catch (error) {
     console.error('Dashboard stats error:', error);
     return res.status(500).json({ message: 'Internal server error' });

@@ -31,7 +31,8 @@ export const getReports = async (req: Request, res: Response) => {
       .populate('reviewedBy', 'name email role')
       .sort({ createdAt: -1 })
       .skip((pageNum - 1) * limitNum)
-      .limit(limitNum);
+      .limit(limitNum)
+      .lean();
 
     return res.status(200).json({
       reports,
@@ -51,7 +52,8 @@ export const getReportById = async (req: Request, res: Response) => {
 
     const report = await Report.findOne({ _id: req.params.id, agent: agentId })
       .populate('agent', 'name email role')
-      .populate('reviewedBy', 'name email role');
+      .populate('reviewedBy', 'name email role')
+      .lean();
 
     if (!report) return res.status(404).json({ message: 'Report not found or access denied' });
     return res.status(200).json({ report });

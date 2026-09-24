@@ -59,10 +59,10 @@ export const TargetsList: React.FC = () => {
         throw err;
       }
     },
-    staleTime: 15000,
-    refetchInterval: 45000,
+    staleTime: 60000,
+    refetchInterval: false,
     refetchIntervalInBackground: false,
-    refetchOnWindowFocus: true
+    refetchOnWindowFocus: false
   });
 
   // Map real backend API data to UI Allocation format

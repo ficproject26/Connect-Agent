@@ -32,7 +32,8 @@ const getReports = async (req, res) => {
             .populate('reviewedBy', 'name email role')
             .sort({ createdAt: -1 })
             .skip((pageNum - 1) * limitNum)
-            .limit(limitNum);
+            .limit(limitNum)
+            .lean();
         return res.status(200).json({
             reports,
             pagination: { page: pageNum, limit: limitNum, total, pages: Math.ceil(total / limitNum) }
@@ -52,7 +53,8 @@ const getReportById = async (req, res) => {
             return res.status(401).json({ message: 'Unauthorized' });
         const report = await Report_1.default.findOne({ _id: req.params.id, agent: agentId })
             .populate('agent', 'name email role')
-            .populate('reviewedBy', 'name email role');
+            .populate('reviewedBy', 'name email role')
+            .lean();
         if (!report)
             return res.status(404).json({ message: 'Report not found or access denied' });
         return res.status(200).json({ report });

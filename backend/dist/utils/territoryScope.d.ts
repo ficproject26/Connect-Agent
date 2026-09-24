@@ -7,8 +7,12 @@ export interface TerritoryScope {
     agentId: string;
 }
 /**
+ * Invalidate cached territory scope when agent details change
+ */
+export declare function invalidateAgentTerritoryScope(agentId: string): Promise<void>;
+/**
  * Fetch territory scope of the authenticated agent.
- * Checks both Agent model and fallback users collection.
+ * Checks cache first, then Agent model and fallback users collection using tight projections.
  */
 export declare function getAgentTerritoryScope(agentId: string): Promise<TerritoryScope | null>;
 /**

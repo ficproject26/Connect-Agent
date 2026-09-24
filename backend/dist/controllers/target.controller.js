@@ -10,6 +10,7 @@ const TargetAssignment_1 = __importDefault(require("../models/TargetAssignment")
 const Agent_1 = __importDefault(require("../models/Agent"));
 const Notification_1 = __importDefault(require("../models/Notification"));
 const territoryScope_1 = require("../utils/territoryScope");
+const cache_service_1 = require("../services/cache.service");
 const createTargetSchema = zod_1.z.object({
     title: zod_1.z.string().min(2, 'Title required'),
     description: zod_1.z.string().optional(),
@@ -140,6 +141,8 @@ const allocateTarget = async (req, res) => {
                 priority: 'high',
                 category: 'target_assigned'
             });
+            // Invalidate dashboard stats cache
+            await cache_service_1.cacheService.delByPrefix('dashboard:');
         }
         return res.status(201).json({
             message: 'Target allocated successfully',
@@ -206,6 +209,8 @@ const assignTarget = async (req, res) => {
             { path: 'assignedTo', select: 'name email role' },
             { path: 'assignedBy', select: 'name email role' }
         ]);
+        // Invalidate dashboard stats cache
+        await cache_service_1.cacheService.delByPrefix('dashboard:');
         return res.status(201).json({ message: 'Target assigned successfully', assignment });
     }
     catch (error) {
@@ -246,6 +251,7 @@ const getMyAssignments = async (req, res) => {
             filter.status = status;
         const total = await TargetAssignment_1.default.countDocuments(filter);
         const assignments = await TargetAssignment_1.default.find(filter)
+            .select('target assignedTo assignedBy dueDate status completedAt createdAt updatedAt')
             .populate('target', 'title description type targetValue')
             .populate('assignedBy', 'name email role')
             .populate('assignedTo', 'name email role territory')
@@ -287,6 +293,8 @@ const updateAssignmentStatus = async (req, res) => {
             { path: 'target', select: 'title type targetValue' },
             { path: 'assignedBy', select: 'name email role' }
         ]);
+        // Invalidate dashboard stats cache
+        await cache_service_1.cacheService.delByPrefix('dashboard:');
         return res.status(200).json({ message: 'Assignment status updated', assignment });
     }
     catch (error) {

@@ -10,18 +10,55 @@ export interface TerritoryScope {
   agentId: string;
 }
 
+import { cacheService } from '../services/cache.service';
+
+/**
+ * Invalidate cached territory scope when agent details change
+ */
+export async function invalidateAgentTerritoryScope(agentId: string): Promise<void> {
+  if (!agentId) return;
+  await cacheService.del(`scope:${agentId}`);
+}
+
 /**
  * Fetch territory scope of the authenticated agent.
- * Checks both Agent model and fallback users collection.
+ * Checks cache first, then Agent model and fallback users collection using tight projections.
  */
 export async function getAgentTerritoryScope(agentId: string): Promise<TerritoryScope | null> {
   if (!agentId) return null;
+  const cacheKey = `scope:${agentId}`;
+
   try {
-    let agent: any = await Agent.findById(agentId);
+    const cachedScope = await cacheService.get<TerritoryScope>(cacheKey);
+    if (cachedScope) {
+      return cachedScope;
+    }
+
+    let agent: any = await Agent.findById(agentId)
+      .select('role level territory state district division pincode assignedState assignedDistrict assignedDivision assignedPincode')
+      .lean();
+
     if (!agent) {
       const db = mongoose.connection.db;
       if (db) {
-        agent = await db.collection('users').findOne({ _id: agentId as any });
+        agent = await db.collection('users').findOne(
+          { _id: agentId as any },
+          {
+            projection: {
+              role: 1,
+              level: 1,
+              territory: 1,
+              state: 1,
+              district: 1,
+              division: 1,
+              pincode: 1,
+              assignedState: 1,
+              assignedDistrict: 1,
+              assignedDivision: 1,
+              assignedPincode: 1
+            }
+          }
+        );
       }
     }
     if (!agent) return null;
@@ -29,7 +66,7 @@ export async function getAgentTerritoryScope(agentId: string): Promise<Territory
     const rawRole = (agent.role || agent.level || 'pincode').toLowerCase();
     const normalizedRole = rawRole === 'agent' ? (agent.level || 'pincode').toLowerCase() : rawRole;
 
-    return {
+    const scope: TerritoryScope = {
       role: normalizedRole,
       state: (agent.territory?.state || agent.state || agent.assignedState || '').trim(),
       district: (agent.territory?.district || agent.district || agent.assignedDistrict || '').trim(),
@@ -37,6 +74,11 @@ export async function getAgentTerritoryScope(agentId: string): Promise<Territory
       pincode: (agent.territory?.pincode || agent.pincode || agent.assignedPincode || '').trim(),
       agentId: agent._id.toString()
     };
+
+    // Cache scope for 60 seconds
+    await cacheService.set(cacheKey, scope, 60);
+
+    return scope;
   } catch (error) {
     console.error('Error fetching agent territory scope:', error);
     return null;

@@ -20,6 +20,9 @@ const targetAssignmentSchema = new mongoose_1.Schema({
     timestamps: true
 });
 targetAssignmentSchema.index({ assignedTo: 1, status: 1 });
+targetAssignmentSchema.index({ assignedTo: 1, createdAt: -1 });
+targetAssignmentSchema.index({ assignedTo: 1, status: 1, createdAt: -1 });
+targetAssignmentSchema.index({ assignedBy: 1, createdAt: -1 });
 targetAssignmentSchema.index({ target: 1 });
 targetAssignmentSchema.index({ assignedBy: 1 });
 targetAssignmentSchema.index({ createdAt: -1 });

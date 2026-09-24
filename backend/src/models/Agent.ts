@@ -99,6 +99,10 @@ const agentSchema = new Schema<IAgent>({
 
 agentSchema.index({ 'territory.state': 1, 'territory.district': 1, 'territory.division': 1, 'territory.pincode': 1 });
 agentSchema.index({ role: 1, kycStatus: 1 });
+agentSchema.index({ role: 1, 'territory.state': 1, createdAt: -1 });
+agentSchema.index({ role: 1, 'territory.district': 1, createdAt: -1 });
+agentSchema.index({ kycStatus: 1, createdAt: -1 });
+agentSchema.index({ status: 1, createdAt: -1 });
 agentSchema.index({ phone: 1 });
 agentSchema.index({ createdAt: -1 });
 
