@@ -40,6 +40,9 @@ export const PincodeDashboard: React.FC = () => {
   // Ticket submission state
   const [ticketRaised, setTicketRaised] = useState(false);
   const [ticketDesc, setTicketDesc] = useState('');
+  const [selectedVendorId, setSelectedVendorId] = useState('');
+  const [vendorNameInput, setVendorNameInput] = useState('');
+  const [storeNameInput, setStoreNameInput] = useState('');
   const [category, setCategory] = useState('Vendor Query');
   const [activeTab, setActiveTab] = useState<'vendors' | 'schedule' | 'support' | 'chat'>('vendors');
 
@@ -57,13 +60,20 @@ export const PincodeDashboard: React.FC = () => {
     setFieldAlerts(prev => prev.filter(item => item.id !== id));
   };
 
-  useEffect(() => {
-    // Simulate real-time target assignment notification after 5 seconds
-    const timer = setTimeout(() => {
-      showToast("New Target Assigned: Validate Aadhaar QR Scan for Sree Balaji Groceries", "info");
-    }, 5000);
-    return () => clearTimeout(timer);
-  }, []);
+  // Real Tickets Query for Support Tab
+  const { data: userTicketsData } = useQuery({
+    queryKey: ['pincodeUserTickets'],
+    queryFn: async () => {
+      try {
+        const res = await api.get('/tickets');
+        return res.data?.tickets || [];
+      } catch (err) {
+        return [];
+      }
+    },
+    staleTime: 30000,
+    refetchInterval: 45000
+  });
 
   const handleRaiseTicket = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,10 +83,16 @@ export const PincodeDashboard: React.FC = () => {
       await api.post('/tickets', {
         category,
         description: ticketDesc,
+        vendorName: vendorNameInput || undefined,
+        storeName: storeNameInput || undefined,
+        vendorId: selectedVendorId || undefined,
         priority: 'medium'
       });
       setTicketRaised(true);
       setTicketDesc('');
+      setVendorNameInput('');
+      setStoreNameInput('');
+      setSelectedVendorId('');
       addNotification(
         'Support Ticket Raised',
         `Support ticket for ${category} successfully logged in the system.`,
@@ -85,6 +101,7 @@ export const PincodeDashboard: React.FC = () => {
       );
       showToast(`Support ticket for ${category} successfully raised!`, 'success');
       queryClient.invalidateQueries({ queryKey: ['pincodeDashboardStats'] });
+      queryClient.invalidateQueries({ queryKey: ['pincodeUserTickets'] });
       setTimeout(() => {
         setTicketRaised(false);
       }, 3000);
@@ -125,6 +142,9 @@ export const PincodeDashboard: React.FC = () => {
   };
 
   const remainingTasks = (stats?.targets?.total || 0) - (stats?.targets?.completed || 0);
+  const performanceScore = typeof user?.performanceScore === 'number' && user.performanceScore > 0
+    ? user.performanceScore
+    : (stats?.targets?.completionRate || 0);
 
   return (
     <div className="space-y-6 animate-fade-in text-[#1b1c1c] font-sans">
@@ -141,7 +161,7 @@ export const PincodeDashboard: React.FC = () => {
         <div className="flex items-center gap-3 shrink-0">
           <div className="text-right">
             <span className="text-[9px] text-[#52443a] font-bold uppercase block">Field Performance</span>
-            <span className="text-lg font-black text-[#864f19]">{user?.performanceScore || '85.4'}</span>
+            <span className="text-lg font-black text-[#864f19]">{performanceScore}%</span>
           </div>
           <div className="relative w-10 h-10 flex items-center justify-center shrink-0">
             <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
@@ -154,7 +174,7 @@ export const PincodeDashboard: React.FC = () => {
               />
               <path
                 className="text-[#864f19] transition-all duration-500 ease-out"
-                strokeDasharray={`${user?.performanceScore || 85.4}, 100`}
+                strokeDasharray={`${performanceScore}, 100`}
                 strokeWidth="3.5"
                 strokeLinecap="round"
                 stroke="currentColor"
@@ -162,7 +182,7 @@ export const PincodeDashboard: React.FC = () => {
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
               />
             </svg>
-            <span className="absolute text-[10px] font-black text-slate-800">{Math.round(user?.performanceScore || 85)}%</span>
+            <span className="absolute text-[10px] font-black text-slate-800">{Math.round(performanceScore)}%</span>
           </div>
         </div>
       </div>
@@ -256,15 +276,18 @@ export const PincodeDashboard: React.FC = () => {
                   <span>Support Ticket ID</span>
                   <span>Resolution State</span>
                 </div>
-                {[
-                  { id: '#TK-9812: Aadhaar verification issue', status: 'Pending Supervisor review' },
-                  { id: '#TK-9742: Merchant sign-up block', status: 'Resolved' }
-                ].map((item, i) => (
-                  <div key={i} className="py-3 flex justify-between text-xs font-semibold">
-                    <span className="text-[#1b1c1c]">{item.id}</span>
-                    <span className="text-emerald-700 font-extrabold">{item.status}</span>
-                  </div>
-                ))}
+                {!userTicketsData || userTicketsData.length === 0 ? (
+                  <p className="py-3 text-center text-xs text-slate-400">No support tickets logged yet.</p>
+                ) : (
+                  userTicketsData.map((item: any, i: number) => (
+                    <div key={i} className="py-3 flex justify-between text-xs font-semibold">
+                      <span className="text-[#1b1c1c]">{item.ticketId || item._id ? `#${item.ticketId || String(item._id).slice(-6)}: ${item.category || item.subject || 'Ticket'}` : item.category}</span>
+                      <span className={`font-extrabold ${item.status === 'resolved' ? 'text-emerald-700' : 'text-amber-600'}`}>
+                        {item.status === 'resolved' ? 'Resolved' : 'Pending Review'}
+                      </span>
+                    </div>
+                  ))
+                )}
               </>
             )}
 
@@ -318,23 +341,54 @@ export const PincodeDashboard: React.FC = () => {
           </div>
           
           <form onSubmit={handleRaiseTicket} className="space-y-3 flex-grow flex flex-col justify-between">
+            {recentVendors && recentVendors.length > 0 && (
+              <div className="space-y-1">
+                <label className="block text-[9px] font-bold text-[#52443a] uppercase tracking-wider">Select Assigned Vendor</label>
+                <select
+                  value={selectedVendorId}
+                  onChange={(e) => {
+                    const vId = e.target.value;
+                    setSelectedVendorId(vId);
+                    const found = recentVendors.find((v: any) => v._id === vId);
+                    if (found) {
+                      setVendorNameInput(found.ownerName || found.name || '');
+                      setStoreNameInput(found.storeName || found.businessName || found.name || '');
+                    } else {
+                      setVendorNameInput('');
+                      setStoreNameInput('');
+                    }
+                  }}
+                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                >
+                  <option value="">-- Choose Vendor or Enter Manually --</option>
+                  {recentVendors.map((v: any) => (
+                    <option key={v._id} value={v._id}>
+                      {v.storeName || v.name} ({v.ownerName || v.name})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="space-y-1">
-              <label className="block text-[9px] font-bold text-[#52443a] uppercase tracking-wider">Vendor Name *</label>
+              <label className="block text-[9px] font-bold text-[#52443a] uppercase tracking-wider">Vendor Name</label>
               <input
                 type="text"
-                readOnly
-                value={user?.name ? `${user.name} Merchant` : 'Sri Rama Merchant'}
-                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs font-bold text-[#1b1c1c] focus:outline-none"
+                placeholder="Enter vendor name..."
+                value={vendorNameInput}
+                onChange={(e) => setVendorNameInput(e.target.value)}
+                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs font-bold text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="block text-[9px] font-bold text-[#52443a] uppercase tracking-wider">Store Name *</label>
+              <label className="block text-[9px] font-bold text-[#52443a] uppercase tracking-wider">Store Name</label>
               <input
                 type="text"
-                readOnly
-                value="Sri Rama Supermarket"
-                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs font-bold text-[#864f19] focus:outline-none"
+                placeholder="Enter store name..."
+                value={storeNameInput}
+                onChange={(e) => setStoreNameInput(e.target.value)}
+                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs font-bold text-[#864f19] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
               />
             </div>
 

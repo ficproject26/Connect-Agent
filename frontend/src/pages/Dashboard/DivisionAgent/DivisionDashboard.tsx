@@ -107,6 +107,13 @@ export const DivisionDashboard: React.FC = () => {
     refetchOnWindowFocus: true
   });
 
+  // Compute real performance from subordinate data
+  const totalAssignedTargets = pincodeAgentsList.reduce((sum, s) => sum + (s.assignedTargets || 0), 0);
+  const totalCompletedTargets = pincodeAgentsList.reduce((sum, s) => sum + (s.completedTargets || 0), 0);
+  const realPerformanceScore = totalAssignedTargets > 0
+    ? Math.round((totalCompletedTargets / totalAssignedTargets) * 1000) / 10
+    : 0;
+
   const handleAssign = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!targetTitle.trim()) return;
@@ -147,7 +154,7 @@ export const DivisionDashboard: React.FC = () => {
         <div className="flex items-center gap-3 shrink-0">
           <div className="text-right">
             <span className="text-[9px] text-[#52443a] font-bold uppercase block">Division Performance</span>
-            <span className="text-lg font-black text-[#864f19]">88.5%</span>
+            <span className="text-lg font-black text-[#864f19]">{realPerformanceScore}%</span>
           </div>
           <div className="relative w-10 h-10 flex items-center justify-center shrink-0">
             <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
@@ -160,7 +167,7 @@ export const DivisionDashboard: React.FC = () => {
               />
               <path
                 className="text-[#864f19] transition-all duration-500 ease-out"
-                strokeDasharray="88.5, 100"
+                strokeDasharray={`${realPerformanceScore}, 100`}
                 strokeWidth="3.5"
                 strokeLinecap="round"
                 stroke="currentColor"
@@ -168,7 +175,7 @@ export const DivisionDashboard: React.FC = () => {
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
               />
             </svg>
-            <span className="absolute text-[9px] font-black text-slate-800">88.5%</span>
+            <span className="absolute text-[9px] font-black text-slate-800">{realPerformanceScore}%</span>
           </div>
         </div>
       </div>
@@ -183,7 +190,7 @@ export const DivisionDashboard: React.FC = () => {
           { label: "Today's Targets", val: `${pincodeAgentsList.reduce((sum, s) => sum + (s.assignedTargets || 0), 0)} targets`, icon: <Target className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
           { label: 'Pending Targets', val: `${pincodeAgentsList.reduce((sum, s) => sum + Math.max(0, (s.assignedTargets || 0) - (s.completedTargets || 0)), 0)} remaining`, icon: <Clock className="w-4 h-4 text-[#4f4635]" />, bg: 'bg-[#efe1ca]' },
           { label: 'Open Tickets', val: '0 unresolved', icon: <Ticket className="w-4 h-4 text-red-700" />, bg: 'bg-red-50' },
-          { label: 'Division Performance', val: '88.5%', icon: <TrendingUp className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' }
+          { label: 'Division Performance', val: `${realPerformanceScore}%`, icon: <TrendingUp className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' }
         ].map((card, idx) => (
           <div key={idx} className="bg-white p-5 rounded-[16px] border border-[#eae8e7] flex items-center justify-between shadow-sm relative overflow-hidden group">
             <div className="space-y-1">
@@ -220,19 +227,19 @@ export const DivisionDashboard: React.FC = () => {
             <div>
               <div className="flex justify-between text-xs font-bold text-[#52443a] mb-1">
                 <span>Vendor Growth</span>
-                <span className="text-green-600">+10.2%</span>
+                <span className="text-green-600">{pincodeAgentsList.reduce((sum, s) => sum + (s.totalOnboardedShops || 0), 0)} total vendors</span>
               </div>
               <div className="w-full bg-[#f6f3f2] h-2 rounded-full overflow-hidden">
-                <div className="bg-emerald-600 h-full w-[72%] rounded-full"></div>
+                <div className="bg-emerald-600 h-full rounded-full" style={{ width: pincodeAgentsList.length > 0 ? '100%' : '0%' }}></div>
               </div>
             </div>
             <div>
               <div className="flex justify-between text-xs font-bold text-[#52443a] mb-1">
                 <span>Daily Target Progress</span>
-                <span className="text-[#864f19]">88.5% Done</span>
+                <span className="text-[#864f19]">{realPerformanceScore}% Done</span>
               </div>
               <div className="w-full bg-[#f6f3f2] h-2 rounded-full overflow-hidden">
-                <div className="bg-[#864f19] h-full w-[88.5%] rounded-full"></div>
+                <div className="bg-[#864f19] h-full rounded-full" style={{ width: `${realPerformanceScore}%` }}></div>
               </div>
             </div>
           </div>
@@ -245,15 +252,15 @@ export const DivisionDashboard: React.FC = () => {
             <div>
               <div className="flex justify-between text-xs font-bold text-[#52443a] mb-1">
                 <span>Resolution Rate</span>
-                <span className="text-[#34647b]">89.2% Resolved</span>
+                <span className="text-[#34647b]">— No ticket data</span>
               </div>
               <div className="w-full bg-[#f6f3f2] h-2 rounded-full overflow-hidden">
-                <div className="bg-[#34647b] h-full w-[89.2%] rounded-full"></div>
+                <div className="bg-[#34647b] h-full w-0 rounded-full"></div>
               </div>
             </div>
             <div className="flex justify-between text-[11px] text-[#52443a] font-medium pt-2">
-              <span>Avg Resolution: 18m</span>
-              <span>Open Tickets: 2</span>
+              <span>Avg Resolution: —</span>
+              <span>Open Tickets: 0</span>
             </div>
           </div>
         </div>
@@ -368,7 +375,7 @@ export const DivisionDashboard: React.FC = () => {
                 className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
               >
                 {pincodeAgentsList.length === 0 ? (
-                  <option value="raki-pin">raki pin (PIN: {divisionPincodesList[0]?.code})</option>
+                  <option value="">No pincode agents found in this division</option>
                 ) : (
                   pincodeAgentsList.map((a) => (
                     <option key={a.id} value={a.id}>{a.name} (PIN: {a.pincode})</option>

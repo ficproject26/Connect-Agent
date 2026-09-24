@@ -182,38 +182,22 @@ export const ReportsModule: React.FC = () => {
   const [realVisits, setRealVisits] = useState<any[]>([]);
   const [realTargets, setRealTargets] = useState<any[]>([]);
   const [realTickets, setRealTickets] = useState<any[]>([]);
+  const [hierarchyAgents, setHierarchyAgents] = useState<any[]>([]);
 
   useEffect(() => {
-    // Load real vendors
-    try {
-      const userKey = user?._id || user?.email ? `connect_portal_custom_vendors_${user._id || user.email?.toLowerCase()}` : 'connect_portal_custom_vendors';
-      const saved = localStorage.getItem(userKey) || localStorage.getItem('connect_portal_custom_vendors');
-      if (saved) setRealVendors(JSON.parse(saved));
-    } catch (e) {}
-
-    // Load real field visits
-    try {
-      const userKey = user?._id || user?.email ? `connect_portal_field_visits_${user._id || user.email?.toLowerCase()}` : 'connect_portal_field_visits';
-      const saved = localStorage.getItem(userKey) || localStorage.getItem('connect_portal_field_visits');
-      if (saved) setRealVisits(JSON.parse(saved));
-    } catch (e) {}
-
-    // Load real target allocations
-    try {
-      const userKey = user?._id || user?.email ? `connect_portal_target_allocations_${user._id || user.email?.toLowerCase()}` : 'connect_portal_target_allocations';
-      const saved = localStorage.getItem(userKey) || localStorage.getItem('connect_portal_target_allocations');
-      if (saved) setRealTargets(JSON.parse(saved));
-    } catch (e) {}
-
-    // Fetch API data for tickets & vendors in parallel
+    // Fetch API data for tickets & vendors & hierarchy in parallel
     const loadSystemData = async () => {
       try {
-        const [vRes, tRes] = await Promise.all([
+        const [vRes, tRes, fRes, aRes] = await Promise.all([
           api.get('/vendors').catch(() => ({ data: { vendors: [] } })),
-          api.get('/tickets').catch(() => ({ data: { tickets: [] } }))
+          api.get('/tickets').catch(() => ({ data: { tickets: [] } })),
+          api.get('/field-visits').catch(() => ({ data: { visits: [] } })),
+          api.get('/admin/hierarchy').catch(() => ({ data: { agents: [] } }))
         ]);
-        if (vRes?.data?.vendors && vRes.data.vendors.length > 0) setRealVendors(vRes.data.vendors);
-        if (tRes?.data?.tickets && tRes.data.tickets.length > 0) setRealTickets(tRes.data.tickets);
+        if (vRes?.data?.vendors) setRealVendors(vRes.data.vendors);
+        if (tRes?.data?.tickets) setRealTickets(tRes.data.tickets);
+        if (fRes?.data?.visits) setRealVisits(fRes.data.visits);
+        if (aRes?.data?.agents) setHierarchyAgents(aRes.data.agents);
       } catch (e) {}
     };
     loadSystemData();
@@ -336,9 +320,9 @@ export const ReportsModule: React.FC = () => {
                 <h3>Field Visits Conducted</h3>
                 <h2>${fieldVisitsCount}</h2>
               </div>
-              <div class="meta-card">
+              <div className="meta-card">
                 <h3>Performance Score</h3>
-                <h2>88.5%</h2>
+                <h2>${targetRatePercent}%</h2>
               </div>
             </div>
             <script>
@@ -559,10 +543,13 @@ export const ReportsModule: React.FC = () => {
                   className="bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl px-2.5 py-1.5 text-xs font-bold text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19] cursor-pointer"
                 >
                   <option value="all">📍 All Districts ({userState})</option>
-                  <option value="Visakhapatnam">Visakhapatnam District</option>
-                  <option value="NTR">NTR District (Vijayawada)</option>
-                  <option value="Guntur">Guntur District</option>
-                  <option value="Chittoor">Chittoor District</option>
+                  {Array.from(new Set(hierarchyAgents
+                    .filter(a => { const st = a.territory?.state || a.assignedState || a.state; return !st || st.toLowerCase() === userState.toLowerCase(); })
+                    .map(a => a.territory?.district || a.assignedDistrict || a.district)
+                    .filter(Boolean)
+                  )).map(d => (
+                    <option key={d} value={d}>{d} District</option>
+                  ))}
                 </select>
 
                 <select
@@ -571,10 +558,13 @@ export const ReportsModule: React.FC = () => {
                   className="bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl px-2.5 py-1.5 text-xs font-bold text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19] cursor-pointer"
                 >
                   <option value="all">🏢 All Divisions</option>
-                  <option value="Vizag City">Vizag City Division</option>
-                  <option value="Vijayawada Central">Vijayawada Central Division</option>
-                  <option value="Guntur City">Guntur City Division</option>
-                  <option value="Tirupati Central">Tirupati Central Division</option>
+                  {Array.from(new Set(hierarchyAgents
+                    .filter(a => { const st = a.territory?.state || a.assignedState || a.state; return !st || st.toLowerCase() === userState.toLowerCase(); })
+                    .map(a => a.territory?.division || a.assignedDivision || a.division)
+                    .filter(Boolean)
+                  )).map(d => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
                 </select>
               </div>
             )}
@@ -595,40 +585,62 @@ export const ReportsModule: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-[#eae8e7] text-xs font-semibold">
                 {activeRole === 'state' ? (
-                  [
-                    { district: 'Visakhapatnam', division: 'Vizag City Division', pincode: 'PIN 530001 (Central)', agent: 'raki pin', vendors: '12 Vendors', targets: '8 / 20 Targets', score: '88.5%', status: 'Active' },
-                    { district: 'Visakhapatnam', division: 'Vizag City Division', pincode: 'PIN 530017 (MVP Colony)', agent: 'Kiran Kumar', vendors: '10 Vendors', targets: '15 / 20 Targets', score: '88.5%', status: 'Active' },
-                    { district: 'Visakhapatnam', division: 'Vizag City Division', pincode: 'PIN 530018 (Madhavadhara)', agent: 'Ramesh Naidu', vendors: '8 Vendors', targets: '12 / 20 Targets', score: '88.5%', status: 'Active' },
-                    { district: 'NTR District', division: 'Vijayawada Central Division', pincode: 'PIN 520001 (Central)', agent: 'Governorpet Agent', vendors: '15 Vendors', targets: '18 / 20 Targets', score: '92.0%', status: 'Active' },
-                    { district: 'NTR District', division: 'Vijayawada Central Division', pincode: 'PIN 520007 (Autonagar)', agent: 'Autonagar Agent', vendors: '11 Vendors', targets: '14 / 20 Targets', score: '85.4%', status: 'Active' },
-                    { district: 'Guntur', division: 'Guntur City Division', pincode: 'PIN 522002 (Kothapet)', agent: 'Guntur Agent', vendors: '9 Vendors', targets: '10 / 20 Targets', score: '78.0%', status: 'Active' },
-                    { district: 'Chittoor', division: 'Tirupati Central Division', pincode: 'PIN 517501 (Tirupati Central)', agent: 'Tirupati Agent', vendors: '14 Vendors', targets: '16 / 20 Targets', score: '90.5%', status: 'Active' },
-                  ]
-                    .filter(item => drillDistrictFilter === 'all' || item.district.toLowerCase().includes(drillDistrictFilter.toLowerCase()))
-                    .filter(item => drillDivisionFilter === 'all' || item.division.toLowerCase().includes(drillDivisionFilter.toLowerCase()))
-                    .map((row, idx) => (
-                      <tr key={idx} className="hover:bg-[#f6f3f2]/40 transition">
-                        <td className="py-3.5 px-4 font-bold text-slate-800">{row.district}</td>
-                        <td className="py-3.5 px-4 font-bold text-[#34647b]">{row.division}</td>
-                        <td className="py-3.5 px-4 font-black text-[#864f19]">{row.pincode}</td>
-                        <td className="py-3.5 px-4 font-extrabold text-slate-900">{row.agent}</td>
-                        <td className="py-3.5 px-4 text-center font-bold text-slate-800">{row.vendors}</td>
-                        <td className="py-3.5 px-4 text-center font-bold text-[#864f19]">{row.targets}</td>
-                        <td className="py-3.5 px-4 text-center font-black text-emerald-700">{row.score}</td>
-                        <td className="py-3.5 px-4 text-center">
-                          <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-[10px] rounded-full border border-emerald-200">
-                            {row.status}
-                          </span>
+                  <>
+                    {hierarchyAgents.filter(a => {
+                      const roleStr = (a.role || a.level || '').toLowerCase();
+                      const st = a.territory?.state || a.assignedState || a.state;
+                      const dist = a.territory?.district || a.assignedDistrict || a.district;
+                      const div = a.territory?.division || a.assignedDivision || a.division;
+                      const matchState = !st || st.toLowerCase() === userState.toLowerCase();
+                      const matchDistrict = drillDistrictFilter === 'all' || (!dist || dist.toLowerCase().includes(drillDistrictFilter.toLowerCase()));
+                      const matchDivision = drillDivisionFilter === 'all' || (!div || div.toLowerCase().includes(drillDivisionFilter.toLowerCase()));
+                      return (roleStr === 'pincode' || roleStr === 'agent') && matchState && matchDistrict && matchDivision;
+                    }).map((agent, idx) => {
+                      const agentPin = agent.territory?.pincode || agent.assignedPincode || '—';
+                      const agentDist = agent.territory?.district || agent.assignedDistrict || '—';
+                      const agentDiv = agent.territory?.division || agent.assignedDivision || '—';
+                      const agentVendors = realVendors.filter(v => {
+                        const vPin = v.pincode || v.territory?.pincode;
+                        return vPin === (agent.territory?.pincode || agent.assignedPincode);
+                      }).length;
+                      const agentVisits = realVisits.filter(v => v.agent === agent._id || v.visitedBy === agent.name).length;
+                      return (
+                        <tr key={agent._id || idx} className="hover:bg-[#f6f3f2]/40 transition">
+                          <td className="py-3.5 px-4 font-bold text-slate-800">{agentDist}</td>
+                          <td className="py-3.5 px-4 font-bold text-[#34647b]">{agentDiv}</td>
+                          <td className="py-3.5 px-4 font-black text-[#864f19]">PIN {agentPin}</td>
+                          <td className="py-3.5 px-4 font-extrabold text-slate-900">{agent.name}</td>
+                          <td className="py-3.5 px-4 text-center font-bold text-slate-800">{agentVendors} Vendors</td>
+                          <td className="py-3.5 px-4 text-center font-bold text-[#864f19]">{agentVisits} Visits</td>
+                          <td className="py-3.5 px-4 text-center font-black text-emerald-700">{agent.performanceScore ?? '—'}{typeof agent.performanceScore === 'number' ? '%' : ''}</td>
+                          <td className="py-3.5 px-4 text-center">
+                            <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-[10px] rounded-full border border-emerald-200">
+                              Active
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {hierarchyAgents.filter(a => {
+                      const roleStr = (a.role || a.level || '').toLowerCase();
+                      const st = a.territory?.state || a.assignedState || a.state;
+                      const matchState = !st || st.toLowerCase() === userState.toLowerCase();
+                      return (roleStr === 'pincode' || roleStr === 'agent') && matchState;
+                    }).length === 0 && (
+                      <tr>
+                        <td colSpan={8} className="py-8 text-center text-slate-400 font-semibold">
+                          No pincode agents found in {userState}
                         </td>
                       </tr>
-                    ))
+                    )}
+                  </>
                 ) : activeRole === 'pincode' ? (
                   <tr className="hover:bg-[#f6f3f2]/40 transition">
                     <td className="py-3.5 px-4 font-black text-[#864f19]">PIN {userPincode}</td>
                     <td className="py-3.5 px-4 font-extrabold text-slate-900">{user?.name || 'Pincode Agent'}</td>
-                    <td className="py-3.5 px-4 text-center font-bold text-slate-800">{vendorsOnboardedCount || 12} Vendors</td>
-                    <td className="py-3.5 px-4 text-center font-bold text-[#864f19]">{completedTasksCount || 8} / {completedTasksCount + pendingTasksCount || 20} Targets</td>
-                    <td className="py-3.5 px-4 text-center font-black text-emerald-700">{targetRatePercent || 88.5}%</td>
+                    <td className="py-3.5 px-4 text-center font-bold text-slate-800">{vendorsOnboardedCount} Vendors</td>
+                    <td className="py-3.5 px-4 text-center font-bold text-[#864f19]">{completedTasksCount} / {completedTasksCount + pendingTasksCount} Targets</td>
+                    <td className="py-3.5 px-4 text-center font-black text-emerald-700">{targetRatePercent}%</td>
                     <td className="py-3.5 px-4 text-center">
                       <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-[10px] rounded-full border border-emerald-200">
                         Active
@@ -637,54 +649,47 @@ export const ReportsModule: React.FC = () => {
                   </tr>
                 ) : (
                   <>
-                    <tr className="hover:bg-[#f6f3f2]/40 transition">
-                      <td className="py-3.5 px-4 font-black text-[#864f19]">PIN 530001 (Central)</td>
-                      <td className="py-3.5 px-4 font-extrabold text-slate-900">raki pin</td>
-                      <td className="py-3.5 px-4 text-center font-bold text-slate-800">12 Vendors</td>
-                      <td className="py-3.5 px-4 text-center font-bold text-[#864f19]">8 / 20 Targets</td>
-                      <td className="py-3.5 px-4 text-center font-black text-emerald-700">88.5%</td>
-                      <td className="py-3.5 px-4 text-center">
-                        <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-[10px] rounded-full border border-emerald-200">
-                          Active
-                        </span>
-                      </td>
-                    </tr>
-                    <tr className="hover:bg-[#f6f3f2]/40 transition">
-                      <td className="py-3.5 px-4 font-black text-[#864f19]">PIN 530017 (MVP Colony)</td>
-                      <td className="py-3.5 px-4 font-extrabold text-slate-900">Kiran Kumar</td>
-                      <td className="py-3.5 px-4 text-center font-bold text-slate-800">10 Vendors</td>
-                      <td className="py-3.5 px-4 text-center font-bold text-[#864f19]">15 / 20 Targets</td>
-                      <td className="py-3.5 px-4 text-center font-black text-emerald-700">88.5%</td>
-                      <td className="py-3.5 px-4 text-center">
-                        <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-[10px] rounded-full border border-emerald-200">
-                          Active
-                        </span>
-                      </td>
-                    </tr>
-                    <tr className="hover:bg-[#f6f3f2]/40 transition">
-                      <td className="py-3.5 px-4 font-black text-[#864f19]">PIN 530018 (Madhavadhara)</td>
-                      <td className="py-3.5 px-4 font-extrabold text-slate-900">Ramesh Naidu</td>
-                      <td className="py-3.5 px-4 text-center font-bold text-slate-800">8 Vendors</td>
-                      <td className="py-3.5 px-4 text-center font-bold text-[#864f19]">12 / 20 Targets</td>
-                      <td className="py-3.5 px-4 text-center font-black text-emerald-700">88.5%</td>
-                      <td className="py-3.5 px-4 text-center">
-                        <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-[10px] rounded-full border border-emerald-200">
-                          Active
-                        </span>
-                      </td>
-                    </tr>
-                    <tr className="hover:bg-[#f6f3f2]/40 transition">
-                      <td className="py-3.5 px-4 font-black text-[#864f19]">PIN 530026 (Gajuwaka)</td>
-                      <td className="py-3.5 px-4 font-extrabold text-slate-900">Nageswara Rao</td>
-                      <td className="py-3.5 px-4 text-center font-bold text-slate-800">6 Vendors</td>
-                      <td className="py-3.5 px-4 text-center font-bold text-[#864f19]">10 / 20 Targets</td>
-                      <td className="py-3.5 px-4 text-center font-black text-emerald-700">88.5%</td>
-                      <td className="py-3.5 px-4 text-center">
-                        <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-[10px] rounded-full border border-emerald-200">
-                          Active
-                        </span>
-                      </td>
-                    </tr>
+                    {hierarchyAgents.filter(a => {
+                      const roleStr = (a.role || a.level || '').toLowerCase();
+                      const st = a.territory?.state || a.assignedState || a.state;
+                      const dist = a.territory?.district || a.assignedDistrict || a.district;
+                      const div = a.territory?.division || a.assignedDivision || a.division;
+                      const matchState = !st || st.toLowerCase() === userState.toLowerCase();
+                      const matchDistrict = activeRole !== 'division' || (!dist || dist.toLowerCase() === userDistrict.toLowerCase());
+                      const matchDivision = activeRole !== 'division' || (!div || div.toLowerCase() === userDivision.toLowerCase());
+                      return (roleStr === 'pincode' || roleStr === 'agent') && matchState && matchDistrict && matchDivision;
+                    }).map((agent, idx) => {
+                      const agentVendors = realVendors.filter(v => {
+                        const vPin = v.pincode || v.territory?.pincode;
+                        return vPin === (agent.territory?.pincode || agent.assignedPincode);
+                      }).length;
+                      const agentVisits = realVisits.filter(v => v.agent === agent._id || v.visitedBy === agent.name).length;
+                      const agentCompleted = agentVisits;
+                      return (
+                        <tr key={agent._id || idx} className="hover:bg-[#f6f3f2]/40 transition">
+                          <td className="py-3.5 px-4 font-black text-[#864f19]">PIN {agent.territory?.pincode || agent.assignedPincode || '—'}</td>
+                          <td className="py-3.5 px-4 font-extrabold text-slate-900">{agent.name}</td>
+                          <td className="py-3.5 px-4 text-center font-bold text-slate-800">{agentVendors} Vendors</td>
+                          <td className="py-3.5 px-4 text-center font-bold text-[#864f19]">{agentCompleted} Visits</td>
+                          <td className="py-3.5 px-4 text-center font-black text-emerald-700">{agent.performanceScore ?? '—'}{typeof agent.performanceScore === 'number' ? '%' : ''}</td>
+                          <td className="py-3.5 px-4 text-center">
+                            <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-[10px] rounded-full border border-emerald-200">
+                              Active
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {hierarchyAgents.filter(a => {
+                      const roleStr = (a.role || a.level || '').toLowerCase();
+                      return roleStr === 'pincode' || roleStr === 'agent';
+                    }).length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="py-8 text-center text-slate-400 font-semibold">
+                          No pincode agents found in your territory
+                        </td>
+                      </tr>
+                    )}
                   </>
                 )}
               </tbody>

@@ -34,10 +34,10 @@ export const WalletDashboard: React.FC = () => {
 
   // Bank details state (User profile / real dynamic data)
   const [bankDetails, setBankDetails] = useState({
-    bankName: user?.bankDetails?.bankName || 'State Bank of India',
-    accountNumber: user?.bankDetails?.accountNumber || '987654321098',
-    ifscCode: user?.bankDetails?.ifscCode || 'SBIN0004821',
-    holderName: user?.name || 'State Manager'
+    bankName: user?.bankDetails?.bankName || '',
+    accountNumber: user?.bankDetails?.accountNumber || '',
+    ifscCode: user?.bankDetails?.ifscCode || '',
+    holderName: user?.bankDetails?.accountHolder || user?.name || ''
   });
 
   const [isEditBankOpen, setIsEditBankOpen] = useState(false);
@@ -65,135 +65,17 @@ export const WalletDashboard: React.FC = () => {
         amount: t.amount,
         type: t.type,
         description: t.description,
-        sourceAgent: t.sourceAgent || 'Downstream Agent',
+        sourceAgent: t.sourceAgent || user?.name || 'Agent',
         territory: t.territory || `${userState} Scope`,
         status: t.status,
         createdAt: new Date(t.createdAt).toLocaleDateString('en-GB') + ' ' + new Date(t.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }));
 
-      if (activeRole === 'state') {
-        const stateInitialTransactions: Transaction[] = [
-          {
-            transactionId: 'TXN-90214',
-            amount: 15400,
-            type: 'credit',
-            description: 'State Override Commission - Visakhapatnam District Onboardings',
-            sourceAgent: 'Vizag City Division Lead',
-            territory: 'Visakhapatnam District',
-            status: 'completed',
-            createdAt: '18/08/2026 11:30 AM'
-          },
-          {
-            transactionId: 'TXN-84192',
-            amount: 18900,
-            type: 'credit',
-            description: 'State Override Commission - NTR District Onboardings',
-            sourceAgent: 'Vijayawada Central Lead',
-            territory: 'NTR District',
-            status: 'completed',
-            createdAt: '17/08/2026 04:15 PM'
-          },
-          {
-            transactionId: 'TXN-71045',
-            amount: 12300,
-            type: 'credit',
-            description: 'State Performance Target Bonus - Guntur District',
-            sourceAgent: 'Guntur City Lead',
-            territory: 'Guntur District',
-            status: 'completed',
-            createdAt: '16/08/2026 02:00 PM'
-          },
-          {
-            transactionId: 'TXN-60912',
-            amount: 25000,
-            type: 'debit',
-            description: 'State Wallet Cashout Payout Transfer to Settlement Bank',
-            sourceAgent: `${user?.name || 'State Agent'} (State Manager)`,
-            territory: `${userState} Scope`,
-            status: 'completed',
-            createdAt: '15/08/2026 10:00 AM'
-          }
-        ];
-        const stateBalance = balanceRes.data.balance || 21600;
-        setBalance(stateBalance);
-        const combined = [...mappedTx.filter(m => !stateInitialTransactions.some(s => s.transactionId === m.transactionId)), ...stateInitialTransactions];
-        setTransactions(combined);
-      } else {
-        setBalance(balanceRes.data.balance || 0);
-        setTransactions(mappedTx);
-      }
+      setBalance(balanceRes.data.balance || 0);
+      setTransactions(mappedTx);
     } catch (err: any) {
-      if (activeRole === 'state') {
-        const stateInitialTransactions: Transaction[] = [
-          {
-            transactionId: 'TXN-90214',
-            amount: 15400,
-            type: 'credit',
-            description: 'State Override Commission - Visakhapatnam District Onboardings',
-            sourceAgent: 'Vizag City Division Lead',
-            territory: 'Visakhapatnam District',
-            status: 'completed',
-            createdAt: '18/08/2026 11:30 AM'
-          },
-          {
-            transactionId: 'TXN-84192',
-            amount: 18900,
-            type: 'credit',
-            description: 'State Override Commission - NTR District Onboardings',
-            sourceAgent: 'Vijayawada Central Lead',
-            territory: 'NTR District',
-            status: 'completed',
-            createdAt: '17/08/2026 04:15 PM'
-          },
-          {
-            transactionId: 'TXN-71045',
-            amount: 12300,
-            type: 'credit',
-            description: 'State Performance Target Bonus - Guntur District',
-            sourceAgent: 'Guntur City Lead',
-            territory: 'Guntur District',
-            status: 'completed',
-            createdAt: '16/08/2026 02:00 PM'
-          },
-          {
-            transactionId: 'TXN-60912',
-            amount: 25000,
-            type: 'debit',
-            description: 'State Wallet Cashout Payout Transfer to Settlement Bank',
-            sourceAgent: `${user?.name || 'State Agent'} (State Manager)`,
-            territory: `${userState} Scope`,
-            status: 'completed',
-            createdAt: '15/08/2026 10:00 AM'
-          }
-        ];
-        setBalance(21600);
-        setTransactions(stateInitialTransactions);
-      } else {
-        const defaultTx: Transaction[] = [
-          {
-            transactionId: 'TXN-53001',
-            amount: 3000,
-            type: 'credit',
-            description: 'Pincode Merchant Onboarding Target Bonus',
-            sourceAgent: user?.name || 'Pincode Agent',
-            territory: `PIN ${user?.territory?.pincode || '422101'}`,
-            status: 'completed',
-            createdAt: '18/08/2026 10:00 AM'
-          },
-          {
-            transactionId: 'TXN-53002',
-            amount: 2000,
-            type: 'credit',
-            description: 'Pincode Audit Verification Reward',
-            sourceAgent: user?.name || 'Pincode Agent',
-            territory: `PIN ${user?.territory?.pincode || '422101'}`,
-            status: 'completed',
-            createdAt: '15/08/2026 02:30 PM'
-          }
-        ];
-        setBalance(5000);
-        setTransactions(defaultTx);
-      }
+      setBalance(0);
+      setTransactions([]);
     } finally {
       setIsLoading(false);
     }
@@ -241,7 +123,7 @@ export const WalletDashboard: React.FC = () => {
         amount: addedTx.amount,
         type: addedTx.type,
         description: addedTx.description,
-        sourceAgent: `${user?.name || 'State Agent'} (State Manager)`,
+        sourceAgent: `${user?.name || 'Agent'}`,
         territory: `${userState} Scope`,
         status: addedTx.status,
         createdAt: new Date(addedTx.createdAt).toLocaleDateString('en-GB') + ' ' + new Date(addedTx.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -256,24 +138,7 @@ export const WalletDashboard: React.FC = () => {
         setCashoutSuccess(false);
       }, 2000);
     } catch (err: any) {
-      const mockTx: Transaction = {
-        transactionId: `TXN-${Math.floor(10000 + Math.random() * 90000)}`,
-        amount: amountNum,
-        type: 'debit',
-        description: activeRole === 'state' ? 'State Wallet Cashout Payout Request' : 'Wallet Cashout Payout Request',
-        sourceAgent: `${user?.name || 'State Agent'} (State Manager)`,
-        territory: `${userState} Scope`,
-        status: 'pending',
-        createdAt: new Date().toLocaleDateString('en-GB') + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-      setBalance(prev => Math.max(0, prev - amountNum));
-      setTransactions([mockTx, ...transactions]);
-      setCashoutSuccess(true);
-      setCashoutAmount('');
-      setTimeout(() => {
-        setIsCashoutOpen(false);
-        setCashoutSuccess(false);
-      }, 2000);
+      setErrorMsg(err.response?.data?.message || 'Cashout request failed. Please check your wallet balance and try again.');
     } finally {
       setCashoutLoading(false);
     }
@@ -369,12 +234,12 @@ export const WalletDashboard: React.FC = () => {
 
         <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">THIS WEEK</span>
-          <p className="text-xl font-black text-[#864f19] mt-1">₹{(weekEarnings || 46600).toLocaleString('en-IN')}</p>
+          <p className="text-xl font-black text-[#864f19] mt-1">₹{weekEarnings.toLocaleString('en-IN')}</p>
         </div>
 
         <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">THIS MONTH</span>
-          <p className="text-xl font-black text-slate-800 mt-1">₹{(monthEarnings || 46600).toLocaleString('en-IN')}</p>
+          <p className="text-xl font-black text-slate-800 mt-1">₹{monthEarnings.toLocaleString('en-IN')}</p>
         </div>
 
         <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
@@ -385,7 +250,7 @@ export const WalletDashboard: React.FC = () => {
         <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">NEXT PAYOUT DATE</span>
           <p className="text-sm font-extrabold text-blue-700 mt-2">
-            {pendingPayouts > 0 ? new Date(Date.now() + 7 * 86400000).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : '25 Aug 2026'}
+            {pendingPayouts > 0 ? new Date(Date.now() + 7 * 86400000).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : 'None Scheduled'}
           </p>
         </div>
       </div>
@@ -440,21 +305,21 @@ export const WalletDashboard: React.FC = () => {
             <div className="space-y-2 text-xs">
               <div className="flex justify-between">
                 <span className="text-slate-400 font-medium">Bank Name</span>
-                <span className="font-bold text-slate-800">{bankDetails.bankName || 'State Bank of India'}</span>
+                <span className="font-bold text-slate-800">{bankDetails.bankName || 'Not Linked'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400 font-medium">Account No.</span>
                 <span className="font-bold text-slate-800">
-                  {bankDetails.accountNumber ? `••••••${bankDetails.accountNumber.slice(-4)}` : '••••••3210'}
+                  {bankDetails.accountNumber ? `••••••${bankDetails.accountNumber.slice(-4)}` : 'Not Linked'}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400 font-medium">IFSC Code</span>
-                <span className="font-bold text-slate-800">{bankDetails.ifscCode || 'SBIN0004821'}</span>
+                <span className="font-bold text-slate-800">{bankDetails.ifscCode || 'Not Linked'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400 font-medium">Account Holder</span>
-                <span className="font-bold text-slate-800 truncate max-w-[120px]">{user?.name || bankDetails.holderName || 'State Manager'}</span>
+                <span className="font-bold text-slate-800 truncate max-w-[120px]">{bankDetails.holderName || user?.name || 'Not Linked'}</span>
               </div>
             </div>
           </div>
@@ -515,7 +380,7 @@ export const WalletDashboard: React.FC = () => {
             </div>
           ) : filteredTransactions.length === 0 ? (
             <div className="py-12 text-center text-slate-500 font-bold text-xs">
-              No matching transactions found.
+              {transactions.length === 0 ? 'No transactions yet' : 'No matching transactions found.'}
             </div>
           ) : (
             <table className="w-full text-left border-collapse">

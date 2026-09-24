@@ -109,7 +109,7 @@ export const FieldVisitsModule: React.FC = () => {
   const [customReason, setCustomReason] = useState<string>('');
 
   // Start Form State
-  const [visitPincode, setVisitPincode] = useState('530001');
+  const [visitPincode, setVisitPincode] = useState('');
   const [vendorName, setVendorName] = useState('');
   const [storeAddress, setStoreAddress] = useState('');
   const [latitude, setLatitude] = useState<number | ''>('');
@@ -372,8 +372,8 @@ export const FieldVisitsModule: React.FC = () => {
       visitDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
       visitTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       status: 'in_progress',
-      latitude: Number(latitude) || 17.6868,
-      longitude: Number(longitude) || 83.2185,
+      latitude: Number(latitude) || 0,
+      longitude: Number(longitude) || 0,
       remarks: remarks,
       visitedBy: userName,
       visitedByRole: `${activeRole.charAt(0).toUpperCase() + activeRole.slice(1)} Agent`,
@@ -390,6 +390,13 @@ export const FieldVisitsModule: React.FC = () => {
       localStorage.setItem(userVisitsKey, JSON.stringify(updatedVisits));
     } catch (e) {}
 
+    // Reset form fields after successful submission
+    setVendorName('');
+    setStoreAddress('');
+    setRemarks('');
+    setGpsPhoto('');
+    setLatitude('');
+    setLongitude('');
     setIsSubmitting(false);
     setIsStartModalOpen(false);
 
@@ -1072,7 +1079,15 @@ export const FieldVisitsModule: React.FC = () => {
       {/* MODAL: Start New Field Visit */}
       <Modal
         isOpen={isStartModalOpen}
-        onClose={() => setIsStartModalOpen(false)}
+        onClose={() => {
+          setIsStartModalOpen(false);
+          setVendorName('');
+          setStoreAddress('');
+          setRemarks('');
+          setGpsPhoto('');
+          setLatitude('');
+          setLongitude('');
+        }}
         title="Start New Store Visit"
         size="full"
       >
@@ -1098,10 +1113,8 @@ export const FieldVisitsModule: React.FC = () => {
                 <option value={userPincode}>{userPincode} (Assigned PIN)</option>
               ) : (
                 <>
-                  <option value="530001">530001 (Central Visakhapatnam)</option>
-                  <option value="530017">530017 (MVP Colony)</option>
-                  <option value="530018">530018 (Madhavadhara)</option>
-                  <option value="530026">530026 (Gajuwaka)</option>
+                  <option value="">-- Select Pincode --</option>
+                  {userPincode && <option value={userPincode}>{userPincode} (Your Territory PIN)</option>}
                 </>
               )}
             </select>

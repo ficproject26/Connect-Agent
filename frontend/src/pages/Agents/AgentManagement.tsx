@@ -1096,15 +1096,15 @@ export const AgentManagement: React.FC = () => {
                       <div className="flex flex-wrap items-center gap-4">
                         <div className="text-right">
                           <p className="text-[8px] uppercase font-bold text-slate-400">Vendors</p>
-                          <p className="text-xs font-black text-slate-800">12 Vendors</p>
+                          <p className="text-xs font-black text-slate-800">{pin.totalOnboardedShops || metrics.totalVendors || 0} Vendors</p>
                         </div>
                         <div className="text-right border-l border-slate-200 pl-3">
                           <p className="text-[8px] uppercase font-bold text-slate-400">Target Progress</p>
-                          <p className="text-xs font-black text-[#864f19]">8 / 20 Targets</p>
+                          <p className="text-xs font-black text-[#864f19]">{pin.completedTargets || 0} / {pin.assignedTargets || 0} Targets</p>
                         </div>
                         <div className="text-right border-l border-slate-200 pl-3">
                           <p className="text-[8px] uppercase font-bold text-slate-400">Performance Score</p>
-                          <p className="text-xs font-black text-emerald-700">88.5%</p>
+                          <p className="text-xs font-black text-emerald-700">{typeof pin.performanceScore === 'number' ? `${pin.performanceScore}%` : '—'}</p>
                         </div>
 
                         <button
@@ -1256,15 +1256,21 @@ export const AgentManagement: React.FC = () => {
                       </div>
                       <div className="bg-[#fbf9f8] p-3.5 rounded-2xl border border-[#d7c3b5]/30">
                         <p className="text-[9px] uppercase font-extrabold text-[#52443a]">Targets Achieved</p>
-                        <p className="text-base font-black text-emerald-700 mt-0.5">18 / 20 Targets</p>
+                        <p className="text-base font-black text-emerald-700 mt-0.5">{selectedAgent?.completedTargets ?? 0} / {selectedAgent?.assignedTargets ?? 0} Targets</p>
                       </div>
                       <div className="bg-[#fbf9f8] p-3.5 rounded-2xl border border-[#d7c3b5]/30">
                         <p className="text-[9px] uppercase font-extrabold text-[#52443a]">Completion Rate</p>
-                        <p className="text-base font-black text-[#864f19] mt-0.5">88.5%</p>
+                        <p className="text-base font-black text-[#864f19] mt-0.5">
+                          {(selectedAgent?.assignedTargets ?? 0) > 0
+                            ? `${Math.round(((selectedAgent?.completedTargets ?? 0) / (selectedAgent?.assignedTargets ?? 1)) * 100)}%`
+                            : '—'}
+                        </p>
                       </div>
                       <div className="bg-[#fbf9f8] p-3.5 rounded-2xl border border-[#d7c3b5]/30">
                         <p className="text-[9px] uppercase font-extrabold text-[#52443a]">Performance Score</p>
-                        <p className="text-base font-black text-[#864f19] mt-0.5">88.5%</p>
+                        <p className="text-base font-black text-[#864f19] mt-0.5">
+                          {typeof selectedAgent?.performanceScore === 'number' ? `${selectedAgent.performanceScore}%` : '—'}
+                        </p>
                       </div>
                     </div>
                   </div>

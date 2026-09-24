@@ -43,9 +43,9 @@ export const TicketsList: React.FC = () => {
   const [attachment, setAttachment] = useState<{ fileName: string; dataUrl: string } | null>(null);
   
   // State Agent Scope specific creation inputs
-  const [selectedDistrict, setSelectedDistrict] = useState('Visakhapatnam');
-  const [selectedDivision, setSelectedDivision] = useState('Vizag City Division');
-  const [selectedPincode, setSelectedPincode] = useState('530001');
+  const [selectedDistrict, setSelectedDistrict] = useState('');
+  const [selectedDivision, setSelectedDivision] = useState('');
+  const [selectedPincode, setSelectedPincode] = useState('');
 
   // State Agent Ticket Inspection / Management State
   const [ticketRaised, setTicketRaised] = useState(false);
@@ -85,77 +85,10 @@ export const TicketsList: React.FC = () => {
         assignedAgent: t.assignedAgent
       }));
 
-      if (activeRole === 'state') {
-        const stateInitialTickets: SupportTicket[] = [
-          {
-            _id: 'ST-101',
-            ticketId: 'TKT-91042',
-            territory: 'Visakhapatnam → Vizag City → 530001',
-            vendorName: 'Sri Venkateswara Traders',
-            raisedBy: 'Ravi Teja (Pincode Agent)',
-            category: 'Vendor',
-            description: 'Merchant KYC verification delayed beyond SLA period of 48 hours.',
-            priority: 'high',
-            status: 'open',
-            createdAt: new Date().toLocaleDateString('en-GB'),
-            remarks: 'Under review by State Admin desk',
-            assignedAgent: 'Ravi Teja (Pincode Agent)'
-          },
-          {
-            _id: 'ST-102',
-            ticketId: 'TKT-82914',
-            territory: 'NTR District → Vijayawada Central → 520001',
-            vendorName: 'Durga Groceries',
-            raisedBy: 'Kiran Kumar (Division Agent)',
-            category: 'Payout/Commission',
-            description: 'Commission calculation mismatch for 15 onboarded retail merchants.',
-            priority: 'critical',
-            status: 'in_progress',
-            createdAt: new Date(Date.now() - 86400000).toLocaleDateString('en-GB'),
-            remarks: 'Escalated to State Finance team',
-            assignedAgent: 'Kiran Kumar (Division Agent)'
-          },
-          {
-            _id: 'ST-103',
-            ticketId: 'TKT-74109',
-            territory: 'Guntur → Guntur City → 522002',
-            vendorName: 'Kothapet Mart',
-            raisedBy: 'Guntur Lead (District Agent)',
-            category: 'Target/Task',
-            description: 'Target quota allocation dispute for Q3 merchant onboarding.',
-            priority: 'medium',
-            status: 'open',
-            createdAt: new Date(Date.now() - 172800000).toLocaleDateString('en-GB'),
-            remarks: 'Awaiting District Lead response',
-            assignedAgent: 'Guntur Lead (District Agent)'
-          },
-          {
-            _id: 'ST-104',
-            ticketId: 'TKT-63028',
-            territory: 'Chittoor → Tirupati Central → 517501',
-            vendorName: 'Tirupati Textiles',
-            raisedBy: 'Tirupati Agent (Pincode Agent)',
-            category: 'Field Visit',
-            description: 'Merchant GPS verification failure during physical audit visit.',
-            priority: 'low',
-            status: 'resolved',
-            createdAt: new Date(Date.now() - 259200000).toLocaleDateString('en-GB'),
-            remarks: 'GPS verification re-audited and approved by State Lead.',
-            assignedAgent: 'Tirupati Agent (Pincode Agent)'
-          }
-        ];
-        const combined = [...mapped.filter(m => !stateInitialTickets.some(s => s.ticketId === m.ticketId)), ...stateInitialTickets];
-        setTickets(combined);
-        if (selectedTicket) {
-          const fresh = combined.find(t => t._id === selectedTicket._id || t.ticketId === selectedTicket.ticketId);
-          if (fresh) setSelectedTicket(prev => prev ? { ...prev, ...fresh } : fresh);
-        }
-      } else {
-        setTickets(mapped);
-        if (selectedTicket) {
-          const fresh = mapped.find(t => t._id === selectedTicket._id || t.ticketId === selectedTicket.ticketId);
-          if (fresh) setSelectedTicket(prev => prev ? { ...prev, ...fresh } : fresh);
-        }
+      setTickets(mapped);
+      if (selectedTicket) {
+        const fresh = mapped.find(t => t._id === selectedTicket._id || t.ticketId === selectedTicket.ticketId);
+        if (fresh) setSelectedTicket(prev => prev ? { ...prev, ...fresh } : fresh);
       }
     } catch (err: any) {
       // Retain existing working data on temporary API/network failure
@@ -509,11 +442,9 @@ export const TicketsList: React.FC = () => {
                           className="bg-white border border-[#d7c3b5]/60 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                         >
                           <option value="">Assign to Responsible Agent...</option>
-                          <option value="Visakhapatnam District Lead">Visakhapatnam District Lead</option>
-                          <option value="Vizag City Division Lead">Vizag City Division Lead</option>
-                          <option value="raki pin (Pincode Agent - 530001)">raki pin (Pincode Agent - 530001)</option>
-                          <option value="NTR District Lead">NTR District Lead</option>
-                          <option value="Vijayawada Central Division Lead">Vijayawada Central Division Lead</option>
+                          <option value="District Lead">District Lead ({selectedDistrict || userState})</option>
+                          <option value="Division Lead">Division Lead</option>
+                          <option value="Pincode Agent">Pincode Agent</option>
                           <option value="System Admin">System SuperAdmin</option>
                         </select>
                       </div>
@@ -576,39 +507,31 @@ export const TicketsList: React.FC = () => {
                     onChange={(e) => setSelectedDistrict(e.target.value)}
                     className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                   >
-                    <option value="Visakhapatnam">Visakhapatnam District</option>
-                    <option value="NTR District">NTR District (Vijayawada)</option>
-                    <option value="Guntur">Guntur District</option>
-                    <option value="Chittoor">Chittoor District</option>
+                    <option value="">-- Select District --</option>
+                    {user?.territory?.state && <option value={user.territory.state}>{user.territory.state} (Your State)</option>}
                   </select>
                 </div>
 
                 <div className="space-y-1">
                   <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Target Division *</label>
-                  <select
+                  <input
+                    type="text"
+                    placeholder="Enter division name..."
                     value={selectedDivision}
                     onChange={(e) => setSelectedDivision(e.target.value)}
                     className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                  >
-                    <option value="Vizag City Division">Vizag City Division</option>
-                    <option value="Vijayawada Central Division">Vijayawada Central Division</option>
-                    <option value="Guntur City Division">Guntur City Division</option>
-                    <option value="Tirupati Central Division">Tirupati Central Division</option>
-                  </select>
+                  />
                 </div>
 
                 <div className="space-y-1">
                   <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Pincode Sector & Responsible Agent</label>
-                  <select
+                  <input
+                    type="text"
+                    placeholder="Enter pincode..."
                     value={selectedPincode}
                     onChange={(e) => setSelectedPincode(e.target.value)}
                     className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                  >
-                    <option value="530001">530001 (raki pin - Pincode Agent)</option>
-                    <option value="530017">530017 (Kiran Kumar - Pincode Agent)</option>
-                    <option value="520001">520001 (Governorpet Agent)</option>
-                    <option value="520007">520007 (Autonagar Agent)</option>
-                  </select>
+                  />
                 </div>
 
                 <div className="space-y-1">
@@ -631,7 +554,7 @@ export const TicketsList: React.FC = () => {
                       <input
                         type="text"
                         readOnly
-                        value={user?.name ? `${user.name} Merchant` : 'Sri Rama Merchant'}
+                        value={user?.name || 'Logged Agent'}
                         className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs font-bold text-[#1b1c1c] focus:outline-none"
                       />
                     </div>
@@ -641,7 +564,7 @@ export const TicketsList: React.FC = () => {
                       <input
                         type="text"
                         required
-                        value={vendorShopName || 'Sri Rama Supermarket'}
+                        value={vendorShopName}
                         onChange={(e) => setVendorShopName(e.target.value)}
                         placeholder="Enter store name..."
                         className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs font-bold text-[#864f19] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
@@ -678,26 +601,20 @@ export const TicketsList: React.FC = () => {
 
                     <div className="space-y-1">
                       <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Select Merchant Pincode *</label>
-                      <select
+                      <input
+                        type="text"
+                        placeholder={`Enter pincode (your territory: ${user?.territory?.pincode || '—'})`}
                         className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                      >
-                        <option value="530001">530001 (Central Visakhapatnam)</option>
-                        <option value="530017">530017 (MVP Colony)</option>
-                        <option value="530018">530018 (Madhavadhara)</option>
-                        <option value="530026">530026 (Gajuwaka)</option>
-                      </select>
+                      />
                     </div>
 
                     <div className="space-y-1">
                       <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Assigned Pincode Agent</label>
-                      <select
+                      <input
+                        type="text"
+                        placeholder="Enter agent name (optional)..."
                         className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                      >
-                        <option value="raki pin">raki pin (Pincode Agent - 530001)</option>
-                        <option value="Kiran Kumar">Kiran Kumar (Pincode Agent - 530017)</option>
-                        <option value="Ramesh Naidu">Ramesh Naidu (Pincode Agent - 530018)</option>
-                        <option value="Nageswara Rao">Nageswara Rao (Pincode Agent - 530026)</option>
-                      </select>
+                      />
                     </div>
                   </>
                 )}
