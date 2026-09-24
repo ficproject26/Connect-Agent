@@ -31,7 +31,10 @@ export const TicketsList: React.FC = () => {
   const [assignedVendors, setAssignedVendors] = useState<any[]>([]);
   const [selectedVendorId, setSelectedVendorId] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [formError, setFormError] = useState('');
+  const [formSuccess, setFormSuccess] = useState('');
   
   const [category, setCategory] = useState(activeRole === 'state' ? 'Vendor' : 'Vendor Query');
   const [description, setDescription] = useState('');
@@ -43,9 +46,9 @@ export const TicketsList: React.FC = () => {
   const [attachment, setAttachment] = useState<{ fileName: string; dataUrl: string } | null>(null);
   
   // State Agent Scope specific creation inputs
-  const [selectedDistrict, setSelectedDistrict] = useState('');
-  const [selectedDivision, setSelectedDivision] = useState('');
-  const [selectedPincode, setSelectedPincode] = useState('');
+  const [selectedDistrict, setSelectedDistrict] = useState(activeRole === 'state' ? 'Visakhapatnam District' : '');
+  const [selectedDivision, setSelectedDivision] = useState(activeRole === 'state' ? 'Vizag City Division' : '');
+  const [selectedPincode, setSelectedPincode] = useState(activeRole === 'state' ? '530001 (raki pin - Pincode Agent)' : '');
 
   // State Agent Ticket Inspection / Management State
   const [ticketRaised, setTicketRaised] = useState(false);
@@ -72,9 +75,11 @@ export const TicketsList: React.FC = () => {
       const mapped: SupportTicket[] = backendTickets.map((t: any) => ({
         _id: t._id || `TK-${Math.floor(1000 + Math.random() * 9000)}`,
         ticketId: t.ticketId || `TKT-${Math.floor(10000 + Math.random() * 90000)}`,
-        territory: t.territory || `${t.district || 'Visakhapatnam'} → ${t.division || 'Vizag City'} → ${t.pincode || '530001'}`,
-        vendorName: t.vendorName || t.vendor?.name || 'Assigned Merchant',
-        raisedBy: t.raisedBy || t.agentName || 'Downstream Agent',
+        territory: t.territory || [t.district, t.division, t.pincode].filter(Boolean).join(' → ') || (t.state ? `${t.state} Scope` : `${userState} Scope`),
+        vendorName: t.storeName || t.vendorName || t.vendor?.name || 'Assigned Merchant',
+        raisedBy: t.creatorName
+          ? `${t.creatorName} (${(t.creatorRole || 'Agent').toUpperCase()})`
+          : (t.creator?.name ? `${t.creator.name} (${(t.creator.role || 'Agent').toUpperCase()})` : (t.raisedBy || 'Downstream Agent')),
         category: t.category || 'Vendor',
         description: t.description || 'Query details',
         priority: t.priority || 'medium',
@@ -91,7 +96,6 @@ export const TicketsList: React.FC = () => {
         if (fresh) setSelectedTicket(prev => prev ? { ...prev, ...fresh } : fresh);
       }
     } catch (err: any) {
-      // Retain existing working data on temporary API/network failure
       console.warn('Background ticket refresh fallback:', err);
     } finally {
       setIsLoading(false);
@@ -130,109 +134,157 @@ export const TicketsList: React.FC = () => {
 
   const handleRaiseTicket = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (description.length < 10) {
-      setErrorMsg('Issue Description must be at least 10 characters.');
+    if (isSubmitting) return;
+
+    setFormError('');
+    setFormSuccess('');
+
+    // Validation
+    if (activeRole === 'state') {
+      if (!selectedDistrict.trim()) {
+        setFormError('Please select or enter the Target District.');
+        return;
+      }
+      if (!selectedDivision.trim()) {
+        setFormError('Please enter the Target Division.');
+        return;
+      }
+    } else {
+      if (!vendorShopName.trim()) {
+        setFormError('Please enter the Store Name.');
+        return;
+      }
+    }
+
+    if (!description.trim()) {
+      setFormError('Please provide the Issue Details.');
       return;
     }
-    
-    setErrorMsg('');
-    const newTicketId = `TKT-${Math.floor(10000 + Math.random() * 90000)}`;
-    const newTicket: SupportTicket = {
-      _id: `TK-${Math.floor(1000 + Math.random() * 9000)}`,
-      ticketId: newTicketId,
-      territory: activeRole === 'state' ? `${selectedDistrict} → ${selectedDivision} → ${selectedPincode}` : `${user?.territory?.district || 'Visakhapatnam'} → ${user?.territory?.division || 'Vizag City'} → 530001`,
-      vendorName: vendorShopName || 'Assigned Merchant',
-      raisedBy: activeRole === 'state' ? `${user?.name || 'State Agent'} (State Lead)` : `${user?.name || 'Division Agent'} (Division Scope)`,
-      category,
-      description,
-      priority,
-      status: 'open',
-      createdAt: new Date().toLocaleDateString('en-GB'),
-      attachmentName: attachment?.fileName,
-      assignedAgent: activeRole === 'state' ? `${selectedDivision} Lead` : undefined
-    };
+
+    setIsSubmitting(true);
 
     try {
-      await api.post('/tickets', {
+      const payload: any = {
         category,
-        description: `[${vendorShopName ? `Vendor: ${vendorShopName}` : 'General'}] ${description}`,
+        description: description.trim(),
         priority,
-        attachmentName: attachment?.fileName
-      });
-    } catch (err: any) {}
-    
-    setTickets(prev => [newTicket, ...prev]);
-    setTicketRaised(true);
-    setDescription('');
-    setSelectedVendorId('');
-    setVendorName('');
-    setVendorShopName('');
-    setVendorAddress('');
-    setVendorPhone('');
-    setAttachment(null);
-    
-    setTimeout(() => setTicketRaised(false), 3000);
+        attachmentName: attachment?.fileName,
+        vendorName: vendorName || (user?.name ? `${user.name} Merchant` : 'Assigned Merchant'),
+        storeName: vendorShopName.trim()
+      };
+
+      if (activeRole === 'state') {
+        payload.state = userState;
+        payload.district = selectedDistrict.trim();
+        payload.division = selectedDivision.trim();
+        payload.pincode = selectedPincode.trim();
+        payload.territory = `${selectedDistrict.trim()} → ${selectedDivision.trim()}${selectedPincode.trim() ? ` → ${selectedPincode.trim()}` : ''}`;
+        payload.assignedAgent = selectedDivision.trim() ? `${selectedDivision.trim()} Lead` : undefined;
+      } else {
+        payload.state = user?.territory?.state || userState;
+        payload.district = user?.territory?.district || 'Visakhapatnam';
+        payload.division = user?.territory?.division || '';
+        payload.pincode = user?.territory?.pincode || '';
+        payload.territory = [payload.district, payload.division, payload.pincode].filter(Boolean).join(' → ');
+      }
+
+      await api.post('/tickets', payload);
+
+      setFormSuccess('Support ticket successfully logged!');
+      setTicketRaised(true);
+
+      // Reset form fields
+      setDescription('');
+      setSelectedVendorId('');
+      setVendorShopName('');
+      setVendorAddress('');
+      setVendorPhone('');
+      setAttachment(null);
+
+      // Immediately refresh the tickets list from backend API
+      await loadTicketData(false);
+
+      setTimeout(() => {
+        setTicketRaised(false);
+        setFormSuccess('');
+      }, 4000);
+    } catch (err: any) {
+      console.error('Submit ticket error:', err);
+      const backendMsg = err.response?.data?.message || err.response?.data?.error || err.message || 'Failed to submit support ticket. Please try again.';
+      setFormError(backendMsg);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // State Agent Ticket Actions (Respond, Assign, Escalate, Resolve, Reopen)
-  const handleStateRespond = (e: React.FormEvent) => {
+  const handleStateRespond = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTicket || !stateResponseText.trim()) return;
 
-    const updatedRemarks = `${selectedTicket.remarks ? `${selectedTicket.remarks} | ` : ''}[State Response ${new Date().toLocaleDateString('en-GB')}]: ${stateResponseText.trim()}`;
-    const updatedTicket: SupportTicket = {
-      ...selectedTicket,
-      remarks: updatedRemarks
-    };
-
-    setTickets(prev => prev.map(t => t._id === selectedTicket._id ? updatedTicket : t));
-    setSelectedTicket(updatedTicket);
-    setStateResponseText('');
+    try {
+      const updatedRemarks = `${selectedTicket.remarks ? `${selectedTicket.remarks} | ` : ''}[State Response ${new Date().toLocaleDateString('en-GB')}]: ${stateResponseText.trim()}`;
+      await api.patch(`/tickets/${selectedTicket._id}/status`, {
+        remarks: updatedRemarks
+      });
+      await loadTicketData(false);
+      setStateResponseText('');
+    } catch (err: any) {
+      console.error('State respond error:', err);
+    }
   };
 
-  const handleStateAssign = (agentName: string) => {
+  const handleStateAssign = async (agentName: string) => {
     if (!selectedTicket || !agentName) return;
-    const updatedTicket: SupportTicket = {
-      ...selectedTicket,
-      assignedAgent: agentName,
-      status: 'in_progress',
-      remarks: `${selectedTicket.remarks ? `${selectedTicket.remarks} | ` : ''}Assigned to ${agentName} by State Desk`
-    };
-    setTickets(prev => prev.map(t => t._id === selectedTicket._id ? updatedTicket : t));
-    setSelectedTicket(updatedTicket);
+    try {
+      await api.patch(`/tickets/${selectedTicket._id}/status`, {
+        status: 'in_progress',
+        assignedAgent: agentName,
+        remarks: `Assigned to ${agentName} by State Desk`
+      });
+      await loadTicketData(false);
+    } catch (err: any) {
+      console.error('State assign error:', err);
+    }
   };
 
-  const handleStateEscalateAdmin = () => {
+  const handleStateEscalateAdmin = async () => {
     if (!selectedTicket) return;
-    const updatedTicket: SupportTicket = {
-      ...selectedTicket,
-      status: 'escalated_to_admin',
-      remarks: `${selectedTicket.remarks ? `${selectedTicket.remarks} | ` : ''}Escalated to System SuperAdmin by State Desk`
-    };
-    setTickets(prev => prev.map(t => t._id === selectedTicket._id ? updatedTicket : t));
-    setSelectedTicket(updatedTicket);
+    try {
+      await api.patch(`/tickets/${selectedTicket._id}/status`, {
+        status: 'escalated_to_admin',
+        remarks: 'Escalated to System SuperAdmin by State Desk'
+      });
+      await loadTicketData(false);
+    } catch (err: any) {
+      console.error('State escalate error:', err);
+    }
   };
 
-  const handleStateResolve = () => {
+  const handleStateResolve = async () => {
     if (!selectedTicket) return;
-    const updatedTicket: SupportTicket = {
-      ...selectedTicket,
-      status: 'resolved',
-      remarks: `${selectedTicket.remarks ? `${selectedTicket.remarks} | ` : ''}Resolved by State Agent Desk`
-    };
-    setTickets(prev => prev.map(t => t._id === selectedTicket._id ? updatedTicket : t));
-    setSelectedTicket(updatedTicket);
+    try {
+      await api.patch(`/tickets/${selectedTicket._id}/status`, {
+        status: 'resolved',
+        remarks: 'Resolved by State Agent Desk'
+      });
+      await loadTicketData(false);
+    } catch (err: any) {
+      console.error('State resolve error:', err);
+    }
   };
 
-  const handleStateReopen = () => {
+  const handleStateReopen = async () => {
     if (!selectedTicket) return;
-    const updatedTicket: SupportTicket = {
-      ...selectedTicket,
-      status: 'open',
-      remarks: `${selectedTicket.remarks ? `${selectedTicket.remarks} | ` : ''}Reopened for re-investigation by State Desk`
-    };
-    setTickets(prev => prev.map(t => t._id === selectedTicket._id ? updatedTicket : t));
-    setSelectedTicket(updatedTicket);
+    try {
+      await api.patch(`/tickets/${selectedTicket._id}/status`, {
+        status: 'open',
+        remarks: 'Reopened for re-investigation by State Desk'
+      });
+      await loadTicketData(false);
+    } catch (err: any) {
+      console.error('State reopen error:', err);
+    }
   };
 
   return (
@@ -508,30 +560,45 @@ export const TicketsList: React.FC = () => {
                     className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                   >
                     <option value="">-- Select District --</option>
-                    {user?.territory?.state && <option value={user.territory.state}>{user.territory.state} (Your State)</option>}
+                    <option value="Visakhapatnam District">Visakhapatnam District</option>
+                    <option value="NTR District">NTR District</option>
+                    <option value="Guntur District">Guntur District</option>
+                    <option value="Tirupati District">Tirupati District</option>
+                    <option value="Krishna District">Krishna District</option>
+                    <option value="Kurnool District">Kurnool District</option>
+                    {user?.territory?.state && <option value={`${user.territory.state} (State Scope)`}>{user.territory.state} (State Scope)</option>}
                   </select>
                 </div>
 
                 <div className="space-y-1">
                   <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Target Division *</label>
-                  <input
-                    type="text"
-                    placeholder="Enter division name..."
+                  <select
                     value={selectedDivision}
                     onChange={(e) => setSelectedDivision(e.target.value)}
                     className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                  />
+                  >
+                    <option value="">-- Select Division --</option>
+                    <option value="Vizag City Division">Vizag City Division</option>
+                    <option value="Vijayawada Division">Vijayawada Division</option>
+                    <option value="Guntur Urban Division">Guntur Urban Division</option>
+                    <option value="Tirupati Central Division">Tirupati Central Division</option>
+                    <option value="State Operations Division">State Operations Division</option>
+                  </select>
                 </div>
 
                 <div className="space-y-1">
                   <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Pincode Sector & Responsible Agent</label>
-                  <input
-                    type="text"
-                    placeholder="Enter pincode..."
+                  <select
                     value={selectedPincode}
                     onChange={(e) => setSelectedPincode(e.target.value)}
                     className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                  />
+                  >
+                    <option value="">-- Select Pincode (Optional) --</option>
+                    <option value="530001 (raki pin - Pincode Agent)">530001 (raki pin - Pincode Agent)</option>
+                    <option value="520001 (Pincodeagent - Pincode Agent)">520001 (Pincodeagent - Pincode Agent)</option>
+                    <option value="530017 (Kiran Kumar - Pincode Agent)">530017 (Kiran Kumar - Pincode Agent)</option>
+                    <option value="522001 (Guntur Lead - District Agent)">522001 (Guntur Lead - District Agent)</option>
+                  </select>
                 </div>
 
                 <div className="space-y-1">
@@ -554,7 +621,7 @@ export const TicketsList: React.FC = () => {
                       <input
                         type="text"
                         readOnly
-                        value={user?.name || 'Logged Agent'}
+                        value={user?.name ? `${user.name} Merchant` : 'Pincodeagent Merchant'}
                         className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs font-bold text-[#1b1c1c] focus:outline-none"
                       />
                     </div>
@@ -574,8 +641,8 @@ export const TicketsList: React.FC = () => {
                     <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 space-y-1.5 text-[11px]">
                       <p className="text-[9px] font-black text-[#864f19] uppercase tracking-wider">Territory Location Details (Pincode Scope)</p>
                       <p className="text-slate-800">State: <strong>{user?.territory?.state || 'Andhra Pradesh'}</strong></p>
-                      <p className="text-slate-800">District: <strong>{user?.territory?.district || 'Visakhapatnam'}</strong></p>
-                      <p className="text-slate-800">Assigned Pincode: <strong className="text-[#864f19]">PIN {user?.territory?.pincode || '530001'}</strong></p>
+                      <p className="text-slate-800">District: <strong>{user?.territory?.district || 'NTR District'}</strong></p>
+                      <p className="text-slate-800">Assigned Pincode: <strong className="text-[#864f19]">PIN {user?.territory?.pincode || '520001'}</strong></p>
                     </div>
                   </>
                 ) : (
@@ -645,6 +712,7 @@ export const TicketsList: React.FC = () => {
                     <option value="KYC Document Issue">KYC Document Issue</option>
                     <option value="Portal Account Block">Portal Account Block</option>
                     <option value="Hardware / QR Standee Request">Hardware / QR Standee Request</option>
+                    <option value="Payment Issue">Payment Issue</option>
                   </>
                 )}
               </select>
@@ -669,8 +737,11 @@ export const TicketsList: React.FC = () => {
               <textarea
                 required
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Describe issue details (minimum 10 chars)..."
+                onChange={(e) => {
+                  setDescription(e.target.value);
+                  if (formError) setFormError('');
+                }}
+                placeholder="Describe issue details..."
                 rows={3}
                 className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19] resize-none"
               />
@@ -697,12 +768,36 @@ export const TicketsList: React.FC = () => {
               </div>
             </div>
 
-            {ticketRaised && (
-              <p className="text-xs text-emerald-700 font-bold text-center bg-emerald-50 p-2 rounded-lg">✓ Ticket Successfully Logged!</p>
+            {formError && (
+              <div className="p-3 bg-rose-50 text-rose-800 text-xs font-bold rounded-xl border border-rose-200 animate-fade-in">
+                ⚠️ {formError}
+              </div>
             )}
 
-            <button type="submit" className="w-full py-3 bg-[#864f19] hover:bg-[#a3672f] text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-sm transition-all border-none cursor-pointer flex items-center justify-center gap-2">
-              <Send className="w-3.5 h-3.5" /> {activeRole === 'state' ? 'Log State Ticket' : 'Submit Support Ticket'}
+            {(formSuccess || ticketRaised) && (
+              <div className="p-3 bg-emerald-50 text-emerald-800 text-xs font-bold rounded-xl border border-emerald-200 animate-fade-in">
+                ✓ {formSuccess || 'Ticket successfully logged!'}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className={`w-full py-3 bg-[#864f19] hover:bg-[#a3672f] text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-sm transition-all border-none flex items-center justify-center gap-2 ${
+                isSubmitting ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'
+              }`}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Submitting Ticket...</span>
+                </>
+              ) : (
+                <>
+                  <Send className="w-3.5 h-3.5" />
+                  <span>{activeRole === 'state' ? 'Log State Ticket' : 'Submit Support Ticket'}</span>
+                </>
+              )}
             </button>
           </form>
         </div>

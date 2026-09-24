@@ -8,6 +8,7 @@ import {
   TrendingUp, Users, Target, Shield, Zap, Globe, Landmark, Building, Layers,
   Download, FileText
 } from 'lucide-react';
+import { formatRegistrationDate } from '../../utils/date';
 
 interface LeaderboardItem {
   _id: string;
@@ -30,6 +31,7 @@ interface LeaderboardItem {
     pincode?: string;
   };
   trend: 'up' | 'down' | 'stable';
+  createdAt?: string;
 }
 
 
@@ -540,7 +542,10 @@ export const LeaderboardModule: React.FC = () => {
                         </div>
                         <div>
                           <p className="font-extrabold text-xs text-[#1b1c1c]">{item.name}</p>
-                          <p className="text-[10px] text-slate-400 font-semibold">{item.registrationId}</p>
+                          <p className="text-[10px] text-slate-400 font-semibold">
+                            {item.registrationId}
+                            {item.createdAt && ` • Reg: ${formatRegistrationDate(item.createdAt)}`}
+                          </p>
                         </div>
                       </div>
                     </td>
@@ -614,12 +619,17 @@ export const LeaderboardModule: React.FC = () => {
               </button>
             </div>
 
-            <div className="bg-[#fbf9f8] p-3.5 rounded-xl border border-[#d7c3b5]/40 flex flex-wrap items-center gap-2 text-xs font-bold text-[#52443a]">
-              <MapPin className="w-4 h-4 text-[#864f19]" />
-              <span>State: {selectedAgent.territory?.state || 'Karnataka'}</span>
-              {selectedAgent.territory?.district && <span>› District: {selectedAgent.territory.district}</span>}
-              {selectedAgent.territory?.division && <span>› Division: {selectedAgent.territory.division}</span>}
-              {selectedAgent.territory?.pincode && <span>› PIN: {selectedAgent.territory.pincode}</span>}
+            <div className="bg-[#fbf9f8] p-3.5 rounded-xl border border-[#d7c3b5]/40 flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-[#52443a]">
+              <div className="flex flex-wrap items-center gap-2">
+                <MapPin className="w-4 h-4 text-[#864f19]" />
+                <span>State: {selectedAgent.territory?.state || 'Andhra Pradesh'}</span>
+                {selectedAgent.territory?.district && <span>› District: {selectedAgent.territory.district}</span>}
+                {selectedAgent.territory?.division && <span>› Division: {selectedAgent.territory.division}</span>}
+                {selectedAgent.territory?.pincode && <span>› PIN: {selectedAgent.territory.pincode}</span>}
+              </div>
+              <div className="text-[11px] font-black text-[#864f19] bg-white px-2.5 py-1 rounded-lg border border-[#d7c3b5]/50 shadow-2xs">
+                Date of Registration: {formatRegistrationDate(selectedAgent.createdAt)}
+              </div>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">

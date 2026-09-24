@@ -550,7 +550,8 @@ export const getWeeklyLeaderboard = async (req: Request, res: Response) => {
         targetsCompleted,
         targetsTotal,
         territory: agent.territory || {},
-        trend: perf >= 85 ? 'up' : perf >= 70 ? 'stable' : 'down'
+        trend: perf >= 85 ? 'up' : perf >= 70 ? 'stable' : 'down',
+        createdAt: agent.createdAt
       };
     });
 

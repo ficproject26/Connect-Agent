@@ -10,6 +10,7 @@ import {
   Camera, Truck
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { formatRegistrationDate } from '../../utils/date';
 
 const getVehicleLabel = (type: string) => {
   switch (type) {
@@ -166,6 +167,13 @@ export const ProfileModule: React.FC = () => {
               </span>
             </div>
 
+            <div className="w-full bg-[#fbf9f8] p-3 rounded-xl border border-[#d7c3b5]/40 mt-3 text-center">
+              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Date of Registration</span>
+              <span className="text-xs font-black text-[#864f19]">
+                {formatRegistrationDate(user?.createdAt || (user as any)?.registeredAt || (user as any)?.registrationDate)}
+              </span>
+            </div>
+
             <div className="w-full border-t border-forgeGray-100 pt-6 mt-6 space-y-2">
               <button type="button" onClick={() => navigate('/shared/settings')} className="w-full flex items-center justify-between p-2.5 hover:bg-forgeGray-50 text-xs font-semibold rounded-lg text-forgeGray-650">
                 <span className="flex items-center"><Settings className="w-4 h-4 mr-2" /> App Preferences</span>
@@ -243,6 +251,21 @@ export const ProfileModule: React.FC = () => {
                     ]}
                     value={blood}
                     onChange={(e) => setBlood(e.target.value)}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Input
+                    label="Date of Registration"
+                    readOnly
+                    value={formatRegistrationDate(user?.createdAt || (user as any)?.registeredAt || (user as any)?.registrationDate)}
+                    className="bg-[#fbf9f8] cursor-not-allowed font-bold text-[#864f19]"
+                  />
+                  <Input
+                    label="Registration ID"
+                    readOnly
+                    value={user?.registrationId || 'REG-AGENT'}
+                    className="bg-[#fbf9f8] cursor-not-allowed font-bold text-slate-700"
                   />
                 </div>
 

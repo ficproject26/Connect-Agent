@@ -4,6 +4,7 @@ import { Card, CardHeader, CardTitle, CardBody, Tabs, Select, Button, Charts, In
 import { BarChart3, TrendingUp, Download, CheckCircle2, Ticket, Users, Upload, FileText, Loader2, Calendar } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../utils/api';
+import { formatRegistrationDate } from '../../utils/date';
 
 export const ReportsModule: React.FC = () => {
   const { user, addNotification } = useAuth();
@@ -166,7 +167,7 @@ export const ReportsModule: React.FC = () => {
     }
     return [
       { id: 'overview', label: 'Pincode Overview' },
-      { id: 'performance', label: 'Vendor / Performance' },
+      { id: 'performance', label: 'Performance' },
       { id: 'reports', label: 'Pincode Reports' },
     ];
   }, [activeRole]);
@@ -609,7 +610,14 @@ export const ReportsModule: React.FC = () => {
                           <td className="py-3.5 px-4 font-bold text-slate-800">{agentDist}</td>
                           <td className="py-3.5 px-4 font-bold text-[#34647b]">{agentDiv}</td>
                           <td className="py-3.5 px-4 font-black text-[#864f19]">PIN {agentPin}</td>
-                          <td className="py-3.5 px-4 font-extrabold text-slate-900">{agent.name}</td>
+                          <td className="py-3.5 px-4 font-extrabold text-slate-900">
+                            <p>{agent.name}</p>
+                            {agent.createdAt && (
+                              <p className="text-[10px] text-slate-400 font-normal mt-0.5">
+                                Reg Date: {formatRegistrationDate(agent.createdAt)}
+                              </p>
+                            )}
+                          </td>
                           <td className="py-3.5 px-4 text-center font-bold text-slate-800">{agentVendors} Vendors</td>
                           <td className="py-3.5 px-4 text-center font-bold text-[#864f19]">{agentVisits} Visits</td>
                           <td className="py-3.5 px-4 text-center font-black text-emerald-700">{agent.performanceScore ?? '—'}{typeof agent.performanceScore === 'number' ? '%' : ''}</td>
@@ -637,7 +645,14 @@ export const ReportsModule: React.FC = () => {
                 ) : activeRole === 'pincode' ? (
                   <tr className="hover:bg-[#f6f3f2]/40 transition">
                     <td className="py-3.5 px-4 font-black text-[#864f19]">PIN {userPincode}</td>
-                    <td className="py-3.5 px-4 font-extrabold text-slate-900">{user?.name || 'Pincode Agent'}</td>
+                    <td className="py-3.5 px-4 font-extrabold text-slate-900">
+                      <p>{user?.name || 'Pincode Agent'}</p>
+                      {user?.createdAt && (
+                        <p className="text-[10px] text-slate-400 font-normal mt-0.5">
+                          Reg Date: {formatRegistrationDate(user.createdAt)}
+                        </p>
+                      )}
+                    </td>
                     <td className="py-3.5 px-4 text-center font-bold text-slate-800">{vendorsOnboardedCount} Vendors</td>
                     <td className="py-3.5 px-4 text-center font-bold text-[#864f19]">{completedTasksCount} / {completedTasksCount + pendingTasksCount} Targets</td>
                     <td className="py-3.5 px-4 text-center font-black text-emerald-700">{targetRatePercent}%</td>
@@ -668,7 +683,14 @@ export const ReportsModule: React.FC = () => {
                       return (
                         <tr key={agent._id || idx} className="hover:bg-[#f6f3f2]/40 transition">
                           <td className="py-3.5 px-4 font-black text-[#864f19]">PIN {agent.territory?.pincode || agent.assignedPincode || '—'}</td>
-                          <td className="py-3.5 px-4 font-extrabold text-slate-900">{agent.name}</td>
+                          <td className="py-3.5 px-4 font-extrabold text-slate-900">
+                            <p>{agent.name}</p>
+                            {agent.createdAt && (
+                              <p className="text-[10px] text-slate-400 font-normal mt-0.5">
+                                Reg Date: {formatRegistrationDate(agent.createdAt)}
+                              </p>
+                            )}
+                          </td>
                           <td className="py-3.5 px-4 text-center font-bold text-slate-800">{agentVendors} Vendors</td>
                           <td className="py-3.5 px-4 text-center font-bold text-[#864f19]">{agentCompleted} Visits</td>
                           <td className="py-3.5 px-4 text-center font-black text-emerald-700">{agent.performanceScore ?? '—'}{typeof agent.performanceScore === 'number' ? '%' : ''}</td>

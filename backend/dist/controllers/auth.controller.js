@@ -235,7 +235,10 @@ const login = async (req, res) => {
                                 pincode: userDoc.pincode || userDoc.assignedPincode || '520001'
                             },
                             kycStatus: userDoc.kycStatus || userDoc.status || 'approved',
-                            registrationId: userDoc.registrationId || `REG-${Date.now()}`
+                            registrationId: userDoc.registrationId || `REG-${Date.now()}`,
+                            ...(userDoc.createdAt || userDoc.registeredAt || userDoc.registrationDate ? {
+                                createdAt: userDoc.createdAt || userDoc.registeredAt || userDoc.registrationDate
+                            } : {})
                         });
                         await agent.save();
                     }

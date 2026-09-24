@@ -10,6 +10,7 @@ import {
   ArrowLeft, Layers, Compass, UserCheck
 } from 'lucide-react';
 import { AgentOnboardedVendorsModal } from '../Vendors/AgentOnboardedVendorsModal';
+import { formatRegistrationDate } from '../../utils/date';
 
 export interface AgentNode {
   _id: string;
@@ -46,6 +47,7 @@ export interface AgentNode {
   districts?: AgentNode[];
   divisions?: AgentNode[];
   pincodes?: AgentNode[];
+  createdAt?: string;
 }
 
 export const AgentManagement: React.FC = () => {
@@ -151,7 +153,8 @@ export const AgentManagement: React.FC = () => {
       territory: { state: userState },
       plusPoints: ['KYC Verified', 'Assigned State Lead'],
       minusPoints: [],
-      districts: stateFilteredDistricts
+      districts: stateFilteredDistricts,
+      createdAt: user?.createdAt
     };
   }, [allStates, hierarchyData, userState, user]);
 
@@ -1212,12 +1215,17 @@ export const AgentManagement: React.FC = () => {
                 </button>
               </div>
 
-              <div className="bg-[#fbf9f8] p-3.5 rounded-xl border border-[#d7c3b5]/40 flex flex-wrap items-center gap-2 text-xs font-bold text-[#52443a]">
-                <MapPin className="w-4 h-4 text-[#864f19]" />
-                <span>State: {selectedAgent.territory?.state || userState}</span>
-                {selectedAgent.territory?.district && <span>› District: {selectedAgent.territory.district}</span>}
-                {selectedAgent.territory?.division && <span>› Division: {selectedAgent.territory.division}</span>}
-                {selectedAgent.role !== 'division' && selectedAgent.territory?.pincode && <span>› PIN: {selectedAgent.territory.pincode}</span>}
+              <div className="bg-[#fbf9f8] p-3.5 rounded-xl border border-[#d7c3b5]/40 flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-[#52443a]">
+                <div className="flex flex-wrap items-center gap-2">
+                  <MapPin className="w-4 h-4 text-[#864f19]" />
+                  <span>State: {selectedAgent.territory?.state || userState}</span>
+                  {selectedAgent.territory?.district && <span>› District: {selectedAgent.territory.district}</span>}
+                  {selectedAgent.territory?.division && <span>› Division: {selectedAgent.territory.division}</span>}
+                  {selectedAgent.role !== 'division' && selectedAgent.territory?.pincode && <span>› PIN: {selectedAgent.territory.pincode}</span>}
+                </div>
+                <div className="text-[11px] font-black text-[#864f19] bg-white px-2.5 py-1 rounded-lg border border-[#d7c3b5]/50 shadow-2xs">
+                  Date of Registration: {formatRegistrationDate(selectedAgent.createdAt)}
+                </div>
               </div>
 
               {selectedAgent.role === 'division' ? (
