@@ -168,10 +168,22 @@ const getSubordinates = async (req, res) => {
         const scope = await (0, territoryScope_1.getAgentTerritoryScope)(agentId);
         const filter = (0, territoryScope_1.buildTerritoryFilter)(scope);
         const subordinates = await Agent_1.default.find(filter)
-            .select('_id name role territory email phone status')
+            .select('_id name role territory email phone status performanceScore')
             .sort({ createdAt: -1 })
             .lean();
-        return res.status(200).json({ subordinates });
+        const subIds = subordinates.map(s => s._id);
+        const assignments = await TargetAssignment_1.default.find({ assignedTo: { $in: subIds } }).populate('target').lean();
+        const subsWithMetrics = subordinates.map(sub => {
+            const subAsgns = assignments.filter((a) => String(a.assignedTo) === String(sub._id));
+            const assignedTargets = subAsgns.reduce((acc, a) => acc + (a.target?.targetValue || 1), 0);
+            const completedTargets = subAsgns.filter((a) => a.status === 'completed').reduce((acc, a) => acc + (a.target?.targetValue || 1), 0);
+            return {
+                ...sub,
+                assignedTargets,
+                completedTargets
+            };
+        });
+        return res.status(200).json({ subordinates: subsWithMetrics });
     }
     catch (error) {
         console.error('Get subordinates error:', error);

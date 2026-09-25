@@ -712,12 +712,12 @@ export const AttendanceLogs: React.FC = () => {
                   </span>
                 </div>
                 <div className="text-2xl font-black text-slate-800">
-                  {selectedSubordinate.completedTargets || 12} / {selectedSubordinate.assignedTargets || 15} Targets
+                  {selectedSubordinate.completedTargets ?? 0} / {selectedSubordinate.assignedTargets ?? 0} Targets
                 </div>
                 <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
                   <div 
                     className="bg-[#864f19] h-full rounded-full" 
-                    style={{ width: `${Math.round(((selectedSubordinate.completedTargets || 12) / (selectedSubordinate.assignedTargets || 15)) * 100)}%` }} 
+                    style={{ width: `${(selectedSubordinate.assignedTargets || 0) > 0 ? Math.round(((selectedSubordinate.completedTargets || 0) / (selectedSubordinate.assignedTargets || 1)) * 100) : 0}%` }} 
                   />
                 </div>
               </div>

@@ -87,9 +87,9 @@ export const TargetsList: React.FC = () => {
           : 'Ongoing',
         status: a.status || 'assigned',
         priority: a.target?.type === 'daily' ? 'high' : 'medium',
-        taskDescription: a.target?.description || `Quota goal of ${a.target?.targetValue || 20} shops.`,
-        targetValue: a.target?.targetValue || 20,
-        achievedValue: a.status === 'completed' ? (a.target?.targetValue || 20) : (a.achievedValue || 0),
+        taskDescription: a.target?.description || `Quota goal of ${a.target?.targetValue ?? 0} shops.`,
+        targetValue: a.target?.targetValue ?? 0,
+        achievedValue: a.status === 'completed' ? (a.target?.targetValue ?? 0) : (a.achievedValue || 0),
         assignedToRole: assignedRole,
         assignedToName: a.assignedTo?.name || ''
       };
@@ -455,7 +455,7 @@ export const TargetsList: React.FC = () => {
             </div>
           ) : (
             currentTasks.map((task) => {
-              const assignedVal = task.targetValue || 20;
+              const assignedVal = task.targetValue ?? 0;
               const achievedVal = task.status === 'completed' ? assignedVal : (task.achievedValue || 0);
               const remainingVal = Math.max(0, assignedVal - achievedVal);
               const pctVal = assignedVal > 0 ? Math.round((achievedVal / assignedVal) * 100) : 0;

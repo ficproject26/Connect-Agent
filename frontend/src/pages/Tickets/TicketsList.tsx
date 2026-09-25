@@ -152,8 +152,8 @@ export const TicketsList: React.FC = () => {
       }
     }
 
-    if (!description.trim()) {
-      setFormError('Please provide the Issue Details.');
+    if (!description.trim() || description.trim().length < 10) {
+      setFormError('Please provide Issue Details (minimum 10 characters required).');
       return;
     }
 
@@ -206,7 +206,11 @@ export const TicketsList: React.FC = () => {
       }, 4000);
     } catch (err: any) {
       console.error('Submit ticket error:', err);
-      const backendMsg = err.response?.data?.message || err.response?.data?.error || err.message || 'Failed to submit support ticket. Please try again.';
+      const errData = err.response?.data;
+      const fieldError = Array.isArray(errData?.errors) && errData.errors.length > 0
+        ? errData.errors.map((e: any) => e.message).join(', ')
+        : null;
+      const backendMsg = fieldError || errData?.message || errData?.error || err.message || 'Failed to submit support ticket. Please try again.';
       setFormError(backendMsg);
     } finally {
       setIsSubmitting(false);
@@ -729,15 +733,16 @@ export const TicketsList: React.FC = () => {
             </div>
 
             <div className="space-y-1">
-              <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Issue Details *</label>
+              <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Issue Details (Minimum 10 characters) *</label>
               <textarea
                 required
+                minLength={10}
                 value={description}
                 onChange={(e) => {
                   setDescription(e.target.value);
                   if (formError) setFormError('');
                 }}
-                placeholder="Describe issue details..."
+                placeholder="Please describe the issue in detail (at least 10 characters)..."
                 rows={3}
                 className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19] resize-none"
               />

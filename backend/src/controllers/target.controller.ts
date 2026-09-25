@@ -177,11 +177,26 @@ export const getSubordinates = async (req: Request, res: Response) => {
     const filter = buildTerritoryFilter(scope);
 
     const subordinates = await Agent.find(filter)
-      .select('_id name role territory email phone status')
+      .select('_id name role territory email phone status performanceScore')
       .sort({ createdAt: -1 })
       .lean();
 
-    return res.status(200).json({ subordinates });
+    const subIds = subordinates.map(s => s._id);
+    const assignments = await TargetAssignment.find({ assignedTo: { $in: subIds } }).populate('target').lean();
+
+    const subsWithMetrics = subordinates.map(sub => {
+      const subAsgns = assignments.filter((a: any) => String(a.assignedTo) === String(sub._id));
+      const assignedTargets = subAsgns.reduce((acc, a: any) => acc + (a.target?.targetValue || 1), 0);
+      const completedTargets = subAsgns.filter((a: any) => a.status === 'completed').reduce((acc, a: any) => acc + (a.target?.targetValue || 1), 0);
+
+      return {
+        ...sub,
+        assignedTargets,
+        completedTargets
+      };
+    });
+
+    return res.status(200).json({ subordinates: subsWithMetrics });
   } catch (error) {
     console.error('Get subordinates error:', error);
     return res.status(500).json({ message: 'Internal server error' });

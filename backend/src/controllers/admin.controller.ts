@@ -3,6 +3,8 @@ import mongoose from 'mongoose';
 import Agent from '../models/Agent';
 import AuditLog from '../models/AuditLog';
 import Vendor from '../models/Vendor';
+import TargetAssignment from '../models/TargetAssignment';
+import Wallet from '../models/Wallet';
 import { getAgentTerritoryScope, buildTerritoryFilter, buildVendorScopeFilter, invalidateAgentTerritoryScope } from '../utils/territoryScope';
 import { cacheService } from '../services/cache.service';
 
@@ -617,13 +619,26 @@ export const getWeeklyLeaderboard = async (req: Request, res: Response) => {
       .select('_id name email phone registrationId role kycStatus registrationFeePaid performanceScore territory createdAt')
       .lean();
 
-    // Enrich and compute leaderboard metrics
+    const agentIds = agents.map(a => a._id);
+    const [assignments, wallets] = await Promise.all([
+      TargetAssignment.find({ assignedTo: { $in: agentIds } }).populate('target').lean(),
+      Wallet.find({ agent: { $in: agentIds } }).lean()
+    ]);
+
+    // Enrich and compute real leaderboard metrics from actual DB records
     let leaderboard = agents.map(agent => {
-      const perf = agent.performanceScore || 85;
-      const feePaid = agent.registrationFeePaid ?? true;
-      const weeklyEarnings = Math.floor((perf * 380) + (feePaid ? 2500 : 0));
-      const targetsCompleted = Math.floor(perf / 10);
-      const targetsTotal = targetsCompleted + 2;
+      const agentAsgns = assignments.filter((a: any) => String(a.assignedTo) === String(agent._id));
+      const targetsTotal = agentAsgns.reduce((acc, a: any) => acc + (a.target?.targetValue || 1), 0);
+      const targetsCompleted = agentAsgns.filter((a: any) => a.status === 'completed').reduce((acc, a: any) => acc + (a.target?.targetValue || 1), 0);
+
+      const agentWallet = wallets.find((w: any) => String(w.agent) === String(agent._id));
+      const weeklyEarnings = (agentWallet?.transactions || [])
+        .filter((t: any) => t.type === 'credit' && t.status === 'completed')
+        .reduce((acc: number, t: any) => acc + (t.amount || 0), 0);
+
+      const realScore = targetsTotal > 0
+        ? Math.min(100, Math.round((targetsCompleted / targetsTotal) * 100))
+        : (agent.performanceScore || 0);
 
       return {
         _id: agent._id,
@@ -633,13 +648,13 @@ export const getWeeklyLeaderboard = async (req: Request, res: Response) => {
         registrationId: agent.registrationId || `AG-${String(agent._id).substring(0, 6)}`,
         role: agent.role,
         kycStatus: agent.kycStatus,
-        registrationFeePaid: feePaid,
-        performanceScore: perf,
+        registrationFeePaid: agent.registrationFeePaid ?? false,
+        performanceScore: realScore,
         weeklyEarnings,
         targetsCompleted,
         targetsTotal,
         territory: agent.territory || {},
-        trend: perf >= 85 ? 'up' : perf >= 70 ? 'stable' : 'down',
+        trend: realScore >= 75 ? 'up' : realScore >= 40 ? 'stable' : 'down',
         createdAt: agent.createdAt
       };
     });

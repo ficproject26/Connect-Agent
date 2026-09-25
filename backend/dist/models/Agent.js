@@ -57,6 +57,12 @@ const agentSchema = new mongoose_1.Schema({
     remarks: { type: String, default: '' },
     registrationFeePaid: { type: Boolean, default: false },
     performanceScore: { type: Number, default: 0 },
+    bankDetails: {
+        bankName: { type: String, default: '' },
+        accountNumber: { type: String, default: '' },
+        ifscCode: { type: String, default: '' },
+        accountHolder: { type: String, default: '' }
+    },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }
 }, {

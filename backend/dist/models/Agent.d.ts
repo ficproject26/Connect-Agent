@@ -31,6 +31,12 @@ export interface IAgent extends Document {
     remarks?: string;
     registrationFeePaid: boolean;
     performanceScore: number;
+    bankDetails?: {
+        bankName: string;
+        accountNumber: string;
+        ifscCode: string;
+        accountHolder: string;
+    };
     createdAt: Date;
     updatedAt: Date;
     comparePassword(password: string): Promise<boolean>;

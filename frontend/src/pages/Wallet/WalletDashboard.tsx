@@ -55,9 +55,10 @@ export const WalletDashboard: React.FC = () => {
     }
     setErrorMsg('');
     try {
-      const [balanceRes, txRes] = await Promise.all([
+      const [balanceRes, txRes, bankRes] = await Promise.all([
         api.get('/wallet/balance').catch(() => ({ data: { balance: 0 } })),
-        api.get('/wallet/transactions').catch(() => ({ data: { transactions: [] } }))
+        api.get('/wallet/transactions').catch(() => ({ data: { transactions: [] } })),
+        api.get('/wallet/bank-details').catch(() => ({ data: { bankDetails: null } }))
       ]);
       
       const mappedTx: Transaction[] = (txRes.data.transactions || []).map((t: any) => ({
@@ -73,6 +74,18 @@ export const WalletDashboard: React.FC = () => {
 
       setBalance(balanceRes.data.balance || 0);
       setTransactions(mappedTx);
+
+      if (bankRes?.data?.bankDetails) {
+        const b = bankRes.data.bankDetails;
+        if (b.bankName || b.accountNumber || b.ifscCode) {
+          setBankDetails({
+            bankName: b.bankName || '',
+            accountNumber: b.accountNumber || '',
+            ifscCode: b.ifscCode || '',
+            holderName: b.accountHolder || user?.name || ''
+          });
+        }
+      }
     } catch (err: any) {
       setBalance(0);
       setTransactions([]);
@@ -144,10 +157,28 @@ export const WalletDashboard: React.FC = () => {
     }
   };
 
-  const handleSaveBankDetails = (e: React.FormEvent) => {
+  const handleSaveBankDetails = async (e: React.FormEvent) => {
     e.preventDefault();
-    setBankDetails({ ...editBankForm });
-    setIsEditBankOpen(false);
+    try {
+      const res = await api.put('/wallet/bank-details', {
+        bankName: editBankForm.bankName,
+        accountNumber: editBankForm.accountNumber,
+        ifscCode: editBankForm.ifscCode,
+        accountHolder: editBankForm.holderName
+      });
+      if (res.data?.bankDetails) {
+        const b = res.data.bankDetails;
+        setBankDetails({
+          bankName: b.bankName || '',
+          accountNumber: b.accountNumber || '',
+          ifscCode: b.ifscCode || '',
+          holderName: b.accountHolder || user?.name || ''
+        });
+      }
+      setIsEditBankOpen(false);
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.message || 'Failed to save bank details.');
+    }
   };
 
   // CSV Statement Downloader

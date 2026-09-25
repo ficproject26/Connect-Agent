@@ -324,7 +324,7 @@ export const DivisionDashboard: React.FC = () => {
                         <span className="text-[10px] text-[#864f19] uppercase font-black">PIN: {agent.pincode}</span>
                       </div>
                       <div>
-                        <span className="text-[#52443a] block font-bold">{agent.completedTargets || 8} / {agent.assignedTargets || 20} Targets</span>
+                        <span className="text-[#52443a] block font-bold">{agent.completedTargets ?? 0} / {agent.assignedTargets ?? 0} Targets</span>
                         <span className={`inline-block text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded ${
                           agent.status === 'present' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-[#864f19]'
                         }`}>
@@ -545,12 +545,12 @@ export const DivisionDashboard: React.FC = () => {
                   </span>
                 </div>
                 <div className="text-2xl font-black text-slate-800">
-                  {selectedAgent.completedTargets} / {selectedAgent.assignedTargets} Targets
+                  {selectedAgent.completedTargets ?? 0} / {selectedAgent.assignedTargets ?? 0} Targets
                 </div>
                 <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
                   <div 
                     className="bg-[#864f19] h-full rounded-full" 
-                    style={{ width: `${Math.round((selectedAgent.completedTargets / selectedAgent.assignedTargets) * 100)}%` }} 
+                    style={{ width: `${(selectedAgent.assignedTargets || 0) > 0 ? Math.round(((selectedAgent.completedTargets || 0) / (selectedAgent.assignedTargets || 1)) * 100) : 0}%` }} 
                   />
                 </div>
               </div>

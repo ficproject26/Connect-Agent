@@ -33,6 +33,12 @@ export interface IAgent extends Document {
   remarks?: string;
   registrationFeePaid: boolean;
   performanceScore: number;
+  bankDetails?: {
+    bankName: string;
+    accountNumber: string;
+    ifscCode: string;
+    accountHolder: string;
+  };
   createdAt: Date;
   updatedAt: Date;
   comparePassword(password: string): Promise<boolean>;
@@ -91,6 +97,12 @@ const agentSchema = new Schema<IAgent>({
   remarks: { type: String, default: '' },
   registrationFeePaid: { type: Boolean, default: false },
   performanceScore: { type: Number, default: 0 },
+  bankDetails: {
+    bankName: { type: String, default: '' },
+    accountNumber: { type: String, default: '' },
+    ifscCode: { type: String, default: '' },
+    accountHolder: { type: String, default: '' }
+  },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 }, {
