@@ -6,6 +6,7 @@ import {
   Menu, Bell, LogOut, Settings, HelpCircle, Search, X, Laptop, Clock,
   User, Award, Shield, Users, Target, Ticket, FileText, ChevronDown, Wallet, Calendar, MapPin, GitFork, Trophy
 } from 'lucide-react';
+import { LiveChatAssistant } from '../common/LiveChatAssistant';
 
 interface SidebarItem {
   label: string;
@@ -24,6 +25,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const notifMenuRef = useRef<HTMLDivElement>(null);
@@ -326,16 +328,17 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                       <div className="px-4 py-1.5 border-b border-slate-100 mb-1">
                         <span className="font-extrabold text-slate-800">Support Resources</span>
                       </div>
-                      <Link
-                        to="/dashboard"
+                      <button
+                        type="button"
                         onClick={() => {
                           setIsHelpOpen(false);
+                          setIsChatOpen(true);
                         }}
-                        className="flex items-center gap-2.5 px-4 py-2 hover:bg-[#f6f3f2] text-slate-700 font-bold"
+                        className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-[#f6f3f2] text-slate-700 font-bold border-none bg-transparent cursor-pointer text-left transition-colors"
                       >
                         <span className="material-symbols-outlined text-sm text-[#864f19]">chat</span>
                         Live Chat Assistant
-                      </Link>
+                      </button>
                       <Link
                         to="/tickets"
                         onClick={() => setIsHelpOpen(false)}
@@ -466,6 +469,9 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
           </aside>
         </div>
       )}
+
+      {/* Global Live Chat Assistant Modal */}
+      <LiveChatAssistant isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
     </div>
   );
 };
