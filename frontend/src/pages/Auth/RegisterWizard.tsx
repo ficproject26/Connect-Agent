@@ -1,3 +1,4 @@
+import { getActiveStates, getActiveDistricts, getActiveDivisions, getActivePincodes, TerritoryPincode } from '../../utils/territoryService';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -139,6 +140,10 @@ const ROLE_SAMPLES = {
 const REGISTRATION_DRAFT_KEY = 'agent_registration_draft';
 
 export const RegisterWizard: React.FC = () => {
+  const [adminStates, setAdminStates] = useState<string[]>([]);
+  const [adminDistricts, setAdminDistricts] = useState<string[]>([]);
+  const [adminDivisions, setAdminDivisions] = useState<string[]>([]);
+  const [adminPincodes, setAdminPincodes] = useState<TerritoryPincode[]>([]);
   const navigate = useNavigate();
   const location = useLocation();
   const { register } = useAuth();
@@ -439,12 +444,12 @@ export const RegisterWizard: React.FC = () => {
         setFormErrors('Please select your assigned District.');
         return;
       }
-      if (!address.division) {
+      if ((role === 'division' || role === 'pincode') && !address.division) {
         setFormErrors('Please select your assigned Division.');
         return;
       }
-      if (!address.pincode || address.pincode.replace(/\D/g, '').length !== 6) {
-        setFormErrors('Please enter your 6-digit Pincode.');
+      if (role === 'pincode' && !address.pincode) {
+        setFormErrors('Please select your assigned PIN Code.');
         return;
       }
       if (!address.buildingNo.trim()) {
@@ -921,17 +926,18 @@ export const RegisterWizard: React.FC = () => {
                   />
                 </div>
 
-                {/* 6. Address & Territory Details */}
+                                {/* 6. Address & Territory Details (Admin Territory Master Single Source of Truth) */}
                 <div className="p-4 bg-amber-50/50 border border-amber-200/80 rounded-xl space-y-3 mt-2">
                   <div className="text-xs font-black text-[#864f19] uppercase tracking-wider">
                     • Address & Territory Details ({role.toUpperCase()} AGENT)
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {/* STATE: Required for ALL roles */}
                     <Select
                       label="State (Required)"
                       options={[
                         { value: '', label: '-- Select Assigned State --' },
-                        ...ALL_INDIAN_STATES.map(s => ({ value: s, label: s }))
+                        ...adminStates.map(s => ({ value: s, label: s }))
                       ]}
                       value={address.state}
                       onChange={(e) => {
@@ -948,34 +954,14 @@ export const RegisterWizard: React.FC = () => {
                       }}
                     />
 
-                    {role !== 'state' ? (
+                    {/* DISTRICT: Required for District, Division, Pincode agents */}
+                    {role !== 'state' && (
                       <Select
                         label="District (Required)"
                         disabled={!address.state}
                         options={[
                           { value: '', label: address.state ? '-- Select Assigned District --' : 'Select State First' },
-                          ...(STATE_DISTRICTS[address.state] || ["District Main", "District North", "District South", "District East", "District West"]).map(d => ({ value: d, label: d }))
-                        ]}
-                        value={address.district}
-                        onChange={(e) => {
-                          const selDistrict = e.target.value;
-                          setAddress({
-                            ...address,
-                            district: selDistrict,
-                            division: '',
-                            pincode: '',
-                            postOffice: ''
-                          });
-                          setFormErrors('');
-                        }}
-                      />
-                    ) : (
-                      <Select
-                        label="District (Optional for State Agent)"
-                        disabled={!address.state}
-                        options={[
-                          { value: '', label: address.state ? '-- Select District (Optional) --' : 'Select State First' },
-                          ...(STATE_DISTRICTS[address.state] || []).map(d => ({ value: d, label: d }))
+                          ...adminDistricts.map(d => ({ value: d, label: d }))
                         ]}
                         value={address.district}
                         onChange={(e) => {
@@ -992,51 +978,50 @@ export const RegisterWizard: React.FC = () => {
                       />
                     )}
 
-                    <Select
-                      label="Division (Required)"
-                      disabled={!address.district && role !== 'state'}
-                      options={[
-                        { value: '', label: address.district ? '-- Select Assigned Division --' : (address.state ? '-- Select Division --' : 'Select District First') },
-                        ...(DISTRICT_DIVISIONS[address.district] || [
-                          `${address.district || 'Central'} Central Division`,
-                          `${address.district || 'North'} North Division`,
-                          `${address.district || 'South'} South Division`,
-                          `${address.district || 'East'} East Division`,
-                          `${address.district || 'West'} West Division`
-                        ]).map(div => ({ value: div, label: div }))
-                      ]}
-                      value={address.division}
-                      onChange={(e) => {
-                        const selDiv = e.target.value;
-                        setAddress({
-                          ...address,
-                          division: selDiv,
-                          pincode: '',
-                          postOffice: ''
-                        });
-                        setFormErrors('');
-                      }}
-                    />
+                    {/* DIVISION: Required for Division & Pincode agents */}
+                    {(role === 'division' || role === 'pincode') && (
+                      <Select
+                        label="Division (Required)"
+                        disabled={!address.district}
+                        options={[
+                          { value: '', label: address.district ? '-- Select Assigned Division --' : 'Select District First' },
+                          ...adminDivisions.map(div => ({ value: div, label: div }))
+                        ]}
+                        value={address.division}
+                        onChange={(e) => {
+                          const selDiv = e.target.value;
+                          setAddress({
+                            ...address,
+                            division: selDiv,
+                            pincode: '',
+                            postOffice: ''
+                          });
+                          setFormErrors('');
+                        }}
+                      />
+                    )}
 
-                    <Input
-                      label="Pincode (6 Digits - Required)"
-                      maxLength={6}
-                      inputMode="numeric"
-                      placeholder="Enter 6-digit Pincode (e.g. 636903)"
-                      value={address.pincode}
-                      onChange={(e) => handlePincodeChange(e.target.value)}
-                    />
-
-                    {address.postOffice && (
-                      <div className="md:col-span-2">
-                        <Input
-                          label="Post Office Branch"
-                          value={address.postOffice}
-                          disabled
-                          className="bg-slate-50 cursor-not-allowed opacity-80"
-                          placeholder="Auto-populated"
-                        />
-                      </div>
+                    {/* PIN CODE: Required for Pincode Agent */}
+                    {role === 'pincode' && (
+                      <Select
+                        label="PIN Code (Required)"
+                        disabled={!address.division}
+                        options={[
+                          { value: '', label: address.division ? '-- Select Assigned PIN Code --' : 'Select Division First' },
+                          ...adminPincodes.map(p => ({ value: p.code, label: `${p.code}${p.name ? ' (' + p.name + ')' : ''}` }))
+                        ]}
+                        value={address.pincode}
+                        onChange={(e) => {
+                          const selPin = e.target.value;
+                          const pinObj = adminPincodes.find(p => p.code === selPin);
+                          setAddress({
+                            ...address,
+                            pincode: selPin,
+                            postOffice: pinObj?.name || pinObj?.postOffice || ''
+                          });
+                          setFormErrors('');
+                        }}
+                      />
                     )}
                   </div>
 

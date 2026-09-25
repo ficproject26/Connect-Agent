@@ -1,3 +1,4 @@
+import { getActiveDistricts, getActiveDivisions, getActivePincodes, TerritoryPincode } from '../../utils/territoryService';
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardBody } from '../../components/ui';
 import { Ticket, Send, Eye, Loader2, Paperclip, FileText, X, ShieldAlert, ArrowUpRight, CheckCircle2, RotateCcw, UserCheck } from 'lucide-react';
@@ -25,7 +26,7 @@ export const TicketsList: React.FC = () => {
   const { user } = useAuth();
   const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';
   const activeRole = (rawRole === 'agent' ? ((user as any)?.level || 'pincode') : rawRole).toLowerCase();
-  const userState = user?.territory?.state || 'Andhra Pradesh';
+  const userState = user?.territory?.state || user?.assignedState || 'Tamil Nadu';
 
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [assignedVendors, setAssignedVendors] = useState<any[]>([]);
@@ -45,10 +46,58 @@ export const TicketsList: React.FC = () => {
   const [vendorPhone, setVendorPhone] = useState('');
   const [attachment, setAttachment] = useState<{ fileName: string; dataUrl: string } | null>(null);
   
-  // State Agent Scope specific creation inputs
-  const [selectedDistrict, setSelectedDistrict] = useState(activeRole === 'state' ? 'Visakhapatnam District' : '');
-  const [selectedDivision, setSelectedDivision] = useState(activeRole === 'state' ? 'Vizag City Division' : '');
-  const [selectedPincode, setSelectedPincode] = useState(activeRole === 'state' ? '530001 (raki pin - Pincode Agent)' : '');
+  // State Agent Scope specific creation inputs (Admin Master Territory Driven)
+  const [selectedDistrict, setSelectedDistrict] = useState('');
+  const [selectedDivision, setSelectedDivision] = useState('');
+  const [selectedPincode, setSelectedPincode] = useState('');
+  const [availableDistricts, setAvailableDistricts] = useState<string[]>([]);
+  const [availableDivisions, setAvailableDivisions] = useState<string[]>([]);
+  const [availablePincodes, setAvailablePincodes] = useState<TerritoryPincode[]>([]);
+
+  // Load Active Districts for userState
+  useEffect(() => {
+    if (activeRole === 'state') {
+      getActiveDistricts(userState).then(dists => {
+        setAvailableDistricts(dists);
+        if (dists.length > 0 && (!selectedDistrict || !dists.includes(selectedDistrict))) {
+          setSelectedDistrict(dists[0]);
+        }
+      });
+    }
+  }, [activeRole, userState]);
+
+  // Load Active Divisions when District changes (with child reset)
+  useEffect(() => {
+    if (activeRole === 'state' && selectedDistrict) {
+      getActiveDivisions(userState, selectedDistrict).then(divs => {
+        setAvailableDivisions(divs);
+        if (divs.length > 0 && (!selectedDivision || !divs.includes(selectedDivision))) {
+          setSelectedDivision(divs[0]);
+        } else if (divs.length === 0) {
+          setSelectedDivision('');
+        }
+      });
+    } else {
+      setAvailableDivisions([]);
+      setSelectedDivision('');
+      setSelectedPincode('');
+    }
+  }, [activeRole, userState, selectedDistrict]);
+
+  // Load Active Pincodes when Division changes (with child reset)
+  useEffect(() => {
+    if (activeRole === 'state' && selectedDistrict && selectedDivision) {
+      getActivePincodes(userState, selectedDistrict, selectedDivision).then(pins => {
+        setAvailablePincodes(pins);
+        if (pins.length > 0 && (!selectedPincode || !pins.some(p => p.code === selectedPincode))) {
+          setSelectedPincode('');
+        }
+      });
+    } else {
+      setAvailablePincodes([]);
+      setSelectedPincode('');
+    }
+  }, [activeRole, userState, selectedDistrict, selectedDivision]);
 
   // State Agent Ticket Inspection / Management State
   const [ticketRaised, setTicketRaised] = useState(false);
@@ -556,17 +605,17 @@ export const TicketsList: React.FC = () => {
                   <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Target District *</label>
                   <select
                     value={selectedDistrict}
-                    onChange={(e) => setSelectedDistrict(e.target.value)}
+                    onChange={(e) => {
+                      setSelectedDistrict(e.target.value);
+                      setSelectedDivision('');
+                      setSelectedPincode('');
+                    }}
                     className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                   >
                     <option value="">-- Select District --</option>
-                    <option value="Visakhapatnam District">Visakhapatnam District</option>
-                    <option value="NTR District">NTR District</option>
-                    <option value="Guntur District">Guntur District</option>
-                    <option value="Tirupati District">Tirupati District</option>
-                    <option value="Krishna District">Krishna District</option>
-                    <option value="Kurnool District">Kurnool District</option>
-                    {user?.territory?.state && <option value={`${user.territory.state} (State Scope)`}>{user.territory.state} (State Scope)</option>}
+                    {availableDistricts.map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -574,15 +623,17 @@ export const TicketsList: React.FC = () => {
                   <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Target Division *</label>
                   <select
                     value={selectedDivision}
-                    onChange={(e) => setSelectedDivision(e.target.value)}
-                    className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                    onChange={(e) => {
+                      setSelectedDivision(e.target.value);
+                      setSelectedPincode('');
+                    }}
+                    disabled={!selectedDistrict}
+                    className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19] disabled:opacity-50"
                   >
                     <option value="">-- Select Division --</option>
-                    <option value="Vizag City Division">Vizag City Division</option>
-                    <option value="Vijayawada Division">Vijayawada Division</option>
-                    <option value="Guntur Urban Division">Guntur Urban Division</option>
-                    <option value="Tirupati Central Division">Tirupati Central Division</option>
-                    <option value="State Operations Division">State Operations Division</option>
+                    {availableDivisions.map(v => (
+                      <option key={v} value={v}>{v}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -591,13 +642,18 @@ export const TicketsList: React.FC = () => {
                   <select
                     value={selectedPincode}
                     onChange={(e) => setSelectedPincode(e.target.value)}
-                    className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                    disabled={!selectedDivision}
+                    className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19] disabled:opacity-50"
                   >
                     <option value="">-- Select Pincode (Optional) --</option>
-                    <option value="530001 (raki pin - Pincode Agent)">530001 (raki pin - Pincode Agent)</option>
-                    <option value="520001 (Pincodeagent - Pincode Agent)">520001 (Pincodeagent - Pincode Agent)</option>
-                    <option value="530017 (Kiran Kumar - Pincode Agent)">530017 (Kiran Kumar - Pincode Agent)</option>
-                    <option value="522001 (Guntur Lead - District Agent)">522001 (Guntur Lead - District Agent)</option>
+                    {availablePincodes.map(p => {
+                      const agentLabel = p.activeAgentId?.name ? ` (${p.activeAgentId.name} - Pincode Agent)` : '';
+                      return (
+                        <option key={p.code} value={p.code}>
+                          {p.code}{agentLabel}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
 
