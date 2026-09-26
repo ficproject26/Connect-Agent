@@ -5,7 +5,7 @@ export interface ITargetAssignment extends Document {
   assignedTo: Types.ObjectId;
   assignedBy: Types.ObjectId;
   dueDate: Date;
-  status: 'assigned' | 'accepted' | 'in_progress' | 'completed' | 'pending' | 'overdue';
+  status: 'assigned' | 'accepted' | 'in_progress' | 'completed' | 'pending' | 'overdue' | 'rejected' | 'cancelled';
   completedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -18,7 +18,7 @@ const targetAssignmentSchema = new Schema<ITargetAssignment>({
   dueDate: { type: Date, required: true },
   status: {
     type: String,
-    enum: ['assigned', 'accepted', 'in_progress', 'completed', 'pending', 'overdue'],
+    enum: ['assigned', 'accepted', 'in_progress', 'completed', 'pending', 'overdue', 'rejected', 'cancelled'],
     default: 'assigned',
     required: true
   },

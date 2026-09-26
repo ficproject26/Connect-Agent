@@ -4,6 +4,7 @@ export interface ITarget extends Document {
     description?: string;
     type: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
     targetValue: number;
+    priority?: 'High' | 'Medium' | 'Low' | 'high' | 'medium' | 'low';
     createdBy: Types.ObjectId;
     createdAt: Date;
     updatedAt: Date;

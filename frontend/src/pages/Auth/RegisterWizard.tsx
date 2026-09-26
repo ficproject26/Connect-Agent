@@ -1,27 +1,49 @@
-import { getActiveStates, getActiveDistricts, getActiveDivisions, getActivePincodes, TerritoryPincode } from '../../utils/territoryService';
-import React, { useState, useEffect, useMemo } from 'react';
+import {
+  getActiveStateList,
+  getActiveDistrictList,
+  getActiveDivisionList,
+  getActivePincodes,
+  TerritoryItem,
+  TerritoryPincode
+} from '../../utils/territoryService';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
-import { ArrowLeft, ArrowRight, Save, Shield, FileText, CheckCircle, Eye, EyeOff, RotateCcw, Trash2, MapPin, Building2, Lock } from 'lucide-react';
+import {
+  ArrowLeft, ArrowRight, Save, Shield, FileText, CheckCircle, Eye, EyeOff,
+  RotateCcw, Trash2, MapPin, Building2, Lock, AlertTriangle, RefreshCw
+} from 'lucide-react';
 import { AgentNetworkHero } from '../../components/auth/AgentNetworkHero';
 import connectPortalLogo from '../../assets/connect_portal_logo.png';
-
-// Centralized Admin States loaded dynamically via territoryService from Admin Pincode Management
 
 const REGISTRATION_DRAFT_KEY = 'agent_registration_draft';
 
 export const RegisterWizard: React.FC = () => {
-  const [adminStates, setAdminStates] = useState<string[]>([]);
-  const [adminDistricts, setAdminDistricts] = useState<string[]>([]);
-  const [adminDivisions, setAdminDivisions] = useState<string[]>([]);
+  // Real database territory state
+  const [adminStates, setAdminStates] = useState<TerritoryItem[]>([]);
+  const [adminDistricts, setAdminDistricts] = useState<TerritoryItem[]>([]);
+  const [adminDivisions, setAdminDivisions] = useState<TerritoryItem[]>([]);
   const [adminPincodes, setAdminPincodes] = useState<TerritoryPincode[]>([]);
+
+  // Territory loading & error states
+  const [isLoadingStates, setIsLoadingStates] = useState<boolean>(true);
+  const [isLoadingDistricts, setIsLoadingDistricts] = useState<boolean>(false);
+  const [isLoadingDivisions, setIsLoadingDivisions] = useState<boolean>(false);
+  const [isLoadingPincodes, setIsLoadingPincodes] = useState<boolean>(false);
+  const [territoryError, setTerritoryError] = useState<string>('');
+
   const navigate = useNavigate();
   const location = useLocation();
   const { register } = useAuth();
+
+  // Check if an existing agent was passed for editing
+  const editingAgent = useMemo(() => {
+    return (location.state as any)?.agent || (location.state as any)?.existingAgent || null;
+  }, [location.state]);
 
   // Wizard state control
   const [currentStep, setCurrentStep] = useState<number>(1);
@@ -36,7 +58,7 @@ export const RegisterWizard: React.FC = () => {
     return maxDate.toISOString().split('T')[0];
   }, []);
 
-  // Form Fields State — Always start with 100% empty fields
+  // Form Fields State
   const [role, setRole] = useState<'state' | 'division' | 'district' | 'pincode'>('state');
   const [personalInfo, setPersonalInfo] = useState({
     name: '',
@@ -78,65 +100,216 @@ export const RegisterWizard: React.FC = () => {
   });
 
   // Dynamic Territory Loading from Central Territory Database (Admin Pincode Management)
-  useEffect(() => {
-    let isMounted = true;
-    getActiveStates().then(states => {
-      if (isMounted && states && states.length > 0) {
-        setAdminStates(states);
-        // If single state available in central DB, auto-select it
-        if (states.length === 1 && !assignedTerritory.state) {
-          setAssignedTerritory(prev => ({ ...prev, state: states[0] }));
+  const loadAdminStates = useCallback(async (forceRefresh = false) => {
+    setIsLoadingStates(true);
+    setTerritoryError('');
+    try {
+      const states = await getActiveStateList(forceRefresh);
+      setAdminStates(states);
+
+      setAssignedTerritory(prev => {
+        // If existing state selected or provided by editingAgent, resolve its stateId
+        if (prev.state) {
+          const matched = states.find(s =>
+            s.name.trim().toLowerCase() === prev.state.trim().toLowerCase() ||
+            (prev.stateId && s.id === prev.stateId)
+          );
+          if (matched) {
+            return { ...prev, state: matched.name, stateId: matched.id };
+          }
         }
-      }
-    }).catch(err => {
+        return prev;
+      });
+    } catch (err: any) {
       console.error('Failed to load active states from central territory DB:', err);
-    });
-    return () => { isMounted = false; };
+      setTerritoryError('Unable to load territories. Please try again.');
+    } finally {
+      setIsLoadingStates(false);
+    }
   }, []);
 
+  useEffect(() => {
+    loadAdminStates(false);
+  }, [loadAdminStates]);
+
+  // Load districts dynamically when assigned state changes
   useEffect(() => {
     if (!assignedTerritory.state) {
       setAdminDistricts([]);
       return;
     }
     let isMounted = true;
-    getActiveDistricts(assignedTerritory.state).then(districts => {
-      if (isMounted) setAdminDistricts(districts);
-    }).catch(err => {
-      console.error('Failed to load active districts:', err);
-    });
+    setIsLoadingDistricts(true);
+    getActiveDistrictList(assignedTerritory.stateId || assignedTerritory.state)
+      .then(districts => {
+        if (isMounted) {
+          setAdminDistricts(districts);
+          setAssignedTerritory(prev => {
+            if (prev.district && !prev.districtId) {
+              const matched = districts.find(d => d.name.trim().toLowerCase() === prev.district.trim().toLowerCase());
+              if (matched) {
+                return { ...prev, districtId: matched.id };
+              }
+            }
+            return prev;
+          });
+        }
+      })
+      .catch(err => {
+        console.error('Failed to load active districts:', err);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingDistricts(false);
+      });
     return () => { isMounted = false; };
-  }, [assignedTerritory.state]);
+  }, [assignedTerritory.state, assignedTerritory.stateId]);
 
+  // Load divisions dynamically when assigned district changes
   useEffect(() => {
     if (!assignedTerritory.state || !assignedTerritory.district) {
       setAdminDivisions([]);
       return;
     }
     let isMounted = true;
-    getActiveDivisions(assignedTerritory.state, assignedTerritory.district).then(divisions => {
-      if (isMounted) setAdminDivisions(divisions);
-    }).catch(err => {
-      console.error('Failed to load active divisions:', err);
-    });
+    setIsLoadingDivisions(true);
+    getActiveDivisionList(
+      assignedTerritory.stateId || assignedTerritory.state,
+      assignedTerritory.districtId || assignedTerritory.district
+    )
+      .then(divisions => {
+        if (isMounted) {
+          setAdminDivisions(divisions);
+          setAssignedTerritory(prev => {
+            if (prev.division && !prev.divisionId) {
+              const matched = divisions.find(dv => dv.name.trim().toLowerCase() === prev.division.trim().toLowerCase());
+              if (matched) {
+                return {
+                  ...prev,
+                  divisionId: matched.id,
+                  taluk: prev.taluk || matched.taluk || ''
+                };
+              }
+            }
+            return prev;
+          });
+        }
+      })
+      .catch(err => {
+        console.error('Failed to load active divisions:', err);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingDivisions(false);
+      });
     return () => { isMounted = false; };
-  }, [assignedTerritory.state, assignedTerritory.district]);
+  }, [assignedTerritory.state, assignedTerritory.stateId, assignedTerritory.district, assignedTerritory.districtId]);
 
+  // Load pincodes dynamically when assigned division changes
   useEffect(() => {
     if (!assignedTerritory.state || !assignedTerritory.district || !assignedTerritory.division) {
       setAdminPincodes([]);
       return;
     }
     let isMounted = true;
-    getActivePincodes(assignedTerritory.state, assignedTerritory.district, assignedTerritory.division).then(pincodes => {
-      if (isMounted) {
-        setAdminPincodes(pincodes);
-      }
-    }).catch(err => {
-      console.error('Failed to load active pincodes:', err);
-    });
+    setIsLoadingPincodes(true);
+    getActivePincodes(
+      assignedTerritory.stateId || assignedTerritory.state,
+      assignedTerritory.districtId || assignedTerritory.district,
+      assignedTerritory.divisionId || assignedTerritory.division
+    )
+      .then(pincodes => {
+        if (isMounted) {
+          setAdminPincodes(pincodes);
+          setAssignedTerritory(prev => {
+            if (prev.pincode && !prev.pincodeId) {
+              const matched = pincodes.find(p => p.code.trim() === prev.pincode.trim());
+              if (matched) {
+                return {
+                  ...prev,
+                  pincodeId: matched.id,
+                  taluk: prev.taluk || matched.taluk || ''
+                };
+              }
+            }
+            return prev;
+          });
+        }
+      })
+      .catch(err => {
+        console.error('Failed to load active pincodes:', err);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingPincodes(false);
+      });
     return () => { isMounted = false; };
   }, [assignedTerritory.state, assignedTerritory.district, assignedTerritory.division]);
+
+  // Memoized territory dropdown options from Admin Central Territory Database
+  const stateOptions = useMemo(() => {
+    if (isLoadingStates) {
+      return [{ value: '', label: 'Loading states...' }];
+    }
+    if (territoryError) {
+      return [{ value: '', label: 'Unable to load states' }];
+    }
+    if (adminStates.length === 0) {
+      return [{ value: '', label: 'No states available' }];
+    }
+    return [
+      { value: '', label: '-- Select Assigned State --' },
+      ...adminStates.map(s => ({ value: s.name, label: s.name }))
+    ];
+  }, [isLoadingStates, territoryError, adminStates]);
+
+  const districtOptions = useMemo(() => {
+    if (!assignedTerritory.state) {
+      return [{ value: '', label: 'Select State First' }];
+    }
+    if (isLoadingDistricts) {
+      return [{ value: '', label: 'Loading districts...' }];
+    }
+    if (adminDistricts.length === 0) {
+      return [{ value: '', label: `No districts available in ${assignedTerritory.state}` }];
+    }
+    return [
+      { value: '', label: '-- Select Assigned District --' },
+      ...adminDistricts.map(d => ({ value: d.name, label: d.name }))
+    ];
+  }, [assignedTerritory.state, isLoadingDistricts, adminDistricts]);
+
+  const divisionOptions = useMemo(() => {
+    if (!assignedTerritory.district) {
+      return [{ value: '', label: 'Select District First' }];
+    }
+    if (isLoadingDivisions) {
+      return [{ value: '', label: 'Loading divisions...' }];
+    }
+    if (adminDivisions.length === 0) {
+      return [{ value: '', label: `No divisions available in ${assignedTerritory.district}` }];
+    }
+    return [
+      { value: '', label: '-- Select Assigned Division --' },
+      ...adminDivisions.map(dv => ({ value: dv.name, label: dv.name }))
+    ];
+  }, [assignedTerritory.district, isLoadingDivisions, adminDivisions]);
+
+  const pincodeOptions = useMemo(() => {
+    if (!assignedTerritory.division) {
+      return [{ value: '', label: 'Select Division First' }];
+    }
+    if (isLoadingPincodes) {
+      return [{ value: '', label: 'Loading pincodes...' }];
+    }
+    if (adminPincodes.length === 0) {
+      return [{ value: '', label: `No pincodes available in ${assignedTerritory.division}` }];
+    }
+    return [
+      { value: '', label: '-- Select Assigned PIN Code --' },
+      ...adminPincodes.map(p => ({
+        value: p.code,
+        label: `${p.code}${p.name ? ' (' + p.name + ')' : ''}${p.taluk ? ' - Taluk: ' + p.taluk : ''}`
+      }))
+    ];
+  }, [assignedTerritory.division, isLoadingPincodes, adminPincodes]);
 
   const [professionalInfo, setProfessionalInfo] = useState({
     qualification: '',
@@ -206,10 +379,50 @@ export const RegisterWizard: React.FC = () => {
     setSuccessData(null);
   };
 
-  // Clear draft on initial page mount to guarantee 100% fresh, empty fields for new users
+  // Clear draft or populate if editing an existing agent
   useEffect(() => {
-    clearDraft();
-  }, []);
+    if (editingAgent) {
+      if (editingAgent.role) setRole(editingAgent.role);
+      setPersonalInfo(prev => ({
+        ...prev,
+        name: editingAgent.name || prev.name,
+        phone: editingAgent.phone || prev.phone,
+        altPhone: editingAgent.altPhone || prev.altPhone,
+        email: editingAgent.email || prev.email,
+        dob: editingAgent.dob ? new Date(editingAgent.dob).toISOString().split('T')[0] : prev.dob,
+        gender: editingAgent.gender || prev.gender,
+        aadhaarNumber: editingAgent.aadhaarNumber || prev.aadhaarNumber,
+        panNumber: editingAgent.panNumber || prev.panNumber
+      }));
+      const t = editingAgent.assignedTerritory || editingAgent.territory || {};
+      setAssignedTerritory(prev => ({
+        ...prev,
+        state: t.state || prev.state,
+        stateId: t.stateId || prev.stateId,
+        district: t.district || prev.district,
+        districtId: t.districtId || prev.districtId,
+        division: t.division || prev.division,
+        divisionId: t.divisionId || prev.divisionId,
+        taluk: t.taluk || prev.taluk,
+        talukId: t.talukId || prev.talukId,
+        pincode: t.pincode || prev.pincode,
+        pincodeId: t.pincodeId || prev.pincodeId
+      }));
+      if (editingAgent.address && typeof editingAgent.address === 'object') {
+        setAddress(prev => ({ ...prev, ...editingAgent.address }));
+      }
+      if (editingAgent.qualification || editingAgent.experience) {
+        setProfessionalInfo(prev => ({
+          ...prev,
+          qualification: editingAgent.qualification || prev.qualification,
+          experience: editingAgent.experience || prev.experience,
+          previousCompany: editingAgent.previousCompany || prev.previousCompany
+        }));
+      }
+    } else {
+      clearDraft();
+    }
+  }, [editingAgent]);
 
   // Check URL query parameters or location state for fresh start
   useEffect(() => {
@@ -939,26 +1152,56 @@ export const RegisterWizard: React.FC = () => {
                         </p>
                       </div>
                     </div>
-                    <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-amber-100 text-[#864f19] border border-amber-300">
-                      Hierarchy Jurisdiction
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => loadAdminStates(true)}
+                        disabled={isLoadingStates}
+                        className="flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-[#864f19] border border-amber-300 transition-colors cursor-pointer disabled:opacity-50"
+                        title="Refresh territories from Admin"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${isLoadingStates ? 'animate-spin' : ''}`} />
+                        Refresh Data
+                      </button>
+                      <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-amber-100 text-[#864f19] border border-amber-300">
+                        Hierarchy Jurisdiction
+                      </span>
+                    </div>
                   </div>
+
+                  {/* Territory Load Error Banner with Retry */}
+                  {territoryError && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between text-xs text-red-700">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                        <span>{territoryError}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => loadAdminStates(true)}
+                        className="flex items-center gap-1 px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        Retry
+                      </button>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                     {/* STATE: Required for all roles */}
                     <div>
                       <Select
                         label="State (Required)"
-                        options={[
-                          { value: '', label: '-- Select Assigned State --' },
-                          ...adminStates.map(s => ({ value: s, label: s }))
-                        ]}
+                        disabled={isLoadingStates}
+                        placeholder={isLoadingStates ? "Loading states..." : territoryError ? "Unable to load states" : adminStates.length === 0 ? "No states available" : "-- Select Assigned State --"}
+                        options={stateOptions}
                         value={assignedTerritory.state}
                         onChange={(e) => {
                           const selState = e.target.value;
+                          const matched = adminStates.find(s => s.name === selState);
                           setAssignedTerritory({
                             state: selState,
-                            stateId: '',
+                            stateId: matched?.id || '',
                             district: '',
                             districtId: '',
                             division: '',
@@ -979,25 +1222,28 @@ export const RegisterWizard: React.FC = () => {
                         <Lock className="w-4 h-4 text-[#864f19] shrink-0" />
                         <div>
                           <span className="text-[9px] font-bold text-amber-800 uppercase block">District Jurisdiction</span>
-                          <span className="text-xs font-black text-[#864f19]">State-wide Scope (All Districts in State)</span>
+                          <span className="text-xs font-black text-[#864f19]">
+                            {assignedTerritory.state
+                              ? `State-wide Scope (All Districts in ${assignedTerritory.state})`
+                              : 'State-wide Scope (All Districts in State)'}
+                          </span>
                         </div>
                       </div>
                     ) : (
                       <div>
                         <Select
                           label="District (Required)"
-                          disabled={!assignedTerritory.state}
-                          options={[
-                            { value: '', label: assignedTerritory.state ? '-- Select Assigned District --' : 'Select State First' },
-                            ...adminDistricts.map(d => ({ value: d, label: d }))
-                          ]}
+                          disabled={!assignedTerritory.state || isLoadingDistricts}
+                          placeholder={!assignedTerritory.state ? "Select State First" : isLoadingDistricts ? "Loading districts..." : "-- Select Assigned District --"}
+                          options={districtOptions}
                           value={assignedTerritory.district}
                           onChange={(e) => {
                             const selDistrict = e.target.value;
+                            const matched = adminDistricts.find(d => d.name === selDistrict);
                             setAssignedTerritory(prev => ({
                               ...prev,
                               district: selDistrict,
-                              districtId: '',
+                              districtId: matched?.id || '',
                               division: '',
                               divisionId: '',
                               taluk: '',
@@ -1018,7 +1264,11 @@ export const RegisterWizard: React.FC = () => {
                           <Lock className="w-4 h-4 text-[#864f19] shrink-0" />
                           <div>
                             <span className="text-[9px] font-bold text-amber-800 uppercase block">Division Jurisdiction</span>
-                            <span className="text-xs font-black text-[#864f19]">District-wide Scope (All Divisions in District)</span>
+                            <span className="text-xs font-black text-[#864f19]">
+                              {assignedTerritory.district
+                                ? `District-wide Scope (All Divisions in ${assignedTerritory.district})`
+                                : 'District-wide Scope (All Divisions in District)'}
+                            </span>
                           </div>
                         </div>
                       ) : null
@@ -1026,21 +1276,18 @@ export const RegisterWizard: React.FC = () => {
                       <div>
                         <Select
                           label="Division (Required)"
-                          disabled={!assignedTerritory.district}
-                          options={[
-                            { value: '', label: assignedTerritory.district ? '-- Select Assigned Division --' : 'Select District First' },
-                            ...adminDivisions.map(div => ({ value: div, label: div }))
-                          ]}
+                          disabled={!assignedTerritory.district || isLoadingDivisions}
+                          placeholder={!assignedTerritory.district ? "Select District First" : isLoadingDivisions ? "Loading divisions..." : "-- Select Assigned Division --"}
+                          options={divisionOptions}
                           value={assignedTerritory.division}
                           onChange={(e) => {
                             const selDiv = e.target.value;
-                            const divPincodes = adminPincodes.filter(p => p.taluk);
-                            const matchedTaluk = divPincodes[0]?.taluk || '';
+                            const matched = adminDivisions.find(dv => dv.name === selDiv);
                             setAssignedTerritory(prev => ({
                               ...prev,
                               division: selDiv,
-                              divisionId: '',
-                              taluk: matchedTaluk,
+                              divisionId: matched?.id || '',
+                              taluk: matched?.taluk || prev.taluk || '',
                               talukId: '',
                               pincode: '',
                               pincodeId: ''
@@ -1069,14 +1316,9 @@ export const RegisterWizard: React.FC = () => {
                       <div>
                         <Select
                           label="PIN Code (Required)"
-                          disabled={!assignedTerritory.division}
-                          options={[
-                            { value: '', label: assignedTerritory.division ? '-- Select Assigned PIN Code --' : 'Select Division First' },
-                            ...adminPincodes.map(p => ({
-                              value: p.code,
-                              label: `${p.code}${p.name ? ' (' + p.name + ')' : ''}${p.taluk ? ' - Taluk: ' + p.taluk : ''}`
-                            }))
-                          ]}
+                          disabled={!assignedTerritory.division || isLoadingPincodes}
+                          placeholder={!assignedTerritory.division ? "Select Division First" : isLoadingPincodes ? "Loading pincodes..." : "-- Select Assigned PIN Code --"}
+                          options={pincodeOptions}
                           value={assignedTerritory.pincode}
                           onChange={(e) => {
                             const selPin = e.target.value;
@@ -1084,6 +1326,7 @@ export const RegisterWizard: React.FC = () => {
                             setAssignedTerritory(prev => ({
                               ...prev,
                               pincode: selPin,
+                              pincodeId: pinObj?.id || '',
                               taluk: pinObj?.taluk || prev.taluk || ''
                             }));
                             setFormErrors('');
@@ -1096,7 +1339,11 @@ export const RegisterWizard: React.FC = () => {
                           <Lock className="w-4 h-4 text-[#864f19] shrink-0" />
                           <div>
                             <span className="text-[9px] font-bold text-amber-800 uppercase block">Pincode Jurisdiction</span>
-                            <span className="text-xs font-black text-[#864f19]">Division-wide Scope (All Pincodes in Division)</span>
+                            <span className="text-xs font-black text-[#864f19]">
+                              {assignedTerritory.division
+                                ? `Division-wide Scope (All Pincodes in ${assignedTerritory.division})`
+                                : 'Division-wide Scope (All Pincodes in Division)'}
+                            </span>
                           </div>
                         </div>
                       ) : null
@@ -1189,9 +1436,11 @@ export const RegisterWizard: React.FC = () => {
                     {/* State */}
                     <Select
                       label="State *"
+                      disabled={isLoadingStates}
+                      placeholder={isLoadingStates ? "Loading states..." : "-- Select State --"}
                       options={[
-                        { value: '', label: '-- Select State --' },
-                        ...adminStates.map(s => ({ value: s, label: s }))
+                        { value: '', label: isLoadingStates ? 'Loading states...' : '-- Select State --' },
+                        ...adminStates.map(s => ({ value: s.name, label: s.name }))
                       ]}
                       value={address.state}
                       onChange={(e) => {

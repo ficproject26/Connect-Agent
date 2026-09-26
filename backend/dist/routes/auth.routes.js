@@ -21,6 +21,9 @@ router.post('/api/login', rateLimiter_middleware_1.authRateLimiter, (0, validate
 router.post('/send-otp', auth_controller_1.sendOtp);
 router.post('/auth/send-otp', auth_controller_1.sendOtp);
 router.post('/api/auth/send-otp', auth_controller_1.sendOtp);
+router.post('/verify-mobile-otp', auth_controller_1.verifyMobileOtp);
+router.post('/auth/verify-mobile-otp', auth_controller_1.verifyMobileOtp);
+router.post('/api/auth/verify-mobile-otp', auth_controller_1.verifyMobileOtp);
 // Profile and KYC routes
 router.get('/me', auth_middleware_1.authMiddleware, auth_controller_1.getMe);
 router.get('/profile', auth_middleware_1.authMiddleware, auth_controller_1.getMe);

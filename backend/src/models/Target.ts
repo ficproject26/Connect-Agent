@@ -5,6 +5,7 @@ export interface ITarget extends Document {
   description?: string;
   type: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
   targetValue: number; // e.g. visits count
+  priority?: 'High' | 'Medium' | 'Low' | 'high' | 'medium' | 'low';
   createdBy: Types.ObjectId; // References Agent/User
   createdAt: Date;
   updatedAt: Date;
@@ -15,6 +16,7 @@ const targetSchema = new Schema<ITarget>({
   description: { type: String },
   type: { type: String, enum: ['daily', 'weekly', 'monthly', 'quarterly', 'yearly'], required: true },
   targetValue: { type: Number, required: true },
+  priority: { type: String, enum: ['High', 'Medium', 'Low', 'high', 'medium', 'low'], default: 'Medium' },
   createdBy: { type: Schema.Types.ObjectId, ref: 'Agent', required: true },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }

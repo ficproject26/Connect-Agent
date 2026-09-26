@@ -15,7 +15,8 @@ const createTargetSchema = zod_1.z.object({
     title: zod_1.z.string().min(2, 'Title required'),
     description: zod_1.z.string().optional(),
     type: zod_1.z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']),
-    targetValue: zod_1.z.number().positive('Target value must be positive')
+    targetValue: zod_1.z.number().positive('Target value must be positive'),
+    priority: zod_1.z.enum(['High', 'Medium', 'Low', 'high', 'medium', 'low']).optional().default('Medium')
 });
 const assignTargetSchema = zod_1.z.object({
     assignedTo: zod_1.z.string().min(1, 'assignedTo agent ID required'),
@@ -30,6 +31,7 @@ const allocateTargetSchema = zod_1.z.object({
     description: zod_1.z.string().optional(),
     type: zod_1.z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']).default('daily'),
     targetValue: zod_1.z.number().positive('Target value must be positive'),
+    priority: zod_1.z.enum(['High', 'Medium', 'Low', 'high', 'medium', 'low']).optional().default('Medium'),
     dueDate: zod_1.z.string().optional()
 });
 // GET /api/targets — list targets created by or assigned to the agent
@@ -135,6 +137,7 @@ const allocateTarget = async (req, res) => {
             description: data.description || `Allocated target of ${data.targetValue} merchant visits`,
             type: data.type || 'daily',
             targetValue: data.targetValue,
+            priority: data.priority || 'Medium',
             createdBy: agentId
         });
         await target.save();
@@ -329,7 +332,7 @@ const updateAssignmentStatus = async (req, res) => {
         if (!agentId)
             return res.status(401).json({ message: 'Unauthorized' });
         const { status } = req.body;
-        const validStatuses = ['assigned', 'accepted', 'in_progress', 'completed', 'pending', 'overdue'];
+        const validStatuses = ['assigned', 'accepted', 'in_progress', 'completed', 'pending', 'overdue', 'rejected', 'cancelled'];
         if (!status || !validStatuses.includes(status)) {
             return res.status(400).json({ message: `Status must be one of: ${validStatuses.join(', ')}` });
         }

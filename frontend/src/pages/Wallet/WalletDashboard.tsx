@@ -46,6 +46,22 @@ export const WalletDashboard: React.FC = () => {
     holderName: user?.bankDetails?.accountHolder || user?.name || ''
   });
 
+  useEffect(() => {
+    if (user?.bankDetails) {
+      const b = user.bankDetails;
+      if (b.bankName || b.accountNumber || b.ifscCode) {
+        const details = {
+          bankName: b.bankName || '',
+          accountNumber: b.accountNumber || '',
+          ifscCode: b.ifscCode || '',
+          holderName: b.accountHolder || user?.name || ''
+        };
+        setBankDetails(details);
+        setEditBankForm(details);
+      }
+    }
+  }, [user]);
+
   const [isEditBankOpen, setIsEditBankOpen] = useState(false);
   const [editBankForm, setEditBankForm] = useState({ ...bankDetails });
   const [bankFormError, setBankFormError] = useState('');
@@ -586,9 +602,10 @@ export const WalletDashboard: React.FC = () => {
               <Input
                 label=""
                 placeholder="e.g. SBIN0001428"
+                maxLength={11}
                 value={editBankForm.ifscCode}
                 onChange={(e) => {
-                  setEditBankForm({ ...editBankForm, ifscCode: e.target.value.toUpperCase() });
+                  setEditBankForm({ ...editBankForm, ifscCode: e.target.value.toUpperCase().slice(0, 11) });
                   setBankFormError('');
                 }}
                 className="mb-0 animate-none uppercase"

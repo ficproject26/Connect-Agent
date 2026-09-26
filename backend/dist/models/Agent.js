@@ -88,6 +88,11 @@ const agentSchema = new mongoose_1.Schema({
     remarks: { type: String, default: '' },
     registrationFeePaid: { type: Boolean, default: false },
     performanceScore: { type: Number, default: 0 },
+    alternateMobile: { type: String, default: '' },
+    preferredLanguage: { type: String, default: 'English' },
+    bloodGroup: { type: String, default: 'O+' },
+    profilePhoto: { type: String, default: '' },
+    vehicleDetails: { type: mongoose_1.Schema.Types.Mixed, default: () => ({}) },
     bankDetails: {
         bankName: { type: String, default: '' },
         accountNumber: { type: String, default: '' },
@@ -97,7 +102,8 @@ const agentSchema = new mongoose_1.Schema({
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }
 }, {
-    timestamps: true
+    timestamps: true,
+    strict: false
 });
 agentSchema.index({ 'territory.state': 1, 'territory.district': 1, 'territory.division': 1, 'territory.pincode': 1 });
 agentSchema.index({ role: 1, kycStatus: 1 });

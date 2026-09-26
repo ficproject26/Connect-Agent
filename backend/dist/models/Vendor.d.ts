@@ -7,9 +7,15 @@ export interface IVendor extends Document {
     category: Types.ObjectId | string;
     gst?: string;
     state?: string;
+    stateId?: string;
     district?: string;
+    districtId?: string;
     division?: string;
+    divisionId?: string;
+    taluk?: string;
+    talukId?: string;
     pincode?: string;
+    pincodeId?: string;
     kycStatus?: 'pending' | 'approved' | 'rejected';
     location: {
         address: string;

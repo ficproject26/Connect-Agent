@@ -81,10 +81,17 @@ async function buildHierarchyTree(scope: any = null, forceAll = false) {
 
   const hierarchy = filteredStates.map(st => {
     const stIdStr = st._id.toString();
-    let stDistricts = activeDistricts.filter(dt =>
-      (dt.stateId && dt.stateId.toString() === stIdStr) ||
-      (dt.state && dt.state.trim().toLowerCase() === st.name.trim().toLowerCase())
-    );
+    const stCustomId = st.stateId || stIdStr;
+    const stNameLower = st.name.trim().toLowerCase();
+
+    let stDistricts = activeDistricts.filter(dt => {
+      const dtStateIdStr = dt.stateId ? dt.stateId.toString() : '';
+      return (
+        dtStateIdStr === stIdStr ||
+        dtStateIdStr === stCustomId ||
+        (dt.state && dt.state.trim().toLowerCase() === stNameLower)
+      );
+    });
 
     if (!forceAll && scope?.district && (scope.role === 'district' || scope.role === 'division' || scope.role === 'pincode')) {
       stDistricts = stDistricts.filter(d => d.name.trim().toLowerCase() === scope.district.trim().toLowerCase());
@@ -92,16 +99,23 @@ async function buildHierarchyTree(scope: any = null, forceAll = false) {
 
     return {
       id: stIdStr,
-      stateId: st.stateId || stIdStr,
+      stateId: stCustomId,
       name: st.name.trim(),
       code: st.code || st.name.slice(0, 3).toUpperCase(),
       status: st.status || 'Active',
       districts: stDistricts.map(dt => {
         const dtIdStr = dt._id.toString();
-        let dtDivisions = activeDivisions.filter(dv =>
-          (dv.districtId && dv.districtId.toString() === dtIdStr) ||
-          (dv.district && dv.district.trim().toLowerCase() === dt.name.trim().toLowerCase())
-        );
+        const dtCustomId = dt.districtId || dtIdStr;
+        const dtNameLower = dt.name.trim().toLowerCase();
+
+        let dtDivisions = activeDivisions.filter(dv => {
+          const dvDistIdStr = dv.districtId ? dv.districtId.toString() : '';
+          return (
+            dvDistIdStr === dtIdStr ||
+            dvDistIdStr === dtCustomId ||
+            (dv.district && dv.district.trim().toLowerCase() === dtNameLower)
+          );
+        });
 
         if (!forceAll && scope?.division && (scope.role === 'division' || scope.role === 'pincode')) {
           dtDivisions = dtDivisions.filter(v => v.name.trim().toLowerCase() === scope.division.trim().toLowerCase());
@@ -109,17 +123,27 @@ async function buildHierarchyTree(scope: any = null, forceAll = false) {
 
         return {
           id: dtIdStr,
-          districtId: dt.districtId || dtIdStr,
+          districtId: dtCustomId,
+          stateId: stCustomId,
           name: dt.name.trim(),
           code: dt.code || dt.name.slice(0, 3).toUpperCase(),
           status: dt.status || 'Active',
           divisions: dtDivisions.map(dv => {
             const dvIdStr = dv._id.toString();
-            let dvPincodes = activePincodes.filter(pc =>
-              (pc.divisionId && pc.divisionId.toString() === dvIdStr) ||
-              (pc.division && pc.division.trim().toLowerCase() === dv.name.trim().toLowerCase()) ||
-              (pc.district && pc.district.trim().toLowerCase() === dt.name.trim().toLowerCase() && !pc.divisionId)
-            );
+            const dvCustomId = dv.divisionId || dvIdStr;
+            const dvNameLower = dv.name.trim().toLowerCase();
+
+            let dvPincodes = activePincodes.filter(pc => {
+              const pcDivIdStr = pc.divisionId ? pc.divisionId.toString() : '';
+              const pcDistIdStr = pc.districtId ? pc.districtId.toString() : '';
+              return (
+                pcDivIdStr === dvIdStr ||
+                pcDivIdStr === dvCustomId ||
+                (pc.division && pc.division.trim().toLowerCase() === dvNameLower) ||
+                (pcDistIdStr === dtIdStr && !pc.divisionId) ||
+                (pc.district && pc.district.trim().toLowerCase() === dtNameLower && !pc.divisionId)
+              );
+            });
 
             if (!forceAll && scope?.pincode && scope.role === 'pincode') {
               dvPincodes = dvPincodes.filter(p => p.code.trim() === scope.pincode.trim());
@@ -129,7 +153,9 @@ async function buildHierarchyTree(scope: any = null, forceAll = false) {
 
             return {
               id: dvIdStr,
-              divisionId: dv.divisionId || dvIdStr,
+              divisionId: dvCustomId,
+              districtId: dtCustomId,
+              stateId: stCustomId,
               name: dv.name.trim(),
               code: dv.code || dv.name.slice(0, 3).toUpperCase(),
               taluk: talukName,
@@ -138,6 +164,9 @@ async function buildHierarchyTree(scope: any = null, forceAll = false) {
               pincodes: dvPincodes.map(pc => ({
                 id: pc._id.toString(),
                 pincodeId: pc.pincodeId || pc._id.toString(),
+                divisionId: dvCustomId,
+                districtId: dtCustomId,
+                stateId: stCustomId,
                 code: String(pc.code).trim(),
                 name: pc.name || pc.area || pc.postOffice || ('PIN ' + pc.code),
                 postOffice: pc.postOffice || pc.name || '',
@@ -173,10 +202,10 @@ export const getTerritoryHierarchy = async (req: Request, res: Response) => {
     }
 
     const hierarchy = await buildHierarchyTree(scope, forceAll);
-    return res.status(200).json({ hierarchy, role: scope?.role || 'all', scope });
+    return res.status(200).json({ success: true, hierarchy, role: scope?.role || 'all', scope });
   } catch (error) {
     console.error('Get territory hierarchy error:', error);
-    return res.status(500).json({ message: 'Internal server error while fetching territory hierarchy' });
+    return res.status(500).json({ success: false, message: 'Internal server error while fetching territory hierarchy' });
   }
 };
 
@@ -187,10 +216,10 @@ export const getTerritoryHierarchy = async (req: Request, res: Response) => {
 export const getAllTerritoryHierarchy = async (_req: Request, res: Response) => {
   try {
     const hierarchy = await buildHierarchyTree(null, true);
-    return res.status(200).json({ hierarchy });
+    return res.status(200).json({ success: true, hierarchy });
   } catch (error) {
     console.error('Get all territory hierarchy error:', error);
-    return res.status(500).json({ message: 'Internal server error while fetching all territory hierarchy' });
+    return res.status(500).json({ success: false, message: 'Internal server error while fetching all territory hierarchy' });
   }
 };
 
@@ -201,16 +230,25 @@ export const getAllTerritoryHierarchy = async (_req: Request, res: Response) => 
 export const getStates = async (_req: Request, res: Response) => {
   try {
     const db = mongoose.connection.db;
-    if (!db) return res.status(500).json({ message: 'Database connection unavailable' });
+    if (!db) return res.status(500).json({ success: false, message: 'Database connection unavailable' });
 
-    const states = await db.collection('states').find({
+    const rawStates = await db.collection('states').find({
       $or: [{ status: 'Active' }, { status: 'active' }, { status: { $exists: false } }]
     }).sort({ name: 1 }).toArray();
 
-    return res.status(200).json({ states });
+    const states = rawStates.map(st => ({
+      _id: st._id,
+      id: st._id.toString(),
+      stateId: st.stateId || st._id.toString(),
+      name: st.name.trim(),
+      code: st.code || st.name.slice(0, 3).toUpperCase(),
+      status: st.status || 'Active'
+    }));
+
+    return res.status(200).json({ success: true, states });
   } catch (error) {
     console.error('Get states error:', error);
-    return res.status(500).json({ message: 'Internal server error' });
+    return res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };
 
@@ -221,104 +259,256 @@ export const getStates = async (_req: Request, res: Response) => {
 export const getDistricts = async (req: Request, res: Response) => {
   try {
     const db = mongoose.connection.db;
-    if (!db) return res.status(500).json({ message: 'Database connection unavailable' });
+    if (!db) return res.status(500).json({ success: false, message: 'Database connection unavailable' });
 
     const { stateId, state } = req.query;
     const filter: any = {
       $or: [{ status: 'Active' }, { status: 'active' }, { status: { $exists: false } }]
     };
 
-    if (stateId) {
-      try {
-        filter.$and = [{ $or: [{ stateId: new mongoose.Types.ObjectId(stateId as string) }, { stateId: stateId }] }];
-      } catch {
-        filter.stateId = stateId;
+    if (stateId || state) {
+      const stateQueries: any[] = [];
+      if (stateId) {
+        if (mongoose.Types.ObjectId.isValid(stateId as string)) {
+          stateQueries.push({ _id: new mongoose.Types.ObjectId(stateId as string) });
+        }
+        stateQueries.push({ stateId: stateId as string });
+        stateQueries.push({ name: stateId as string });
       }
-    } else if (state) {
-      filter.state = { $regex: new RegExp(`^${(state as string).trim()}$`, 'i') };
+      if (state) {
+        stateQueries.push({ name: { $regex: new RegExp(`^${(state as string).trim()}$`, 'i') } });
+        stateQueries.push({ stateId: state as string });
+      }
+
+      const stateDoc = await db.collection('states').findOne({ $or: stateQueries });
+      if (stateDoc) {
+        const stateMatches: any[] = [
+          { stateId: stateDoc._id },
+          { stateId: stateDoc._id.toString() },
+          { state: stateDoc.name }
+        ];
+        if (stateDoc.stateId) {
+          stateMatches.push({ stateId: stateDoc.stateId });
+        }
+        filter.$and = [{ $or: stateMatches }];
+      } else if (stateId) {
+        const idMatches: any[] = [{ stateId: stateId }];
+        if (mongoose.Types.ObjectId.isValid(stateId as string)) {
+          idMatches.push({ stateId: new mongoose.Types.ObjectId(stateId as string) });
+        }
+        filter.$and = [{ $or: idMatches }];
+      }
     }
 
-    const districts = await db.collection('districts').find(filter).sort({ name: 1 }).toArray();
-    return res.status(200).json({ districts });
+    const rawDistricts = await db.collection('districts').find(filter).sort({ name: 1 }).toArray();
+    const districts = rawDistricts.map(dt => ({
+      _id: dt._id,
+      id: dt._id.toString(),
+      districtId: dt.districtId || dt._id.toString(),
+      stateId: dt.stateId ? dt.stateId.toString() : '',
+      name: dt.name.trim(),
+      code: dt.code || dt.name.slice(0, 3).toUpperCase(),
+      status: dt.status || 'Active'
+    }));
+
+    return res.status(200).json({ success: true, districts });
   } catch (error) {
     console.error('Get districts error:', error);
-    return res.status(500).json({ message: 'Internal server error' });
+    return res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };
 
 /**
  * GET /api/territory/divisions
- * Query params: districtId, district, state
+ * Query params: districtId, district, stateId, state
  */
 export const getDivisions = async (req: Request, res: Response) => {
   try {
     const db = mongoose.connection.db;
-    if (!db) return res.status(500).json({ message: 'Database connection unavailable' });
+    if (!db) return res.status(500).json({ success: false, message: 'Database connection unavailable' });
 
-    const { districtId, district, state } = req.query;
+    const { districtId, district, stateId, state } = req.query;
     const filter: any = {
       $or: [{ status: 'Active' }, { status: 'active' }, { status: { $exists: false } }]
     };
 
-    if (districtId) {
-      try {
-        filter.$and = [{ $or: [{ districtId: new mongoose.Types.ObjectId(districtId as string) }, { districtId: districtId }] }];
-      } catch {
-        filter.districtId = districtId;
+    if (districtId || district) {
+      const districtQueries: any[] = [];
+      if (districtId) {
+        if (mongoose.Types.ObjectId.isValid(districtId as string)) {
+          districtQueries.push({ _id: new mongoose.Types.ObjectId(districtId as string) });
+        }
+        districtQueries.push({ districtId: districtId as string });
+        districtQueries.push({ name: districtId as string });
       }
-    } else if (district) {
-      filter.district = { $regex: new RegExp(`^${(district as string).trim()}$`, 'i') };
+      if (district) {
+        districtQueries.push({ name: { $regex: new RegExp(`^${(district as string).trim()}$`, 'i') } });
+        districtQueries.push({ districtId: district as string });
+      }
+
+      const distDoc = await db.collection('districts').findOne({ $or: districtQueries });
+      if (distDoc) {
+        const distMatches: any[] = [
+          { districtId: distDoc._id },
+          { districtId: distDoc._id.toString() },
+          { district: distDoc.name }
+        ];
+        if (distDoc.districtId) {
+          distMatches.push({ districtId: distDoc.districtId });
+        }
+        filter.$and = [{ $or: distMatches }];
+      } else if (districtId) {
+        const idMatches: any[] = [{ districtId: districtId }];
+        if (mongoose.Types.ObjectId.isValid(districtId as string)) {
+          idMatches.push({ districtId: new mongoose.Types.ObjectId(districtId as string) });
+        }
+        filter.$and = [{ $or: idMatches }];
+      }
+    } else if (stateId || state) {
+      // Find all districts of this state
+      const stateQueries: any[] = [];
+      if (stateId) {
+        if (mongoose.Types.ObjectId.isValid(stateId as string)) stateQueries.push({ _id: new mongoose.Types.ObjectId(stateId as string) });
+        stateQueries.push({ stateId: stateId as string });
+      }
+      if (state) stateQueries.push({ name: { $regex: new RegExp(`^${(state as string).trim()}$`, 'i') } });
+
+      const stateDoc = await db.collection('states').findOne({ $or: stateQueries });
+      if (stateDoc) {
+        const stateDists = await db.collection('districts').find({
+          $or: [
+            { stateId: stateDoc._id },
+            { stateId: stateDoc._id.toString() },
+            { stateId: stateDoc.stateId },
+            { state: stateDoc.name }
+          ]
+        }).toArray();
+        const distIds = stateDists.map(d => d._id);
+        const distIdStrs = stateDists.map(d => d._id.toString());
+        const distNames = stateDists.map(d => d.name);
+        filter.$and = [{
+          $or: [
+            { districtId: { $in: distIds } },
+            { districtId: { $in: distIdStrs } },
+            { district: { $in: distNames } },
+            { stateId: stateDoc._id },
+            { stateId: stateDoc._id.toString() }
+          ]
+        }];
+      }
     }
 
-    if (state) {
-      filter.state = { $regex: new RegExp(`^${(state as string).trim()}$`, 'i') };
-    }
+    const rawDivisions = await db.collection('divisions').find(filter).sort({ name: 1 }).toArray();
+    const divisions = rawDivisions.map(dv => ({
+      _id: dv._id,
+      id: dv._id.toString(),
+      divisionId: dv.divisionId || dv._id.toString(),
+      districtId: dv.districtId ? dv.districtId.toString() : '',
+      stateId: dv.stateId ? dv.stateId.toString() : '',
+      name: dv.name.trim(),
+      code: dv.code || dv.name.slice(0, 3).toUpperCase(),
+      taluk: dv.talukInfo || dv.taluk || '',
+      talukInfo: dv.talukInfo || dv.taluk || '',
+      status: dv.status || 'Active'
+    }));
 
-    const divisions = await db.collection('divisions').find(filter).sort({ name: 1 }).toArray();
-    return res.status(200).json({ divisions });
+    return res.status(200).json({ success: true, divisions });
   } catch (error) {
     console.error('Get divisions error:', error);
-    return res.status(500).json({ message: 'Internal server error' });
+    return res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };
 
 /**
  * GET /api/territory/pincodes
- * Query params: divisionId, division, district, state
+ * Query params: divisionId, division, districtId, district, stateId, state
  */
 export const getPincodes = async (req: Request, res: Response) => {
   try {
     const db = mongoose.connection.db;
-    if (!db) return res.status(500).json({ message: 'Database connection unavailable' });
+    if (!db) return res.status(500).json({ success: false, message: 'Database connection unavailable' });
 
-    const { divisionId, division, district, state } = req.query;
+    const { divisionId, division, districtId, district, stateId, state } = req.query;
     const filter: any = {
       $or: [{ status: 'Active' }, { status: 'active' }, { status: { $exists: false } }]
     };
 
-    if (divisionId) {
-      try {
-        filter.$and = [{ $or: [{ divisionId: new mongoose.Types.ObjectId(divisionId as string) }, { divisionId: divisionId }] }];
-      } catch {
-        filter.divisionId = divisionId;
+    if (divisionId || division) {
+      const divisionQueries: any[] = [];
+      if (divisionId) {
+        if (mongoose.Types.ObjectId.isValid(divisionId as string)) {
+          divisionQueries.push({ _id: new mongoose.Types.ObjectId(divisionId as string) });
+        }
+        divisionQueries.push({ divisionId: divisionId as string });
+        divisionQueries.push({ name: divisionId as string });
       }
-    } else if (division) {
-      filter.division = { $regex: new RegExp(`^${(division as string).trim()}$`, 'i') };
+      if (division) {
+        divisionQueries.push({ name: { $regex: new RegExp(`^${(division as string).trim()}$`, 'i') } });
+        divisionQueries.push({ divisionId: division as string });
+      }
+
+      const divDoc = await db.collection('divisions').findOne({ $or: divisionQueries });
+      if (divDoc) {
+        const divMatches: any[] = [
+          { divisionId: divDoc._id },
+          { divisionId: divDoc._id.toString() },
+          { division: divDoc.name }
+        ];
+        if (divDoc.divisionId) {
+          divMatches.push({ divisionId: divDoc.divisionId });
+        }
+        filter.$and = [{ $or: divMatches }];
+      } else if (divisionId) {
+        const idMatches: any[] = [{ divisionId: divisionId }];
+        if (mongoose.Types.ObjectId.isValid(divisionId as string)) {
+          idMatches.push({ divisionId: new mongoose.Types.ObjectId(divisionId as string) });
+        }
+        filter.$and = [{ $or: idMatches }];
+      }
+    } else if (districtId || district) {
+      const districtQueries: any[] = [];
+      if (districtId) {
+        if (mongoose.Types.ObjectId.isValid(districtId as string)) districtQueries.push({ _id: new mongoose.Types.ObjectId(districtId as string) });
+        districtQueries.push({ districtId: districtId as string });
+      }
+      if (district) districtQueries.push({ name: { $regex: new RegExp(`^${(district as string).trim()}$`, 'i') } });
+
+      const distDoc = await db.collection('districts').findOne({ $or: districtQueries });
+      if (distDoc) {
+        filter.$and = [{
+          $or: [
+            { districtId: distDoc._id },
+            { districtId: distDoc._id.toString() },
+            { district: distDoc.name }
+          ]
+        }];
+      }
     }
 
-    if (district) {
-      filter.district = { $regex: new RegExp(`^${(district as string).trim()}$`, 'i') };
-    }
+    const rawPincodes = await db.collection('pincodes').find(filter).sort({ code: 1 }).toArray();
+    const pincodes = rawPincodes.map(pc => ({
+      _id: pc._id,
+      id: pc._id.toString(),
+      pincodeId: pc.pincodeId || pc._id.toString(),
+      divisionId: pc.divisionId ? pc.divisionId.toString() : '',
+      districtId: pc.districtId ? pc.districtId.toString() : '',
+      stateId: pc.stateId ? pc.stateId.toString() : '',
+      code: String(pc.code).trim(),
+      name: pc.name || pc.area || pc.postOffice || ('PIN ' + pc.code),
+      postOffice: pc.postOffice || pc.name || '',
+      taluk: pc.taluk || '',
+      area: pc.area || pc.name || '',
+      district: pc.district || '',
+      division: pc.division || '',
+      state: pc.state || '',
+      status: pc.status || 'Active',
+      activeAgentId: pc.activeAgentId
+    }));
 
-    if (state) {
-      filter.state = { $regex: new RegExp(`^${(state as string).trim()}$`, 'i') };
-    }
-
-    const pincodes = await db.collection('pincodes').find(filter).sort({ code: 1 }).toArray();
-    return res.status(200).json({ pincodes });
+    return res.status(200).json({ success: true, pincodes });
   } catch (error) {
     console.error('Get pincodes error:', error);
-    return res.status(500).json({ message: 'Internal server error' });
+    return res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };
 

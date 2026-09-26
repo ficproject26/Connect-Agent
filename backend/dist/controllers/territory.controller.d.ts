@@ -24,12 +24,12 @@ export declare const getStates: (_req: Request, res: Response) => Promise<Respon
 export declare const getDistricts: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 /**
  * GET /api/territory/divisions
- * Query params: districtId, district, state
+ * Query params: districtId, district, stateId, state
  */
 export declare const getDivisions: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 /**
  * GET /api/territory/pincodes
- * Query params: divisionId, division, district, state
+ * Query params: divisionId, division, districtId, district, stateId, state
  */
 export declare const getPincodes: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 /**

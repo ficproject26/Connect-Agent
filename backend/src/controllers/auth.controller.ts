@@ -127,6 +127,164 @@ export const register = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Assigned PIN Code is required for Pincode Agent.' });
     }
 
+    // Server-side Territory Hierarchy Verification against Admin Territory Database
+    const db = mongoose.connection.db;
+    if (db) {
+      // 1. Verify State exists and is active
+      const stateQueries: any[] = [
+        { name: { $regex: new RegExp(`^${cleanAssignedTerritory.state.trim()}$`, 'i') } }
+      ];
+      if (cleanAssignedTerritory.stateId) {
+        if (mongoose.Types.ObjectId.isValid(cleanAssignedTerritory.stateId)) {
+          stateQueries.push({ _id: new mongoose.Types.ObjectId(cleanAssignedTerritory.stateId) });
+        }
+        stateQueries.push({ stateId: cleanAssignedTerritory.stateId });
+      }
+
+      const stateDoc = await db.collection('states').findOne({
+        $or: stateQueries,
+        $and: [{ $or: [{ status: 'Active' }, { status: 'active' }, { status: { $exists: false } }] }]
+      });
+
+      if (!stateDoc) {
+        return res.status(400).json({
+          message: `Selected State "${cleanAssignedTerritory.state}" is not an active territory in the Admin territory database.`
+        });
+      }
+
+      // Populate verified state details
+      cleanAssignedTerritory.state = stateDoc.name.trim();
+      cleanAssignedTerritory.stateId = stateDoc.stateId || stateDoc._id.toString();
+
+      // 2. Verify District belongs to State
+      let districtDoc: any = null;
+      if (agentRole !== 'state') {
+        const distQueries: any[] = [
+          { name: { $regex: new RegExp(`^${cleanAssignedTerritory.district.trim()}$`, 'i') } }
+        ];
+        if (cleanAssignedTerritory.districtId) {
+          if (mongoose.Types.ObjectId.isValid(cleanAssignedTerritory.districtId)) {
+            distQueries.push({ _id: new mongoose.Types.ObjectId(cleanAssignedTerritory.districtId) });
+          }
+          distQueries.push({ districtId: cleanAssignedTerritory.districtId });
+        }
+
+        const stateRefConditions: any[] = [
+          { stateId: stateDoc._id },
+          { stateId: stateDoc._id.toString() },
+          { state: stateDoc.name }
+        ];
+        if (stateDoc.stateId) {
+          stateRefConditions.push({ stateId: stateDoc.stateId });
+        }
+
+        districtDoc = await db.collection('districts').findOne({
+          $or: distQueries,
+          $and: [
+            { $or: stateRefConditions },
+            { $or: [{ status: 'Active' }, { status: 'active' }, { status: { $exists: false } }] }
+          ]
+        });
+
+        if (!districtDoc) {
+          return res.status(400).json({
+            message: `Assigned District "${cleanAssignedTerritory.district}" does not belong to State "${cleanAssignedTerritory.state}" or is not active.`
+          });
+        }
+
+        cleanAssignedTerritory.district = districtDoc.name.trim();
+        cleanAssignedTerritory.districtId = districtDoc.districtId || districtDoc._id.toString();
+      }
+
+      // 3. Verify Division belongs to District
+      let divisionDoc: any = null;
+      if (agentRole === 'division' || agentRole === 'pincode') {
+        const divQueries: any[] = [
+          { name: { $regex: new RegExp(`^${cleanAssignedTerritory.division.trim()}$`, 'i') } }
+        ];
+        if (cleanAssignedTerritory.divisionId) {
+          if (mongoose.Types.ObjectId.isValid(cleanAssignedTerritory.divisionId)) {
+            divQueries.push({ _id: new mongoose.Types.ObjectId(cleanAssignedTerritory.divisionId) });
+          }
+          divQueries.push({ divisionId: cleanAssignedTerritory.divisionId });
+        }
+
+        const distRefConditions: any[] = [
+          { districtId: districtDoc._id },
+          { districtId: districtDoc._id.toString() },
+          { district: districtDoc.name }
+        ];
+        if (districtDoc.districtId) {
+          distRefConditions.push({ districtId: districtDoc.districtId });
+        }
+
+        divisionDoc = await db.collection('divisions').findOne({
+          $or: divQueries,
+          $and: [
+            { $or: distRefConditions },
+            { $or: [{ status: 'Active' }, { status: 'active' }, { status: { $exists: false } }] }
+          ]
+        });
+
+        if (!divisionDoc) {
+          return res.status(400).json({
+            message: `Assigned Division "${cleanAssignedTerritory.division}" does not belong to District "${cleanAssignedTerritory.district}" or is not active.`
+          });
+        }
+
+        cleanAssignedTerritory.division = divisionDoc.name.trim();
+        cleanAssignedTerritory.divisionId = divisionDoc.divisionId || divisionDoc._id.toString();
+        if (!cleanAssignedTerritory.taluk && (divisionDoc.talukInfo || divisionDoc.taluk)) {
+          cleanAssignedTerritory.taluk = divisionDoc.talukInfo || divisionDoc.taluk;
+        }
+      }
+
+      // 4. Verify Pincode belongs to Division/District
+      if (agentRole === 'pincode') {
+        const pinCodeClean = cleanAssignedTerritory.pincode.replace(/\D/g, '').slice(0, 6);
+        const pinQueries: any[] = [
+          { code: pinCodeClean }
+        ];
+        if (cleanAssignedTerritory.pincodeId) {
+          if (mongoose.Types.ObjectId.isValid(cleanAssignedTerritory.pincodeId)) {
+            pinQueries.push({ _id: new mongoose.Types.ObjectId(cleanAssignedTerritory.pincodeId) });
+          }
+          pinQueries.push({ pincodeId: cleanAssignedTerritory.pincodeId });
+        }
+
+        const pinRefConditions: any[] = [
+          { divisionId: divisionDoc._id },
+          { divisionId: divisionDoc._id.toString() },
+          { division: divisionDoc.name },
+          { districtId: districtDoc._id },
+          { districtId: districtDoc._id.toString() }
+        ];
+        if (divisionDoc.divisionId) {
+          pinRefConditions.push({ divisionId: divisionDoc.divisionId });
+        }
+
+        const pincodeDoc = await db.collection('pincodes').findOne({
+          $or: pinQueries,
+          $and: [
+            { $or: pinRefConditions },
+            { $or: [{ status: 'Active' }, { status: 'active' }, { status: { $exists: false } }] }
+          ]
+        });
+
+        if (!pincodeDoc) {
+          return res.status(400).json({
+            message: `Assigned PIN Code "${cleanAssignedTerritory.pincode}" does not belong to Division "${cleanAssignedTerritory.division}" or is not active.`
+          });
+        }
+
+        cleanAssignedTerritory.pincode = String(pincodeDoc.code).trim();
+        cleanAssignedTerritory.pincodeId = pincodeDoc.pincodeId || pincodeDoc._id.toString();
+        if (pincodeDoc.taluk) {
+          cleanAssignedTerritory.taluk = pincodeDoc.taluk;
+        }
+      }
+    }
+
     const cleanTerritory = {
       state: cleanAssignedTerritory.state,
       district: cleanAssignedTerritory.district,

@@ -54,6 +54,22 @@ export interface IAgent extends Document {
     remarks?: string;
     registrationFeePaid: boolean;
     performanceScore: number;
+    alternateMobile?: string;
+    preferredLanguage?: string;
+    bloodGroup?: string;
+    profilePhoto?: string;
+    vehicleDetails?: {
+        type?: string;
+        number?: string;
+        model?: string;
+        licenseNumber?: string;
+        workingArea?: string;
+        vehicleTypes?: string[];
+        vehicles?: Record<string, {
+            model?: string;
+            number?: string;
+        }>;
+    };
     bankDetails?: {
         bankName: string;
         accountNumber: string;

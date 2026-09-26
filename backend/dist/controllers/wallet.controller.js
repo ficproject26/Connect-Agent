@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.requestCashout = exports.updateBankDetails = exports.getBankDetails = exports.getTransactions = exports.getBalance = void 0;
+const mongoose_1 = __importDefault(require("mongoose"));
 const Wallet_1 = __importDefault(require("../models/Wallet"));
 const Agent_1 = __importDefault(require("../models/Agent"));
 // Helper to generate a transaction ID
@@ -136,21 +137,54 @@ const updateBankDetails = async (req, res) => {
         if (!accountNumber || !ifscCode) {
             return res.status(400).json({ message: 'Account number and IFSC code are required' });
         }
+        const cleanAccNo = String(accountNumber).trim();
+        if (!/^\d{8,20}$/.test(cleanAccNo)) {
+            return res.status(400).json({ message: 'Account number must contain between 8 and 20 numeric digits.' });
+        }
+        const cleanIfsc = String(ifscCode).toUpperCase().trim();
+        const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+        if (!ifscRegex.test(cleanIfsc)) {
+            return res.status(400).json({
+                message: 'Invalid IFSC code format. Indian IFSC must be 4 uppercase letters, followed by 0, and 6 alphanumeric characters (e.g., SBIN0001428).'
+            });
+        }
         const updatedBank = {
-            bankName: (bankName || '').trim(),
-            accountNumber: (accountNumber || '').trim(),
-            ifscCode: (ifscCode || '').toUpperCase().trim(),
+            bankName: (bankName || 'State Bank of India').trim(),
+            accountNumber: cleanAccNo,
+            ifscCode: cleanIfsc,
             accountHolder: (holderName || accountHolder || '').trim()
         };
-        await Agent_1.default.findByIdAndUpdate(agentId, { bankDetails: updatedBank }, { new: true });
+        const updatedAgent = await Agent_1.default.findByIdAndUpdate(agentId, { bankDetails: updatedBank }, { new: true });
+        if (!updatedAgent) {
+            return res.status(404).json({ message: 'Agent not found' });
+        }
+        // Sync bank details to users collection in MongoDB
+        try {
+            const db = mongoose_1.default.connection.db;
+            if (db) {
+                await db.collection('users').updateOne({ $or: [{ email: updatedAgent.email.toLowerCase() }, { phone: updatedAgent.phone }] }, {
+                    $set: {
+                        bankDetails: updatedBank,
+                        bankName: updatedBank.bankName,
+                        accountNo: updatedBank.accountNumber,
+                        accountNumber: updatedBank.accountNumber,
+                        ifscCode: updatedBank.ifscCode,
+                        accountHolderName: updatedBank.accountHolder
+                    }
+                });
+            }
+        }
+        catch (syncErr) {
+            console.error('Error syncing bank details to users collection:', syncErr);
+        }
         return res.status(200).json({
-            message: 'Bank details updated successfully',
+            message: 'Bank details saved successfully',
             bankDetails: updatedBank
         });
     }
     catch (error) {
         console.error('Update bank details error:', error);
-        return res.status(500).json({ message: 'Internal server error' });
+        return res.status(500).json({ message: 'Internal server error while saving bank details' });
     }
 };
 exports.updateBankDetails = updateBankDetails;

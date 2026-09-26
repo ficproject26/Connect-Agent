@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendOtp = exports.resetPassword = exports.verifyOtp = exports.forgotPassword = exports.updateKyc = exports.updateProfile = exports.getMe = exports.login = exports.register = void 0;
+exports.verifyMobileOtp = exports.sendOtp = exports.resetPassword = exports.verifyOtp = exports.forgotPassword = exports.updateKyc = exports.updateProfile = exports.getMe = exports.login = exports.register = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const Agent_1 = __importDefault(require("../models/Agent"));
 const jwt_1 = require("../utils/jwt");
@@ -121,6 +121,145 @@ const register = async (req, res) => {
         }
         if (agentRole === 'pincode' && !cleanAssignedTerritory.pincode) {
             return res.status(400).json({ message: 'Assigned PIN Code is required for Pincode Agent.' });
+        }
+        // Server-side Territory Hierarchy Verification against Admin Territory Database
+        const db = mongoose_1.default.connection.db;
+        if (db) {
+            // 1. Verify State exists and is active
+            const stateQueries = [
+                { name: { $regex: new RegExp(`^${cleanAssignedTerritory.state.trim()}$`, 'i') } }
+            ];
+            if (cleanAssignedTerritory.stateId) {
+                if (mongoose_1.default.Types.ObjectId.isValid(cleanAssignedTerritory.stateId)) {
+                    stateQueries.push({ _id: new mongoose_1.default.Types.ObjectId(cleanAssignedTerritory.stateId) });
+                }
+                stateQueries.push({ stateId: cleanAssignedTerritory.stateId });
+            }
+            const stateDoc = await db.collection('states').findOne({
+                $or: stateQueries,
+                $and: [{ $or: [{ status: 'Active' }, { status: 'active' }, { status: { $exists: false } }] }]
+            });
+            if (!stateDoc) {
+                return res.status(400).json({
+                    message: `Selected State "${cleanAssignedTerritory.state}" is not an active territory in the Admin territory database.`
+                });
+            }
+            // Populate verified state details
+            cleanAssignedTerritory.state = stateDoc.name.trim();
+            cleanAssignedTerritory.stateId = stateDoc.stateId || stateDoc._id.toString();
+            // 2. Verify District belongs to State
+            let districtDoc = null;
+            if (agentRole !== 'state') {
+                const distQueries = [
+                    { name: { $regex: new RegExp(`^${cleanAssignedTerritory.district.trim()}$`, 'i') } }
+                ];
+                if (cleanAssignedTerritory.districtId) {
+                    if (mongoose_1.default.Types.ObjectId.isValid(cleanAssignedTerritory.districtId)) {
+                        distQueries.push({ _id: new mongoose_1.default.Types.ObjectId(cleanAssignedTerritory.districtId) });
+                    }
+                    distQueries.push({ districtId: cleanAssignedTerritory.districtId });
+                }
+                const stateRefConditions = [
+                    { stateId: stateDoc._id },
+                    { stateId: stateDoc._id.toString() },
+                    { state: stateDoc.name }
+                ];
+                if (stateDoc.stateId) {
+                    stateRefConditions.push({ stateId: stateDoc.stateId });
+                }
+                districtDoc = await db.collection('districts').findOne({
+                    $or: distQueries,
+                    $and: [
+                        { $or: stateRefConditions },
+                        { $or: [{ status: 'Active' }, { status: 'active' }, { status: { $exists: false } }] }
+                    ]
+                });
+                if (!districtDoc) {
+                    return res.status(400).json({
+                        message: `Assigned District "${cleanAssignedTerritory.district}" does not belong to State "${cleanAssignedTerritory.state}" or is not active.`
+                    });
+                }
+                cleanAssignedTerritory.district = districtDoc.name.trim();
+                cleanAssignedTerritory.districtId = districtDoc.districtId || districtDoc._id.toString();
+            }
+            // 3. Verify Division belongs to District
+            let divisionDoc = null;
+            if (agentRole === 'division' || agentRole === 'pincode') {
+                const divQueries = [
+                    { name: { $regex: new RegExp(`^${cleanAssignedTerritory.division.trim()}$`, 'i') } }
+                ];
+                if (cleanAssignedTerritory.divisionId) {
+                    if (mongoose_1.default.Types.ObjectId.isValid(cleanAssignedTerritory.divisionId)) {
+                        divQueries.push({ _id: new mongoose_1.default.Types.ObjectId(cleanAssignedTerritory.divisionId) });
+                    }
+                    divQueries.push({ divisionId: cleanAssignedTerritory.divisionId });
+                }
+                const distRefConditions = [
+                    { districtId: districtDoc._id },
+                    { districtId: districtDoc._id.toString() },
+                    { district: districtDoc.name }
+                ];
+                if (districtDoc.districtId) {
+                    distRefConditions.push({ districtId: districtDoc.districtId });
+                }
+                divisionDoc = await db.collection('divisions').findOne({
+                    $or: divQueries,
+                    $and: [
+                        { $or: distRefConditions },
+                        { $or: [{ status: 'Active' }, { status: 'active' }, { status: { $exists: false } }] }
+                    ]
+                });
+                if (!divisionDoc) {
+                    return res.status(400).json({
+                        message: `Assigned Division "${cleanAssignedTerritory.division}" does not belong to District "${cleanAssignedTerritory.district}" or is not active.`
+                    });
+                }
+                cleanAssignedTerritory.division = divisionDoc.name.trim();
+                cleanAssignedTerritory.divisionId = divisionDoc.divisionId || divisionDoc._id.toString();
+                if (!cleanAssignedTerritory.taluk && (divisionDoc.talukInfo || divisionDoc.taluk)) {
+                    cleanAssignedTerritory.taluk = divisionDoc.talukInfo || divisionDoc.taluk;
+                }
+            }
+            // 4. Verify Pincode belongs to Division/District
+            if (agentRole === 'pincode') {
+                const pinCodeClean = cleanAssignedTerritory.pincode.replace(/\D/g, '').slice(0, 6);
+                const pinQueries = [
+                    { code: pinCodeClean }
+                ];
+                if (cleanAssignedTerritory.pincodeId) {
+                    if (mongoose_1.default.Types.ObjectId.isValid(cleanAssignedTerritory.pincodeId)) {
+                        pinQueries.push({ _id: new mongoose_1.default.Types.ObjectId(cleanAssignedTerritory.pincodeId) });
+                    }
+                    pinQueries.push({ pincodeId: cleanAssignedTerritory.pincodeId });
+                }
+                const pinRefConditions = [
+                    { divisionId: divisionDoc._id },
+                    { divisionId: divisionDoc._id.toString() },
+                    { division: divisionDoc.name },
+                    { districtId: districtDoc._id },
+                    { districtId: districtDoc._id.toString() }
+                ];
+                if (divisionDoc.divisionId) {
+                    pinRefConditions.push({ divisionId: divisionDoc.divisionId });
+                }
+                const pincodeDoc = await db.collection('pincodes').findOne({
+                    $or: pinQueries,
+                    $and: [
+                        { $or: pinRefConditions },
+                        { $or: [{ status: 'Active' }, { status: 'active' }, { status: { $exists: false } }] }
+                    ]
+                });
+                if (!pincodeDoc) {
+                    return res.status(400).json({
+                        message: `Assigned PIN Code "${cleanAssignedTerritory.pincode}" does not belong to Division "${cleanAssignedTerritory.division}" or is not active.`
+                    });
+                }
+                cleanAssignedTerritory.pincode = String(pincodeDoc.code).trim();
+                cleanAssignedTerritory.pincodeId = pincodeDoc.pincodeId || pincodeDoc._id.toString();
+                if (pincodeDoc.taluk) {
+                    cleanAssignedTerritory.taluk = pincodeDoc.taluk;
+                }
+            }
         }
         const cleanTerritory = {
             state: cleanAssignedTerritory.state,
@@ -501,11 +640,18 @@ const updateProfile = async (req, res) => {
         const agentId = req.agent?.agentId;
         if (!agentId)
             return res.status(401).json({ message: 'Unauthorized' });
-        const allowedFields = ['name', 'phone', 'territory', 'assignedTerritory', 'address', 'fullAddress'];
+        const allowedFields = [
+            'name', 'phone', 'mobile', 'territory', 'assignedTerritory', 'address', 'fullAddress',
+            'alternateMobile', 'preferredLanguage', 'bloodGroup', 'profilePhoto',
+            'vehicleDetails', 'bankDetails', 'dob', 'gender', 'qualification', 'experience', 'previousCompany'
+        ];
         const updates = {};
         for (const field of allowedFields) {
             if (req.body[field] !== undefined)
                 updates[field] = req.body[field];
+        }
+        if (req.body.mobile && !updates.phone) {
+            updates.phone = req.body.mobile;
         }
         // Keep territory and assignedTerritory synchronized if either is passed without touching address
         if (updates.assignedTerritory && !updates.territory) {
@@ -530,11 +676,49 @@ const updateProfile = async (req, res) => {
         if (!agent)
             return res.status(404).json({ message: 'Agent not found' });
         await (0, territoryScope_1.invalidateAgentTerritoryScope)(agentId);
-        return res.status(200).json({ message: 'Profile updated', agent });
+        // Sync profile updates to users collection for Admin visibility
+        try {
+            const db = mongoose_1.default.connection.db;
+            if (db) {
+                const userUpdates = {};
+                if (updates.name)
+                    userUpdates.name = updates.name;
+                if (updates.phone) {
+                    userUpdates.phone = updates.phone;
+                    userUpdates.mobile = updates.phone;
+                }
+                if (updates.alternateMobile)
+                    userUpdates.alternateMobile = updates.alternateMobile;
+                if (updates.preferredLanguage)
+                    userUpdates.preferredLanguage = updates.preferredLanguage;
+                if (updates.bloodGroup)
+                    userUpdates.bloodGroup = updates.bloodGroup;
+                if (updates.profilePhoto)
+                    userUpdates.profilePhoto = updates.profilePhoto;
+                if (updates.vehicleDetails)
+                    userUpdates.vehicleDetails = updates.vehicleDetails;
+                if (updates.bankDetails) {
+                    const bd = updates.bankDetails;
+                    userUpdates.bankDetails = bd;
+                    userUpdates.bankName = bd.bankName;
+                    userUpdates.accountNo = bd.accountNumber;
+                    userUpdates.accountNumber = bd.accountNumber;
+                    userUpdates.ifscCode = bd.ifscCode;
+                    userUpdates.accountHolderName = bd.accountHolder;
+                }
+                if (Object.keys(userUpdates).length > 0) {
+                    await db.collection('users').updateOne({ $or: [{ email: agent.email.toLowerCase() }, { phone: agent.phone }] }, { $set: userUpdates });
+                }
+            }
+        }
+        catch (syncErr) {
+            console.error('Error syncing profile update to users collection:', syncErr);
+        }
+        return res.status(200).json({ message: 'Details saved successfully.', agent });
     }
     catch (error) {
         console.error('Update profile error:', error);
-        return res.status(500).json({ message: 'Internal server error' });
+        return res.status(500).json({ message: 'Unable to save details. Please try again.' });
     }
 };
 exports.updateProfile = updateProfile;
@@ -573,13 +757,161 @@ const resetPassword = async (req, res) => {
     return res.status(200).json({ message: 'Password reset successfully' });
 };
 exports.resetPassword = resetPassword;
+// ─────────────────────────────────────────────────────────
+// In-memory OTP store: { phone → { otp, expiresAt } }
+// Replace with Redis for multi-server deployments.
+// ─────────────────────────────────────────────────────────
+const mobileOtpStore = new Map();
+const OTP_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
+/**
+ * POST /auth/send-otp
+ * Step 1 of Mobile OTP Login:
+ *   1. Validate the phone number format.
+ *   2. Check if any Agent is registered with that phone.
+ *   3. Check account status – reject suspended/inactive accounts early.
+ *   4. Generate a 6-digit OTP, store it with a 5-minute expiry.
+ *   5. Return the OTP in the response (in production, send via SMS gateway).
+ */
 const sendOtp = async (req, res) => {
-    const { phone, mobileNumber, email } = req.body || {};
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    return res.status(200).json({
-        message: 'OTP sent successfully',
-        otp
-    });
+    try {
+        const phone = (req.body.phone || req.body.mobileNumber || '').toString().trim();
+        // Basic validation
+        if (!phone || !/^[6-9][0-9]{9}$/.test(phone)) {
+            return res.status(400).json({ message: 'Please enter a valid 10-digit Indian mobile number.' });
+        }
+        // Check if agent is registered with this phone number
+        const agent = await Agent_1.default.findOne({ phone }).select('_id role status kycStatus rejectionReason');
+        if (!agent) {
+            return res.status(404).json({
+                message: 'This mobile number is not registered as an agent. Please apply for agent onboarding first.',
+                notRegistered: true
+            });
+        }
+        // Reject suspended / rejected accounts immediately
+        const status = (agent.status || '').toLowerCase();
+        const kycStatus = (agent.kycStatus || '').toLowerCase();
+        if (status === 'suspended' || status === 'inactive') {
+            return res.status(403).json({
+                message: 'Your account has been suspended. Please contact the Administrator.',
+                status: 'suspended'
+            });
+        }
+        if (kycStatus === 'rejected' || status === 'rejected') {
+            return res.status(403).json({
+                message: `Your registration was rejected. Reason: ${agent.rejectionReason || 'No reason provided.'}. Contact Administrator.`,
+                status: 'rejected'
+            });
+        }
+        // Generate 6-digit OTP and store with expiry
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        mobileOtpStore.set(phone, { otp, expiresAt: Date.now() + OTP_EXPIRY_MS });
+        console.log(`[OTP] Generated for +91${phone}: ${otp} (expires in 5 minutes)`);
+        // In production: send otp via SMS gateway here
+        // await smsService.send(`+91${phone}`, `Your Connect Portal OTP is ${otp}. Valid for 5 minutes.`);
+        return res.status(200).json({
+            message: `OTP sent to +91 ${phone}. It is valid for 5 minutes.`,
+            otp // Remove in production after SMS integration
+        });
+    }
+    catch (error) {
+        console.error('sendOtp error:', error);
+        return res.status(500).json({ message: 'Unable to send OTP. Please try again.' });
+    }
 };
 exports.sendOtp = sendOtp;
+/**
+ * POST /auth/verify-mobile-otp
+ * Step 2 of Mobile OTP Login:
+ *   1. Validate OTP from store (must match + not expired).
+ *   2. Clear OTP from store (one-time use).
+ *   3. Look up agent by phone, check account status.
+ *   4. Generate JWT token identical to email login.
+ *   5. Return token + agent data.
+ */
+const verifyMobileOtp = async (req, res) => {
+    try {
+        const phone = (req.body.phone || req.body.mobileNumber || '').toString().trim();
+        const code = (req.body.otp || req.body.code || '').toString().trim();
+        if (!phone || !code) {
+            return res.status(400).json({ message: 'Phone number and OTP are required.' });
+        }
+        if (!/^[6-9][0-9]{9}$/.test(phone)) {
+            return res.status(400).json({ message: 'Invalid phone number format.' });
+        }
+        if (!/^[0-9]{6}$/.test(code)) {
+            return res.status(400).json({ message: 'OTP must be a 6-digit number.' });
+        }
+        // Retrieve stored OTP
+        const stored = mobileOtpStore.get(phone);
+        if (!stored) {
+            return res.status(400).json({
+                message: 'No OTP was requested for this number. Please click "Get OTP" first.',
+                expired: true
+            });
+        }
+        if (Date.now() > stored.expiresAt) {
+            mobileOtpStore.delete(phone);
+            return res.status(400).json({
+                message: 'OTP has expired (5-minute limit). Please request a new OTP.',
+                expired: true
+            });
+        }
+        if (stored.otp !== code) {
+            return res.status(400).json({ message: 'Incorrect OTP. Please check and try again.' });
+        }
+        // OTP is valid – consume it (one-time use)
+        mobileOtpStore.delete(phone);
+        // Fetch full agent record
+        const agent = await Agent_1.default.findOne({ phone }).select('-password');
+        if (!agent) {
+            return res.status(404).json({ message: 'Agent account not found. Please contact Administrator.' });
+        }
+        // Status checks (same as email login)
+        const currentKycStatus = (agent.kycStatus || '').toLowerCase();
+        const currentStatus = (agent.status || '').toLowerCase();
+        const isApproved = currentKycStatus === 'approved' || currentStatus === 'approved' || currentStatus === 'active';
+        if (!isApproved) {
+            if (currentKycStatus === 'rejected' || currentStatus === 'rejected') {
+                return res.status(403).json({
+                    message: `Your registration was rejected. Reason: ${agent.rejectionReason || 'No reason provided.'}.`,
+                    status: 'rejected'
+                });
+            }
+            if (currentStatus === 'suspended' || currentStatus === 'inactive') {
+                return res.status(403).json({
+                    message: 'Your account has been suspended. Please contact the Administrator.',
+                    status: 'suspended'
+                });
+            }
+            // Pending approval – allow frontend to redirect to /pending
+            return res.status(403).json({
+                message: 'Your account is pending Admin verification.',
+                status: 'pending',
+                registrationId: agent.registrationId || 'N/A',
+                role: agent.role
+            });
+        }
+        // Generate JWT (same structure as email login)
+        const token = (0, jwt_1.generateToken)({
+            agentId: agent._id.toString(),
+            role: agent.role,
+            email: agent.email
+        });
+        const agentObj = agent.toObject();
+        return res.status(200).json({
+            message: 'OTP verified. Login successful.',
+            token,
+            agent: {
+                ...agentObj,
+                status: 'active',
+                kycStatus: 'approved'
+            }
+        });
+    }
+    catch (error) {
+        console.error('verifyMobileOtp error:', error);
+        return res.status(500).json({ message: 'OTP verification failed. Please try again.' });
+    }
+};
+exports.verifyMobileOtp = verifyMobileOtp;
 //# sourceMappingURL=auth.controller.js.map

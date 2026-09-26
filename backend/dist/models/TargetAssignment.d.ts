@@ -4,7 +4,7 @@ export interface ITargetAssignment extends Document {
     assignedTo: Types.ObjectId;
     assignedBy: Types.ObjectId;
     dueDate: Date;
-    status: 'assigned' | 'accepted' | 'in_progress' | 'completed' | 'pending' | 'overdue';
+    status: 'assigned' | 'accepted' | 'in_progress' | 'completed' | 'pending' | 'overdue' | 'rejected' | 'cancelled';
     completedAt?: Date;
     createdAt: Date;
     updatedAt: Date;

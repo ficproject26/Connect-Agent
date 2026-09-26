@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const getAgentBackendUrl = () => {
-  let url = import.meta.env.VITE_API_URL || 'http://3.110.88.42:8083/api';
+  let url = import.meta.env.VITE_API_URL || '/api';
   url = url.trim().replace(/\/+$/, '');
   if (!url.endsWith('/api')) {
     url += '/api';

@@ -7,6 +7,7 @@ const targetSchema = new mongoose_1.Schema({
     description: { type: String },
     type: { type: String, enum: ['daily', 'weekly', 'monthly', 'quarterly', 'yearly'], required: true },
     targetValue: { type: Number, required: true },
+    priority: { type: String, enum: ['High', 'Medium', 'Low', 'high', 'medium', 'low'], default: 'Medium' },
     createdBy: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Agent', required: true },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }

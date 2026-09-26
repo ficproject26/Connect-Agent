@@ -9,7 +9,7 @@ const targetAssignmentSchema = new mongoose_1.Schema({
     dueDate: { type: Date, required: true },
     status: {
         type: String,
-        enum: ['assigned', 'accepted', 'in_progress', 'completed', 'pending', 'overdue'],
+        enum: ['assigned', 'accepted', 'in_progress', 'completed', 'pending', 'overdue', 'rejected', 'cancelled'],
         default: 'assigned',
         required: true
     },

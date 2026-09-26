@@ -12,7 +12,8 @@ const createTargetSchema = z.object({
   title: z.string().min(2, 'Title required'),
   description: z.string().optional(),
   type: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']),
-  targetValue: z.number().positive('Target value must be positive')
+  targetValue: z.number().positive('Target value must be positive'),
+  priority: z.enum(['High', 'Medium', 'Low', 'high', 'medium', 'low']).optional().default('Medium')
 });
 
 const assignTargetSchema = z.object({
@@ -29,6 +30,7 @@ const allocateTargetSchema = z.object({
   description: z.string().optional(),
   type: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']).default('daily'),
   targetValue: z.number().positive('Target value must be positive'),
+  priority: z.enum(['High', 'Medium', 'Low', 'high', 'medium', 'low']).optional().default('Medium'),
   dueDate: z.string().optional()
 });
 
@@ -144,6 +146,7 @@ export const allocateTarget = async (req: Request, res: Response) => {
       description: data.description || `Allocated target of ${data.targetValue} merchant visits`,
       type: data.type || 'daily',
       targetValue: data.targetValue,
+      priority: data.priority || 'Medium',
       createdBy: agentId
     });
     await target.save();
@@ -353,7 +356,7 @@ export const updateAssignmentStatus = async (req: Request, res: Response) => {
     if (!agentId) return res.status(401).json({ message: 'Unauthorized' });
 
     const { status } = req.body;
-    const validStatuses = ['assigned', 'accepted', 'in_progress', 'completed', 'pending', 'overdue'];
+    const validStatuses = ['assigned', 'accepted', 'in_progress', 'completed', 'pending', 'overdue', 'rejected', 'cancelled'];
     if (!status || !validStatuses.includes(status)) {
       return res.status(400).json({ message: `Status must be one of: ${validStatuses.join(', ')}` });
     }
