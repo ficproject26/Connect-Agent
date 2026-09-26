@@ -6,7 +6,13 @@ const getAgentBackendUrl = () => {
       ? (import.meta.env.VITE_API_URL || import.meta.env.NEXT_PUBLIC_API_URL)
       : null;
 
-  let url = envUrl || 'http://3.110.88.42:8083/api';
+  let url = envUrl || '/api';
+  // Guard against insecure HTTP when page is loaded over HTTPS (Mixed Content prevention)
+  if (url.includes('3.110.88.42:8083')) {
+    url = 'https://agent.ficapp.in/api';
+  } else if (typeof window !== 'undefined' && window.location.protocol === 'https:' && url.startsWith('http://')) {
+    url = url.replace(/^http:\/\//, 'https://');
+  }
   url = url.trim().replace(/\/+$/, '');
   if (!url.endsWith('/api')) {
     url += '/api';

@@ -10,6 +10,7 @@ router.get('/balance', getBalance);
 router.get('/transactions', getTransactions);
 router.get('/bank-details', getBankDetails);
 router.put('/bank-details', updateBankDetails);
+router.post('/bank-details', updateBankDetails);
 router.post('/cashout', requestCashout);
 
 export default router;

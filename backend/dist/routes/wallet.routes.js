@@ -9,6 +9,7 @@ router.get('/balance', wallet_controller_1.getBalance);
 router.get('/transactions', wallet_controller_1.getTransactions);
 router.get('/bank-details', wallet_controller_1.getBankDetails);
 router.put('/bank-details', wallet_controller_1.updateBankDetails);
+router.post('/bank-details', wallet_controller_1.updateBankDetails);
 router.post('/cashout', wallet_controller_1.requestCashout);
 exports.default = router;
 //# sourceMappingURL=wallet.routes.js.map
