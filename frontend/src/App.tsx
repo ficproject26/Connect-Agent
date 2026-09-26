@@ -7,6 +7,7 @@ import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { AppRoutes } from './routes/AppRoutes';
 
+import { RealtimeSyncProvider } from './realtime/RealtimeSyncProvider';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 function App() {
@@ -14,14 +15,15 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <AuthProvider>
-          <ToastProvider>
-            <ErrorBoundary>
-              <BrowserRouter>
-                <AppRoutes />
-
-              </BrowserRouter>
-            </ErrorBoundary>
-          </ToastProvider>
+          <RealtimeSyncProvider>
+            <ToastProvider>
+              <ErrorBoundary>
+                <BrowserRouter>
+                  <AppRoutes />
+                </BrowserRouter>
+              </ErrorBoundary>
+            </ToastProvider>
+          </RealtimeSyncProvider>
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>
@@ -29,3 +31,4 @@ function App() {
 }
 
 export default App;
+

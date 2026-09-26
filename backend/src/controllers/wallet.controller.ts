@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import Wallet from '../models/Wallet';
 import Agent from '../models/Agent';
+import { publishEntityEvent } from '../realtime/eventBus';
 
 // Helper to generate a transaction ID
 const generateTxId = () => `TXN-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
@@ -234,6 +235,21 @@ export const requestCashout = async (req: Request, res: Response) => {
     
     wallet.transactions.push(newTx);
     await wallet.save();
+
+    // Publish Realtime Wallet Event
+    publishEntityEvent({
+      event: 'ENTITY_UPDATED',
+      entity: 'wallet',
+      entityId: wallet._id.toString(),
+      action: 'transacted',
+      scope: {
+        targetAgentId: agentId
+      },
+      data: {
+        balance: wallet.balance,
+        transaction: newTx
+      }
+    }).catch(() => {});
 
     return res.status(200).json({
       message: 'Payout request submitted successfully',

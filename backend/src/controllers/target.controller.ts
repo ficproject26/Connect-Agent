@@ -7,6 +7,7 @@ import Agent from '../models/Agent';
 import Notification from '../models/Notification';
 import { getAgentTerritoryScope, buildTerritoryFilter } from '../utils/territoryScope';
 import { cacheService } from '../services/cache.service';
+import { publishEntityEvent } from '../realtime/eventBus';
 
 const createTargetSchema = z.object({
   title: z.string().min(2, 'Title required'),
@@ -174,6 +175,24 @@ export const allocateTarget = async (req: Request, res: Response) => {
       // Invalidate dashboard stats cache
       await cacheService.delByPrefix('dashboard:');
     }
+
+    // Publish Realtime Target Event
+    publishEntityEvent({
+      event: 'ENTITY_CREATED',
+      entity: 'target',
+      entityId: target._id.toString(),
+      action: 'assigned',
+      scope: {
+        targetAgentId: targetAgentId ? targetAgentId.toString() : undefined
+      },
+      data: {
+        targetId: target._id,
+        title: target.title,
+        targetValue: target.targetValue,
+        assignedTo: targetAgentId,
+        assignmentId: assignment ? assignment._id : undefined
+      }
+    }).catch(() => {});
 
     return res.status(201).json({
       message: 'Target allocated successfully',
@@ -385,6 +404,22 @@ export const updateAssignmentStatus = async (req: Request, res: Response) => {
 
     // Invalidate dashboard stats cache
     await cacheService.delByPrefix('dashboard:');
+
+    // Publish Realtime Target Status Event
+    publishEntityEvent({
+      event: 'ENTITY_STATUS_CHANGED',
+      entity: 'target',
+      entityId: assignment._id.toString(),
+      action: 'status_changed',
+      scope: {
+        targetAgentId: assignment.assignedBy ? (assignment.assignedBy as any)._id?.toString() || assignment.assignedBy.toString() : undefined
+      },
+      data: {
+        assignmentId: assignment._id,
+        targetId: (assignment.target as any)?._id || assignment.target,
+        status: assignment.status
+      }
+    }).catch(() => {});
 
     return res.status(200).json({ message: 'Assignment status updated', assignment });
   } catch (error) {

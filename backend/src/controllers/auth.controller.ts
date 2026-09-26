@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import Agent from '../models/Agent';
 import { generateToken } from '../utils/jwt';
 import { invalidateAgentTerritoryScope } from '../utils/territoryScope';
+import { publishEntityEvent } from '../realtime/eventBus';
 import { z } from 'zod';
 
 const registerSchema = z.object({
@@ -449,6 +450,27 @@ export const register = async (req: Request, res: Response) => {
     // Return registration information (success screen requirements)
     const agentObj = newAgent.toObject();
     const { password, ...agentData } = agentObj;
+
+    // Publish Realtime Agent Registration Event
+    publishEntityEvent({
+      event: 'ENTITY_CREATED',
+      entity: 'agent',
+      entityId: newAgent._id.toString(),
+      action: 'created',
+      scope: {
+        state: cleanTerritory.state,
+        district: cleanTerritory.district,
+        division: cleanTerritory.division,
+        pincode: cleanTerritory.pincode
+      },
+      data: {
+        _id: newAgent._id,
+        registrationId,
+        name: newAgent.name,
+        role: newAgent.role,
+        status: newAgent.status
+      }
+    }).catch(() => {});
 
     return res.status(201).json({
       message: 'Agent registered successfully. Pending Admin approval.',

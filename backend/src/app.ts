@@ -92,8 +92,39 @@ const healthHandler = (req: Request, res: Response) => {
   });
 };
 
+import socketServer from './realtime/socketServer';
+import eventBus from './realtime/eventBus';
+
 app.get('/api/health', healthHandler);
 app.get('/health', healthHandler);
+
+// Centralized Realtime System Observability & Health
+app.get('/api/realtime/status', (req: Request, res: Response) => {
+  res.status(200).json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    realtime: socketServer.getStatus()
+  });
+});
+
+// Real-time Event Trigger Endpoint for testing & inter-service triggers
+app.post('/api/realtime/test-emit', async (req: Request, res: Response) => {
+  try {
+    const event = await eventBus.publish({
+      event: req.body.event || 'ENTITY_UPDATED',
+      entity: req.body.entity || 'generic',
+      entityId: req.body.entityId || 'test_id',
+      action: req.body.action || 'updated',
+      scope: req.body.scope || { isPublic: true },
+      data: req.body.data || {}
+    });
+    res.status(200).json({ status: 'ok', event });
+  } catch (err: any) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+
 
 // 404 handler
 app.use((req: Request, res: Response) => {

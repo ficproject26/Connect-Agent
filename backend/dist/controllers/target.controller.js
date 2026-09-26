@@ -12,6 +12,7 @@ const Agent_1 = __importDefault(require("../models/Agent"));
 const Notification_1 = __importDefault(require("../models/Notification"));
 const territoryScope_1 = require("../utils/territoryScope");
 const cache_service_1 = require("../services/cache.service");
+const eventBus_1 = require("../realtime/eventBus");
 const createTargetSchema = zod_1.z.object({
     title: zod_1.z.string().min(2, 'Title required'),
     description: zod_1.z.string().optional(),
@@ -164,6 +165,23 @@ const allocateTarget = async (req, res) => {
             // Invalidate dashboard stats cache
             await cache_service_1.cacheService.delByPrefix('dashboard:');
         }
+        // Publish Realtime Target Event
+        (0, eventBus_1.publishEntityEvent)({
+            event: 'ENTITY_CREATED',
+            entity: 'target',
+            entityId: target._id.toString(),
+            action: 'assigned',
+            scope: {
+                targetAgentId: targetAgentId ? targetAgentId.toString() : undefined
+            },
+            data: {
+                targetId: target._id,
+                title: target.title,
+                targetValue: target.targetValue,
+                assignedTo: targetAgentId,
+                assignmentId: assignment ? assignment._id : undefined
+            }
+        }).catch(() => { });
         return res.status(201).json({
             message: 'Target allocated successfully',
             target,
@@ -358,6 +376,21 @@ const updateAssignmentStatus = async (req, res) => {
         ]);
         // Invalidate dashboard stats cache
         await cache_service_1.cacheService.delByPrefix('dashboard:');
+        // Publish Realtime Target Status Event
+        (0, eventBus_1.publishEntityEvent)({
+            event: 'ENTITY_STATUS_CHANGED',
+            entity: 'target',
+            entityId: assignment._id.toString(),
+            action: 'status_changed',
+            scope: {
+                targetAgentId: assignment.assignedBy ? assignment.assignedBy._id?.toString() || assignment.assignedBy.toString() : undefined
+            },
+            data: {
+                assignmentId: assignment._id,
+                targetId: assignment.target?._id || assignment.target,
+                status: assignment.status
+            }
+        }).catch(() => { });
         return res.status(200).json({ message: 'Assignment status updated', assignment });
     }
     catch (error) {

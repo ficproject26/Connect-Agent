@@ -77,8 +77,35 @@ const healthHandler = (req, res) => {
         message: 'Forge Connect Backend API is healthy',
     });
 };
+const socketServer_1 = __importDefault(require("./realtime/socketServer"));
+const eventBus_1 = __importDefault(require("./realtime/eventBus"));
 app.get('/api/health', healthHandler);
 app.get('/health', healthHandler);
+// Centralized Realtime System Observability & Health
+app.get('/api/realtime/status', (req, res) => {
+    res.status(200).json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        realtime: socketServer_1.default.getStatus()
+    });
+});
+// Real-time Event Trigger Endpoint for testing & inter-service triggers
+app.post('/api/realtime/test-emit', async (req, res) => {
+    try {
+        const event = await eventBus_1.default.publish({
+            event: req.body.event || 'ENTITY_UPDATED',
+            entity: req.body.entity || 'generic',
+            entityId: req.body.entityId || 'test_id',
+            action: req.body.action || 'updated',
+            scope: req.body.scope || { isPublic: true },
+            data: req.body.data || {}
+        });
+        res.status(200).json({ status: 'ok', event });
+    }
+    catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
 // 404 handler
 app.use((req, res) => {
     res.status(404).json({ status: 'fail', message: 'Resource not found' });

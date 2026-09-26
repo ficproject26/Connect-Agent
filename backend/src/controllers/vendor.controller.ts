@@ -10,6 +10,7 @@ import {
   validateGeographicConsistency,
   validateVendorFieldFormats
 } from '../utils/territoryValidation';
+import { publishEntityEvent } from '../realtime/eventBus';
 
 const createVendorSchema = z.object({
   businessName: z.string().optional(),
@@ -376,6 +377,27 @@ export const createVendor = async (req: Request, res: Response) => {
       cacheService.delByPrefix('hierarchy:')
     ]);
 
+    // Publish Realtime Entity Event
+    publishEntityEvent({
+      event: 'ENTITY_CREATED',
+      entity: 'vendor',
+      entityId: vendor._id.toString(),
+      action: 'created',
+      scope: {
+        state: vendor.state,
+        district: vendor.district,
+        division: (vendor as any).division,
+        pincode: vendor.pincode
+      },
+      data: {
+        _id: vendor._id,
+        registrationId: (vendor as any).registrationId,
+        businessName: vendor.businessName,
+        status: vendor.status,
+        kycStatus: vendor.kycStatus
+      }
+    }).catch(() => {});
+
     return res.status(201).json({ message: 'Vendor created successfully', vendor });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
@@ -427,6 +449,27 @@ export const updateVendor = async (req: Request, res: Response) => {
       cacheService.delByPrefix('hierarchy:')
     ]);
 
+    // Publish Realtime Entity Event
+    publishEntityEvent({
+      event: 'ENTITY_UPDATED',
+      entity: 'vendor',
+      entityId: vendor._id.toString(),
+      action: 'updated',
+      scope: {
+        state: vendor.state,
+        district: vendor.district,
+        division: (vendor as any).division,
+        pincode: vendor.pincode
+      },
+      data: {
+        _id: vendor._id,
+        registrationId: (vendor as any).registrationId,
+        businessName: vendor.businessName,
+        status: vendor.status,
+        kycStatus: vendor.kycStatus
+      }
+    }).catch(() => {});
+
     return res.status(200).json({ message: 'Vendor updated', vendor });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
@@ -468,6 +511,25 @@ export const updateVendorStatus = async (req: Request, res: Response) => {
       cacheService.delByPrefix('dashboard:'),
       cacheService.delByPrefix('hierarchy:')
     ]);
+
+    // Publish Realtime Entity Event
+    publishEntityEvent({
+      event: 'ENTITY_STATUS_CHANGED',
+      entity: 'vendor',
+      entityId: vendor._id.toString(),
+      action: 'status_changed',
+      scope: {
+        state: vendor.state,
+        district: vendor.district,
+        division: (vendor as any).division,
+        pincode: vendor.pincode
+      },
+      data: {
+        _id: vendor._id,
+        registrationId: (vendor as any).registrationId,
+        status: vendor.status
+      }
+    }).catch(() => {});
 
     return res.status(200).json({ message: 'Vendor status updated', vendor });
   } catch (error) {

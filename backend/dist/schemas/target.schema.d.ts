@@ -46,20 +46,20 @@ export declare const updateTargetStatusSchema: z.ZodObject<{
         achievedQuantity: z.ZodOptional<z.ZodNumber>;
         status: z.ZodOptional<z.ZodEnum<["pending", "in_progress", "completed", "failed"]>>;
     }, "strip", z.ZodTypeAny, {
-        status?: "pending" | "in_progress" | "completed" | "failed" | undefined;
+        status?: "pending" | "completed" | "in_progress" | "failed" | undefined;
         achievedQuantity?: number | undefined;
     }, {
-        status?: "pending" | "in_progress" | "completed" | "failed" | undefined;
+        status?: "pending" | "completed" | "in_progress" | "failed" | undefined;
         achievedQuantity?: number | undefined;
     }>;
 }, "strip", z.ZodTypeAny, {
     body: {
-        status?: "pending" | "in_progress" | "completed" | "failed" | undefined;
+        status?: "pending" | "completed" | "in_progress" | "failed" | undefined;
         achievedQuantity?: number | undefined;
     };
 }, {
     body: {
-        status?: "pending" | "in_progress" | "completed" | "failed" | undefined;
+        status?: "pending" | "completed" | "in_progress" | "failed" | undefined;
         achievedQuantity?: number | undefined;
     };
 }>;

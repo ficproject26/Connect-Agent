@@ -7,6 +7,7 @@ exports.getWalletSummary = exports.requestCashout = exports.updateBankDetails = 
 const mongoose_1 = __importDefault(require("mongoose"));
 const Wallet_1 = __importDefault(require("../models/Wallet"));
 const Agent_1 = __importDefault(require("../models/Agent"));
+const eventBus_1 = require("../realtime/eventBus");
 // Helper to generate a transaction ID
 const generateTxId = () => `TXN-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 const FAKE_DESCRIPTIONS = [
@@ -216,6 +217,20 @@ const requestCashout = async (req, res) => {
         };
         wallet.transactions.push(newTx);
         await wallet.save();
+        // Publish Realtime Wallet Event
+        (0, eventBus_1.publishEntityEvent)({
+            event: 'ENTITY_UPDATED',
+            entity: 'wallet',
+            entityId: wallet._id.toString(),
+            action: 'transacted',
+            scope: {
+                targetAgentId: agentId
+            },
+            data: {
+                balance: wallet.balance,
+                transaction: newTx
+            }
+        }).catch(() => { });
         return res.status(200).json({
             message: 'Payout request submitted successfully',
             balance: wallet.balance,

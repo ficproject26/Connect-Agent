@@ -1,6 +1,8 @@
+import http from 'http';
 import app from './app';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
+import socketServer from './realtime/socketServer';
 
 // Load environment variables
 dotenv.config();
@@ -25,10 +27,17 @@ async function startServer() {
     console.error('Warning: Failed to connect to MongoDB. Starting server without DB:', error);
   }
 
-  // Start Express Server
-  app.listen(PORT, () => {
-    console.log(`Server is running at http://localhost:${PORT}`);
+  // Create HTTP server wrapping Express
+  const server = http.createServer(app);
+
+  // Initialize Centralized WebSocket Server
+  socketServer.init(server);
+
+  // Start HTTP + WebSocket Server
+  server.listen(PORT, () => {
+    console.log(`Server and Realtime WebSocket is running at http://localhost:${PORT}`);
   });
 }
 
 startServer();
+

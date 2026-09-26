@@ -7,6 +7,7 @@ import TargetAssignment from '../models/TargetAssignment';
 import Wallet from '../models/Wallet';
 import { getAgentTerritoryScope, buildTerritoryFilter, buildVendorScopeFilter, invalidateAgentTerritoryScope } from '../utils/territoryScope';
 import { cacheService } from '../services/cache.service';
+import { publishEntityEvent } from '../realtime/eventBus';
 
 // GET /api/admin/registrations
 export const getRegistrations = async (req: Request, res: Response) => {
@@ -192,6 +193,26 @@ export const approveRegistration = async (req: Request, res: Response) => {
       invalidateAgentTerritoryScope(id)
     ]);
 
+    // Publish Realtime Agent Approval Event
+    publishEntityEvent({
+      event: 'ENTITY_STATUS_CHANGED',
+      entity: 'agent',
+      entityId: id,
+      action: 'approved',
+      scope: {
+        targetAgentId: id,
+        state: agent?.territory?.state,
+        district: agent?.territory?.district,
+        division: agent?.territory?.division,
+        pincode: agent?.territory?.pincode
+      },
+      data: {
+        agentId: id,
+        status: 'approved',
+        kycStatus: 'approved'
+      }
+    }).catch(() => {});
+
     return res.status(200).json({
       message: 'Agent registration application approved successfully.',
       registration: agent || { _id: id, status: 'approved', kycStatus: 'approved' }
@@ -263,6 +284,27 @@ export const rejectRegistration = async (req: Request, res: Response) => {
       cacheService.delByPrefix('dashboard:'),
       invalidateAgentTerritoryScope(id)
     ]);
+
+    // Publish Realtime Agent Rejection Event
+    publishEntityEvent({
+      event: 'ENTITY_STATUS_CHANGED',
+      entity: 'agent',
+      entityId: id,
+      action: 'rejected',
+      scope: {
+        targetAgentId: id,
+        state: agent?.territory?.state,
+        district: agent?.territory?.district,
+        division: agent?.territory?.division,
+        pincode: agent?.territory?.pincode
+      },
+      data: {
+        agentId: id,
+        status: 'rejected',
+        kycStatus: 'rejected',
+        rejectionReason
+      }
+    }).catch(() => {});
 
     return res.status(200).json({
       message: 'Agent registration application rejected successfully.',

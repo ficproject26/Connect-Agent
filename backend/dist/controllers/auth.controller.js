@@ -8,6 +8,7 @@ const mongoose_1 = __importDefault(require("mongoose"));
 const Agent_1 = __importDefault(require("../models/Agent"));
 const jwt_1 = require("../utils/jwt");
 const territoryScope_1 = require("../utils/territoryScope");
+const eventBus_1 = require("../realtime/eventBus");
 const zod_1 = require("zod");
 const registerSchema = zod_1.z.object({
     name: zod_1.z.string().min(2, 'Name must be at least 2 characters'),
@@ -412,6 +413,26 @@ const register = async (req, res) => {
         // Return registration information (success screen requirements)
         const agentObj = newAgent.toObject();
         const { password, ...agentData } = agentObj;
+        // Publish Realtime Agent Registration Event
+        (0, eventBus_1.publishEntityEvent)({
+            event: 'ENTITY_CREATED',
+            entity: 'agent',
+            entityId: newAgent._id.toString(),
+            action: 'created',
+            scope: {
+                state: cleanTerritory.state,
+                district: cleanTerritory.district,
+                division: cleanTerritory.division,
+                pincode: cleanTerritory.pincode
+            },
+            data: {
+                _id: newAgent._id,
+                registrationId,
+                name: newAgent.name,
+                role: newAgent.role,
+                status: newAgent.status
+            }
+        }).catch(() => { });
         return res.status(201).json({
             message: 'Agent registered successfully. Pending Admin approval.',
             registrationId,

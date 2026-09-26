@@ -3,9 +3,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+const http_1 = __importDefault(require("http"));
 const app_1 = __importDefault(require("./app"));
 const mongoose_1 = __importDefault(require("mongoose"));
 const dotenv_1 = __importDefault(require("dotenv"));
+const socketServer_1 = __importDefault(require("./realtime/socketServer"));
 // Load environment variables
 dotenv_1.default.config();
 const PORT = process.env.PORT || 8083;
@@ -27,9 +29,13 @@ async function startServer() {
     catch (error) {
         console.error('Warning: Failed to connect to MongoDB. Starting server without DB:', error);
     }
-    // Start Express Server
-    app_1.default.listen(PORT, () => {
-        console.log(`Server is running at http://localhost:${PORT}`);
+    // Create HTTP server wrapping Express
+    const server = http_1.default.createServer(app_1.default);
+    // Initialize Centralized WebSocket Server
+    socketServer_1.default.init(server);
+    // Start HTTP + WebSocket Server
+    server.listen(PORT, () => {
+        console.log(`Server and Realtime WebSocket is running at http://localhost:${PORT}`);
     });
 }
 startServer();

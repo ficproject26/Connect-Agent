@@ -12,6 +12,7 @@ const TargetAssignment_1 = __importDefault(require("../models/TargetAssignment")
 const Wallet_1 = __importDefault(require("../models/Wallet"));
 const territoryScope_1 = require("../utils/territoryScope");
 const cache_service_1 = require("../services/cache.service");
+const eventBus_1 = require("../realtime/eventBus");
 // GET /api/admin/registrations
 const getRegistrations = async (req, res) => {
     try {
@@ -196,6 +197,25 @@ const approveRegistration = async (req, res) => {
             cache_service_1.cacheService.delByPrefix('dashboard:'),
             (0, territoryScope_1.invalidateAgentTerritoryScope)(id)
         ]);
+        // Publish Realtime Agent Approval Event
+        (0, eventBus_1.publishEntityEvent)({
+            event: 'ENTITY_STATUS_CHANGED',
+            entity: 'agent',
+            entityId: id,
+            action: 'approved',
+            scope: {
+                targetAgentId: id,
+                state: agent?.territory?.state,
+                district: agent?.territory?.district,
+                division: agent?.territory?.division,
+                pincode: agent?.territory?.pincode
+            },
+            data: {
+                agentId: id,
+                status: 'approved',
+                kycStatus: 'approved'
+            }
+        }).catch(() => { });
         return res.status(200).json({
             message: 'Agent registration application approved successfully.',
             registration: agent || { _id: id, status: 'approved', kycStatus: 'approved' }
@@ -260,6 +280,26 @@ const rejectRegistration = async (req, res) => {
             cache_service_1.cacheService.delByPrefix('dashboard:'),
             (0, territoryScope_1.invalidateAgentTerritoryScope)(id)
         ]);
+        // Publish Realtime Agent Rejection Event
+        (0, eventBus_1.publishEntityEvent)({
+            event: 'ENTITY_STATUS_CHANGED',
+            entity: 'agent',
+            entityId: id,
+            action: 'rejected',
+            scope: {
+                targetAgentId: id,
+                state: agent?.territory?.state,
+                district: agent?.territory?.district,
+                division: agent?.territory?.division,
+                pincode: agent?.territory?.pincode
+            },
+            data: {
+                agentId: id,
+                status: 'rejected',
+                kycStatus: 'rejected',
+                rejectionReason
+            }
+        }).catch(() => { });
         return res.status(200).json({
             message: 'Agent registration application rejected successfully.',
             registration: agent || { _id: id, status: 'rejected', kycStatus: 'rejected' }

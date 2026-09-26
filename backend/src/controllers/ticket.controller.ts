@@ -4,6 +4,7 @@ import Ticket from '../models/Ticket';
 import Agent from '../models/Agent';
 import { getAgentTerritoryScope } from '../utils/territoryScope';
 import { cacheService } from '../services/cache.service';
+import { publishEntityEvent } from '../realtime/eventBus';
 
 // Simple unique ticket ID generator — format TKT-XXXXXX
 const generateTicketId = () =>
@@ -191,6 +192,27 @@ export const createTicket = async (req: Request, res: Response) => {
     // Invalidate dashboard stats cache
     await cacheService.delByPrefix('dashboard:');
 
+    // Publish Realtime Ticket Event
+    publishEntityEvent({
+      event: 'ENTITY_CREATED',
+      entity: 'ticket',
+      entityId: ticket._id.toString(),
+      action: 'created',
+      scope: {
+        state: ticket.state,
+        district: ticket.district,
+        division: ticket.division,
+        pincode: ticket.pincode
+      },
+      data: {
+        _id: ticket._id,
+        ticketId: ticket.ticketId,
+        status: ticket.status,
+        category: ticket.category,
+        priority: ticket.priority
+      }
+    }).catch(() => {});
+
     return res.status(201).json({ message: 'Support ticket created successfully', ticket });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
@@ -239,6 +261,26 @@ export const updateTicketStatus = async (req: Request, res: Response) => {
 
     // Invalidate dashboard stats cache
     await cacheService.delByPrefix('dashboard:');
+
+    // Publish Realtime Ticket Status Event
+    publishEntityEvent({
+      event: 'ENTITY_STATUS_CHANGED',
+      entity: 'ticket',
+      entityId: ticket._id.toString(),
+      action: 'status_changed',
+      scope: {
+        state: ticket.state,
+        district: ticket.district,
+        division: ticket.division,
+        pincode: ticket.pincode,
+        targetAgentId: ticket.creator ? (ticket.creator as any)._id?.toString() || ticket.creator.toString() : undefined
+      },
+      data: {
+        _id: ticket._id,
+        ticketId: ticket.ticketId,
+        status: ticket.status
+      }
+    }).catch(() => {});
 
     return res.status(200).json({ message: 'Ticket status updated', ticket });
   } catch (error) {

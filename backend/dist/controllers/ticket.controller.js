@@ -9,6 +9,7 @@ const Ticket_1 = __importDefault(require("../models/Ticket"));
 const Agent_1 = __importDefault(require("../models/Agent"));
 const territoryScope_1 = require("../utils/territoryScope");
 const cache_service_1 = require("../services/cache.service");
+const eventBus_1 = require("../realtime/eventBus");
 // Simple unique ticket ID generator — format TKT-XXXXXX
 const generateTicketId = () => `TKT-${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
 const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -171,6 +172,26 @@ const createTicket = async (req, res) => {
         await ticket.populate('creator', 'name email role phone');
         // Invalidate dashboard stats cache
         await cache_service_1.cacheService.delByPrefix('dashboard:');
+        // Publish Realtime Ticket Event
+        (0, eventBus_1.publishEntityEvent)({
+            event: 'ENTITY_CREATED',
+            entity: 'ticket',
+            entityId: ticket._id.toString(),
+            action: 'created',
+            scope: {
+                state: ticket.state,
+                district: ticket.district,
+                division: ticket.division,
+                pincode: ticket.pincode
+            },
+            data: {
+                _id: ticket._id,
+                ticketId: ticket.ticketId,
+                status: ticket.status,
+                category: ticket.category,
+                priority: ticket.priority
+            }
+        }).catch(() => { });
         return res.status(201).json({ message: 'Support ticket created successfully', ticket });
     }
     catch (error) {
@@ -219,6 +240,25 @@ const updateTicketStatus = async (req, res) => {
         ]);
         // Invalidate dashboard stats cache
         await cache_service_1.cacheService.delByPrefix('dashboard:');
+        // Publish Realtime Ticket Status Event
+        (0, eventBus_1.publishEntityEvent)({
+            event: 'ENTITY_STATUS_CHANGED',
+            entity: 'ticket',
+            entityId: ticket._id.toString(),
+            action: 'status_changed',
+            scope: {
+                state: ticket.state,
+                district: ticket.district,
+                division: ticket.division,
+                pincode: ticket.pincode,
+                targetAgentId: ticket.creator ? ticket.creator._id?.toString() || ticket.creator.toString() : undefined
+            },
+            data: {
+                _id: ticket._id,
+                ticketId: ticket.ticketId,
+                status: ticket.status
+            }
+        }).catch(() => { });
         return res.status(200).json({ message: 'Ticket status updated', ticket });
     }
     catch (error) {

@@ -11,6 +11,7 @@ const Vendor_1 = __importDefault(require("../models/Vendor"));
 const territoryScope_1 = require("../utils/territoryScope");
 const cache_service_1 = require("../services/cache.service");
 const territoryValidation_1 = require("../utils/territoryValidation");
+const eventBus_1 = require("../realtime/eventBus");
 const createVendorSchema = zod_1.z.object({
     businessName: zod_1.z.string().optional(),
     name: zod_1.z.string().optional(),
@@ -356,6 +357,26 @@ const createVendor = async (req, res) => {
             cache_service_1.cacheService.delByPrefix('dashboard:'),
             cache_service_1.cacheService.delByPrefix('hierarchy:')
         ]);
+        // Publish Realtime Entity Event
+        (0, eventBus_1.publishEntityEvent)({
+            event: 'ENTITY_CREATED',
+            entity: 'vendor',
+            entityId: vendor._id.toString(),
+            action: 'created',
+            scope: {
+                state: vendor.state,
+                district: vendor.district,
+                division: vendor.division,
+                pincode: vendor.pincode
+            },
+            data: {
+                _id: vendor._id,
+                registrationId: vendor.registrationId,
+                businessName: vendor.businessName,
+                status: vendor.status,
+                kycStatus: vendor.kycStatus
+            }
+        }).catch(() => { });
         return res.status(201).json({ message: 'Vendor created successfully', vendor });
     }
     catch (error) {
@@ -400,6 +421,26 @@ const updateVendor = async (req, res) => {
             cache_service_1.cacheService.delByPrefix('dashboard:'),
             cache_service_1.cacheService.delByPrefix('hierarchy:')
         ]);
+        // Publish Realtime Entity Event
+        (0, eventBus_1.publishEntityEvent)({
+            event: 'ENTITY_UPDATED',
+            entity: 'vendor',
+            entityId: vendor._id.toString(),
+            action: 'updated',
+            scope: {
+                state: vendor.state,
+                district: vendor.district,
+                division: vendor.division,
+                pincode: vendor.pincode
+            },
+            data: {
+                _id: vendor._id,
+                registrationId: vendor.registrationId,
+                businessName: vendor.businessName,
+                status: vendor.status,
+                kycStatus: vendor.kycStatus
+            }
+        }).catch(() => { });
         return res.status(200).json({ message: 'Vendor updated', vendor });
     }
     catch (error) {
@@ -435,6 +476,24 @@ const updateVendorStatus = async (req, res) => {
             cache_service_1.cacheService.delByPrefix('dashboard:'),
             cache_service_1.cacheService.delByPrefix('hierarchy:')
         ]);
+        // Publish Realtime Entity Event
+        (0, eventBus_1.publishEntityEvent)({
+            event: 'ENTITY_STATUS_CHANGED',
+            entity: 'vendor',
+            entityId: vendor._id.toString(),
+            action: 'status_changed',
+            scope: {
+                state: vendor.state,
+                district: vendor.district,
+                division: vendor.division,
+                pincode: vendor.pincode
+            },
+            data: {
+                _id: vendor._id,
+                registrationId: vendor.registrationId,
+                status: vendor.status
+            }
+        }).catch(() => { });
         return res.status(200).json({ message: 'Vendor status updated', vendor });
     }
     catch (error) {
