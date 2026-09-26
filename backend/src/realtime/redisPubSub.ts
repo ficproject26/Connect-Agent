@@ -4,6 +4,20 @@ import { RealtimeEvent } from './eventTypes';
 
 export const GLOBAL_REDIS_CHANNEL = 'connect:global:events';
 
+function cleanRedisUrl(url?: string): string | undefined {
+  if (!url) return undefined;
+  let cleaned = url.trim();
+  if ((cleaned.startsWith('"') && cleaned.endsWith('"')) || (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+    cleaned = cleaned.slice(1, -1).trim();
+  }
+  if (cleaned.startsWith('redis-cli -u ')) {
+    cleaned = cleaned.substring('redis-cli -u '.length).trim();
+  } else if (cleaned.startsWith('redis-cli -u')) {
+    cleaned = cleaned.substring('redis-cli -u'.length).trim();
+  }
+  return cleaned.length > 0 ? cleaned : undefined;
+}
+
 class RedisPubSubManager {
   private publisher: Redis | null = null;
   private subscriber: Redis | null = null;
@@ -27,7 +41,7 @@ class RedisPubSubManager {
   }
 
   private initClients() {
-    const redisUrl = process.env.REDIS_URL;
+    const redisUrl = cleanRedisUrl(process.env.REDIS_URL);
     const redisHost = process.env.REDIS_HOST;
 
     if (redisUrl || redisHost) {
@@ -148,25 +162,19 @@ class RedisPubSubManager {
       this.metrics.eventsPublished++;
       this.metrics.lastEventTime = new Date().toISOString();
 
-      // Record in local dedup map
+      // Record in local dedup map so the Redis subscriber echo is ignored
       this.seenEvents.set(event.eventId, Date.now());
 
-      let publishedToRedis = false;
+      // Deliver immediately to local clients
+      this.localEmitter.emit('event', event);
+
+      // Broadcast to other cluster nodes via Redis
       if (this.isRedisConnected && this.publisher) {
         try {
           await this.publisher.publish(GLOBAL_REDIS_CHANNEL, payload);
-          publishedToRedis = true;
         } catch (err: any) {
-          console.warn('[RedisPubSub] Redis publish failed, falling back to local dispatch:', err.message);
+          console.warn('[RedisPubSub] Redis publish failed:', err.message);
         }
-      }
-
-      // If not published via Redis (or in local dev fallback), dispatch locally
-      if (!publishedToRedis) {
-        // Asynchronous micro-tick to avoid blocking the API call stack
-        setImmediate(() => {
-          this.localEmitter.emit('event', event);
-        });
       }
 
       return true;

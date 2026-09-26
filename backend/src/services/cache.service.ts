@@ -17,7 +17,17 @@ class CacheService {
   }
 
   private initRedis() {
-    const redisUrl = process.env.REDIS_URL;
+    let redisUrl = process.env.REDIS_URL?.trim();
+    if (redisUrl) {
+      if ((redisUrl.startsWith('"') && redisUrl.endsWith('"')) || (redisUrl.startsWith("'") && redisUrl.endsWith("'"))) {
+        redisUrl = redisUrl.slice(1, -1).trim();
+      }
+      if (redisUrl.startsWith('redis-cli -u ')) {
+        redisUrl = redisUrl.substring('redis-cli -u '.length).trim();
+      } else if (redisUrl.startsWith('redis-cli -u')) {
+        redisUrl = redisUrl.substring('redis-cli -u'.length).trim();
+      }
+    }
     const redisHost = process.env.REDIS_HOST;
 
     if (redisUrl || redisHost) {
