@@ -178,8 +178,10 @@ const updateBankDetails = async (req, res) => {
             console.error('Error syncing bank details to users collection:', syncErr);
         }
         return res.status(200).json({
+            success: true,
             message: 'Bank details saved successfully',
-            bankDetails: updatedBank
+            bankDetails: updatedBank,
+            data: { bankDetails: updatedBank }
         });
     }
     catch (error) {

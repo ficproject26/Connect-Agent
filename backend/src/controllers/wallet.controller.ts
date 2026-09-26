@@ -193,8 +193,10 @@ export const updateBankDetails = async (req: Request, res: Response) => {
     }
 
     return res.status(200).json({
+      success: true,
       message: 'Bank details saved successfully',
-      bankDetails: updatedBank
+      bankDetails: updatedBank,
+      data: { bankDetails: updatedBank }
     });
   } catch (error) {
     console.error('Update bank details error:', error);
