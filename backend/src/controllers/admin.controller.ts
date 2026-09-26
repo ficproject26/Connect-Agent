@@ -299,7 +299,7 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
     // Safely execute independent queries in parallel with field projections
     const [agents, allVendors] = await Promise.all([
       Agent.find(filter)
-        .select('_id name email phone registrationId role kycStatus registrationFeePaid performanceScore territory createdAt')
+        .select('_id name email phone registrationId role kycStatus registrationFeePaid performanceScore territory assignedTerritory address fullAddress createdAt')
         .sort({ createdAt: -1 })
         .lean(),
       Vendor.find(vendorScopeFilter)
@@ -423,6 +423,9 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
         tieupsYesterday,
         totalTieups,
         territory: agent.territory || {},
+        assignedTerritory: agent.assignedTerritory || agent.territory || {},
+        address: agent.address || {},
+        fullAddress: agent.fullAddress || '',
         plusPoints,
         minusPoints,
         createdAt: agent.createdAt,

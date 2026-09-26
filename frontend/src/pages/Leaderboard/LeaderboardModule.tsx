@@ -625,10 +625,10 @@ export const LeaderboardModule: React.FC = () => {
             <div className="bg-[#fbf9f8] p-3.5 rounded-xl border border-[#d7c3b5]/40 flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-[#52443a]">
               <div className="flex flex-wrap items-center gap-2">
                 <MapPin className="w-4 h-4 text-[#864f19]" />
-                <span>State: {selectedAgent.territory?.state || 'Andhra Pradesh'}</span>
-                {selectedAgent.territory?.district && <span>› District: {selectedAgent.territory.district}</span>}
-                {selectedAgent.territory?.division && <span>› Division: {selectedAgent.territory.division}</span>}
-                {selectedAgent.territory?.pincode && <span>› PIN: {selectedAgent.territory.pincode}</span>}
+                <span>State: {selectedAgent.territory?.state || (selectedAgent as any)?.assignedTerritory?.state || '—'}</span>
+                {(selectedAgent.territory?.district || (selectedAgent as any)?.assignedTerritory?.district) && <span>› District: {selectedAgent.territory?.district || (selectedAgent as any)?.assignedTerritory?.district}</span>}
+                {(selectedAgent.territory?.division || (selectedAgent as any)?.assignedTerritory?.division) && <span>› Division: {selectedAgent.territory?.division || (selectedAgent as any)?.assignedTerritory?.division}</span>}
+                {(selectedAgent.territory?.pincode || (selectedAgent as any)?.assignedTerritory?.pincode) && <span>› PIN: {selectedAgent.territory?.pincode || (selectedAgent as any)?.assignedTerritory?.pincode}</span>}
               </div>
               <div className="text-[11px] font-black text-[#864f19] bg-white px-2.5 py-1 rounded-lg border border-[#d7c3b5]/50 shadow-2xs">
                 Date of Registration: {formatRegistrationDate(selectedAgent.createdAt)}

@@ -22,7 +22,9 @@ const assignTargetSchema = z.object({
 
 const allocateTargetSchema = z.object({
   assignedTo: z.string().optional(),
+  district: z.string().optional(),
   divisionName: z.string().optional(),
+  pincode: z.string().optional(),
   title: z.string().optional(),
   description: z.string().optional(),
   type: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']).default('daily'),
@@ -102,12 +104,29 @@ export const allocateTarget = async (req: Request, res: Response) => {
       if (!allowedAgent) {
         return res.status(403).json({ message: 'Target cannot be allocated to an agent outside authorized territory' });
       }
+
+      // If specific district / division / pincode was selected for the target, verify agent matches
+      const agtDist = (allowedAgent.assignedTerritory?.district || allowedAgent.territory?.district || (allowedAgent as any).district || '').trim().toLowerCase();
+      const agtDiv = (allowedAgent.assignedTerritory?.division || allowedAgent.territory?.division || (allowedAgent as any).division || '').trim().toLowerCase();
+      const agtPin = (allowedAgent.assignedTerritory?.pincode || allowedAgent.territory?.pincode || (allowedAgent as any).pincode || '').trim();
+
+      if (data.district && agtDist && agtDist !== data.district.trim().toLowerCase()) {
+        return res.status(403).json({ message: `Agent '${allowedAgent.name}' is assigned to district '${agtDist}', not '${data.district}'` });
+      }
+      if (data.divisionName && agtDiv && !agtDiv.includes(data.divisionName.trim().toLowerCase()) && !data.divisionName.trim().toLowerCase().includes(agtDiv)) {
+        return res.status(403).json({ message: `Agent '${allowedAgent.name}' is assigned to division '${agtDiv}', not '${data.divisionName}'` });
+      }
+      if (data.pincode && agtPin && agtPin !== data.pincode.trim()) {
+        return res.status(403).json({ message: `Agent '${allowedAgent.name}' is assigned to PIN '${agtPin}', not '${data.pincode}'` });
+      }
+
       recipientName = allowedAgent.name;
     } else if (data.divisionName) {
       const matchedAgent = await Agent.findOne({
         ...territoryFilter,
         $or: [
           { name: new RegExp(data.divisionName, 'i') },
+          { 'assignedTerritory.division': new RegExp(data.divisionName, 'i') },
           { 'territory.division': new RegExp(data.divisionName, 'i') },
           { division: new RegExp(data.divisionName, 'i') }
         ]
@@ -173,11 +192,36 @@ export const getSubordinates = async (req: Request, res: Response) => {
     const agentId = (req as any).agent?.agentId;
     if (!agentId) return res.status(401).json({ message: 'Unauthorized' });
 
+    const { district, division, role } = req.query;
     const scope = await getAgentTerritoryScope(agentId);
-    const filter = buildTerritoryFilter(scope);
+    const filter: any = buildTerritoryFilter(scope);
+
+    if (district) {
+      filter.$and = filter.$and || [];
+      filter.$and.push({
+        $or: [
+          { 'assignedTerritory.district': new RegExp(`^${(district as string).trim()}$`, 'i') },
+          { 'territory.district': new RegExp(`^${(district as string).trim()}$`, 'i') },
+          { district: new RegExp(`^${(district as string).trim()}$`, 'i') }
+        ]
+      });
+    }
+    if (division) {
+      filter.$and = filter.$and || [];
+      filter.$and.push({
+        $or: [
+          { 'assignedTerritory.division': new RegExp((division as string).trim(), 'i') },
+          { 'territory.division': new RegExp((division as string).trim(), 'i') },
+          { division: new RegExp((division as string).trim(), 'i') }
+        ]
+      });
+    }
+    if (role) {
+      filter.role = (role as string).toLowerCase();
+    }
 
     const subordinates = await Agent.find(filter)
-      .select('_id name role territory email phone status performanceScore')
+      .select('_id name role assignedTerritory territory state district division pincode email phone status performanceScore')
       .sort({ createdAt: -1 })
       .lean();
 

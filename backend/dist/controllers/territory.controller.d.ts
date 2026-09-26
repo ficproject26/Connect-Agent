@@ -3,9 +3,15 @@ import { Request, Response } from 'express';
  * GET /api/territory/hierarchy
  * Returns centralized territory database hierarchy from Admin Pincode Management:
  * State -> District -> Division -> Taluk & Pincode
- * Role-aware: Filters down to authorized territory if caller is authenticated agent
+ * Role-aware: Filters down to authorized territory if caller is authenticated agent.
+ * If query param ?all=true is present, returns full un-scoped hierarchy.
  */
 export declare const getTerritoryHierarchy: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+/**
+ * GET /api/territory/all-hierarchy
+ * Returns full active territory hierarchy from Admin Pincode Management (for registration)
+ */
+export declare const getAllTerritoryHierarchy: (_req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 /**
  * GET /api/territory/states
  * Returns all active states from central territory database
@@ -16,6 +22,16 @@ export declare const getStates: (_req: Request, res: Response) => Promise<Respon
  * Query params: stateId, state
  */
 export declare const getDistricts: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+/**
+ * GET /api/territory/divisions
+ * Query params: districtId, district, state
+ */
+export declare const getDivisions: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+/**
+ * GET /api/territory/pincodes
+ * Query params: divisionId, division, district, state
+ */
+export declare const getPincodes: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 /**
  * GET /api/territory/lookup/:pincode
  * Lookup a 6-digit PIN code in central territory database

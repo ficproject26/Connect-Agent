@@ -37,10 +37,16 @@ export const FieldVisitsModule: React.FC = () => {
   const navigate = useNavigate();
   const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';
   const activeRole = (rawRole === 'agent' ? ((user as any)?.level || 'pincode') : rawRole).toLowerCase();
-  const userState = user?.territory?.state || 'Andhra Pradesh';
-  const userDistrict = user?.territory?.district || 'Visakhapatnam';
-  const userDivision = user?.territory?.division || 'Vizag City Division';
-  const userPincode = user?.territory?.pincode || '530001';
+  const userTerritory = user?.assignedTerritory || user?.territory || {
+    state: (user as any)?.assignedState,
+    district: (user as any)?.assignedDistrict,
+    division: (user as any)?.assignedDivision,
+    pincode: (user as any)?.assignedPincode
+  };
+  const userState = (userTerritory?.state || (user as any)?.assignedState || '').trim();
+  const userDistrict = (userTerritory?.district || (user as any)?.assignedDistrict || '').trim();
+  const userDivision = (userTerritory?.division || (user as any)?.assignedDivision || '').trim();
+  const userPincode = (userTerritory?.pincode || (user as any)?.assignedPincode || '').trim();
   const userName = user?.name || 'Logged Agent';
 
   const userVisitsKey = useMemo(() => {

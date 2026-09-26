@@ -56,12 +56,19 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
   const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';
   const activeRole = (rawRole === 'agent' ? ((user as any)?.level || 'pincode') : rawRole).toLowerCase();
 
-  const agentState = user?.territory?.state || 'Tamil Nadu';
-  const agentDistrict = user?.territory?.district || 'Dharmapuri';
-  const agentDivision = user?.territory?.division || 'Harur Division';
-  const agentPincode = (user?.territory?.pincode || '636903').trim();
-  const agentPostOffice = (user?.territory as any)?.postOffice || '';
-  const agentTaluk = (user?.territory as any)?.taluk || '';
+  const agentTerritory = user?.assignedTerritory || user?.territory || {
+    state: (user as any)?.assignedState,
+    district: (user as any)?.assignedDistrict,
+    division: (user as any)?.assignedDivision,
+    pincode: (user as any)?.assignedPincode
+  };
+
+  const agentState = (agentTerritory?.state || (user as any)?.assignedState || '').trim();
+  const agentDistrict = (agentTerritory?.district || (user as any)?.assignedDistrict || '').trim();
+  const agentDivision = (agentTerritory?.division || (user as any)?.assignedDivision || '').trim();
+  const agentPincode = (agentTerritory?.pincode || (user as any)?.assignedPincode || '').trim();
+  const agentPostOffice = ((agentTerritory as any)?.postOffice || (user as any)?.postOffice || '').trim();
+  const agentTaluk = ((agentTerritory as any)?.taluk || (user as any)?.taluk || '').trim();
 
   // Step 1: Business Info
   const [formData, setFormData] = useState({
@@ -73,8 +80,8 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
     email: '',
     buildingNo: '',
     streetName: '',
-    postOffice: agentPostOffice || 'Harur Head Post Office',
-    taluk: agentTaluk || 'Harur',
+    postOffice: agentPostOffice,
+    taluk: agentTaluk,
     district: agentDistrict,
     state: agentState,
     pincode: agentPincode,
@@ -121,21 +128,23 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
     if (activeRole === 'state') {
       return getDistrictsForState(formData.state || agentState);
     }
-    return [formData.district || agentDistrict];
+    return (formData.district || agentDistrict) ? [formData.district || agentDistrict] : [];
   }, [activeRole, formData.state, agentState, formData.district, agentDistrict]);
 
   const availableDivisions = useMemo(() => {
     if (activeRole === 'state' || activeRole === 'district') {
       return getDivisionsForDistrict(formData.district || agentDistrict, formData.state || agentState);
     }
-    return [formData.division || agentDivision];
+    return (formData.division || agentDivision) ? [formData.division || agentDivision] : [];
   }, [activeRole, formData.district, agentDistrict, formData.state, agentState, formData.division, agentDivision]);
 
   const availablePincodes = useMemo(() => {
     if (activeRole === 'pincode') {
-      return [agentPincode];
+      return agentPincode ? [agentPincode] : [];
     }
-    return getPincodesForDivision(formData.division || agentDivision, agentPincode);
+    const currentDiv = formData.division || agentDivision;
+    if (!currentDiv) return [];
+    return getPincodesForDivision(currentDiv);
   }, [activeRole, formData.division, agentDivision, agentPincode]);
 
   // Synchronize form territory with logged in agent when modal opens
@@ -149,22 +158,22 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
 
       if (activeRole === 'state') {
         const districts = getDistrictsForState(defaultState);
-        defaultDistrict = agentDistrict && districts.includes(agentDistrict) ? agentDistrict : (districts[0] || 'Dharmapuri');
-        const divisions = getDivisionsForDistrict(defaultDistrict, defaultState);
-        defaultDivision = agentDivision && divisions.includes(agentDivision) ? agentDivision : (divisions[0] || 'Harur Division');
-        const pins = getPincodesForDivision(defaultDivision, agentPincode);
-        defaultPin = pins[0] || agentPincode;
+        defaultDistrict = agentDistrict && districts.includes(agentDistrict) ? agentDistrict : (districts[0] || '');
+        const divisions = defaultDistrict ? getDivisionsForDistrict(defaultDistrict, defaultState) : [];
+        defaultDivision = agentDivision && divisions.includes(agentDivision) ? agentDivision : (divisions[0] || '');
+        const pins = defaultDivision ? getPincodesForDivision(defaultDivision) : [];
+        defaultPin = pins[0] || '';
       } else if (activeRole === 'district') {
         defaultDistrict = agentDistrict;
-        const divisions = getDivisionsForDistrict(defaultDistrict, defaultState);
-        defaultDivision = agentDivision && divisions.includes(agentDivision) ? agentDivision : (divisions[0] || 'Harur Division');
-        const pins = getPincodesForDivision(defaultDivision, agentPincode);
-        defaultPin = pins[0] || agentPincode;
+        const divisions = defaultDistrict ? getDivisionsForDistrict(defaultDistrict, defaultState) : [];
+        defaultDivision = agentDivision && divisions.includes(agentDivision) ? agentDivision : (divisions[0] || '');
+        const pins = defaultDivision ? getPincodesForDivision(defaultDivision) : [];
+        defaultPin = pins[0] || '';
       } else if (activeRole === 'division') {
         defaultDistrict = agentDistrict;
         defaultDivision = agentDivision;
-        const pins = getPincodesForDivision(defaultDivision, agentPincode);
-        defaultPin = agentPincode && pins.includes(agentPincode) ? agentPincode : (pins[0] || agentPincode);
+        const pins = defaultDivision ? getPincodesForDivision(defaultDivision) : [];
+        defaultPin = agentPincode && pins.includes(agentPincode) ? agentPincode : (pins[0] || '');
       } else {
         // Pincode Agent: strictly locked to agent territory
         defaultDistrict = agentDistrict;
@@ -172,13 +181,13 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
         defaultPin = agentPincode;
       }
 
-      const loc = getLocationFromPincode(defaultPin, {
+      const loc = defaultPin ? getLocationFromPincode(defaultPin, {
         state: defaultState,
         district: defaultDistrict,
         division: defaultDivision,
         taluk: agentTaluk,
         postOffice: agentPostOffice
-      });
+      }) : { taluk: agentTaluk || '', postOffice: agentPostOffice || '' };
 
       setFormData(prev => ({
         ...prev,
@@ -186,8 +195,8 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
         district: defaultDistrict,
         division: defaultDivision,
         pincode: defaultPin,
-        taluk: agentTaluk || loc.taluk || defaultDivision.replace(' Division', ''),
-        postOffice: agentPostOffice || loc.postOffice,
+        taluk: loc.taluk || agentTaluk || (defaultDivision ? defaultDivision.replace(' Division', '') : ''),
+        postOffice: loc.postOffice || agentPostOffice || '',
         agentCode: user?.name ? `${user.name} (${user.registrationId || 'AGENT-REF'})` : 'Self Registered'
       }));
     }
@@ -196,41 +205,41 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
   // Handle District selection (State Agent only)
   const handleDistrictSelect = (newDistrict: string) => {
     const divs = getDivisionsForDistrict(newDistrict, formData.state);
-    const defaultDiv = divs[0] || `${newDistrict} Division`;
-    const pins = getPincodesForDivision(defaultDiv);
-    const defaultPin = pins[0] || '636903';
-    const loc = getLocationFromPincode(defaultPin, {
+    const defaultDiv = divs[0] || '';
+    const pins = defaultDiv ? getPincodesForDivision(defaultDiv) : [];
+    const defaultPin = pins[0] || '';
+    const loc = defaultPin ? getLocationFromPincode(defaultPin, {
       state: formData.state,
       district: newDistrict,
       division: defaultDiv
-    });
+    }) : { taluk: '', postOffice: '' };
 
     setFormData(prev => ({
       ...prev,
       district: newDistrict,
       division: defaultDiv,
-      taluk: loc.taluk || defaultDiv.replace(' Division', ''),
+      taluk: loc.taluk || (defaultDiv ? defaultDiv.replace(' Division', '') : ''),
       pincode: defaultPin,
-      postOffice: loc.postOffice
+      postOffice: loc.postOffice || ''
     }));
   };
 
   // Handle Division selection (State & District Agents)
   const handleDivisionSelect = (newDiv: string) => {
-    const pins = getPincodesForDivision(newDiv);
-    const defaultPin = pins[0] || '636903';
-    const loc = getLocationFromPincode(defaultPin, {
+    const pins = newDiv ? getPincodesForDivision(newDiv) : [];
+    const defaultPin = pins[0] || '';
+    const loc = defaultPin ? getLocationFromPincode(defaultPin, {
       state: formData.state,
       district: formData.district,
       division: newDiv
-    });
+    }) : { taluk: '', postOffice: '' };
 
     setFormData(prev => ({
       ...prev,
       division: newDiv,
-      taluk: loc.taluk || newDiv.replace(' Division', ''),
+      taluk: loc.taluk || (newDiv ? newDiv.replace(' Division', '') : ''),
       pincode: defaultPin,
-      postOffice: loc.postOffice
+      postOffice: loc.postOffice || ''
     }));
   };
 
@@ -389,16 +398,20 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
     // Mandatory Address Fields
     if (!formData.buildingNo.trim()) return 'Building No / Door No / Shop No is required.';
     if (!formData.streetName.trim()) return 'Street Name / Area is required.';
-    if (!formData.postOffice.trim()) return 'Post Office is required.';
-    if (!formData.taluk.trim()) return 'Taluk / Sub-District is required.';
     if (!formData.district.trim()) return 'District is required.';
     if (!formData.state.trim()) return 'State is required.';
+    if (!formData.division.trim()) return 'Division is required.';
     if (!formData.pincode || formData.pincode.replace(/\D/g, '').length !== 6) {
       return 'Valid 6-digit Postal Code (Pincode) is required.';
     }
+    if (availablePincodes.length === 0 || !availablePincodes.includes(formData.pincode)) {
+      return 'No valid pincode is configured in Admin Pincode Management for this division.';
+    }
+    if (!formData.postOffice.trim()) return 'Post Office is required.';
+    if (!formData.taluk.trim()) return 'Taluk / Sub-District is required.';
 
     // Territory Jurisdiction Check against Logged-in Agent's Approved Territory
-    const territoryCheck = validateTerritoryBelongsToAgent(activeRole, user?.territory, formData);
+    const territoryCheck = validateTerritoryBelongsToAgent(activeRole, agentTerritory, formData);
     if (!territoryCheck.valid) {
       return territoryCheck.reason || 'Selected territory is outside your approved jurisdiction.';
     }
@@ -798,19 +811,33 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                       </label>
                       <input
                         type="text"
-                        value={formData.pincode}
+                        value={formData.pincode || 'No Pincode Assigned'}
                         disabled
                         readOnly
                         className="w-full bg-slate-100 border border-slate-300 rounded-xl px-3 py-2 text-xs font-black text-[#864f19] cursor-not-allowed select-none"
                       />
                     </div>
+                  ) : availablePincodes.length === 0 ? (
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-extrabold text-slate-700 uppercase flex items-center justify-between">
+                        <span>Postal Code (Pincode) *</span>
+                        <span className="text-[9px] text-amber-600 font-bold">UNAVAILABLE</span>
+                      </label>
+                      <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs font-medium flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                        <span>No pincode available in this division.</span>
+                      </div>
+                    </div>
                   ) : (
                     <Select
                       label={`Postal Code (Pincodes in ${formData.division || 'Division'}) *`}
-                      options={availablePincodes.map(p => ({
-                        value: p,
-                        label: `${p} — ${getLocationFromPincode(p).postOffice}`
-                      }))}
+                      options={availablePincodes.map(p => {
+                        const loc = getLocationFromPincode(p);
+                        return {
+                          value: p,
+                          label: loc.postOffice ? `${p} — ${loc.postOffice}` : p
+                        };
+                      })}
                       value={formData.pincode}
                       onChange={(e) => handlePincodeSelect(e.target.value)}
                     />
@@ -1180,11 +1207,11 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
 
                     if (ifsc.length >= 4) {
                       const prefix = ifsc.slice(0, 4);
-                      if (prefix === 'SBIN') { bankName = 'State Bank of India'; branch = 'Harur Main Branch'; bankCity = 'Harur / Dharmapuri'; }
-                      else if (prefix === 'HDFC') { bankName = 'HDFC Bank'; branch = 'City Center Branch'; bankCity = 'Dharmapuri'; }
-                      else if (prefix === 'ICIC') { bankName = 'ICICI Bank'; branch = 'Commercial Branch'; bankCity = 'Salem'; }
-                      else if (prefix === 'UTIB' || prefix === 'AXIS') { bankName = 'Axis Bank'; branch = 'MG Road Branch'; bankCity = 'Bengaluru'; }
-                      else if (prefix === 'CNRB') { bankName = 'Canara Bank'; branch = 'Town Market Branch'; bankCity = 'Krishnagiri'; }
+                      if (prefix === 'SBIN') { bankName = 'State Bank of India'; }
+                      else if (prefix === 'HDFC') { bankName = 'HDFC Bank'; }
+                      else if (prefix === 'ICIC') { bankName = 'ICICI Bank'; }
+                      else if (prefix === 'UTIB' || prefix === 'AXIS') { bankName = 'Axis Bank'; }
+                      else if (prefix === 'CNRB') { bankName = 'Canara Bank'; }
                     }
 
                     setFormData({
@@ -1226,7 +1253,7 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                 />
                 <Input
                   label="Account Holder Name *"
-                  placeholder="e.g. Ramesh Kumar / Harur Supermarket"
+                  placeholder="e.g. Ramesh Kumar / Business Name"
                   value={formData.accountHolderName}
                   onChange={(e) => setFormData({ ...formData, accountHolderName: e.target.value })}
                   required
@@ -1236,14 +1263,14 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Input
                   label="Bank Branch Name *"
-                  placeholder="e.g. Harur Main Branch"
+                  placeholder="e.g. Main Branch"
                   value={formData.branch}
                   onChange={(e) => setFormData({ ...formData, branch: e.target.value })}
                   required
                 />
                 <Input
                   label="Bank City *"
-                  placeholder="e.g. Harur / Dharmapuri"
+                  placeholder="e.g. City / Town"
                   value={formData.bankCity}
                   onChange={(e) => setFormData({ ...formData, bankCity: e.target.value })}
                   required

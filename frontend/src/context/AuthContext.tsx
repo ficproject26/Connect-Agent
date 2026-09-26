@@ -63,7 +63,9 @@ interface AuthContextType {
   soundProfile: 'chirp' | 'melody' | 'siren';
   soundVolume: number;
   login: (email: string, password?: string) => Promise<any>;
+  loginWithToken: (token: string, agent: AgentProfile) => void;
   register: (agentData: any) => Promise<any>;
+
   logout: () => void;
   updateAgent: (data: Partial<AgentProfile>) => void;
   updateProfile: (profile: Partial<AgentProfile>) => void; // compatibility
@@ -267,6 +269,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     throw new Error('Invalid email or password. Please check your credentials or register an account.');
+  };
+
+  /**
+   * loginWithToken – used by Mobile OTP flow after the backend verifies the OTP
+   * and returns a pre-authenticated token + agent object. Sets up the auth session
+   * identically to the email login flow without making another API call.
+   */
+  const loginWithToken = (newToken: string, agentData: AgentProfile) => {
+    const agent = { ...agentData };
+    agent.status = (agent.kycStatus === 'approved' || (agent.status as string) === 'approved' || (agent.status as string) === 'active') ? 'active' as any : 'pending_approval' as any;
+    agent.mobile = agent.phone;
+    localStorage.setItem('agent_token', newToken);
+    setToken(newToken);
+    const finalAgent = applySavedProfileOverrides(agent);
+    try { localStorage.setItem('agent_user', JSON.stringify(finalAgent)); } catch (e) {}
+    setUser(finalAgent);
+    setLoading(false);
+    fetchNotifications().catch(() => {});
   };
 
   const register = async (agentData: any): Promise<any> => {
@@ -517,6 +537,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         soundProfile,
         soundVolume,
         login,
+        loginWithToken,
         register,
         logout,
         updateAgent,

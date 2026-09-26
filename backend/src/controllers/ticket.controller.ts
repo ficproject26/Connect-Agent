@@ -133,15 +133,32 @@ export const createTicket = async (req: Request, res: Response) => {
 
     const data = createTicketSchema.parse(req.body);
 
-    // Retrieve agent profile for fallback identity & territory information
+    // Retrieve agent profile and verify territory jurisdiction
+    const scope = await getAgentTerritoryScope(agentId);
     let agent = await Agent.findById(agentId);
-    const agentRole = (req as any).agent?.role || agent?.role || 'pincode';
+    const agentRole = scope?.role || (req as any).agent?.role || agent?.role || 'pincode';
     const agentName = agent?.name || (req as any).agent?.name || 'Agent';
 
-    const state = (data.state || agent?.territory?.state || '').trim();
-    const district = (data.district || agent?.territory?.district || '').trim();
-    const division = (data.division || agent?.territory?.division || '').trim();
-    const pincode = (data.pincode || agent?.territory?.pincode || '').trim();
+    const state = (data.state || scope?.state || agent?.assignedTerritory?.state || agent?.territory?.state || '').trim();
+    const district = (data.district || scope?.district || agent?.assignedTerritory?.district || agent?.territory?.district || '').trim();
+    const division = (data.division || scope?.division || agent?.assignedTerritory?.division || agent?.territory?.division || '').trim();
+    const pincode = (data.pincode || scope?.pincode || agent?.assignedTerritory?.pincode || agent?.territory?.pincode || '').trim();
+
+    // Backend territory authorization validation
+    if (scope) {
+      if (scope.role === 'state' && scope.state && state && state.toLowerCase() !== scope.state.toLowerCase()) {
+        return res.status(403).json({ message: `State Agent is restricted to State ${scope.state}. Requested: ${state}` });
+      }
+      if (scope.role === 'district' && scope.district && district && district.toLowerCase() !== scope.district.toLowerCase()) {
+        return res.status(403).json({ message: `District Agent is restricted to District ${scope.district}. Requested: ${district}` });
+      }
+      if (scope.role === 'division' && scope.division && division && !division.toLowerCase().includes(scope.division.toLowerCase())) {
+        return res.status(403).json({ message: `Division Agent is restricted to Division ${scope.division}. Requested: ${division}` });
+      }
+      if (scope.role === 'pincode' && scope.pincode && pincode && pincode !== scope.pincode) {
+        return res.status(403).json({ message: `Pincode Agent is restricted to Pincode ${scope.pincode}. Requested: ${pincode}` });
+      }
+    }
 
     const territory = data.territory || [district, division, pincode].filter(Boolean).join(' → ') || (state ? `${state} Scope` : '');
     const vendorName = data.vendorName || data.storeName || '';

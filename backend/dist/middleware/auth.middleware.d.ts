@@ -4,6 +4,7 @@ export interface AuthenticatedRequest extends Request {
     agent?: TokenPayload;
 }
 export declare const authMiddleware: (req: Request, res: Response, next: NextFunction) => Response<any, Record<string, any>> | undefined;
+export declare const optionalAuthMiddleware: (req: Request, res: Response, next: NextFunction) => void;
 /**
  * Middleware to restrict route access to specific agent roles
  */

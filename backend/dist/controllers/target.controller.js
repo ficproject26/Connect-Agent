@@ -23,7 +23,9 @@ const assignTargetSchema = zod_1.z.object({
 });
 const allocateTargetSchema = zod_1.z.object({
     assignedTo: zod_1.z.string().optional(),
+    district: zod_1.z.string().optional(),
     divisionName: zod_1.z.string().optional(),
+    pincode: zod_1.z.string().optional(),
     title: zod_1.z.string().optional(),
     description: zod_1.z.string().optional(),
     type: zod_1.z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']).default('daily'),
@@ -97,6 +99,19 @@ const allocateTarget = async (req, res) => {
             if (!allowedAgent) {
                 return res.status(403).json({ message: 'Target cannot be allocated to an agent outside authorized territory' });
             }
+            // If specific district / division / pincode was selected for the target, verify agent matches
+            const agtDist = (allowedAgent.assignedTerritory?.district || allowedAgent.territory?.district || allowedAgent.district || '').trim().toLowerCase();
+            const agtDiv = (allowedAgent.assignedTerritory?.division || allowedAgent.territory?.division || allowedAgent.division || '').trim().toLowerCase();
+            const agtPin = (allowedAgent.assignedTerritory?.pincode || allowedAgent.territory?.pincode || allowedAgent.pincode || '').trim();
+            if (data.district && agtDist && agtDist !== data.district.trim().toLowerCase()) {
+                return res.status(403).json({ message: `Agent '${allowedAgent.name}' is assigned to district '${agtDist}', not '${data.district}'` });
+            }
+            if (data.divisionName && agtDiv && !agtDiv.includes(data.divisionName.trim().toLowerCase()) && !data.divisionName.trim().toLowerCase().includes(agtDiv)) {
+                return res.status(403).json({ message: `Agent '${allowedAgent.name}' is assigned to division '${agtDiv}', not '${data.divisionName}'` });
+            }
+            if (data.pincode && agtPin && agtPin !== data.pincode.trim()) {
+                return res.status(403).json({ message: `Agent '${allowedAgent.name}' is assigned to PIN '${agtPin}', not '${data.pincode}'` });
+            }
             recipientName = allowedAgent.name;
         }
         else if (data.divisionName) {
@@ -104,6 +119,7 @@ const allocateTarget = async (req, res) => {
                 ...territoryFilter,
                 $or: [
                     { name: new RegExp(data.divisionName, 'i') },
+                    { 'assignedTerritory.division': new RegExp(data.divisionName, 'i') },
                     { 'territory.division': new RegExp(data.divisionName, 'i') },
                     { division: new RegExp(data.divisionName, 'i') }
                 ]
@@ -165,10 +181,34 @@ const getSubordinates = async (req, res) => {
         const agentId = req.agent?.agentId;
         if (!agentId)
             return res.status(401).json({ message: 'Unauthorized' });
+        const { district, division, role } = req.query;
         const scope = await (0, territoryScope_1.getAgentTerritoryScope)(agentId);
         const filter = (0, territoryScope_1.buildTerritoryFilter)(scope);
+        if (district) {
+            filter.$and = filter.$and || [];
+            filter.$and.push({
+                $or: [
+                    { 'assignedTerritory.district': new RegExp(`^${district.trim()}$`, 'i') },
+                    { 'territory.district': new RegExp(`^${district.trim()}$`, 'i') },
+                    { district: new RegExp(`^${district.trim()}$`, 'i') }
+                ]
+            });
+        }
+        if (division) {
+            filter.$and = filter.$and || [];
+            filter.$and.push({
+                $or: [
+                    { 'assignedTerritory.division': new RegExp(division.trim(), 'i') },
+                    { 'territory.division': new RegExp(division.trim(), 'i') },
+                    { division: new RegExp(division.trim(), 'i') }
+                ]
+            });
+        }
+        if (role) {
+            filter.role = role.toLowerCase();
+        }
         const subordinates = await Agent_1.default.find(filter)
-            .select('_id name role territory email phone status performanceScore')
+            .select('_id name role assignedTerritory territory state district division pincode email phone status performanceScore')
             .sort({ createdAt: -1 })
             .lean();
         const subIds = subordinates.map(s => s._id);

@@ -32,7 +32,7 @@ async function getAgentTerritoryScope(agentId) {
             return cachedScope;
         }
         let agent = await Agent_1.default.findById(agentId)
-            .select('role level territory state district division pincode assignedState assignedDistrict assignedDivision assignedPincode')
+            .select('role level assignedTerritory territory state district division pincode assignedState assignedDistrict assignedDivision assignedPincode')
             .lean();
         if (!agent) {
             const db = mongoose_1.default.connection.db;
@@ -41,6 +41,7 @@ async function getAgentTerritoryScope(agentId) {
                     projection: {
                         role: 1,
                         level: 1,
+                        assignedTerritory: 1,
                         territory: 1,
                         state: 1,
                         district: 1,
@@ -60,10 +61,10 @@ async function getAgentTerritoryScope(agentId) {
         const normalizedRole = rawRole === 'agent' ? (agent.level || 'pincode').toLowerCase() : rawRole;
         const scope = {
             role: normalizedRole,
-            state: (agent.territory?.state || agent.state || agent.assignedState || '').trim(),
-            district: (agent.territory?.district || agent.district || agent.assignedDistrict || '').trim(),
-            division: (agent.territory?.division || agent.division || agent.assignedDivision || '').trim(),
-            pincode: (agent.territory?.pincode || agent.pincode || agent.assignedPincode || '').trim(),
+            state: (agent.assignedTerritory?.state || agent.territory?.state || agent.state || agent.assignedState || '').trim(),
+            district: (agent.assignedTerritory?.district || agent.territory?.district || agent.district || agent.assignedDistrict || '').trim(),
+            division: (agent.assignedTerritory?.division || agent.territory?.division || agent.division || agent.assignedDivision || '').trim(),
+            pincode: (agent.assignedTerritory?.pincode || agent.territory?.pincode || agent.pincode || agent.assignedPincode || '').trim(),
             agentId: agent._id.toString()
         };
         // Cache scope for 60 seconds
@@ -93,8 +94,10 @@ function buildTerritoryFilter(scope) {
         return {
             role: { $in: ['district', 'division', 'pincode'] },
             $or: [
+                { 'assignedTerritory.state': exactRegex(scope.state) },
                 { 'territory.state': exactRegex(scope.state) },
-                { state: exactRegex(scope.state) }
+                { state: exactRegex(scope.state) },
+                { assignedState: exactRegex(scope.state) }
             ]
         };
     }
@@ -104,8 +107,10 @@ function buildTerritoryFilter(scope) {
         const stateConditions = scope.state ? [
             {
                 $or: [
+                    { 'assignedTerritory.state': exactRegex(scope.state) },
                     { 'territory.state': exactRegex(scope.state) },
-                    { state: exactRegex(scope.state) }
+                    { state: exactRegex(scope.state) },
+                    { assignedState: exactRegex(scope.state) }
                 ]
             }
         ] : [];
@@ -114,8 +119,10 @@ function buildTerritoryFilter(scope) {
             $and: [
                 {
                     $or: [
+                        { 'assignedTerritory.district': exactRegex(scope.district) },
                         { 'territory.district': exactRegex(scope.district) },
-                        { district: exactRegex(scope.district) }
+                        { district: exactRegex(scope.district) },
+                        { assignedDistrict: exactRegex(scope.district) }
                     ]
                 },
                 ...stateConditions
@@ -128,16 +135,20 @@ function buildTerritoryFilter(scope) {
         const districtConditions = scope.district ? [
             {
                 $or: [
+                    { 'assignedTerritory.district': exactRegex(scope.district) },
                     { 'territory.district': exactRegex(scope.district) },
-                    { district: exactRegex(scope.district) }
+                    { district: exactRegex(scope.district) },
+                    { assignedDistrict: exactRegex(scope.district) }
                 ]
             }
         ] : [];
         const stateConditions = scope.state ? [
             {
                 $or: [
+                    { 'assignedTerritory.state': exactRegex(scope.state) },
                     { 'territory.state': exactRegex(scope.state) },
-                    { state: exactRegex(scope.state) }
+                    { state: exactRegex(scope.state) },
+                    { assignedState: exactRegex(scope.state) }
                 ]
             }
         ] : [];
@@ -146,8 +157,10 @@ function buildTerritoryFilter(scope) {
             $and: [
                 {
                     $or: [
+                        { 'assignedTerritory.division': containsRegex(scope.division) },
                         { 'territory.division': containsRegex(scope.division) },
-                        { division: containsRegex(scope.division) }
+                        { division: containsRegex(scope.division) },
+                        { assignedDivision: containsRegex(scope.division) }
                     ]
                 },
                 ...districtConditions,
@@ -162,8 +175,10 @@ function buildTerritoryFilter(scope) {
             role: 'pincode',
             $or: [
                 { _id: scope.agentId },
+                { 'assignedTerritory.pincode': scope.pincode },
                 { 'territory.pincode': scope.pincode },
-                { pincode: scope.pincode }
+                { pincode: scope.pincode },
+                { assignedPincode: scope.pincode }
             ]
         };
     }
@@ -182,6 +197,7 @@ function buildVendorScopeFilter(scope) {
         return {
             $or: [
                 { state: exactRegex(scope.state) },
+                { assignedState: exactRegex(scope.state) },
                 { 'location.address': containsRegex(scope.state) }
             ]
         };
@@ -193,6 +209,7 @@ function buildVendorScopeFilter(scope) {
             {
                 $or: [
                     { state: exactRegex(scope.state) },
+                    { assignedState: exactRegex(scope.state) },
                     { 'location.address': containsRegex(scope.state) }
                 ]
             }
@@ -202,6 +219,7 @@ function buildVendorScopeFilter(scope) {
                 {
                     $or: [
                         { district: exactRegex(scope.district) },
+                        { assignedDistrict: exactRegex(scope.district) },
                         { 'location.address': containsRegex(scope.district) }
                     ]
                 },
@@ -216,6 +234,7 @@ function buildVendorScopeFilter(scope) {
             {
                 $or: [
                     { district: exactRegex(scope.district) },
+                    { assignedDistrict: exactRegex(scope.district) },
                     { 'location.address': containsRegex(scope.district) }
                 ]
             }
@@ -225,6 +244,7 @@ function buildVendorScopeFilter(scope) {
                 {
                     $or: [
                         { division: containsRegex(scope.division) },
+                        { assignedDivision: containsRegex(scope.division) },
                         { 'location.address': containsRegex(scope.division) }
                     ]
                 },
@@ -237,11 +257,20 @@ function buildVendorScopeFilter(scope) {
             return {
                 $or: [
                     { pincode: scope.pincode },
-                    { assignedAgent: scope.agentId }
+                    { assignedPincode: scope.pincode },
+                    { assignedAgent: scope.agentId },
+                    { agentId: scope.agentId },
+                    { onboardedBy: scope.agentId }
                 ]
             };
         }
-        return { assignedAgent: scope.agentId };
+        return {
+            $or: [
+                { assignedAgent: scope.agentId },
+                { agentId: scope.agentId },
+                { onboardedBy: scope.agentId }
+            ]
+        };
     }
     return { _id: null };
 }

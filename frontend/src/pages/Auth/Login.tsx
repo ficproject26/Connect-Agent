@@ -65,32 +65,33 @@ export const Login: React.FC = () => {
     setErrorMsg('');
 
     try {
-      // Send OTP via API
-      const res = await api.post('/auth/send-otp', { phone: mobileNumber, mobileNumber });
+      const res = await api.post('/auth/send-otp', { phone: mobileNumber });
       const data = res.data || {};
-      
-      const otpCode = data.otp || Math.floor(100000 + Math.random() * 900000).toString();
-      addNotification('OTP Generated', `Your 6-digit OTP for +91 ${mobileNumber} is ${otpCode}`, 'high', 'system');
-      
+
+      // Show OTP in notification (will be replaced by SMS in production)
+      if (data.otp) {
+        addNotification('OTP Sent', `Your 6-digit OTP for +91 ${mobileNumber} is: ${data.otp}`, 'high', 'system');
+      }
+
       navigate('/otp-verification', {
         state: {
           phone: mobileNumber,
-          mobileNumber,
-          email: `${mobileNumber}@mobile.connect`,
-          otpCode
+          // Do NOT pass otpCode – verification happens server-side
         }
       });
-    } catch (err) {
-      const fallbackOtp = Math.floor(100000 + Math.random() * 900000).toString();
-      addNotification('OTP Generated', `Your 6-digit OTP for +91 ${mobileNumber} is ${fallbackOtp}`, 'high', 'system');
-      navigate('/otp-verification', {
-        state: {
-          phone: mobileNumber,
-          mobileNumber,
-          email: `${mobileNumber}@mobile.connect`,
-          otpCode: fallbackOtp
-        }
-      });
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const serverMsg = err?.response?.data?.message;
+
+      if (status === 404 || err?.response?.data?.notRegistered) {
+        setErrorMsg('This mobile number is not registered as an agent. Please apply for agent onboarding first.');
+      } else if (status === 403) {
+        setErrorMsg(serverMsg || 'Your account is not active. Please contact the Administrator.');
+      } else if (err?.code === 'ERR_NETWORK') {
+        setErrorMsg('Unable to connect to the server. Please check your network connection.');
+      } else {
+        setErrorMsg(serverMsg || 'Failed to send OTP. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }

@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import Agent from '../models/Agent';
+import { cacheService } from '../services/cache.service';
 
 export interface TerritoryScope {
   role: string;
@@ -9,8 +10,6 @@ export interface TerritoryScope {
   pincode: string;
   agentId: string;
 }
-
-import { cacheService } from '../services/cache.service';
 
 /**
  * Invalidate cached territory scope when agent details change
@@ -35,7 +34,7 @@ export async function getAgentTerritoryScope(agentId: string): Promise<Territory
     }
 
     let agent: any = await Agent.findById(agentId)
-      .select('role level territory state district division pincode assignedState assignedDistrict assignedDivision assignedPincode')
+      .select('role level assignedTerritory territory state district division pincode assignedState assignedDistrict assignedDivision assignedPincode')
       .lean();
 
     if (!agent) {
@@ -47,6 +46,7 @@ export async function getAgentTerritoryScope(agentId: string): Promise<Territory
             projection: {
               role: 1,
               level: 1,
+              assignedTerritory: 1,
               territory: 1,
               state: 1,
               district: 1,
@@ -68,10 +68,10 @@ export async function getAgentTerritoryScope(agentId: string): Promise<Territory
 
     const scope: TerritoryScope = {
       role: normalizedRole,
-      state: (agent.territory?.state || agent.state || agent.assignedState || '').trim(),
-      district: (agent.territory?.district || agent.district || agent.assignedDistrict || '').trim(),
-      division: (agent.territory?.division || agent.division || agent.assignedDivision || '').trim(),
-      pincode: (agent.territory?.pincode || agent.pincode || agent.assignedPincode || '').trim(),
+      state: (agent.assignedTerritory?.state || agent.territory?.state || agent.state || agent.assignedState || '').trim(),
+      district: (agent.assignedTerritory?.district || agent.territory?.district || agent.district || agent.assignedDistrict || '').trim(),
+      division: (agent.assignedTerritory?.division || agent.territory?.division || agent.division || agent.assignedDivision || '').trim(),
+      pincode: (agent.assignedTerritory?.pincode || agent.territory?.pincode || agent.pincode || agent.assignedPincode || '').trim(),
       agentId: agent._id.toString()
     };
 
@@ -104,8 +104,10 @@ export function buildTerritoryFilter(scope: TerritoryScope | null): Record<strin
     return {
       role: { $in: ['district', 'division', 'pincode'] },
       $or: [
+        { 'assignedTerritory.state': exactRegex(scope.state) },
         { 'territory.state': exactRegex(scope.state) },
-        { state: exactRegex(scope.state) }
+        { state: exactRegex(scope.state) },
+        { assignedState: exactRegex(scope.state) }
       ]
     };
   }
@@ -116,8 +118,10 @@ export function buildTerritoryFilter(scope: TerritoryScope | null): Record<strin
     const stateConditions = scope.state ? [
       {
         $or: [
+          { 'assignedTerritory.state': exactRegex(scope.state) },
           { 'territory.state': exactRegex(scope.state) },
-          { state: exactRegex(scope.state) }
+          { state: exactRegex(scope.state) },
+          { assignedState: exactRegex(scope.state) }
         ]
       }
     ] : [];
@@ -127,8 +131,10 @@ export function buildTerritoryFilter(scope: TerritoryScope | null): Record<strin
       $and: [
         {
           $or: [
+            { 'assignedTerritory.district': exactRegex(scope.district) },
             { 'territory.district': exactRegex(scope.district) },
-            { district: exactRegex(scope.district) }
+            { district: exactRegex(scope.district) },
+            { assignedDistrict: exactRegex(scope.district) }
           ]
         },
         ...stateConditions
@@ -142,8 +148,10 @@ export function buildTerritoryFilter(scope: TerritoryScope | null): Record<strin
     const districtConditions = scope.district ? [
       {
         $or: [
+          { 'assignedTerritory.district': exactRegex(scope.district) },
           { 'territory.district': exactRegex(scope.district) },
-          { district: exactRegex(scope.district) }
+          { district: exactRegex(scope.district) },
+          { assignedDistrict: exactRegex(scope.district) }
         ]
       }
     ] : [];
@@ -151,8 +159,10 @@ export function buildTerritoryFilter(scope: TerritoryScope | null): Record<strin
     const stateConditions = scope.state ? [
       {
         $or: [
+          { 'assignedTerritory.state': exactRegex(scope.state) },
           { 'territory.state': exactRegex(scope.state) },
-          { state: exactRegex(scope.state) }
+          { state: exactRegex(scope.state) },
+          { assignedState: exactRegex(scope.state) }
         ]
       }
     ] : [];
@@ -162,8 +172,10 @@ export function buildTerritoryFilter(scope: TerritoryScope | null): Record<strin
       $and: [
         {
           $or: [
+            { 'assignedTerritory.division': containsRegex(scope.division) },
             { 'territory.division': containsRegex(scope.division) },
-            { division: containsRegex(scope.division) }
+            { division: containsRegex(scope.division) },
+            { assignedDivision: containsRegex(scope.division) }
           ]
         },
         ...districtConditions,
@@ -179,8 +191,10 @@ export function buildTerritoryFilter(scope: TerritoryScope | null): Record<strin
       role: 'pincode',
       $or: [
         { _id: scope.agentId },
+        { 'assignedTerritory.pincode': scope.pincode },
         { 'territory.pincode': scope.pincode },
-        { pincode: scope.pincode }
+        { pincode: scope.pincode },
+        { assignedPincode: scope.pincode }
       ]
     };
   }
@@ -201,6 +215,7 @@ export function buildVendorScopeFilter(scope: TerritoryScope | null): Record<str
     return {
       $or: [
         { state: exactRegex(scope.state) },
+        { assignedState: exactRegex(scope.state) },
         { 'location.address': containsRegex(scope.state) }
       ]
     };
@@ -213,6 +228,7 @@ export function buildVendorScopeFilter(scope: TerritoryScope | null): Record<str
       {
         $or: [
           { state: exactRegex(scope.state) },
+          { assignedState: exactRegex(scope.state) },
           { 'location.address': containsRegex(scope.state) }
         ]
       }
@@ -223,6 +239,7 @@ export function buildVendorScopeFilter(scope: TerritoryScope | null): Record<str
         {
           $or: [
             { district: exactRegex(scope.district) },
+            { assignedDistrict: exactRegex(scope.district) },
             { 'location.address': containsRegex(scope.district) }
           ]
         },
@@ -238,6 +255,7 @@ export function buildVendorScopeFilter(scope: TerritoryScope | null): Record<str
       {
         $or: [
           { district: exactRegex(scope.district) },
+          { assignedDistrict: exactRegex(scope.district) },
           { 'location.address': containsRegex(scope.district) }
         ]
       }
@@ -248,6 +266,7 @@ export function buildVendorScopeFilter(scope: TerritoryScope | null): Record<str
         {
           $or: [
             { division: containsRegex(scope.division) },
+            { assignedDivision: containsRegex(scope.division) },
             { 'location.address': containsRegex(scope.division) }
           ]
         },
@@ -261,11 +280,20 @@ export function buildVendorScopeFilter(scope: TerritoryScope | null): Record<str
       return {
         $or: [
           { pincode: scope.pincode },
-          { assignedAgent: scope.agentId }
+          { assignedPincode: scope.pincode },
+          { assignedAgent: scope.agentId },
+          { agentId: scope.agentId },
+          { onboardedBy: scope.agentId }
         ]
       };
     }
-    return { assignedAgent: scope.agentId };
+    return {
+      $or: [
+        { assignedAgent: scope.agentId },
+        { agentId: scope.agentId },
+        { onboardedBy: scope.agentId }
+      ]
+    };
   }
 
   return { _id: null };

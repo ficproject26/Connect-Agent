@@ -20,7 +20,13 @@ export const StateDashboard: React.FC = () => {
   const [drilledDistrictId, setDrilledDistrictId] = useState<string | null>(null);
   const [drilledDivisionId, setDrilledDivisionId] = useState<string | null>(null);
 
-  const userState = user?.territory?.state || 'Andhra Pradesh';
+  const userTerritory = user?.assignedTerritory || user?.territory || {
+    state: (user as any)?.assignedState,
+    district: (user as any)?.assignedDistrict,
+    division: (user as any)?.assignedDivision,
+    pincode: (user as any)?.assignedPincode
+  };
+  const userState = (userTerritory?.state || (user as any)?.assignedState || '').trim();
 
   // Fetch live agent hierarchy from backend
   const { data: hierarchyRes } = useQuery({

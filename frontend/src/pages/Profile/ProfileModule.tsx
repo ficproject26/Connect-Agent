@@ -7,10 +7,11 @@ import { useAuth, UserProfile } from '../../context/AuthContext';
 import { 
   User, Phone, MapPin, Landmark, ShieldCheck, 
   Settings, LogOut, ArrowRight, Save, ShieldAlert, Award,
-  Camera, Truck, Building2
+  Camera, Truck, Building2, AlertCircle, CheckCircle2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { formatRegistrationDate } from '../../utils/date';
+import api from '../../utils/api';
 
 const getVehicleLabel = (type: string) => {
   switch (type) {
@@ -29,11 +30,13 @@ export const ProfileModule: React.FC = () => {
 
   const [name, setName] = useState(user?.name || '');
   const [email, setEmail] = useState(user?.email || '');
-  const [mobile, setMobile] = useState(user?.mobile || '');
+  const [mobile, setMobile] = useState(user?.mobile || user?.phone || '');
   const [altMobile, setAltMobile] = useState(user?.alternateMobile || '');
   const [lang, setLang] = useState(user?.preferredLanguage || 'English');
   const [blood, setBlood] = useState(user?.bloodGroup || 'O+');
   const [profilePic, setProfilePic] = useState(user?.profilePhoto || '');
+  const [profileSaveError, setProfileSaveError] = useState('');
+  const [profileSaveSuccess, setProfileSaveSuccess] = useState('');
   const [vehicleDetails, setVehicleDetails] = useState<UserProfile['vehicleDetails']>(() => {
     const details = user?.vehicleDetails;
     if (details) {
@@ -86,24 +89,76 @@ export const ProfileModule: React.FC = () => {
     }
   };
 
-  const handleProfileSave = (e: React.FormEvent) => {
+  const handleProfileSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
-    setTimeout(() => {
-      setIsSubmitting(false);
-      updateProfile({
-        name,
-        email: email.toLowerCase().trim(),
-        mobile,
-        alternateMobile: altMobile,
+    setProfileSaveError('');
+    setProfileSaveSuccess('');
+
+    try {
+      const cleanName = name.trim();
+      const cleanEmail = email.toLowerCase().trim();
+      const cleanPhone = mobile.trim();
+
+      if (!cleanName) {
+        setProfileSaveError('Full Name is required.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (!cleanPhone || cleanPhone.length < 10) {
+        setProfileSaveError('Please enter a valid 10-digit primary mobile number.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      const res = await api.put('/auth/profile', {
+        name: cleanName,
+        email: cleanEmail,
+        phone: cleanPhone,
+        mobile: cleanPhone,
+        alternateMobile: altMobile.trim(),
         preferredLanguage: lang,
         bloodGroup: blood,
         profilePhoto: profilePic,
         vehicleDetails: vehicleDetails
       });
-      addNotification('Profile Updated', 'Personal contact and vehicle details successfully updated in operations portal.', 'medium', 'system');
-    }, 1200);
+
+      const savedAgent = res.data?.agent;
+      if (savedAgent) {
+        updateProfile({
+          name: savedAgent.name,
+          email: savedAgent.email,
+          mobile: savedAgent.phone || savedAgent.mobile,
+          phone: savedAgent.phone || savedAgent.mobile,
+          alternateMobile: savedAgent.alternateMobile,
+          preferredLanguage: savedAgent.preferredLanguage,
+          bloodGroup: savedAgent.bloodGroup,
+          profilePhoto: savedAgent.profilePhoto,
+          vehicleDetails: savedAgent.vehicleDetails
+        });
+      } else {
+        updateProfile({
+          name: cleanName,
+          email: cleanEmail,
+          mobile: cleanPhone,
+          phone: cleanPhone,
+          alternateMobile: altMobile.trim(),
+          preferredLanguage: lang,
+          bloodGroup: blood,
+          profilePhoto: profilePic,
+          vehicleDetails: vehicleDetails
+        });
+      }
+
+      setProfileSaveSuccess('Details saved successfully.');
+      addNotification('Profile Updated', 'Personal contact and operational details successfully saved to database.', 'medium', 'system');
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.message || 'Unable to save details. Please try again.';
+      setProfileSaveError(errorMsg);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleLogout = () => {
@@ -195,6 +250,20 @@ export const ProfileModule: React.FC = () => {
         {/* Right Side form block (2 cols) */}
         <div className="lg:col-span-2 space-y-6">
           <form onSubmit={handleProfileSave} className="space-y-6">
+            {profileSaveError && (
+              <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-semibold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                <span>{profileSaveError}</span>
+              </div>
+            )}
+
+            {profileSaveSuccess && (
+              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-bold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{profileSaveSuccess}</span>
+              </div>
+            )}
+
             <Card variant="default">
               <CardHeader>
                 <div className="flex items-center space-x-2">
@@ -286,12 +355,22 @@ export const ProfileModule: React.FC = () => {
                   {(() => {
                     const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';
                     const uRole = (rawRole === 'agent' ? ((user as any)?.level || 'pincode') : rawRole).toLowerCase();
+                    const aTerritory = user?.assignedTerritory || user?.territory || {
+                      state: (user as any)?.assignedState,
+                      district: (user as any)?.assignedDistrict,
+                      division: (user as any)?.assignedDivision,
+                      pincode: (user as any)?.assignedPincode
+                    };
+                    const aState = (aTerritory?.state || (user as any)?.assignedState || '').trim();
+                    const aDistrict = (aTerritory?.district || (user as any)?.assignedDistrict || '').trim();
+                    const aDivision = (aTerritory?.division || (user as any)?.assignedDivision || '').trim();
+                    const aPincode = (aTerritory?.pincode || (user as any)?.assignedPincode || '').trim();
 
                     if (uRole === 'state') {
                       return (
                         <div className="p-3.5 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 text-xs font-semibold">
                           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">STATE JURISDICTION ONLY</span>
-                          <p className="text-[#864f19] font-black text-sm mt-0.5">{user?.territory?.state || (user as any)?.state || 'Andhra Pradesh'}</p>
+                          <p className="text-[#864f19] font-black text-sm mt-0.5">{aState || '—'}</p>
                           <p className="text-slate-500 text-[10px] font-medium mt-1">Full state operational scope covering all downstream Districts, Divisions, and Pincodes.</p>
                         </div>
                       );
@@ -302,11 +381,11 @@ export const ProfileModule: React.FC = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3.5 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 text-xs font-semibold">
                           <div>
                             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">STATE JURISDICTION</span>
-                            <p className="text-slate-900 font-extrabold mt-0.5">{user?.territory?.state || (user as any)?.state || 'Andhra Pradesh'}</p>
+                            <p className="text-slate-900 font-extrabold mt-0.5">{aState || '—'}</p>
                           </div>
                           <div>
                             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">ASSIGNED DISTRICT</span>
-                            <p className="text-[#864f19] font-black mt-0.5">{user?.territory?.district || (user as any)?.district || 'Visakhapatnam'}</p>
+                            <p className="text-[#864f19] font-black mt-0.5">{aDistrict || '—'}</p>
                           </div>
                         </div>
                       );
@@ -317,15 +396,15 @@ export const ProfileModule: React.FC = () => {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3.5 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 text-xs font-semibold">
                           <div>
                             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">STATE JURISDICTION</span>
-                            <p className="text-slate-900 font-extrabold mt-0.5">{user?.territory?.state || (user as any)?.state || 'Andhra Pradesh'}</p>
+                            <p className="text-slate-900 font-extrabold mt-0.5">{aState || '—'}</p>
                           </div>
                           <div>
                             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">ASSIGNED DISTRICT</span>
-                            <p className="text-slate-900 font-extrabold mt-0.5">{user?.territory?.district || (user as any)?.district || 'Visakhapatnam'}</p>
+                            <p className="text-slate-900 font-extrabold mt-0.5">{aDistrict || '—'}</p>
                           </div>
                           <div>
                             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">ASSIGNED DIVISION</span>
-                            <p className="text-[#864f19] font-black mt-0.5">{user?.territory?.division || (user as any)?.division || 'Vizag City Division'}</p>
+                            <p className="text-[#864f19] font-black mt-0.5">{aDivision || '—'}</p>
                           </div>
                         </div>
                       );
@@ -336,19 +415,19 @@ export const ProfileModule: React.FC = () => {
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-3.5 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 text-xs font-semibold">
                         <div>
                           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">STATE</span>
-                          <p className="text-slate-900 font-extrabold mt-0.5">{user?.territory?.state || (user as any)?.state || 'Andhra Pradesh'}</p>
+                          <p className="text-slate-900 font-extrabold mt-0.5">{aState || '—'}</p>
                         </div>
                         <div>
                           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">DISTRICT</span>
-                          <p className="text-slate-900 font-extrabold mt-0.5">{user?.territory?.district || (user as any)?.district || 'Visakhapatnam'}</p>
+                          <p className="text-slate-900 font-extrabold mt-0.5">{aDistrict || '—'}</p>
                         </div>
                         <div>
                           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">DIVISION</span>
-                          <p className="text-slate-900 font-extrabold mt-0.5">{user?.territory?.division || (user as any)?.division || 'Vizag City Division'}</p>
+                          <p className="text-slate-900 font-extrabold mt-0.5">{aDivision || '—'}</p>
                         </div>
                         <div>
                           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">ASSIGNED PINCODE</span>
-                          <p className="text-[#864f19] font-black mt-0.5">PIN {user?.territory?.pincode || (user as any)?.pincode || '530001'}</p>
+                          <p className="text-[#864f19] font-black mt-0.5">{aPincode ? `PIN ${aPincode}` : '—'}</p>
                         </div>
                       </div>
                     );

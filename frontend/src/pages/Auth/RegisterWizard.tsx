@@ -10,132 +10,7 @@ import { ArrowLeft, ArrowRight, Save, Shield, FileText, CheckCircle, Eye, EyeOff
 import { AgentNetworkHero } from '../../components/auth/AgentNetworkHero';
 import connectPortalLogo from '../../assets/connect_portal_logo.png';
 
-const ALL_INDIAN_STATES = [
-  "Tamil Nadu",
-  "Karnataka",
-  "Kerala",
-  "Andhra Pradesh",
-  "Telangana",
-  "Maharashtra",
-  "Delhi",
-  "Gujarat",
-  "Uttar Pradesh",
-  "West Bengal",
-  "Rajasthan",
-  "Madhya Pradesh",
-  "Punjab",
-  "Haryana",
-  "Bihar",
-  "Odisha",
-  "Assam"
-];
-
-const STATE_DISTRICTS: Record<string, string[]> = {
-  "Tamil Nadu": ["Krishnagiri", "Dharmapuri", "Chennai", "Coimbatore", "Salem", "Tiruchirappalli", "Madurai", "Vellore", "Erode", "Tirunelveli", "Kanchipuram", "Thanjavur", "Cuddalore", "Dindigul", "Theni", "Tiruppur"],
-  "Karnataka": ["Bengaluru Urban", "Bengaluru Rural", "Mysuru", "Tumakuru", "Dakshina Kannada", "Hubballi-Dharwad", "Belagavi", "Mangaluru", "Ballari", "Shivamogga", "Udupi", "Kolar", "Mandya", "Hassan"],
-  "Kerala": ["Ernakulam", "Thiruvananthapuram", "Kozhikode", "Thrissur", "Kollam", "Kottayam", "Palakkad", "Malappuram", "Kannur", "Alappuzha", "Idukki", "Wayanad", "Kasaragod", "Pathanamthitta"],
-  "Andhra Pradesh": ["Visakhapatnam", "Vijayawada", "Guntur", "NTR District", "Tirupati", "Nellore", "Kakinada", "Kurnool", "Anantapur", "Kadapa", "Eluru", "Ongole"],
-  "Telangana": ["Hyderabad", "Rangareddy", "Medchal-Malkajgiri", "Warangal", "Nizamabad", "Karimnagar", "Khammam", "Mahabubnagar", "Nalgonda", "Sangareddy"],
-  "Maharashtra": ["Mumbai City", "Mumbai Suburban", "Pune", "Thane", "Nagpur", "Nashik", "Chhatrapati Sambhaji Nagar (Aurangabad)", "Solapur", "Kolhapur", "Navi Mumbai"],
-  "Delhi": ["New Delhi", "Central Delhi", "South Delhi", "North Delhi", "East Delhi", "West Delhi", "Gurugram / NCR", "Noida / NCR"],
-  "Gujarat": ["Ahmedabad", "Surat", "Vadodara", "Rajkot", "Bhavnagar", "Jamnagar", "Gandhinagar", "Junagadh", "Anand"],
-  "Uttar Pradesh": ["Lucknow", "Noida / Gautam Buddha Nagar", "Ghaziabad", "Kanpur", "Varanasi", "Agra", "Prayagraj", "Meerut", "Gorakhpur", "Bareilly"],
-  "West Bengal": ["Kolkata", "Howrah", "North 24 Parganas", "South 24 Parganas", "Hooghly", "Darjeeling", "Siliguri", "Paschim Bardhaman"],
-  "Rajasthan": ["Jaipur", "Jodhpur", "Udaipur", "Kota", "Ajmer", "Bikaner", "Bhilwara", "Alwar"],
-  "Madhya Pradesh": ["Indore", "Bhopal", "Gwalior", "Jabalpur", "Ujjain", "Sagar"],
-  "Punjab": ["Ludhiana", "Amritsar", "Jalandhar", "Patiala", "Mohali (SAS Nagar)", "Bathinda"],
-  "Haryana": ["Gurugram", "Faridabad", "Panipat", "Ambala", "Karnal", "Hisar", "Rohtak"],
-  "Bihar": ["Patna", "Gaya", "Muzaffarpur", "Bhagalpur", "Darbhanga", "Purnia"],
-  "Odisha": ["Khordha (Bhubaneswar)", "Cuttack", "Ganjam", "Sundargarh (Rourkela)", "Puri", "Sambalpur"],
-  "Assam": ["Kamrup Metropolitan (Guwahati)", "Dibrugarh", "Silchar", "Jorhat", "Nagaon"]
-};
-
-const DISTRICT_DIVISIONS: Record<string, string[]> = {
-  "Krishnagiri": ["Hosur Division", "Krishnagiri Division", "Denkanikottai Division", "Pochampalli Division"],
-  "Dharmapuri": ["Dharmapuri Division", "Harur Division", "Palacode Division"],
-  "Chennai": ["Chennai Central Division", "Chennai North Division", "Chennai South Division", "Adyar Division", "Anna Nagar Division"],
-  "Coimbatore": ["Coimbatore North Division", "Coimbatore South Division", "Pollachi Division"],
-  "Salem": ["Salem Urban Division", "Salem West Division", "Attur Division"],
-  "Tiruchirappalli": ["Trichy East Division", "Trichy West Division", "Srirangam Division"],
-  "Madurai": ["Madurai North Division", "Madurai South Division", "Tirumangalam Division"],
-  "Vellore": ["Vellore Division", "Gudiyatham Division", "Ranipet Division"],
-
-  "Bengaluru Urban": ["Bengaluru South Division", "Bengaluru North Division", "Bengaluru East Division", "Bengaluru West Division", "Electronic City Division", "Whitefield Division"],
-  "Bengaluru Rural": ["Nelamangala Division", "Doddaballapura Division", "Devanahalli Division"],
-  "Mysuru": ["Mysuru City Division", "Mysuru Rural Division", "Nanjangud Division", "Hunsur Division"],
-  "Tumakuru": ["Tumakuru Division", "Tiptur Division", "Madhugiri Division"],
-  "Dakshina Kannada": ["Mangaluru Division", "Bantwal Division", "Puttur Division"],
-
-  "Ernakulam": ["Kochi Division", "Aluva Division", "Muvattupuzha Division"],
-  "Thiruvananthapuram": ["Trivandrum City Division", "Attingal Division", "Neyyattinkara Division"],
-
-  "Visakhapatnam": ["Vizag City Division", "Anakapalle Division"],
-  "Vijayawada": ["Vijayawada Urban Division", "Gudivada Division"],
-  "Hyderabad": ["Hyderabad Central Division", "Secunderabad Division", "Charminar Division", "Cyberabad Division"],
-
-  "Mumbai City": ["South Mumbai Division", "Central Mumbai Division"],
-  "Mumbai Suburban": ["Western Suburbs Division", "Eastern Suburbs Division", "Andheri Division", "Borivali Division"],
-  "Pune": ["Pune City Division", "Pimpri-Chinchwad Division", "Baramati Division"],
-
-  "New Delhi": ["Connaught Place Division", "Chanakyapuri Division"],
-  "Gurugram / NCR": ["DLF Cyber City Division", "Gurugram South Division"]
-};
-
-const PINCODE_DIRECTORY: Record<string, { state: string, division: string, district: string, postOffice: string }> = {
-  "560001": { state: "Karnataka", division: "Bengaluru Division", district: "Bengaluru Urban", postOffice: "Bengaluru G.P.O." },
-  "560037": { state: "Karnataka", division: "Bengaluru Division", district: "Bengaluru Urban", postOffice: "Marathahalli" },
-  "572101": { state: "Karnataka", division: "Bengaluru Division", district: "Tumakuru", postOffice: "Tumkur Head Office" },
-  "570001": { state: "Karnataka", division: "Mysuru Division", district: "Mysuru", postOffice: "Mysuru Head Office" },
-  "635109": { state: "Tamil Nadu", division: "Hosur Division", district: "Krishnagiri", postOffice: "Hosur Head Office" },
-  "635206": { state: "Tamil Nadu", division: "Dharmapuri Division", district: "Krishnagiri", postOffice: "Singarapettai Post Office" }
-};
-
-const ROLE_SAMPLES = {
-  state: {
-    name: 'Suresh Kumar',
-    phone: '9876543210',
-    email: 'suresh.kumar@example.com',
-    aadhar: '1234 5678 9012',
-    pan: 'ABCDE1234F',
-    state: 'Karnataka',
-    division: 'Bengaluru Division',
-    district: 'Bengaluru Urban',
-    pincode: '560001'
-  },
-  division: {
-    name: 'Priya Sharma',
-    phone: '9123456780',
-    email: 'priya.sharma@example.com',
-    aadhar: '2345 6789 0123',
-    pan: 'PQRST5678L',
-    state: 'Karnataka',
-    division: 'Mysuru Division',
-    district: 'Mysuru',
-    pincode: '570001'
-  },
-  district: {
-    name: 'Muthuswamy',
-    phone: '9012345678',
-    email: 'muthuswamy@example.com',
-    aadhar: '3456 7890 1234',
-    pan: 'LMNOP6789K',
-    state: 'Tamil Nadu',
-    division: 'Hosur Division',
-    district: 'Krishnagiri District',
-    pincode: '635109'
-  },
-  pincode: {
-    name: 'Karthik R',
-    phone: '9988776655',
-    email: 'karthik.r@example.com',
-    aadhar: '4567 8901 2345',
-    pan: 'UVWXY9876P',
-    state: 'Karnataka',
-    division: 'Bengaluru Division',
-    district: 'Bengaluru Urban',
-    pincode: '560037'
-  }
-};
+// Centralized Admin States loaded dynamically via territoryService from Admin Pincode Management
 
 const REGISTRATION_DRAFT_KEY = 'agent_registration_draft';
 
@@ -353,8 +228,7 @@ export const RegisterWizard: React.FC = () => {
     status: string;
   } | null>(null);
 
-  // Dynamic placeholders based on selected role
-  const sample = ROLE_SAMPLES[role];
+
 
   const compressImageFile = (file: File): Promise<string> => {
     return new Promise((resolve) => {
@@ -839,7 +713,7 @@ export const RegisterWizard: React.FC = () => {
                   <div className="md:col-span-2">
                     <Input
                       label="Full Name (Required)"
-                      placeholder={`e.g. ${sample.name}`}
+                      placeholder="e.g. Ramesh Kumar"
                       value={personalInfo.name}
                       onChange={(e) => setPersonalInfo({ ...personalInfo, name: e.target.value })}
                     />
@@ -850,7 +724,7 @@ export const RegisterWizard: React.FC = () => {
                       label="Primary Mobile Number (Required)"
                       maxLength={10}
                       inputMode="numeric"
-                      placeholder={`e.g. ${sample.phone}`}
+                      placeholder="e.g. 9876543210"
                       value={personalInfo.phone}
                       onChange={(e) => {
                         let val = e.target.value.replace(/\D/g, '');
@@ -876,7 +750,7 @@ export const RegisterWizard: React.FC = () => {
                   <Input
                     label="Email Address (Required)"
                     type="email"
-                    placeholder={`e.g. ${sample.email}`}
+                    placeholder="e.g. agent@example.com"
                     value={personalInfo.email}
                     onChange={(e) => setPersonalInfo({ ...personalInfo, email: e.target.value.toLowerCase().trim() })}
                   />
@@ -1317,7 +1191,7 @@ export const RegisterWizard: React.FC = () => {
                       label="State *"
                       options={[
                         { value: '', label: '-- Select State --' },
-                        ...ALL_INDIAN_STATES.map(s => ({ value: s, label: s }))
+                        ...adminStates.map(s => ({ value: s, label: s }))
                       ]}
                       value={address.state}
                       onChange={(e) => {

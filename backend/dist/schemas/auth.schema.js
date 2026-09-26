@@ -35,7 +35,10 @@ exports.updateProfileSchema = zod_1.z.object({
         name: zod_1.z.string().min(2).optional(),
         phone: exports.optionalPhoneSchema,
         phoneNumber: exports.optionalPhoneSchema,
-        address: zod_1.z.string().optional(),
-    }),
+        address: zod_1.z.union([zod_1.z.string(), zod_1.z.record(zod_1.z.any())]).optional(),
+        assignedTerritory: zod_1.z.record(zod_1.z.any()).optional(),
+        territory: zod_1.z.record(zod_1.z.any()).optional(),
+        fullAddress: zod_1.z.string().optional()
+    }).passthrough(),
 });
 //# sourceMappingURL=auth.schema.js.map

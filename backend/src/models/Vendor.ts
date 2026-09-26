@@ -8,9 +8,15 @@ export interface IVendor extends Document {
   category: Types.ObjectId | string;
   gst?: string;
   state?: string;
+  stateId?: string;
   district?: string;
+  districtId?: string;
   division?: string;
+  divisionId?: string;
+  taluk?: string;
+  talukId?: string;
   pincode?: string;
+  pincodeId?: string;
   kycStatus?: 'pending' | 'approved' | 'rejected';
   location: {
     address: string;
@@ -42,9 +48,15 @@ const vendorSchema = new Schema<IVendor>({
   category: { type: Schema.Types.Mixed },
   gst: { type: String },
   state: { type: String },
+  stateId: { type: String },
   district: { type: String },
+  districtId: { type: String },
   division: { type: String },
+  divisionId: { type: String },
+  taluk: { type: String },
+  talukId: { type: String },
   pincode: { type: String },
+  pincodeId: { type: String },
   kycStatus: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
   location: {
     address: { type: String, required: true },

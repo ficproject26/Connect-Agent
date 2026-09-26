@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { AgentOnboardedVendorsModal } from '../Vendors/AgentOnboardedVendorsModal';
 import { formatRegistrationDate } from '../../utils/date';
+import { getPincodesForDivision } from '../../utils/locationData';
 
 export interface AgentNode {
   _id: string;
@@ -71,10 +72,22 @@ export const AgentManagement: React.FC = () => {
   const activeRole = effectiveRole;
 
   // Logged-in Agent's Territory Parameters
-  const userState = user?.territory?.state || '';
-  const userDistrict = user?.territory?.district || '';
-  const userDivision = user?.territory?.division || '';
-  const userPincode = user?.territory?.pincode || '';
+  const userTerritory = user?.assignedTerritory || user?.territory || {
+    state: (user as any)?.assignedState,
+    district: (user as any)?.assignedDistrict,
+    division: (user as any)?.assignedDivision,
+    pincode: (user as any)?.assignedPincode
+  };
+  const userState = (userTerritory?.state || '').trim();
+  const userDistrict = (userTerritory?.district || '').trim();
+  const userDivision = (userTerritory?.division || '').trim();
+  const userPincode = (userTerritory?.pincode || '').trim();
+
+  // Division Agent's active pincodes dynamically from Admin Pincode Management DB
+  const divisionPincodes = useMemo(() => {
+    if (!userDivision) return [];
+    return getPincodesForDivision(userDivision);
+  }, [userDivision]);
 
   // Search & Filter controls
   const [searchTerm, setSearchTerm] = useState('');
@@ -380,14 +393,18 @@ export const AgentManagement: React.FC = () => {
   const filterList = (items: AgentNode[]) => {
     return items.filter(item => {
       if (kycFilter !== 'all' && item.kycStatus !== kycFilter) return false;
+      if (pincodeFilter !== 'all') {
+        const itemPin = item.territory?.pincode || (item as any)?.assignedTerritory?.pincode;
+        if (itemPin !== pincodeFilter) return false;
+      }
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase();
         const name = (item.name || '').toLowerCase();
         const email = (item.email || '').toLowerCase();
         const regId = (item.registrationId || '').toLowerCase();
-        const pincode = (item.territory?.pincode || '').toLowerCase();
-        const dist = (item.territory?.district || '').toLowerCase();
-        const div = (item.territory?.division || '').toLowerCase();
+        const pincode = (item.territory?.pincode || (item as any)?.assignedTerritory?.pincode || '').toLowerCase();
+        const dist = (item.territory?.district || (item as any)?.assignedTerritory?.district || '').toLowerCase();
+        const div = (item.territory?.division || (item as any)?.assignedTerritory?.division || '').toLowerCase();
         return name.includes(q) || email.includes(q) || regId.includes(q) || pincode.includes(q) || dist.includes(q) || div.includes(q);
       }
       return true;
@@ -545,10 +562,9 @@ export const AgentManagement: React.FC = () => {
                 className="bg-[#fbf9f8] border border-[#d7c3b5]/70 text-[#1b1c1c] text-xs font-extrabold rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19] cursor-pointer shadow-2xs"
               >
                 <option value="all">📍 All Pincode Areas</option>
-                <option value="530001">PIN 530001 (Central)</option>
-                <option value="530017">PIN 530017 (MVP Colony)</option>
-                <option value="530018">PIN 530018 (Madhavadhara)</option>
-                <option value="530026">PIN 530026 (Gajuwaka)</option>
+                {divisionPincodes.map(pin => (
+                  <option key={pin} value={pin}>PIN {pin}</option>
+                ))}
               </select>
             )}
 

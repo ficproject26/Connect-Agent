@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardBody, Button, Input, Modal } from '../../components/ui';
-import { Wallet, ArrowUpRight, ArrowDownLeft, Clock, CheckCircle2, XCircle, Send, Loader2, Download, Building, CreditCard, User, Landmark, Search, Filter } from 'lucide-react';
+import { Wallet, ArrowUpRight, ArrowDownLeft, Clock, CheckCircle2, XCircle, Send, Loader2, Download, Building, CreditCard, User, Landmark, Search, Filter, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../utils/api';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -17,10 +17,16 @@ interface Transaction {
 }
 
 export const WalletDashboard: React.FC = () => {
-  const { user } = useAuth();
+  const { user, updateProfile, addNotification } = useAuth();
   const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';
   const activeRole = (rawRole === 'agent' ? ((user as any)?.level || 'pincode') : rawRole).toLowerCase();
-  const userState = user?.territory?.state || 'Andhra Pradesh';
+  const userTerritory = user?.assignedTerritory || user?.territory || {
+    state: (user as any)?.assignedState,
+    district: (user as any)?.assignedDistrict,
+    division: (user as any)?.assignedDivision,
+    pincode: (user as any)?.assignedPincode
+  };
+  const userState = (userTerritory?.state || (user as any)?.assignedState || '').trim();
 
   const [balance, setBalance] = useState<number>(0);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -42,6 +48,9 @@ export const WalletDashboard: React.FC = () => {
 
   const [isEditBankOpen, setIsEditBankOpen] = useState(false);
   const [editBankForm, setEditBankForm] = useState({ ...bankDetails });
+  const [bankFormError, setBankFormError] = useState('');
+  const [bankSuccessMsg, setBankSuccessMsg] = useState('');
+  const [isSavingBank, setIsSavingBank] = useState(false);
 
   // Cashout Modal State
   const [isCashoutOpen, setIsCashoutOpen] = useState(false);
@@ -159,25 +168,77 @@ export const WalletDashboard: React.FC = () => {
 
   const handleSaveBankDetails = async (e: React.FormEvent) => {
     e.preventDefault();
+    setBankFormError('');
+    setBankSuccessMsg('');
+
+    const cleanBankName = editBankForm.bankName.trim();
+    if (!cleanBankName) {
+      setBankFormError('Bank name is required.');
+      return;
+    }
+
+    const cleanAccNo = editBankForm.accountNumber.trim();
+    if (!/^\d{8,20}$/.test(cleanAccNo)) {
+      setBankFormError('Account number must contain between 8 and 20 numeric digits.');
+      return;
+    }
+
+    const cleanIfsc = editBankForm.ifscCode.toUpperCase().trim();
+    const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+    if (!ifscRegex.test(cleanIfsc)) {
+      setBankFormError('Invalid IFSC format. Must be 4 uppercase letters, followed by 0, and 6 alphanumeric characters (e.g. SBIN0001428).');
+      return;
+    }
+
+    const cleanHolder = editBankForm.holderName.trim();
+    if (!cleanHolder) {
+      setBankFormError('Account holder name is required.');
+      return;
+    }
+
+    setIsSavingBank(true);
     try {
       const res = await api.put('/wallet/bank-details', {
-        bankName: editBankForm.bankName,
-        accountNumber: editBankForm.accountNumber,
-        ifscCode: editBankForm.ifscCode,
-        accountHolder: editBankForm.holderName
+        bankName: cleanBankName,
+        accountNumber: cleanAccNo,
+        ifscCode: cleanIfsc,
+        accountHolder: cleanHolder
       });
+
       if (res.data?.bankDetails) {
         const b = res.data.bankDetails;
-        setBankDetails({
+        const newDetails = {
           bankName: b.bankName || '',
           accountNumber: b.accountNumber || '',
           ifscCode: b.ifscCode || '',
-          holderName: b.accountHolder || user?.name || ''
+          holderName: b.accountHolder || cleanHolder || user?.name || ''
+        };
+        setBankDetails(newDetails);
+        setEditBankForm(newDetails);
+
+        // Update profile in AuthContext and localStorage so reload and navigation persist
+        updateProfile({
+          bankDetails: {
+            bankName: newDetails.bankName,
+            accountNumber: newDetails.accountNumber,
+            ifscCode: newDetails.ifscCode,
+            accountHolder: newDetails.holderName
+          }
         });
+
+        addNotification('Bank Details Saved', 'Linked settlement bank account details updated successfully.', 'medium', 'system');
+        setBankSuccessMsg('Details saved successfully.');
+
+        setTimeout(() => {
+          setIsEditBankOpen(false);
+          setBankSuccessMsg('');
+        }, 1200);
       }
-      setIsEditBankOpen(false);
     } catch (err: any) {
-      setErrorMsg(err.response?.data?.message || 'Failed to save bank details.');
+      const msg = err.response?.data?.message || 'Unable to save details. Please try again.';
+      setBankFormError(msg);
+    } finally {
+      setIsSavingBank(false);
     }
   };
 
@@ -468,51 +529,83 @@ export const WalletDashboard: React.FC = () => {
       {/* Edit Bank Details Modal */}
       <Modal
         isOpen={isEditBankOpen}
-        onClose={() => setIsEditBankOpen(false)}
+        onClose={() => {
+          setIsEditBankOpen(false);
+          setBankFormError('');
+          setBankSuccessMsg('');
+        }}
         title="Edit Linked Bank Details"
       >
         <form onSubmit={handleSaveBankDetails} className="space-y-4 font-sans text-xs">
+          {bankFormError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-semibold flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+              <span>{bankFormError}</span>
+            </div>
+          )}
+
+          {bankSuccessMsg && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-bold flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{bankSuccessMsg}</span>
+            </div>
+          )}
+
           <div className="space-y-3">
             <div>
-              <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Bank Name</label>
+              <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Bank Name *</label>
               <Input
                 label=""
                 placeholder="e.g. State Bank of India"
                 value={editBankForm.bankName}
-                onChange={(e) => setEditBankForm({ ...editBankForm, bankName: e.target.value })}
+                onChange={(e) => {
+                  setEditBankForm({ ...editBankForm, bankName: e.target.value });
+                  setBankFormError('');
+                }}
                 className="mb-0 animate-none"
               />
             </div>
             
             <div>
-              <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Account Number</label>
+              <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Account Number *</label>
               <Input
                 label=""
                 placeholder="e.g. 123456789012"
                 value={editBankForm.accountNumber}
-                onChange={(e) => setEditBankForm({ ...editBankForm, accountNumber: e.target.value })}
+                onChange={(e) => {
+                  setEditBankForm({ ...editBankForm, accountNumber: e.target.value });
+                  setBankFormError('');
+                }}
                 className="mb-0 animate-none"
               />
+              <p className="text-[10px] text-slate-400 mt-1 font-medium">8 to 20 numeric digits</p>
             </div>
             
             <div>
-              <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">IFSC Code</label>
+              <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">IFSC Code *</label>
               <Input
                 label=""
-                placeholder="e.g. SBIN0004821"
+                placeholder="e.g. SBIN0001428"
                 value={editBankForm.ifscCode}
-                onChange={(e) => setEditBankForm({ ...editBankForm, ifscCode: e.target.value.toUpperCase() })}
-                className="mb-0 animate-none"
+                onChange={(e) => {
+                  setEditBankForm({ ...editBankForm, ifscCode: e.target.value.toUpperCase() });
+                  setBankFormError('');
+                }}
+                className="mb-0 animate-none uppercase"
               />
+              <p className="text-[10px] text-slate-400 mt-1 font-medium">Format: 4 letters + 0 + 6 alphanumeric characters (e.g. SBIN0001428)</p>
             </div>
             
             <div>
-              <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Account Holder Name</label>
+              <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Account Holder Name *</label>
               <Input
                 label=""
                 placeholder="Holder Name"
                 value={editBankForm.holderName}
-                onChange={(e) => setEditBankForm({ ...editBankForm, holderName: e.target.value })}
+                onChange={(e) => {
+                  setEditBankForm({ ...editBankForm, holderName: e.target.value });
+                  setBankFormError('');
+                }}
                 className="mb-0 animate-none"
               />
             </div>
@@ -520,9 +613,16 @@ export const WalletDashboard: React.FC = () => {
 
           <button
             type="submit"
-            className="w-full py-3.5 bg-[#864f19] hover:bg-[#a3672f] text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-sm transition-all border-none cursor-pointer flex items-center justify-center gap-2 mt-4"
+            disabled={isSavingBank}
+            className="w-full py-3.5 bg-[#864f19] hover:bg-[#a3672f] disabled:opacity-50 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-sm transition-all border-none cursor-pointer flex items-center justify-center gap-2 mt-4"
           >
-            Save Bank Details
+            {isSavingBank ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" /> Saving Bank Details...
+              </>
+            ) : (
+              'Save Bank Details'
+            )}
           </button>
         </form>
       </Modal>

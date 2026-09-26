@@ -11,10 +11,16 @@ export const ReportsModule: React.FC = () => {
   const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';
   const activeRole = (rawRole === 'agent' ? ((user as any)?.level || 'pincode') : rawRole).toLowerCase();
 
-  const userPincode = user?.territory?.pincode || (user as any)?.assignedPincode || (user as any)?.pincode || '530001';
-  const userDivision = user?.territory?.division || (user as any)?.assignedDivision || (user as any)?.division || 'Vizag City Division';
-  const userDistrict = user?.territory?.district || (user as any)?.assignedDistrict || (user as any)?.district || 'Visakhapatnam';
-  const userState = user?.territory?.state || (user as any)?.assignedState || (user as any)?.state || 'Andhra Pradesh';
+  const userTerritory = user?.assignedTerritory || user?.territory || {
+    state: (user as any)?.assignedState,
+    district: (user as any)?.assignedDistrict,
+    division: (user as any)?.assignedDivision,
+    pincode: (user as any)?.assignedPincode
+  };
+  const userPincode = (userTerritory?.pincode || (user as any)?.assignedPincode || (user as any)?.pincode || '').trim();
+  const userDivision = (userTerritory?.division || (user as any)?.assignedDivision || (user as any)?.division || '').trim();
+  const userDistrict = (userTerritory?.district || (user as any)?.assignedDistrict || (user as any)?.district || '').trim();
+  const userState = (userTerritory?.state || (user as any)?.assignedState || (user as any)?.state || '').trim();
 
   const [activeTab, setActiveTab] = useState('overview');
   const [timeframe, setTimeframe] = useState<'today' | 'weekly' | 'monthly' | 'date'>('today');
@@ -101,10 +107,10 @@ export const ReportsModule: React.FC = () => {
       submittedAt: new Date().toLocaleDateString('en-GB') + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       status: 'Submitted',
       remarks: reportRemarks || 'Pincode territory field report submission',
-      state: user?.territory?.state || 'Andhra Pradesh',
-      district: user?.territory?.district || 'Visakhapatnam',
-      division: user?.territory?.division || 'Vizag City',
-      pincode: user?.territory?.pincode || '530001',
+      state: userState,
+      district: userDistrict,
+      division: userDivision,
+      pincode: userPincode,
       agentName: user?.name || 'Logged Agent'
     };
 
@@ -127,7 +133,7 @@ export const ReportsModule: React.FC = () => {
       });
       addNotification(
         'Pincode Agent Report Submitted',
-        `Successfully submitted ${reportType} report for PIN ${user?.territory?.pincode || '530001'}.`,
+        `Successfully submitted ${reportType} report${userPincode ? ` for PIN ${userPincode}` : ''}.`,
         'medium',
         'system'
       );

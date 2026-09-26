@@ -80,31 +80,50 @@ export declare const updateProfileSchema: z.ZodObject<{
         name: z.ZodOptional<z.ZodString>;
         phone: z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>;
         phoneNumber: z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>;
-        address: z.ZodOptional<z.ZodString>;
-    }, "strip", z.ZodTypeAny, {
-        name?: string | undefined;
-        phone?: string | undefined;
-        address?: string | undefined;
-        phoneNumber?: string | undefined;
-    }, {
-        name?: string | undefined;
-        phone?: string | undefined;
-        address?: string | undefined;
-        phoneNumber?: string | undefined;
-    }>;
+        address: z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodRecord<z.ZodString, z.ZodAny>]>>;
+        assignedTerritory: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodAny>>;
+        territory: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodAny>>;
+        fullAddress: z.ZodOptional<z.ZodString>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        name: z.ZodOptional<z.ZodString>;
+        phone: z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>;
+        phoneNumber: z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>;
+        address: z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodRecord<z.ZodString, z.ZodAny>]>>;
+        assignedTerritory: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodAny>>;
+        territory: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodAny>>;
+        fullAddress: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        name: z.ZodOptional<z.ZodString>;
+        phone: z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>;
+        phoneNumber: z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>;
+        address: z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodRecord<z.ZodString, z.ZodAny>]>>;
+        assignedTerritory: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodAny>>;
+        territory: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodAny>>;
+        fullAddress: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">>;
 }, "strip", z.ZodTypeAny, {
     body: {
         name?: string | undefined;
         phone?: string | undefined;
-        address?: string | undefined;
+        territory?: Record<string, any> | undefined;
+        assignedTerritory?: Record<string, any> | undefined;
+        address?: string | Record<string, any> | undefined;
+        fullAddress?: string | undefined;
         phoneNumber?: string | undefined;
+    } & {
+        [k: string]: unknown;
     };
 }, {
     body: {
         name?: string | undefined;
         phone?: string | undefined;
-        address?: string | undefined;
+        territory?: Record<string, any> | undefined;
+        assignedTerritory?: Record<string, any> | undefined;
+        address?: string | Record<string, any> | undefined;
+        fullAddress?: string | undefined;
         phoneNumber?: string | undefined;
+    } & {
+        [k: string]: unknown;
     };
 }>;
 //# sourceMappingURL=auth.schema.d.ts.map

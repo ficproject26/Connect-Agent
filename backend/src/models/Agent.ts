@@ -56,6 +56,19 @@ export interface IAgent extends Document {
   remarks?: string;
   registrationFeePaid: boolean;
   performanceScore: number;
+  alternateMobile?: string;
+  preferredLanguage?: string;
+  bloodGroup?: string;
+  profilePhoto?: string;
+  vehicleDetails?: {
+    type?: string;
+    number?: string;
+    model?: string;
+    licenseNumber?: string;
+    workingArea?: string;
+    vehicleTypes?: string[];
+    vehicles?: Record<string, { model?: string; number?: string }>;
+  };
   bankDetails?: {
     bankName: string;
     accountNumber: string;
@@ -153,6 +166,11 @@ const agentSchema = new Schema<IAgent>({
   remarks: { type: String, default: '' },
   registrationFeePaid: { type: Boolean, default: false },
   performanceScore: { type: Number, default: 0 },
+  alternateMobile: { type: String, default: '' },
+  preferredLanguage: { type: String, default: 'English' },
+  bloodGroup: { type: String, default: 'O+' },
+  profilePhoto: { type: String, default: '' },
+  vehicleDetails: { type: Schema.Types.Mixed, default: () => ({}) },
   bankDetails: {
     bankName: { type: String, default: '' },
     accountNumber: { type: String, default: '' },
@@ -162,7 +180,8 @@ const agentSchema = new Schema<IAgent>({
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 }, {
-  timestamps: true
+  timestamps: true,
+  strict: false
 });
 
 agentSchema.index({ 'territory.state': 1, 'territory.district': 1, 'territory.division': 1, 'territory.pincode': 1 });

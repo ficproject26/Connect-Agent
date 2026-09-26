@@ -26,6 +26,22 @@ export const authMiddleware = (req: Request, res: Response, next: NextFunction) 
   }
 };
 
+export const optionalAuthMiddleware = (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      if (token) {
+        const decoded = verifyToken(token);
+        (req as AuthenticatedRequest).agent = decoded;
+      }
+    }
+  } catch (error) {
+    // Non-blocking for optional auth
+  }
+  next();
+};
+
 /**
  * Middleware to restrict route access to specific agent roles
  */

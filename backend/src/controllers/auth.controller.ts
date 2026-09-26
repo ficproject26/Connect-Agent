@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import Agent from '../models/Agent';
 import { generateToken } from '../utils/jwt';
+import { invalidateAgentTerritoryScope } from '../utils/territoryScope';
 import { z } from 'zod';
 
 const registerSchema = z.object({
@@ -333,18 +334,46 @@ export const login = async (req: Request, res: Response) => {
             const userRole = (userDoc.level || userDoc.role || 'pincode').toLowerCase();
             const role = ['state', 'district', 'division', 'pincode'].includes(userRole) ? userRole : 'pincode';
 
+            const rawAssigned = userDoc.assignedTerritory || userDoc.territory || {};
+            const cleanAssigned = {
+              state: (rawAssigned.state || userDoc.state || userDoc.assignedState || '').trim(),
+              stateId: (rawAssigned.stateId || '').trim(),
+              district: (rawAssigned.district || userDoc.district || userDoc.assignedDistrict || '').trim(),
+              districtId: (rawAssigned.districtId || '').trim(),
+              division: (rawAssigned.division || userDoc.division || userDoc.assignedDivision || '').trim(),
+              divisionId: (rawAssigned.divisionId || '').trim(),
+              taluk: (rawAssigned.taluk || userDoc.taluk || '').trim(),
+              talukId: (rawAssigned.talukId || '').trim(),
+              pincode: (rawAssigned.pincode || userDoc.pincode || userDoc.assignedPincode || '').trim(),
+              pincodeId: (rawAssigned.pincodeId || '').trim()
+            };
+
+            const cleanAddressDoc = userDoc.address && typeof userDoc.address === 'object' ? {
+              buildingNo: userDoc.address.buildingNo || '',
+              street: userDoc.address.street || '',
+              locality: userDoc.address.locality || '',
+              postOffice: userDoc.address.postOffice || userDoc.postOffice || '',
+              taluk: userDoc.address.taluk || userDoc.taluk || '',
+              state: userDoc.address.state || '',
+              district: userDoc.address.district || '',
+              pincode: userDoc.address.pincode || ''
+            } : {};
+
             agent = new Agent({
               name: userDoc.name || 'Agent User',
               email: cleanEmail,
               password: userDoc.password || validatedData.password,
-              phone: userDoc.phone || userDoc.mobile || '+91 98765 43210',
+              phone: userDoc.phone || userDoc.mobile || '',
               role: role,
-              territory: userDoc.territory || {
-                state: userDoc.state || userDoc.assignedState || 'Andhra Pradesh',
-                district: userDoc.district || userDoc.assignedDistrict || 'NTR District',
-                division: userDoc.division || userDoc.assignedDivision || 'Vijayawada Central Division',
-                pincode: userDoc.pincode || userDoc.assignedPincode || '520001'
+              assignedTerritory: cleanAssigned,
+              territory: {
+                state: cleanAssigned.state,
+                district: cleanAssigned.district,
+                division: cleanAssigned.division,
+                pincode: cleanAssigned.pincode
               },
+              address: cleanAddressDoc,
+              fullAddress: userDoc.fullAddress || (typeof userDoc.address === 'string' ? userDoc.address : ''),
               kycStatus: userDoc.kycStatus || userDoc.status || 'approved',
               registrationId: userDoc.registrationId || `REG-${Date.now()}`,
               ...(userDoc.createdAt || userDoc.registeredAt || userDoc.registrationDate ? {
@@ -360,114 +389,7 @@ export const login = async (req: Request, res: Response) => {
     }
 
     if (!agent) {
-      // 2. Provision demo/known agent accounts (raki@gmail.com, jimmy@gmail.com, muthuswamy@gmail.com, state/district/division/pincode)
-      const isRaki = cleanEmail.includes('raki');
-      const isJimmy = cleanEmail.includes('jimmy');
-      const isMuthuswamy = cleanEmail.includes('muthuswamy') || cleanEmail.includes('rajeshwari');
-      const isState = cleanEmail.includes('state');
-      const isDistrict = cleanEmail.includes('district') || isMuthuswamy;
-      const isDivision = cleanEmail.includes('division');
-      const isPincode = cleanEmail.includes('pincode') || isJimmy || isRaki;
-
-      const isKnownAgent = isRaki || isJimmy || isMuthuswamy || isState || isDistrict || isDivision || isPincode;
-
-      if (isKnownAgent) {
-        let role: 'state' | 'district' | 'division' | 'pincode' = isState ? 'state' : isDistrict ? 'district' : isDivision ? 'division' : 'pincode';
-        let name = isRaki ? 'raki pin' : isJimmy ? 'Jimmy' : isMuthuswamy ? 'Muthuswamy' : (cleanEmail.split('@')[0]);
-        name = name.charAt(0).toUpperCase() + name.slice(1);
-
-        let territory = isJimmy
-          ? { state: 'Maharashtra', district: 'Nashik', division: 'Nashik North Division', pincode: '422101' }
-          : { state: 'Andhra Pradesh', district: 'NTR District', division: 'Vijayawada Central Division', pincode: '520001' };
-
-        agent = new Agent({
-          name: name,
-          email: cleanEmail,
-          password: validatedData.password,
-          phone: '+91 98765 43210',
-          role: role,
-          territory: territory,
-          kycStatus: 'approved',
-          registrationFeePaid: true,
-          performanceScore: 100,
-          registrationId: `REG-${Date.now().toString().slice(-6)}`
-        });
-        await agent.save();
-      }
-    }
-
-    if (!agent) {
       return res.status(401).json({ message: 'Invalid email or password' });
-    }
-
-    let isMatch = false;
-    try {
-      isMatch = await agent.comparePassword(validatedData.password);
-    } catch (e) {}
-
-    if (!isMatch && (agent.password === validatedData.password || (validatedData.password && validatedData.password.length >= 6))) {
-      agent.password = validatedData.password;
-      await agent.save();
-      isMatch = true;
-    }
-
-    if (!isMatch) {
-      return res.status(401).json({ message: 'Invalid email or password' });
-    }
-
-    // Sync latest status from admin users collection if updated by Admin
-    try {
-      const db = mongoose.connection.db;
-      if (db) {
-        const userDoc = await db.collection('users').findOne({ email: cleanEmail });
-        if (userDoc) {
-          const rawDocStatus = String(userDoc.status || userDoc.kycStatus || '').toLowerCase();
-          if (rawDocStatus === 'approved' || rawDocStatus === 'active') {
-            agent.kycStatus = 'approved';
-            agent.status = 'approved';
-            await agent.save();
-          } else if (rawDocStatus === 'rejected') {
-            agent.kycStatus = 'rejected';
-            agent.status = 'rejected';
-            agent.rejectionReason = userDoc.rejectionReason || 'Rejected by Admin';
-            await agent.save();
-          } else if (rawDocStatus === 'suspended' || rawDocStatus === 'inactive') {
-            agent.status = 'suspended';
-            await agent.save();
-          }
-
-          if (userDoc.role && ['state', 'district', 'division', 'pincode'].includes(String(userDoc.role).toLowerCase())) {
-            agent.role = String(userDoc.role).toLowerCase() as any;
-            await agent.save();
-          }
-        }
-      }
-    } catch (statusSyncErr) {
-      console.error('Error syncing status from admin collection:', statusSyncErr);
-    }
-
-    if (agent.email.toLowerCase().includes('jimmy') || agent.name.toLowerCase().includes('jimmy')) {
-      let updated = false;
-      if (agent.role !== 'pincode') {
-        agent.role = 'pincode';
-        updated = true;
-      }
-      if (!agent.territory || agent.territory.state !== 'Maharashtra') {
-        agent.territory = {
-          state: 'Maharashtra',
-          district: 'Nashik',
-          division: 'Nashik North Division',
-          pincode: '422101'
-        };
-        (agent as any).assignedState = 'Maharashtra';
-        (agent as any).assignedDistrict = 'Nashik';
-        (agent as any).assignedDivision = 'Nashik North Division';
-        (agent as any).assignedPincode = '422101';
-        updated = true;
-      }
-      if (updated) {
-        await agent.save();
-      }
     }
 
     // Workflow validation: Status check against MongoDB
@@ -574,30 +496,6 @@ export const getMe = async (req: Request, res: Response) => {
       console.error('Error syncing status from admin collection in getMe:', statusSyncErr);
     }
 
-    if (agent.email.toLowerCase().includes('jimmy') || agent.name.toLowerCase().includes('jimmy')) {
-      let updated = false;
-      if (agent.role !== 'pincode') {
-        agent.role = 'pincode';
-        updated = true;
-      }
-      if (!agent.territory || agent.territory.state !== 'Maharashtra') {
-        agent.territory = {
-          state: 'Maharashtra',
-          district: 'Nashik',
-          division: 'Nashik North Division',
-          pincode: '422101'
-        };
-        (agent as any).assignedState = 'Maharashtra';
-        (agent as any).assignedDistrict = 'Nashik';
-        (agent as any).assignedDivision = 'Nashik North Division';
-        (agent as any).assignedPincode = '422101';
-        updated = true;
-      }
-      if (updated) {
-        await agent.save();
-      }
-    }
-
     const currentKycStatus = (agent.kycStatus || '').toLowerCase();
     const currentStatus = (agent.status || '').toLowerCase();
 
@@ -638,10 +536,18 @@ export const updateProfile = async (req: Request, res: Response) => {
     const agentId = (req as any).agent?.agentId;
     if (!agentId) return res.status(401).json({ message: 'Unauthorized' });
 
-    const allowedFields = ['name', 'phone', 'territory', 'assignedTerritory', 'address', 'fullAddress'];
+    const allowedFields = [
+      'name', 'phone', 'mobile', 'territory', 'assignedTerritory', 'address', 'fullAddress',
+      'alternateMobile', 'preferredLanguage', 'bloodGroup', 'profilePhoto',
+      'vehicleDetails', 'bankDetails', 'dob', 'gender', 'qualification', 'experience', 'previousCompany'
+    ];
     const updates: Record<string, unknown> = {};
     for (const field of allowedFields) {
       if (req.body[field] !== undefined) updates[field] = req.body[field];
+    }
+
+    if (req.body.mobile && !updates.phone) {
+      updates.phone = req.body.mobile;
     }
 
     // Keep territory and assignedTerritory synchronized if either is passed without touching address
@@ -670,10 +576,44 @@ export const updateProfile = async (req: Request, res: Response) => {
     ).select('-password');
 
     if (!agent) return res.status(404).json({ message: 'Agent not found' });
-    return res.status(200).json({ message: 'Profile updated', agent });
+    await invalidateAgentTerritoryScope(agentId);
+
+    // Sync profile updates to users collection for Admin visibility
+    try {
+      const db = mongoose.connection.db;
+      if (db) {
+        const userUpdates: Record<string, any> = {};
+        if (updates.name) userUpdates.name = updates.name;
+        if (updates.phone) { userUpdates.phone = updates.phone; userUpdates.mobile = updates.phone; }
+        if (updates.alternateMobile) userUpdates.alternateMobile = updates.alternateMobile;
+        if (updates.preferredLanguage) userUpdates.preferredLanguage = updates.preferredLanguage;
+        if (updates.bloodGroup) userUpdates.bloodGroup = updates.bloodGroup;
+        if (updates.profilePhoto) userUpdates.profilePhoto = updates.profilePhoto;
+        if (updates.vehicleDetails) userUpdates.vehicleDetails = updates.vehicleDetails;
+        if (updates.bankDetails) {
+          const bd = updates.bankDetails as any;
+          userUpdates.bankDetails = bd;
+          userUpdates.bankName = bd.bankName;
+          userUpdates.accountNo = bd.accountNumber;
+          userUpdates.accountNumber = bd.accountNumber;
+          userUpdates.ifscCode = bd.ifscCode;
+          userUpdates.accountHolderName = bd.accountHolder;
+        }
+        if (Object.keys(userUpdates).length > 0) {
+          await db.collection('users').updateOne(
+            { $or: [{ email: agent.email.toLowerCase() }, { phone: agent.phone }] },
+            { $set: userUpdates }
+          );
+        }
+      }
+    } catch (syncErr) {
+      console.error('Error syncing profile update to users collection:', syncErr);
+    }
+
+    return res.status(200).json({ message: 'Details saved successfully.', agent });
   } catch (error) {
     console.error('Update profile error:', error);
-    return res.status(500).json({ message: 'Internal server error' });
+    return res.status(500).json({ message: 'Unable to save details. Please try again.' });
   }
 };
 
@@ -717,12 +657,185 @@ export const resetPassword = async (req: Request, res: Response) => {
   return res.status(200).json({ message: 'Password reset successfully' });
 };
 
+// ─────────────────────────────────────────────────────────
+// In-memory OTP store: { phone → { otp, expiresAt } }
+// Replace with Redis for multi-server deployments.
+// ─────────────────────────────────────────────────────────
+const mobileOtpStore = new Map<string, { otp: string; expiresAt: number }>();
+
+const OTP_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * POST /auth/send-otp
+ * Step 1 of Mobile OTP Login:
+ *   1. Validate the phone number format.
+ *   2. Check if any Agent is registered with that phone.
+ *   3. Check account status – reject suspended/inactive accounts early.
+ *   4. Generate a 6-digit OTP, store it with a 5-minute expiry.
+ *   5. Return the OTP in the response (in production, send via SMS gateway).
+ */
 export const sendOtp = async (req: Request, res: Response) => {
-  const { phone, mobileNumber, email } = req.body || {};
-  const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  return res.status(200).json({
-    message: 'OTP sent successfully',
-    otp
-  });
+  try {
+    const phone: string = (req.body.phone || req.body.mobileNumber || '').toString().trim();
+
+    // Basic validation
+    if (!phone || !/^[6-9][0-9]{9}$/.test(phone)) {
+      return res.status(400).json({ message: 'Please enter a valid 10-digit Indian mobile number.' });
+    }
+
+    // Check if agent is registered with this phone number
+    const agent = await Agent.findOne({ phone }).select('_id role status kycStatus rejectionReason');
+
+    if (!agent) {
+      return res.status(404).json({
+        message: 'This mobile number is not registered as an agent. Please apply for agent onboarding first.',
+        notRegistered: true
+      });
+    }
+
+    // Reject suspended / rejected accounts immediately
+    const status = (agent.status || '').toLowerCase();
+    const kycStatus = (agent.kycStatus || '').toLowerCase();
+
+    if (status === 'suspended' || status === 'inactive') {
+      return res.status(403).json({
+        message: 'Your account has been suspended. Please contact the Administrator.',
+        status: 'suspended'
+      });
+    }
+
+    if (kycStatus === 'rejected' || status === 'rejected') {
+      return res.status(403).json({
+        message: `Your registration was rejected. Reason: ${(agent as any).rejectionReason || 'No reason provided.'}. Contact Administrator.`,
+        status: 'rejected'
+      });
+    }
+
+    // Generate 6-digit OTP and store with expiry
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    mobileOtpStore.set(phone, { otp, expiresAt: Date.now() + OTP_EXPIRY_MS });
+
+    console.log(`[OTP] Generated for +91${phone}: ${otp} (expires in 5 minutes)`);
+
+    // In production: send otp via SMS gateway here
+    // await smsService.send(`+91${phone}`, `Your Connect Portal OTP is ${otp}. Valid for 5 minutes.`);
+
+    return res.status(200).json({
+      message: `OTP sent to +91 ${phone}. It is valid for 5 minutes.`,
+      otp // Remove in production after SMS integration
+    });
+  } catch (error) {
+    console.error('sendOtp error:', error);
+    return res.status(500).json({ message: 'Unable to send OTP. Please try again.' });
+  }
+};
+
+/**
+ * POST /auth/verify-mobile-otp
+ * Step 2 of Mobile OTP Login:
+ *   1. Validate OTP from store (must match + not expired).
+ *   2. Clear OTP from store (one-time use).
+ *   3. Look up agent by phone, check account status.
+ *   4. Generate JWT token identical to email login.
+ *   5. Return token + agent data.
+ */
+export const verifyMobileOtp = async (req: Request, res: Response) => {
+  try {
+    const phone: string = (req.body.phone || req.body.mobileNumber || '').toString().trim();
+    const code: string = (req.body.otp || req.body.code || '').toString().trim();
+
+    if (!phone || !code) {
+      return res.status(400).json({ message: 'Phone number and OTP are required.' });
+    }
+
+    if (!/^[6-9][0-9]{9}$/.test(phone)) {
+      return res.status(400).json({ message: 'Invalid phone number format.' });
+    }
+
+    if (!/^[0-9]{6}$/.test(code)) {
+      return res.status(400).json({ message: 'OTP must be a 6-digit number.' });
+    }
+
+    // Retrieve stored OTP
+    const stored = mobileOtpStore.get(phone);
+
+    if (!stored) {
+      return res.status(400).json({
+        message: 'No OTP was requested for this number. Please click "Get OTP" first.',
+        expired: true
+      });
+    }
+
+    if (Date.now() > stored.expiresAt) {
+      mobileOtpStore.delete(phone);
+      return res.status(400).json({
+        message: 'OTP has expired (5-minute limit). Please request a new OTP.',
+        expired: true
+      });
+    }
+
+    if (stored.otp !== code) {
+      return res.status(400).json({ message: 'Incorrect OTP. Please check and try again.' });
+    }
+
+    // OTP is valid – consume it (one-time use)
+    mobileOtpStore.delete(phone);
+
+    // Fetch full agent record
+    const agent = await Agent.findOne({ phone }).select('-password');
+
+    if (!agent) {
+      return res.status(404).json({ message: 'Agent account not found. Please contact Administrator.' });
+    }
+
+    // Status checks (same as email login)
+    const currentKycStatus = (agent.kycStatus || '').toLowerCase();
+    const currentStatus = (agent.status || '').toLowerCase();
+    const isApproved = currentKycStatus === 'approved' || currentStatus === 'approved' || currentStatus === 'active';
+
+    if (!isApproved) {
+      if (currentKycStatus === 'rejected' || currentStatus === 'rejected') {
+        return res.status(403).json({
+          message: `Your registration was rejected. Reason: ${(agent as any).rejectionReason || 'No reason provided.'}.`,
+          status: 'rejected'
+        });
+      }
+      if (currentStatus === 'suspended' || currentStatus === 'inactive') {
+        return res.status(403).json({
+          message: 'Your account has been suspended. Please contact the Administrator.',
+          status: 'suspended'
+        });
+      }
+      // Pending approval – allow frontend to redirect to /pending
+      return res.status(403).json({
+        message: 'Your account is pending Admin verification.',
+        status: 'pending',
+        registrationId: agent.registrationId || 'N/A',
+        role: agent.role
+      });
+    }
+
+    // Generate JWT (same structure as email login)
+    const token = generateToken({
+      agentId: agent._id.toString(),
+      role: agent.role,
+      email: agent.email
+    });
+
+    const agentObj = agent.toObject();
+
+    return res.status(200).json({
+      message: 'OTP verified. Login successful.',
+      token,
+      agent: {
+        ...agentObj,
+        status: 'active',
+        kycStatus: 'approved'
+      }
+    });
+  } catch (error) {
+    console.error('verifyMobileOtp error:', error);
+    return res.status(500).json({ message: 'OTP verification failed. Please try again.' });
+  }
 };
 

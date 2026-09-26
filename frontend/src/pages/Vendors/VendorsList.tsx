@@ -155,10 +155,16 @@ export const VendorsList: React.FC = () => {
 
   const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';
   const activeRole = (rawRole === 'agent' ? ((user as any)?.level || 'pincode') : rawRole).toLowerCase();
-  const userState = user?.territory?.state || 'Andhra Pradesh';
-  const userDistrict = user?.territory?.district || 'NTR District';
-  const userDivision = user?.territory?.division || 'Vijayawada Central Division';
-  const userPincode = user?.territory?.pincode || '520001';
+  const userTerritory = user?.assignedTerritory || user?.territory || {
+    state: (user as any)?.assignedState,
+    district: (user as any)?.assignedDistrict,
+    division: (user as any)?.assignedDivision,
+    pincode: (user as any)?.assignedPincode
+  };
+  const userState = (userTerritory?.state || (user as any)?.assignedState || '').trim();
+  const userDistrict = (userTerritory?.district || (user as any)?.assignedDistrict || '').trim();
+  const userDivision = (userTerritory?.division || (user as any)?.assignedDivision || '').trim();
+  const userPincode = (userTerritory?.pincode || (user as any)?.assignedPincode || '').trim();
 
   // Sync API backend vendors into state with strict canonical deduplication
   useEffect(() => {
@@ -199,9 +205,11 @@ export const VendorsList: React.FC = () => {
         };
       });
 
+      const uniqueApiVendors = Array.from(new Map(mappedApiVendors.map(v => [v.id, v])).values());
+
       setVendors(prev => {
-        const serverKeys = new Set(mappedApiVendors.map(getVendorCanonicalKey));
-        const serverIds = new Set(mappedApiVendors.map(v => v.id));
+        const serverKeys = new Set(uniqueApiVendors.map(getVendorCanonicalKey));
+        const serverIds = new Set(uniqueApiVendors.map(v => v.id));
 
         // Preserve truly offline/local-only items that do NOT match any server item by ID or canonical key
         const localOnly = prev.filter(item => {
@@ -211,7 +219,9 @@ export const VendorsList: React.FC = () => {
           return true;
         });
 
-        const reconciled = [...mappedApiVendors, ...localOnly];
+        const reconciled = Array.from(
+          new Map([...uniqueApiVendors, ...localOnly].map(item => [item.id, item])).values()
+        );
 
         // Update localStorage to remove any stale duplicate records
         try {
@@ -223,7 +233,7 @@ export const VendorsList: React.FC = () => {
 
       setSelectedVendor(prev => {
         if (!prev) return prev;
-        const matching = mappedApiVendors.find(v => v.id === prev.id || getVendorCanonicalKey(v) === getVendorCanonicalKey(prev));
+        const matching = uniqueApiVendors.find(v => v.id === prev.id || getVendorCanonicalKey(v) === getVendorCanonicalKey(prev));
         return matching ? { ...prev, ...matching } : prev;
       });
     }
@@ -236,7 +246,7 @@ export const VendorsList: React.FC = () => {
 
   // 1. SCOPED VENDORS LIST BASED ON LOGGED IN AGENT HIERARCHY (STRICT STATE ISOLATION)
   const scopedVendors = useMemo(() => {
-    return vendors.filter(vendor => {
+    const filtered = vendors.filter(vendor => {
       // 1. First enforce strict State Territory match (use agent's own state as fallback)
       const vendorState = (vendor.state || userState).toLowerCase();
       const activeState = userState.toLowerCase();
@@ -260,9 +270,12 @@ export const VendorsList: React.FC = () => {
 
       return true; // State Lead sees all vendors within their assigned state
     });
+
+    // Safely deduplicate by immutable ID so no vendor record can ever appear twice
+    return Array.from(new Map(filtered.map(item => [item.id, item])).values());
   }, [vendors, activeRole, userState, userDistrict, userDivision, userPincode]);
 
-  // Extract unique filter dropdown values strictly scoped to Andhra Pradesh
+  // Extract unique filter dropdown values strictly scoped to assigned State
   const categories = useMemo(() => Array.from(new Set([...CANONICAL_MAIN_CATEGORIES, ...scopedVendors.map(v => v.storeType).filter(Boolean)])), [scopedVendors]);
   const districts = useMemo(() => getDistrictsForState(userState), [userState]);
   const divisions = useMemo(() => getDivisionsForDistrict(districtFilter, userState), [districtFilter, userState]);
@@ -608,7 +621,7 @@ export const VendorsList: React.FC = () => {
       ownerName: newVendor.ownerName || 'Merchant Owner',
       phone: newVendor.phone,
       email: (newVendor.email ? newVendor.email.toLowerCase().trim() : `${newVendor.name.toLowerCase().replace(/\s+/g, '')}@example.com`),
-      state: userState || newVendor.state || 'Tamil Nadu',
+      state: userState || newVendor.state || '',
       division: newVendor.division || userDivision,
       district: newVendor.district || userDistrict,
       pincode: newVendor.pincode || userPincode,
@@ -1233,7 +1246,7 @@ export const VendorsList: React.FC = () => {
         onClose={() => setIsAddModalOpen(false)}
         onSuccess={(wizardData) => {
           // Use verified territory from wizardData or fallback to agent's territory
-          const targetState = wizardData.state || userState || 'Tamil Nadu';
+          const targetState = wizardData.state || userState || '';
           const targetDistrict = wizardData.district || userDistrict;
           const targetDivision = wizardData.division || userDivision;
           const targetPincode = wizardData.pincode || userPincode;

@@ -38,6 +38,9 @@ export const updateProfileSchema = z.object({
     name: z.string().min(2).optional(),
     phone: optionalPhoneSchema,
     phoneNumber: optionalPhoneSchema,
-    address: z.string().optional(),
-  }),
+    address: z.union([z.string(), z.record(z.any())]).optional(),
+    assignedTerritory: z.record(z.any()).optional(),
+    territory: z.record(z.any()).optional(),
+    fullAddress: z.string().optional()
+  }).passthrough(),
 });

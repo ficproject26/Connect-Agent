@@ -24,7 +24,13 @@ export const SettingsModule: React.FC = () => {
   } = useAuth();
   const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';
   const activeRole = (rawRole === 'agent' ? ((user as any)?.level || 'pincode') : rawRole).toLowerCase();
-  const userState = user?.territory?.state || 'Andhra Pradesh';
+  const userTerritory = user?.assignedTerritory || user?.territory || {
+    state: (user as any)?.assignedState,
+    district: (user as any)?.assignedDistrict,
+    division: (user as any)?.assignedDivision,
+    pincode: (user as any)?.assignedPincode
+  };
+  const userState = (userTerritory?.state || (user as any)?.assignedState || '').trim();
 
   // Pincode Agent Alert Toggles State
   const [fieldVisitAlerts, setFieldVisitAlerts] = useState(true);

@@ -27,10 +27,16 @@ interface PincodeSubordinate {
 
 export const DivisionDashboard: React.FC = () => {
   const { user } = useAuth();
-  const userState = user?.territory?.state || '';
-  const userDistrict = user?.territory?.district || '';
-  const userDivision = user?.territory?.division || '';
-  const userPincode = user?.territory?.pincode || '';
+  const userTerritory = user?.assignedTerritory || user?.territory || {
+    state: (user as any)?.assignedState,
+    district: (user as any)?.assignedDistrict,
+    division: (user as any)?.assignedDivision,
+    pincode: (user as any)?.assignedPincode
+  };
+  const userState = (userTerritory?.state || '').trim();
+  const userDistrict = (userTerritory?.district || '').trim();
+  const userDivision = (userTerritory?.division || '').trim();
+  const userPincode = (userTerritory?.pincode || '').trim();
 
   const [pincodeAgentsList, setPincodeAgentsList] = useState<PincodeSubordinate[]>([]);
   const [targetTitle, setTargetTitle] = useState('');
@@ -475,9 +481,9 @@ export const DivisionDashboard: React.FC = () => {
           
           <div className="space-y-3">
             {[
-              { type: 'New Vendor Alert', msg: `New vendor registration pending document audit in ${userDivision}.`, time: '10m ago', alert: false },
-              { type: 'Escalated Ticket', msg: `Ticket ID #TK-9742: Merchant terminal query logged at PIN ${divisionPincodesList[0]?.code || '530001'}.`, time: '2h ago', alert: true },
-              { type: 'Field Visit Alert', msg: `Pincode Sector ${divisionPincodesList[0]?.code || '530001'} field report submitted successfully.`, time: '4h ago', alert: false }
+              { type: 'New Vendor Alert', msg: `New vendor registration pending document audit in ${userDivision || 'Division'}.`, time: '10m ago', alert: false },
+              { type: 'Escalated Ticket', msg: `Ticket ID #TK-9742: Merchant terminal query logged at PIN ${divisionPincodesList[0]?.code || userPincode || '—'}.`, time: '2h ago', alert: true },
+              { type: 'Field Visit Alert', msg: `Pincode Sector ${divisionPincodesList[0]?.code || userPincode || '—'} field report submitted successfully.`, time: '4h ago', alert: false }
             ].map((notif, idx) => (
               <div key={idx} className="flex items-start gap-3 p-3 bg-[#fbf9f8] rounded-xl border border-[#eae8e7]/50">
                 <div className={`h-2 w-2 rounded-full mt-1 shrink-0 ${notif.alert ? 'bg-[#ba1a1a]' : 'bg-[#864f19]'}`} />

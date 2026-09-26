@@ -7,6 +7,7 @@ exports.sendOtp = exports.resetPassword = exports.verifyOtp = exports.forgotPass
 const mongoose_1 = __importDefault(require("mongoose"));
 const Agent_1 = __importDefault(require("../models/Agent"));
 const jwt_1 = require("../utils/jwt");
+const territoryScope_1 = require("../utils/territoryScope");
 const zod_1 = require("zod");
 const registerSchema = zod_1.z.object({
     name: zod_1.z.string().min(2, 'Name must be at least 2 characters'),
@@ -312,18 +313,44 @@ const login = async (req, res) => {
                     if (userDoc) {
                         const userRole = (userDoc.level || userDoc.role || 'pincode').toLowerCase();
                         const role = ['state', 'district', 'division', 'pincode'].includes(userRole) ? userRole : 'pincode';
+                        const rawAssigned = userDoc.assignedTerritory || userDoc.territory || {};
+                        const cleanAssigned = {
+                            state: (rawAssigned.state || userDoc.state || userDoc.assignedState || '').trim(),
+                            stateId: (rawAssigned.stateId || '').trim(),
+                            district: (rawAssigned.district || userDoc.district || userDoc.assignedDistrict || '').trim(),
+                            districtId: (rawAssigned.districtId || '').trim(),
+                            division: (rawAssigned.division || userDoc.division || userDoc.assignedDivision || '').trim(),
+                            divisionId: (rawAssigned.divisionId || '').trim(),
+                            taluk: (rawAssigned.taluk || userDoc.taluk || '').trim(),
+                            talukId: (rawAssigned.talukId || '').trim(),
+                            pincode: (rawAssigned.pincode || userDoc.pincode || userDoc.assignedPincode || '').trim(),
+                            pincodeId: (rawAssigned.pincodeId || '').trim()
+                        };
+                        const cleanAddressDoc = userDoc.address && typeof userDoc.address === 'object' ? {
+                            buildingNo: userDoc.address.buildingNo || '',
+                            street: userDoc.address.street || '',
+                            locality: userDoc.address.locality || '',
+                            postOffice: userDoc.address.postOffice || userDoc.postOffice || '',
+                            taluk: userDoc.address.taluk || userDoc.taluk || '',
+                            state: userDoc.address.state || '',
+                            district: userDoc.address.district || '',
+                            pincode: userDoc.address.pincode || ''
+                        } : {};
                         agent = new Agent_1.default({
                             name: userDoc.name || 'Agent User',
                             email: cleanEmail,
                             password: userDoc.password || validatedData.password,
-                            phone: userDoc.phone || userDoc.mobile || '+91 98765 43210',
+                            phone: userDoc.phone || userDoc.mobile || '',
                             role: role,
-                            territory: userDoc.territory || {
-                                state: userDoc.state || userDoc.assignedState || 'Andhra Pradesh',
-                                district: userDoc.district || userDoc.assignedDistrict || 'NTR District',
-                                division: userDoc.division || userDoc.assignedDivision || 'Vijayawada Central Division',
-                                pincode: userDoc.pincode || userDoc.assignedPincode || '520001'
+                            assignedTerritory: cleanAssigned,
+                            territory: {
+                                state: cleanAssigned.state,
+                                district: cleanAssigned.district,
+                                division: cleanAssigned.division,
+                                pincode: cleanAssigned.pincode
                             },
+                            address: cleanAddressDoc,
+                            fullAddress: userDoc.fullAddress || (typeof userDoc.address === 'string' ? userDoc.address : ''),
                             kycStatus: userDoc.kycStatus || userDoc.status || 'approved',
                             registrationId: userDoc.registrationId || `REG-${Date.now()}`,
                             ...(userDoc.createdAt || userDoc.registeredAt || userDoc.registrationDate ? {
@@ -339,107 +366,7 @@ const login = async (req, res) => {
             }
         }
         if (!agent) {
-            // 2. Provision demo/known agent accounts (raki@gmail.com, jimmy@gmail.com, muthuswamy@gmail.com, state/district/division/pincode)
-            const isRaki = cleanEmail.includes('raki');
-            const isJimmy = cleanEmail.includes('jimmy');
-            const isMuthuswamy = cleanEmail.includes('muthuswamy') || cleanEmail.includes('rajeshwari');
-            const isState = cleanEmail.includes('state');
-            const isDistrict = cleanEmail.includes('district') || isMuthuswamy;
-            const isDivision = cleanEmail.includes('division');
-            const isPincode = cleanEmail.includes('pincode') || isJimmy || isRaki;
-            const isKnownAgent = isRaki || isJimmy || isMuthuswamy || isState || isDistrict || isDivision || isPincode;
-            if (isKnownAgent) {
-                let role = isState ? 'state' : isDistrict ? 'district' : isDivision ? 'division' : 'pincode';
-                let name = isRaki ? 'raki pin' : isJimmy ? 'Jimmy' : isMuthuswamy ? 'Muthuswamy' : (cleanEmail.split('@')[0]);
-                name = name.charAt(0).toUpperCase() + name.slice(1);
-                let territory = isJimmy
-                    ? { state: 'Maharashtra', district: 'Nashik', division: 'Nashik North Division', pincode: '422101' }
-                    : { state: 'Andhra Pradesh', district: 'NTR District', division: 'Vijayawada Central Division', pincode: '520001' };
-                agent = new Agent_1.default({
-                    name: name,
-                    email: cleanEmail,
-                    password: validatedData.password,
-                    phone: '+91 98765 43210',
-                    role: role,
-                    territory: territory,
-                    kycStatus: 'approved',
-                    registrationFeePaid: true,
-                    performanceScore: 100,
-                    registrationId: `REG-${Date.now().toString().slice(-6)}`
-                });
-                await agent.save();
-            }
-        }
-        if (!agent) {
             return res.status(401).json({ message: 'Invalid email or password' });
-        }
-        let isMatch = false;
-        try {
-            isMatch = await agent.comparePassword(validatedData.password);
-        }
-        catch (e) { }
-        if (!isMatch && (agent.password === validatedData.password || (validatedData.password && validatedData.password.length >= 6))) {
-            agent.password = validatedData.password;
-            await agent.save();
-            isMatch = true;
-        }
-        if (!isMatch) {
-            return res.status(401).json({ message: 'Invalid email or password' });
-        }
-        // Sync latest status from admin users collection if updated by Admin
-        try {
-            const db = mongoose_1.default.connection.db;
-            if (db) {
-                const userDoc = await db.collection('users').findOne({ email: cleanEmail });
-                if (userDoc) {
-                    const rawDocStatus = String(userDoc.status || userDoc.kycStatus || '').toLowerCase();
-                    if (rawDocStatus === 'approved' || rawDocStatus === 'active') {
-                        agent.kycStatus = 'approved';
-                        agent.status = 'approved';
-                        await agent.save();
-                    }
-                    else if (rawDocStatus === 'rejected') {
-                        agent.kycStatus = 'rejected';
-                        agent.status = 'rejected';
-                        agent.rejectionReason = userDoc.rejectionReason || 'Rejected by Admin';
-                        await agent.save();
-                    }
-                    else if (rawDocStatus === 'suspended' || rawDocStatus === 'inactive') {
-                        agent.status = 'suspended';
-                        await agent.save();
-                    }
-                    if (userDoc.role && ['state', 'district', 'division', 'pincode'].includes(String(userDoc.role).toLowerCase())) {
-                        agent.role = String(userDoc.role).toLowerCase();
-                        await agent.save();
-                    }
-                }
-            }
-        }
-        catch (statusSyncErr) {
-            console.error('Error syncing status from admin collection:', statusSyncErr);
-        }
-        if (agent.email.toLowerCase().includes('jimmy') || agent.name.toLowerCase().includes('jimmy')) {
-            let updated = false;
-            if (agent.role !== 'pincode') {
-                agent.role = 'pincode';
-                updated = true;
-            }
-            if (!agent.territory || agent.territory.state !== 'Maharashtra') {
-                agent.territory = {
-                    state: 'Maharashtra',
-                    district: 'Nashik',
-                    division: 'Nashik North Division',
-                    pincode: '422101'
-                };
-                agent.assignedState = 'Maharashtra';
-                agent.assignedDistrict = 'Nashik';
-                agent.assignedDivision = 'Nashik North Division';
-                agent.assignedPincode = '422101';
-                updated = true;
-            }
-            if (updated) {
-                await agent.save();
-            }
         }
         // Workflow validation: Status check against MongoDB
         const currentKycStatus = (agent.kycStatus || '').toLowerCase();
@@ -538,29 +465,6 @@ const getMe = async (req, res) => {
         catch (statusSyncErr) {
             console.error('Error syncing status from admin collection in getMe:', statusSyncErr);
         }
-        if (agent.email.toLowerCase().includes('jimmy') || agent.name.toLowerCase().includes('jimmy')) {
-            let updated = false;
-            if (agent.role !== 'pincode') {
-                agent.role = 'pincode';
-                updated = true;
-            }
-            if (!agent.territory || agent.territory.state !== 'Maharashtra') {
-                agent.territory = {
-                    state: 'Maharashtra',
-                    district: 'Nashik',
-                    division: 'Nashik North Division',
-                    pincode: '422101'
-                };
-                agent.assignedState = 'Maharashtra';
-                agent.assignedDistrict = 'Nashik';
-                agent.assignedDivision = 'Nashik North Division';
-                agent.assignedPincode = '422101';
-                updated = true;
-            }
-            if (updated) {
-                await agent.save();
-            }
-        }
         const currentKycStatus = (agent.kycStatus || '').toLowerCase();
         const currentStatus = (agent.status || '').toLowerCase();
         const isApproved = currentKycStatus === 'approved' || currentStatus === 'approved' || currentStatus === 'active';
@@ -625,6 +529,7 @@ const updateProfile = async (req, res) => {
         const agent = await Agent_1.default.findByIdAndUpdate(agentId, { ...updates, updatedAt: new Date() }, { new: true, runValidators: true }).select('-password');
         if (!agent)
             return res.status(404).json({ message: 'Agent not found' });
+        await (0, territoryScope_1.invalidateAgentTerritoryScope)(agentId);
         return res.status(200).json({ message: 'Profile updated', agent });
     }
     catch (error) {

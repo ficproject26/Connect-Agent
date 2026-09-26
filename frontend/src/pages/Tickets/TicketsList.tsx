@@ -26,7 +26,16 @@ export const TicketsList: React.FC = () => {
   const { user } = useAuth();
   const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';
   const activeRole = (rawRole === 'agent' ? ((user as any)?.level || 'pincode') : rawRole).toLowerCase();
-  const userState = user?.territory?.state || user?.assignedState || 'Tamil Nadu';
+  const userTerritory = user?.assignedTerritory || user?.territory || {
+    state: (user as any)?.assignedState,
+    district: (user as any)?.assignedDistrict,
+    division: (user as any)?.assignedDivision,
+    pincode: (user as any)?.assignedPincode
+  };
+  const userState = (userTerritory?.state || (user as any)?.assignedState || '').trim();
+  const userDistrict = (userTerritory?.district || (user as any)?.assignedDistrict || '').trim();
+  const userDivision = (userTerritory?.division || (user as any)?.assignedDivision || '').trim();
+  const userPincode = (userTerritory?.pincode || (user as any)?.assignedPincode || '').trim();
 
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [assignedVendors, setAssignedVendors] = useState<any[]>([]);
@@ -226,10 +235,10 @@ export const TicketsList: React.FC = () => {
         payload.territory = `${selectedDistrict.trim()} → ${selectedDivision.trim()}${selectedPincode.trim() ? ` → ${selectedPincode.trim()}` : ''}`;
         payload.assignedAgent = selectedDivision.trim() ? `${selectedDivision.trim()} Lead` : undefined;
       } else {
-        payload.state = user?.territory?.state || userState;
-        payload.district = user?.territory?.district || 'Visakhapatnam';
-        payload.division = user?.territory?.division || '';
-        payload.pincode = user?.territory?.pincode || '';
+        payload.state = userState;
+        payload.district = userDistrict;
+        payload.division = userDivision;
+        payload.pincode = userPincode;
         payload.territory = [payload.district, payload.division, payload.pincode].filter(Boolean).join(' → ');
       }
 
@@ -696,9 +705,9 @@ export const TicketsList: React.FC = () => {
 
                     <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 space-y-1.5 text-[11px]">
                       <p className="text-[9px] font-black text-[#864f19] uppercase tracking-wider">Territory Location Details (Pincode Scope)</p>
-                      <p className="text-slate-800">State: <strong>{user?.territory?.state || 'Andhra Pradesh'}</strong></p>
-                      <p className="text-slate-800">District: <strong>{user?.territory?.district || 'NTR District'}</strong></p>
-                      <p className="text-slate-800">Assigned Pincode: <strong className="text-[#864f19]">PIN {user?.territory?.pincode || '520001'}</strong></p>
+                      <p className="text-slate-800">State: <strong>{userState || '—'}</strong></p>
+                      <p className="text-slate-800">District: <strong>{userDistrict || '—'}</strong></p>
+                      <p className="text-slate-800">Assigned Pincode: <strong className="text-[#864f19]">PIN {userPincode || '—'}</strong></p>
                     </div>
                   </>
                 ) : (
@@ -717,16 +726,16 @@ export const TicketsList: React.FC = () => {
 
                     <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 space-y-1.5 text-[11px]">
                       <p className="text-[9px] font-black text-[#864f19] uppercase tracking-wider">Territory Location Details (Division Scope)</p>
-                      <p className="text-slate-800">State: <strong>{user?.territory?.state || 'Andhra Pradesh'}</strong></p>
-                      <p className="text-slate-800">District: <strong>{user?.territory?.district || 'Visakhapatnam'}</strong></p>
-                      <p className="text-slate-800">Assigned Division: <strong className="text-[#864f19]">{user?.territory?.division || 'Vizag City Division'}</strong></p>
+                      <p className="text-slate-800">State: <strong>{userState || '—'}</strong></p>
+                      <p className="text-slate-800">District: <strong>{userDistrict || '—'}</strong></p>
+                      <p className="text-slate-800">Assigned Division: <strong className="text-[#864f19]">{userDivision || '—'}</strong></p>
                     </div>
 
                     <div className="space-y-1">
                       <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Select Merchant Pincode *</label>
                       <input
                         type="text"
-                        placeholder={`Enter pincode (your territory: ${user?.territory?.pincode || '—'})`}
+                        placeholder={`Enter pincode (your territory: ${userPincode || '—'})`}
                         className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                       />
                     </div>

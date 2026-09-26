@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.requireHigherOrEqualRole = exports.ROLE_HIERARCHY = exports.requireRole = exports.authMiddleware = void 0;
+exports.requireHigherOrEqualRole = exports.ROLE_HIERARCHY = exports.requireRole = exports.optionalAuthMiddleware = exports.authMiddleware = void 0;
 const jwt_1 = require("../utils/jwt");
 const authMiddleware = (req, res, next) => {
     try {
@@ -22,6 +22,23 @@ const authMiddleware = (req, res, next) => {
     }
 };
 exports.authMiddleware = authMiddleware;
+const optionalAuthMiddleware = (req, res, next) => {
+    try {
+        const authHeader = req.headers.authorization;
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+            const token = authHeader.split(' ')[1];
+            if (token) {
+                const decoded = (0, jwt_1.verifyToken)(token);
+                req.agent = decoded;
+            }
+        }
+    }
+    catch (error) {
+        // Non-blocking for optional auth
+    }
+    next();
+};
+exports.optionalAuthMiddleware = optionalAuthMiddleware;
 /**
  * Middleware to restrict route access to specific agent roles
  */

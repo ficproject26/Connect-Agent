@@ -44,7 +44,16 @@ export const AgentOnboardedVendorsModal: React.FC<AgentOnboardedVendorsModalProp
   
   const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';
   const effectiveRole = (rawRole === 'agent' ? ((user as any)?.level || 'pincode') : rawRole).toLowerCase();
-  const userState = user?.territory?.state || 'Andhra Pradesh';
+  const userTerritory = user?.assignedTerritory || user?.territory || {
+    state: (user as any)?.assignedState,
+    district: (user as any)?.assignedDistrict,
+    division: (user as any)?.assignedDivision,
+    pincode: (user as any)?.assignedPincode
+  };
+  const userState = (userTerritory?.state || (user as any)?.assignedState || '').trim();
+  const userDistrict = (userTerritory?.district || (user as any)?.assignedDistrict || '').trim();
+  const userDivision = (userTerritory?.division || (user as any)?.assignedDivision || '').trim();
+  const userPincode = (userTerritory?.pincode || (user as any)?.assignedPincode || '').trim();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [vendorsList, setVendorsList] = useState<VendorItem[]>([]);
@@ -87,10 +96,10 @@ export const AgentOnboardedVendorsModal: React.FC<AgentOnboardedVendorsModalProp
                   ownerName: v.ownerName || 'Merchant Owner',
                   phone: v.phone || '',
                   email: v.email || '',
-                  state: v.state || userState,
-                  district: v.district || 'Visakhapatnam',
-                  division: v.division || 'Vizag City Division',
-                  pincode: v.pincode || '530001',
+                  state: v.state || userState || '—',
+                  district: v.district || userDistrict || '—',
+                  division: v.division || userDivision || '—',
+                  pincode: v.pincode || userPincode || '—',
                   role: 'Merchant Partner',
                   kycStatus: v.kycStatus || 'pending',
                   status: v.status || 'pending',
@@ -139,10 +148,10 @@ export const AgentOnboardedVendorsModal: React.FC<AgentOnboardedVendorsModalProp
           ownerName: v.ownerName || 'Merchant Owner',
           phone: v.phone || '',
           email: v.email || '',
-          state: v.state || userState,
-          district: v.district || 'Visakhapatnam',
-          division: v.division || 'Vizag City Division',
-          pincode: v.pincode || '530001',
+          state: v.state || userState || '—',
+          district: v.district || userDistrict || '—',
+          division: v.division || userDivision || '—',
+          pincode: v.pincode || userPincode || '—',
           role: 'Merchant Partner',
           kycStatus: v.kycStatus || 'pending',
           status: v.status || 'pending',

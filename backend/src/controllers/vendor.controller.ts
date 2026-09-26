@@ -239,7 +239,7 @@ export const createVendor = async (req: Request, res: Response) => {
     }
 
     // 3. Security Check: Verify Requested Territory Belongs to Agent's Allowed Jurisdiction
-    const jurisdiction = validateAgentJurisdiction(scope, {
+    const jurisdiction = await validateAgentJurisdiction(scope, {
       state: data.state,
       district: data.district,
       division: (data as any).division,
@@ -249,8 +249,8 @@ export const createVendor = async (req: Request, res: Response) => {
       return res.status(403).json({ message: jurisdiction.error });
     }
 
-    // 4. Geographic Consistency Check
-    const geoConsistency = validateGeographicConsistency({
+    // 4. Geographic Consistency Check against Admin Pincode Management DB
+    const geoConsistency = await validateGeographicConsistency({
       state: data.state,
       district: data.district,
       division: (data as any).division,

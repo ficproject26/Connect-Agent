@@ -4,7 +4,7 @@ import { Target, CheckCircle2, Calendar, Check, MapPin, Loader2, Plus, Users, Aw
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getDistrictsForState, getDivisionsForDistrict, getPincodesForDivision } from '../../utils/locationData';
+import { getActiveDistricts, getActiveDivisions, getActivePincodes } from '../../utils/territoryService';
 
 interface Allocation {
   _id: string;
@@ -118,48 +118,67 @@ export const TargetsList: React.FC = () => {
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
   const [endDate, setEndDate] = useState(new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10));
 
-  // Dynamic Territory Lists based on Authorized Scope
-  const availableDistricts = useMemo(() => {
+  // Dynamic Territory Lists from Centralized Admin Territory DB
+  const [availableDistricts, setAvailableDistricts] = useState<string[]>([]);
+  const [availableDivisions, setAvailableDivisions] = useState<string[]>([]);
+  const [availablePincodes, setAvailablePincodes] = useState<string[]>([]);
+
+  useEffect(() => {
     if (userRole === 'state') {
-      return getDistrictsForState(userState);
+      getActiveDistricts(userState).then(dists => {
+        setAvailableDistricts(dists);
+        if (dists.length > 0 && (!selectedDistrict || !dists.includes(selectedDistrict))) {
+          setSelectedDistrict(dists[0]);
+        }
+      });
+    } else {
+      const dist = userDistrict || '';
+      setAvailableDistricts(dist ? [dist] : []);
+      setSelectedDistrict(dist);
     }
-    return [userDistrict];
   }, [userRole, userState, userDistrict]);
 
-  const availableDivisions = useMemo(() => {
-    const currentDist = selectedDistrict || userDistrict;
-    if (userRole === 'state') {
-      return getDivisionsForDistrict(currentDist, userState);
+  useEffect(() => {
+    const curDist = selectedDistrict || userDistrict;
+    if (userRole === 'state' || userRole === 'district') {
+      if (curDist) {
+        getActiveDivisions(userState, curDist).then(divs => {
+          setAvailableDivisions(divs);
+          if (divs.length > 0 && (!selectedDivision || !divs.includes(selectedDivision))) {
+            setSelectedDivision(divs[0]);
+          } else if (divs.length === 0) {
+            setSelectedDivision('');
+          }
+        });
+      } else {
+        setAvailableDivisions([]);
+        setSelectedDivision('');
+      }
+    } else {
+      const div = userDivision || '';
+      setAvailableDivisions(div ? [div] : []);
+      setSelectedDivision(div);
     }
-    if (userRole === 'district') {
-      return getDivisionsForDistrict(userDistrict, userState);
-    }
-    return [userDivision];
   }, [userRole, selectedDistrict, userDistrict, userState, userDivision]);
 
-  const availablePincodes = useMemo(() => {
-    const currentDiv = selectedDivision || userDivision;
-    return getPincodesForDivision(currentDiv);
-  }, [selectedDivision, userDivision]);
-
-  // Keep district/division/pincode selection valid on type or scope change
   useEffect(() => {
-    if (availableDistricts.length > 0 && !availableDistricts.includes(selectedDistrict)) {
-      setSelectedDistrict(availableDistricts[0]);
+    const curDist = selectedDistrict || userDistrict;
+    const curDiv = selectedDivision || userDivision;
+    if (curDist && curDiv) {
+      getActivePincodes(userState, curDist, curDiv).then(pins => {
+        const pinCodes = pins.map(p => p.code);
+        setAvailablePincodes(pinCodes);
+        if (pinCodes.length > 0 && (!selectedPincode || !pinCodes.includes(selectedPincode))) {
+          setSelectedPincode(pinCodes[0]);
+        } else if (pinCodes.length === 0) {
+          setSelectedPincode('');
+        }
+      });
+    } else {
+      setAvailablePincodes([]);
+      setSelectedPincode('');
     }
-  }, [availableDistricts, selectedDistrict]);
-
-  useEffect(() => {
-    if (availableDivisions.length > 0 && !availableDivisions.includes(selectedDivision)) {
-      setSelectedDivision(availableDivisions[0]);
-    }
-  }, [availableDivisions, selectedDivision]);
-
-  useEffect(() => {
-    if (availablePincodes.length > 0 && !availablePincodes.includes(selectedPincode)) {
-      setSelectedPincode(availablePincodes[0]);
-    }
-  }, [availablePincodes, selectedPincode]);
+  }, [userState, selectedDistrict, userDistrict, selectedDivision, userDivision]);
 
   // Fetch real subordinates strictly scoped to user's assigned territory
   const { data: subordinatesData } = useQuery({
@@ -177,10 +196,32 @@ export const TargetsList: React.FC = () => {
     staleTime: 60000
   });
 
-  // Dynamic Agent list strictly based on selected Agent Type & User's Territory Scope
+  // Dynamic Agent list strictly based on selected Agent Type & territory matching
   const candidateAgents = useMemo(() => {
     const subs: any[] = Array.isArray(subordinatesData) ? subordinatesData : [];
-    const matched = subs.filter((s: any) => (s.role || '').toLowerCase() === agentType);
+    const matched = subs.filter((s: any) => {
+      const r = (s.role || '').toLowerCase();
+      if (r !== agentType) return false;
+
+      // Strict territory matching:
+      if (agentType === 'district') {
+        const agtDist = (s.assignedTerritory?.district || s.territory?.district || s.district || '').trim().toLowerCase();
+        const targetDist = (selectedDistrict || userDistrict || '').trim().toLowerCase();
+        return agtDist === targetDist;
+      }
+      if (agentType === 'division') {
+        const agtDiv = (s.assignedTerritory?.division || s.territory?.division || s.division || '').trim().toLowerCase();
+        const targetDiv = (selectedDivision || userDivision || '').trim().toLowerCase();
+        return agtDiv.includes(targetDiv) || targetDiv.includes(agtDiv);
+      }
+      if (agentType === 'pincode') {
+        const agtPin = (s.assignedTerritory?.pincode || s.territory?.pincode || s.pincode || '').trim();
+        const targetPin = (selectedPincode || userPincode || '').trim();
+        return agtPin === targetPin;
+      }
+      return true;
+    });
+
     return matched.map((s: any) => ({
       id: s._id,
       name: s.name,
@@ -189,7 +230,7 @@ export const TargetsList: React.FC = () => {
         ? (s.territory?.division ? `${s.territory.division}${s.territory.pincode ? ` (${s.territory.pincode})` : ''}` : (s.territory?.district || s.territory?.state || 'Assigned Territory'))
         : (s.territory || 'Assigned Territory')
     }));
-  }, [subordinatesData, agentType]);
+  }, [subordinatesData, agentType, selectedDistrict, userDistrict, selectedDivision, userDivision, selectedPincode, userPincode]);
 
   useEffect(() => {
     if (candidateAgents.length > 0) {
@@ -223,7 +264,9 @@ export const TargetsList: React.FC = () => {
         type,
         targetValue,
         assignedTo: assignedAgentObj?.id,
+        district: selectedDistrict,
         divisionName: selectedDivision,
+        pincode: selectedPincode,
         dueDate: endDate
       });
       await queryClient.invalidateQueries({ queryKey: ['targetAssignmentsMine'] });
@@ -927,11 +970,23 @@ export const TargetsList: React.FC = () => {
                 />
               </div>
 
+              {candidateAgents.length === 0 && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
+                  <span>No {agentType} agents are currently assigned to {agentType === 'district' ? (selectedDistrict || 'this district') : agentType === 'division' ? (selectedDivision || 'this division') : (selectedPincode ? `PIN ${selectedPincode}` : 'this territory')}. An agent must be active in this territory before a target can be allocated.</span>
+                </div>
+              )}
+
               <div className="flex justify-end gap-2 pt-3 border-t border-[#eae8e7]">
                 <Button variant="outline" type="button" onClick={() => setIsCreateModalOpen(false)}>
                   Cancel
                 </Button>
-                <Button variant="primary" type="submit" disabled={isSubmitting} className="bg-[#864f19] text-white font-bold">
+                <Button
+                  variant="primary"
+                  type="submit"
+                  disabled={isSubmitting || candidateAgents.length === 0}
+                  className="bg-[#864f19] text-white font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   {isSubmitting ? 'Creating...' : 'Save Target Goal'}
                 </Button>
               </div>

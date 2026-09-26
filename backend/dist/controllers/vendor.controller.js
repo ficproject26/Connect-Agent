@@ -233,7 +233,7 @@ const createVendor = async (req, res) => {
             return res.status(403).json({ message: 'Agent territory profile could not be determined.' });
         }
         // 3. Security Check: Verify Requested Territory Belongs to Agent's Allowed Jurisdiction
-        const jurisdiction = (0, territoryValidation_1.validateAgentJurisdiction)(scope, {
+        const jurisdiction = await (0, territoryValidation_1.validateAgentJurisdiction)(scope, {
             state: data.state,
             district: data.district,
             division: data.division,
@@ -242,8 +242,8 @@ const createVendor = async (req, res) => {
         if (!jurisdiction.valid) {
             return res.status(403).json({ message: jurisdiction.error });
         }
-        // 4. Geographic Consistency Check
-        const geoConsistency = (0, territoryValidation_1.validateGeographicConsistency)({
+        // 4. Geographic Consistency Check against Admin Pincode Management DB
+        const geoConsistency = await (0, territoryValidation_1.validateGeographicConsistency)({
             state: data.state,
             district: data.district,
             division: data.division,
