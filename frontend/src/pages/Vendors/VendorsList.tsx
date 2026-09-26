@@ -5,7 +5,8 @@ import api from '../../utils/api';
 import {
   Search, Eye, UserCheck, UserX, MapPin, Building, Phone, Mail, Award, Calendar,
   Download, FileText, Send, Clock, CheckCircle, XCircle, Filter, User, Tag,
-  RefreshCw, ChevronRight, Shield, ArrowUpRight, Store, GitFork, Layers, Landmark, Building2
+  RefreshCw, ChevronRight, Shield, ArrowUpRight, Store, GitFork, Layers, Landmark, Building2,
+  Edit
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { OnboardVendorWizardModal } from './OnboardVendorWizardModal';
@@ -95,6 +96,84 @@ export const VendorsList: React.FC = () => {
 
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const [editingVendor, setEditingVendor] = useState<Vendor | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    ownerName: '',
+    phone: '',
+    email: '',
+    storeType: '',
+    businessGst: '',
+    fullAddress: '',
+    pincode: '',
+    district: '',
+    division: '',
+    state: ''
+  });
+
+
+  const handleOpenEdit = (vendor: Vendor) => {
+    if (!vendor) return;
+    setEditingVendor(vendor);
+    setEditForm({
+      name: vendor.name || '',
+      ownerName: vendor.ownerName || '',
+      phone: vendor.phone || '',
+      email: vendor.email || '',
+      storeType: vendor.storeType || '',
+      businessGst: vendor.businessGst || '',
+      fullAddress: vendor.fullAddress || '',
+      pincode: vendor.pincode || '',
+      district: vendor.district || '',
+      division: vendor.division || '',
+      state: vendor.state || ''
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingVendor) return;
+    try {
+      setIsSavingEdit(true);
+      const vendorId = editingVendor.id;
+      await api.patch(`/vendors/${vendorId}`, {
+        businessName: editForm.name,
+        name: editForm.name,
+        ownerName: editForm.ownerName,
+        phone: editForm.phone,
+        email: editForm.email,
+        storeType: editForm.storeType,
+        category: editForm.storeType,
+        gst: editForm.businessGst,
+        businessGst: editForm.businessGst,
+        fullAddress: editForm.fullAddress,
+        pincode: editForm.pincode,
+        district: editForm.district,
+        division: editForm.division,
+        state: editForm.state
+      });
+
+      // Update in local state & localStorage
+      setVendors(prev => prev.map(v => v.id === vendorId ? { ...v, ...editForm } : v));
+      try {
+        const saved = JSON.parse(localStorage.getItem(userVendorsKey) || '[]');
+        const updated = saved.map((v: any) => v.id === vendorId ? { ...v, ...editForm } : v);
+        localStorage.setItem(userVendorsKey, JSON.stringify(updated));
+      } catch (e) {}
+
+      addNotification('Vendor Updated', `${editForm.name} details have been updated successfully.`, 'medium', 'system');
+      setIsEditModalOpen(false);
+      refetchVendors();
+    } catch (err: any) {
+      console.error('Failed to update vendor:', err);
+      addNotification('Update Failed', err?.response?.data?.message || 'Could not update vendor profile.', 'high', 'system');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
 
   // Initialize vendors from user-scoped localStorage
   const [vendors, setVendors] = useState<Vendor[]>(() => {
@@ -1079,7 +1158,7 @@ export const VendorsList: React.FC = () => {
                   <th className="py-3.5 px-4">Status</th>
                   <th className="py-3.5 px-4">KYC Status</th>
                   <th className="py-3.5 px-4">Registration Date</th>
-                  <th className="py-3.5 px-4 text-center">Details</th>
+                  <th className="py-3.5 px-4 text-center">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#eae8e7] text-xs">
@@ -1124,13 +1203,24 @@ export const VendorsList: React.FC = () => {
                     </td>
 
                     <td className="py-3.5 px-4 text-center">
-                      <button
-                        type="button"
-                        onClick={() => handleOpenDetails(vendor)}
-                        className="py-1 px-3 bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 text-[#864f19] font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1 mx-auto"
-                      >
-                        <Eye className="w-3.5 h-3.5" /> Details
-                      </button>
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenDetails(vendor)}
+                          className="py-1 px-2.5 bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 text-[#864f19] font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1"
+                          title="View Details"
+                        >
+                          <Eye className="w-3.5 h-3.5" /> Details
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEdit(vendor)}
+                          className="py-1 px-2.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1"
+                          title="Edit Vendor"
+                        >
+                          <Edit className="w-3.5 h-3.5" /> Edit
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1145,20 +1235,20 @@ export const VendorsList: React.FC = () => {
         <Modal
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
-          title={`Vendor Profile Details — ${selectedVendor.id}`}
+          title={`Vendor Profile Details — ${selectedVendor.id || 'N/A'}`}
         >
           <div className="space-y-5 p-1">
             {/* Header profile info */}
             <div className="flex items-start justify-between p-4 bg-[#fbf9f8] rounded-2xl border border-[#eae8e7]">
               <div>
                 <span className="text-[10px] uppercase font-black text-[#52443a]">Merchant Store Name</span>
-                <h3 className="text-xl font-black text-[#1b1c1c] mt-0.5">{selectedVendor.name}</h3>
-                <p className="text-xs font-bold text-slate-500 mt-0.5">Owner: {selectedVendor.ownerName}</p>
+                <h3 className="text-xl font-black text-[#1b1c1c] mt-0.5">{selectedVendor?.name || 'N/A'}</h3>
+                <p className="text-xs font-bold text-slate-500 mt-0.5">Owner: {selectedVendor?.ownerName || 'N/A'}</p>
               </div>
 
               <div className="text-right space-y-1">
-                {getStatusBadge(selectedVendor.status)}
-                <div className="mt-1">{getKycBadge(selectedVendor.kycStatus)}</div>
+                {getStatusBadge(selectedVendor?.status || 'pending')}
+                <div className="mt-1">{getKycBadge(selectedVendor?.kycStatus || 'pending')}</div>
               </div>
             </div>
 
@@ -1172,55 +1262,55 @@ export const VendorsList: React.FC = () => {
             <div className="grid grid-cols-2 gap-4 text-xs">
               <div className="space-y-1">
                 <p className="text-[10px] uppercase font-black text-slate-400">Category & Store Type</p>
-                <p className="font-bold text-slate-800">{selectedVendor.storeType}</p>
+                <p className="font-bold text-slate-800">{selectedVendor?.storeType || 'N/A'}</p>
               </div>
 
               <div className="space-y-1">
                 <p className="text-[10px] uppercase font-black text-slate-400">GSTIN Registration</p>
-                <p className="font-bold text-slate-800">{selectedVendor.businessGst || 'N/A'}</p>
+                <p className="font-bold text-slate-800">{selectedVendor?.businessGst || 'N/A'}</p>
               </div>
 
               <div className="space-y-1">
                 <p className="text-[10px] uppercase font-black text-slate-400">Phone Number</p>
-                <p className="font-bold text-slate-800">{selectedVendor.phone}</p>
+                <p className="font-bold text-slate-800">{selectedVendor?.phone ? `+91 ${selectedVendor.phone}` : 'N/A'}</p>
               </div>
 
               <div className="space-y-1">
                 <p className="text-[10px] uppercase font-black text-slate-400">Email Address</p>
-                <p className="font-bold text-slate-800">{selectedVendor.email}</p>
+                <p className="font-bold text-slate-800">{selectedVendor?.email || 'N/A'}</p>
               </div>
 
               <div className="space-y-1">
                 <p className="text-[10px] uppercase font-black text-slate-400">Territory Location</p>
                 <p className="font-bold text-slate-800">
-                  {`${selectedVendor.district || userDistrict} (${selectedVendor.division || userDivision}), ${selectedVendor.state || userState}`}
+                  {`${selectedVendor?.district || userDistrict || 'N/A'} (${selectedVendor?.division || userDivision || 'N/A'}), ${selectedVendor?.state || userState || 'N/A'}`}
                 </p>
               </div>
 
               <div className="space-y-1">
                 <p className="text-[10px] uppercase font-black text-slate-400">Pincode</p>
-                <p className="font-bold text-slate-800">{selectedVendor.pincode || userPincode}</p>
+                <p className="font-bold text-slate-800">{selectedVendor?.pincode || userPincode || 'N/A'}</p>
               </div>
 
               <div className="space-y-1">
                 <p className="text-[10px] uppercase font-black text-slate-400">Assigned Agent</p>
-                <p className="font-bold text-[#864f19]">{selectedVendor.assignedAgent}</p>
+                <p className="font-bold text-[#864f19]">{selectedVendor?.assignedAgent || 'N/A'}</p>
               </div>
 
               <div className="space-y-1">
                 <p className="text-[10px] uppercase font-black text-slate-400">Registration Date</p>
-                <p className="font-bold text-slate-800">{selectedVendor.createdAt}</p>
+                <p className="font-bold text-slate-800">{selectedVendor?.createdAt || 'N/A'}</p>
               </div>
             </div>
 
             <div className="space-y-1 text-xs">
               <p className="text-[10px] uppercase font-black text-slate-400">Full Business Address & Administrative Location</p>
               <p className="font-bold text-slate-700 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
-                {selectedVendor.fullAddress || `${selectedVendor.name}, ${selectedVendor.division || userDivision}, ${selectedVendor.district || userDistrict}, ${selectedVendor.state || userState} - ${selectedVendor.pincode || userPincode}`}
+                {selectedVendor?.fullAddress || `${selectedVendor?.name || 'Store'}, ${selectedVendor?.division || userDivision || ''}, ${selectedVendor?.district || userDistrict || ''}, ${selectedVendor?.state || userState || ''} - ${selectedVendor?.pincode || userPincode || ''}`}
               </p>
             </div>
 
-            {selectedVendor.rejectionReason && (
+            {selectedVendor?.rejectionReason && (
               <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs space-y-1">
                 <p className="font-black text-rose-900 uppercase text-[10px]">KYC Rejection Reason (KYC Team)</p>
                 <p className="font-semibold text-rose-800">{selectedVendor.rejectionReason}</p>
@@ -1234,6 +1324,158 @@ export const VendorsList: React.FC = () => {
                 className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold py-2 px-5 rounded-xl border-none cursor-pointer"
               >
                 Close Profile
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* EDIT VENDOR MODAL */}
+      {editingVendor && (
+        <Modal
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          title={`Edit Vendor Details — ${editingVendor.id || editingVendor.name}`}
+        >
+          <div className="space-y-4 p-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Store / Business Name *</label>
+                <input
+                  type="text"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="Store Name"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800 bg-white focus:ring-1 focus:ring-[#864f19] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Owner Name *</label>
+                <input
+                  type="text"
+                  value={editForm.ownerName}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, ownerName: e.target.value }))}
+                  placeholder="Owner Name"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800 bg-white focus:ring-1 focus:ring-[#864f19] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Phone Number *</label>
+                <input
+                  type="tel"
+                  value={editForm.phone}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, phone: e.target.value }))}
+                  placeholder="10-digit Phone"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800 bg-white focus:ring-1 focus:ring-[#864f19] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Email Address</label>
+                <input
+                  type="email"
+                  value={editForm.email}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, email: e.target.value }))}
+                  placeholder="vendor@example.com"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800 bg-white focus:ring-1 focus:ring-[#864f19] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Store Type / Category</label>
+                <input
+                  type="text"
+                  value={editForm.storeType}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, storeType: e.target.value }))}
+                  placeholder="e.g. Retail, Grocery"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800 bg-white focus:ring-1 focus:ring-[#864f19] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">GSTIN Number</label>
+                <input
+                  type="text"
+                  value={editForm.businessGst}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, businessGst: e.target.value }))}
+                  placeholder="15-digit GSTIN"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800 bg-white focus:ring-1 focus:ring-[#864f19] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Pincode *</label>
+                <input
+                  type="text"
+                  value={editForm.pincode}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, pincode: e.target.value }))}
+                  placeholder="6-digit PIN"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800 bg-white focus:ring-1 focus:ring-[#864f19] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">District</label>
+                <input
+                  type="text"
+                  value={editForm.district}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, district: e.target.value }))}
+                  placeholder="District"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800 bg-white focus:ring-1 focus:ring-[#864f19] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Division</label>
+                <input
+                  type="text"
+                  value={editForm.division}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, division: e.target.value }))}
+                  placeholder="Division"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800 bg-white focus:ring-1 focus:ring-[#864f19] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">State</label>
+                <input
+                  type="text"
+                  value={editForm.state}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, state: e.target.value }))}
+                  placeholder="State"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800 bg-white focus:ring-1 focus:ring-[#864f19] focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 mb-1">Full Business Address</label>
+              <input
+                type="text"
+                value={editForm.fullAddress}
+                onChange={(e) => setEditForm(prev => ({ ...prev, fullAddress: e.target.value }))}
+                placeholder="Door No, Street, Landmark, Area"
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800 bg-white focus:ring-1 focus:ring-[#864f19] focus:outline-none"
+              />
+            </div>
+
+            <div className="pt-3 flex justify-end gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => setIsEditModalOpen(false)}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold py-2 px-4 rounded-xl border-none cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleSaveEdit}
+                disabled={isSavingEdit || !editForm.name || !editForm.phone}
+                className="bg-[#864f19] hover:bg-[#6e4014] text-white text-xs font-bold py-2 px-5 rounded-xl cursor-pointer"
+              >
+                {isSavingEdit ? 'Saving Changes...' : 'Save Changes'}
               </Button>
             </div>
           </div>

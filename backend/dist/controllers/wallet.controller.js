@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.requestCashout = exports.updateBankDetails = exports.getBankDetails = exports.getTransactions = exports.getBalance = void 0;
+exports.getWalletSummary = exports.requestCashout = exports.updateBankDetails = exports.getBankDetails = exports.getTransactions = exports.getBalance = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const Wallet_1 = __importDefault(require("../models/Wallet"));
 const Agent_1 = __importDefault(require("../models/Agent"));
@@ -228,4 +228,65 @@ const requestCashout = async (req, res) => {
     }
 };
 exports.requestCashout = requestCashout;
+// GET /api/wallet/summary
+const getWalletSummary = async (req, res) => {
+    try {
+        const agentId = req.agent?.agentId;
+        if (!agentId)
+            return res.status(401).json({ message: 'Unauthorized' });
+        const wallet = await getOrCreateWallet(agentId);
+        const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+        // Current week starting Monday
+        const day = now.getDay();
+        const diffToMonday = (day === 0 ? -6 : 1) - day;
+        const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMonday, 0, 0, 0, 0);
+        // Current month starting 1st
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+        let todayEarnings = 0;
+        let weekEarnings = 0;
+        let monthEarnings = 0;
+        let pendingPayouts = 0;
+        for (const tx of wallet.transactions || []) {
+            const txDate = new Date(tx.createdAt);
+            const isCredit = tx.type === 'credit' && tx.status === 'completed';
+            const isPendingDebit = tx.type === 'debit' && tx.status === 'pending';
+            if (isCredit) {
+                if (txDate >= startOfToday) {
+                    todayEarnings += tx.amount || 0;
+                }
+                if (txDate >= startOfWeek) {
+                    weekEarnings += tx.amount || 0;
+                }
+                if (txDate >= startOfMonth) {
+                    monthEarnings += tx.amount || 0;
+                }
+            }
+            if (isPendingDebit) {
+                pendingPayouts += tx.amount || 0;
+            }
+        }
+        let nextPayoutDate = null;
+        if (pendingPayouts > 0) {
+            const nextPayout = new Date(now);
+            const dayOfWeek = nextPayout.getDay();
+            const daysUntilFriday = (5 - dayOfWeek + 7) % 7 || 7;
+            nextPayout.setDate(nextPayout.getDate() + daysUntilFriday);
+            nextPayoutDate = nextPayout.toISOString().split('T')[0];
+        }
+        return res.status(200).json({
+            balance: wallet.balance || 0,
+            todayEarnings,
+            weekEarnings,
+            monthEarnings,
+            pendingPayouts,
+            nextPayoutDate
+        });
+    }
+    catch (error) {
+        console.error('Get wallet summary error:', error);
+        return res.status(500).json({ message: 'Internal server error' });
+    }
+};
+exports.getWalletSummary = getWalletSummary;
 //# sourceMappingURL=wallet.controller.js.map

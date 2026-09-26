@@ -245,3 +245,72 @@ export const requestCashout = async (req: Request, res: Response) => {
     return res.status(500).json({ message: 'Internal server error' });
   }
 };
+
+// GET /api/wallet/summary
+export const getWalletSummary = async (req: Request, res: Response) => {
+  try {
+    const agentId = (req as any).agent?.agentId;
+    if (!agentId) return res.status(401).json({ message: 'Unauthorized' });
+
+    const wallet = await getOrCreateWallet(agentId);
+
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+
+    // Current week starting Monday
+    const day = now.getDay();
+    const diffToMonday = (day === 0 ? -6 : 1) - day;
+    const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMonday, 0, 0, 0, 0);
+
+    // Current month starting 1st
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+
+    let todayEarnings = 0;
+    let weekEarnings = 0;
+    let monthEarnings = 0;
+    let pendingPayouts = 0;
+
+    for (const tx of wallet.transactions || []) {
+      const txDate = new Date(tx.createdAt);
+      const isCredit = tx.type === 'credit' && tx.status === 'completed';
+      const isPendingDebit = tx.type === 'debit' && tx.status === 'pending';
+
+      if (isCredit) {
+        if (txDate >= startOfToday) {
+          todayEarnings += tx.amount || 0;
+        }
+        if (txDate >= startOfWeek) {
+          weekEarnings += tx.amount || 0;
+        }
+        if (txDate >= startOfMonth) {
+          monthEarnings += tx.amount || 0;
+        }
+      }
+
+      if (isPendingDebit) {
+        pendingPayouts += tx.amount || 0;
+      }
+    }
+
+    let nextPayoutDate: string | null = null;
+    if (pendingPayouts > 0) {
+      const nextPayout = new Date(now);
+      const dayOfWeek = nextPayout.getDay();
+      const daysUntilFriday = (5 - dayOfWeek + 7) % 7 || 7;
+      nextPayout.setDate(nextPayout.getDate() + daysUntilFriday);
+      nextPayoutDate = nextPayout.toISOString().split('T')[0];
+    }
+
+    return res.status(200).json({
+      balance: wallet.balance || 0,
+      todayEarnings,
+      weekEarnings,
+      monthEarnings,
+      pendingPayouts,
+      nextPayoutDate
+    });
+  } catch (error) {
+    console.error('Get wallet summary error:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+};

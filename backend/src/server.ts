@@ -10,12 +10,17 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/forge-
 
 async function startServer() {
   try {
-    // Attempt MongoDB Connection
+    // Attempt MongoDB Connection with optimized pooling and fast timeout failover
     console.log('Connecting to MongoDB...');
-    await mongoose.connect(MONGODB_URI);
+    await mongoose.connect(MONGODB_URI, {
+      maxPoolSize: 50,
+      minPoolSize: 5,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+      connectTimeoutMS: 10000,
+      retryWrites: true
+    });
     console.log('Successfully connected to MongoDB.');
-    
-    // Database connected
   } catch (error) {
     console.error('Warning: Failed to connect to MongoDB. Starting server without DB:', error);
   }

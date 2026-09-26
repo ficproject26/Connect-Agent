@@ -92,7 +92,7 @@ function buildTerritoryFilter(scope) {
         if (!scope.state)
             return { _id: null };
         return {
-            role: { $in: ['district', 'division', 'pincode'] },
+            role: { $in: ['state', 'district', 'division', 'pincode'] },
             $or: [
                 { 'assignedTerritory.state': exactRegex(scope.state) },
                 { 'territory.state': exactRegex(scope.state) },
@@ -115,7 +115,7 @@ function buildTerritoryFilter(scope) {
             }
         ] : [];
         return {
-            role: { $in: ['division', 'pincode'] },
+            role: { $in: ['district', 'division', 'pincode'] },
             $and: [
                 {
                     $or: [
@@ -153,7 +153,7 @@ function buildTerritoryFilter(scope) {
             }
         ] : [];
         return {
-            role: 'pincode',
+            role: { $in: ['division', 'pincode'] },
             $and: [
                 {
                     $or: [

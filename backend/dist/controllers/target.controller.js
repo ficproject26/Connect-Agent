@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.updateAssignmentStatus = exports.getMyAssignments = exports.assignTarget = exports.getSubordinates = exports.allocateTarget = exports.createTarget = exports.getTargets = void 0;
 const zod_1 = require("zod");
+const mongoose_1 = __importDefault(require("mongoose"));
 const Target_1 = __importDefault(require("../models/Target"));
 const TargetAssignment_1 = __importDefault(require("../models/TargetAssignment"));
 const Agent_1 = __importDefault(require("../models/Agent"));
@@ -286,8 +287,14 @@ const getMyAssignments = async (req, res) => {
         const { page = '1', limit = '50', status } = req.query;
         const pageNum = parseInt(page, 10) || 1;
         const limitNum = parseInt(limit, 10) || 50;
+        const isObjId = mongoose_1.default.Types.ObjectId.isValid(agentId);
+        const objAgentId = isObjId ? new mongoose_1.default.Types.ObjectId(agentId) : null;
+        const idMatches = [{ assignedTo: agentId }, { assignedBy: agentId }];
+        if (objAgentId) {
+            idMatches.push({ assignedTo: objAgentId }, { assignedBy: objAgentId });
+        }
         let filter = {
-            $or: [{ assignedTo: agentId }, { assignedBy: agentId }]
+            $or: idMatches
         };
         const scope = await (0, territoryScope_1.getAgentTerritoryScope)(agentId);
         if (scope && ['state', 'district', 'division'].includes(scope.role)) {
@@ -296,24 +303,25 @@ const getMyAssignments = async (req, res) => {
             const subordinateIds = subordinates.map(s => s._id);
             filter = {
                 $or: [
-                    { assignedTo: agentId },
-                    { assignedBy: agentId },
+                    ...idMatches,
                     { assignedTo: { $in: subordinateIds } }
                 ]
             };
         }
         if (status)
             filter.status = status;
-        const total = await TargetAssignment_1.default.countDocuments(filter);
-        const assignments = await TargetAssignment_1.default.find(filter)
-            .select('target assignedTo assignedBy dueDate status completedAt createdAt updatedAt')
-            .populate('target', 'title description type targetValue')
-            .populate('assignedBy', 'name email role')
-            .populate('assignedTo', 'name email role territory')
-            .sort({ createdAt: -1 })
-            .skip((pageNum - 1) * limitNum)
-            .limit(limitNum)
-            .lean();
+        const [total, assignments] = await Promise.all([
+            TargetAssignment_1.default.countDocuments(filter),
+            TargetAssignment_1.default.find(filter)
+                .select('target assignedTo assignedBy dueDate status completedAt createdAt updatedAt')
+                .populate('target', 'title description type targetValue')
+                .populate('assignedBy', 'name email role')
+                .populate('assignedTo', 'name email role territory assignedTerritory')
+                .sort({ createdAt: -1 })
+                .skip((pageNum - 1) * limitNum)
+                .limit(limitNum)
+                .lean()
+        ]);
         return res.status(200).json({
             assignments,
             pagination: { page: pageNum, limit: limitNum, total, pages: Math.ceil(total / limitNum) }

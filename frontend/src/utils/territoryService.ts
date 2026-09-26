@@ -182,7 +182,8 @@ export async function fetchTerritoryHierarchy(forceRefresh = false): Promise<Ter
     // 3. Direct fetch to Central Admin Territory Backend (Single Source of Truth)
     try {
       const adminRes = await fetch('https://api.ficapp.in/admin-api/territory/hierarchy', {
-        headers: { 'Accept': 'application/json' }
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(5000)
       });
       if (adminRes.ok) {
         const json = await adminRes.json();
@@ -202,7 +203,8 @@ export async function fetchTerritoryHierarchy(forceRefresh = false): Promise<Ter
     // 4. Try Admin states endpoint as fallback to ensure at least states are available
     try {
       const adminStatesRes = await fetch('https://api.ficapp.in/admin-api/territory/states', {
-        headers: { 'Accept': 'application/json' }
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(5000)
       });
       if (adminStatesRes.ok) {
         const statesData = await adminStatesRes.json();

@@ -74,14 +74,29 @@ export const WalletDashboard: React.FC = () => {
   const [cashoutLoading, setCashoutLoading] = useState(false);
   const [cashoutSuccess, setCashoutSuccess] = useState(false);
 
+  const [walletSummary, setWalletSummary] = useState<{
+    todayEarnings: number;
+    weekEarnings: number;
+    monthEarnings: number;
+    pendingPayouts: number;
+    nextPayoutDate: string | null;
+  }>({
+    todayEarnings: 0,
+    weekEarnings: 0,
+    monthEarnings: 0,
+    pendingPayouts: 0,
+    nextPayoutDate: null
+  });
+
   const fetchWalletDetails = async (isInitial = false) => {
     if (isInitial && transactions.length === 0) {
       setIsLoading(true);
     }
     setErrorMsg('');
     try {
-      const [balanceRes, txRes, bankRes] = await Promise.all([
+      const [balanceRes, summaryRes, txRes, bankRes] = await Promise.all([
         api.get('/wallet/balance').catch(() => ({ data: { balance: 0 } })),
+        api.get('/wallet/summary').catch(() => ({ data: null })),
         api.get('/wallet/transactions').catch(() => ({ data: { transactions: [] } })),
         api.get('/wallet/bank-details').catch(() => ({ data: { bankDetails: null } }))
       ]);
@@ -98,6 +113,15 @@ export const WalletDashboard: React.FC = () => {
       }));
 
       setBalance(balanceRes.data.balance || 0);
+      if (summaryRes?.data) {
+        setWalletSummary({
+          todayEarnings: Number(summaryRes.data.todayEarnings) || 0,
+          weekEarnings: Number(summaryRes.data.weekEarnings) || 0,
+          monthEarnings: Number(summaryRes.data.monthEarnings) || 0,
+          pendingPayouts: Number(summaryRes.data.pendingPayouts) || 0,
+          nextPayoutDate: summaryRes.data.nextPayoutDate || null
+        });
+      }
       setTransactions(mappedTx);
 
       if (bankRes?.data?.bankDetails) {
@@ -303,11 +327,12 @@ export const WalletDashboard: React.FC = () => {
     }
   };
 
-  // Calculated earnings breakdown based on transactions
-  const todayEarnings = transactions.filter(t => t.type === 'credit' && t.createdAt.includes(new Date().toLocaleDateString('en-GB'))).reduce((acc, t) => acc + t.amount, 0);
-  const weekEarnings = transactions.filter(t => t.type === 'credit').reduce((acc, t) => acc + t.amount, 0);
-  const monthEarnings = weekEarnings;
-  const pendingPayouts = transactions.filter(t => t.type === 'debit' && t.status === 'pending').reduce((acc, t) => acc + t.amount, 0);
+  // Calculated earnings breakdown based on real database records
+  const todayEarnings = walletSummary.todayEarnings;
+  const weekEarnings = walletSummary.weekEarnings;
+  const monthEarnings = walletSummary.monthEarnings;
+  const pendingPayouts = walletSummary.pendingPayouts;
+  const nextPayoutDate = walletSummary.nextPayoutDate;
 
   return (
     <div className="space-y-6 animate-fade-in text-[#1b1c1c] font-sans">
@@ -358,7 +383,11 @@ export const WalletDashboard: React.FC = () => {
         <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">NEXT PAYOUT DATE</span>
           <p className="text-sm font-extrabold text-blue-700 mt-2">
-            {pendingPayouts > 0 ? new Date(Date.now() + 7 * 86400000).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : 'None Scheduled'}
+            {nextPayoutDate
+              ? new Date(nextPayoutDate).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+              : (pendingPayouts > 0
+                  ? new Date(Date.now() + 7 * 86400000).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+                  : 'No Payout Scheduled')}
           </p>
         </div>
       </div>

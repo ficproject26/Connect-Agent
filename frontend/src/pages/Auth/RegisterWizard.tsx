@@ -50,6 +50,9 @@ export const RegisterWizard: React.FC = () => {
   const totalSteps = 4;
   const [formErrors, setFormErrors] = useState<string>('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const showConfirmPwd = showConfirmPassword;
+  const setShowConfirmPwd = setShowConfirmPassword;
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const maxDobDate = useMemo(() => {
@@ -1012,10 +1015,19 @@ export const RegisterWizard: React.FC = () => {
 
                   <Input
                     label="Confirm Password (Required)"
-                    type={showPassword ? 'text' : 'password'}
+                    type={showConfirmPassword ? 'text' : 'password'}
                     placeholder="••••••••"
                     value={personalInfo.confirmPassword}
                     onChange={(e) => setPersonalInfo({ ...personalInfo, confirmPassword: e.target.value })}
+                    rightIcon={
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="focus:outline-none text-slate-400 hover:text-slate-600 cursor-pointer"
+                      >
+                        {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    }
                   />
                 </div>
               </div>

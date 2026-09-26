@@ -389,9 +389,15 @@ export const AgentManagement: React.FC = () => {
     }
   };
 
-  // Filter items by search & KYC filter
+  // Filter items by search & KYC filter with strict database _id deduplication
   const filterList = (items: AgentNode[]) => {
+    const seenIds = new Set<string>();
     return items.filter(item => {
+      if (!item || !item._id) return false;
+      const id = String(item._id);
+      if (seenIds.has(id)) return false;
+      seenIds.add(id);
+
       if (kycFilter !== 'all' && item.kycStatus !== kycFilter) return false;
       if (pincodeFilter !== 'all') {
         const itemPin = item.territory?.pincode || (item as any)?.assignedTerritory?.pincode;

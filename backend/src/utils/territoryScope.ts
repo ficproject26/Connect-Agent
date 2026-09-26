@@ -102,7 +102,7 @@ export function buildTerritoryFilter(scope: TerritoryScope | null): Record<strin
     if (!scope.state) return { _id: null };
 
     return {
-      role: { $in: ['district', 'division', 'pincode'] },
+      role: { $in: ['state', 'district', 'division', 'pincode'] },
       $or: [
         { 'assignedTerritory.state': exactRegex(scope.state) },
         { 'territory.state': exactRegex(scope.state) },
@@ -127,7 +127,7 @@ export function buildTerritoryFilter(scope: TerritoryScope | null): Record<strin
     ] : [];
 
     return {
-      role: { $in: ['division', 'pincode'] },
+      role: { $in: ['district', 'division', 'pincode'] },
       $and: [
         {
           $or: [
@@ -168,7 +168,7 @@ export function buildTerritoryFilter(scope: TerritoryScope | null): Record<strin
     ] : [];
 
     return {
-      role: 'pincode',
+      role: { $in: ['division', 'pincode'] },
       $and: [
         {
           $or: [

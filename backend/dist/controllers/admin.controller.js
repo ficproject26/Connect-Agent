@@ -332,11 +332,21 @@ const getHierarchyTree = async (req, res) => {
         }
         const todayStr = new Date().toISOString().slice(0, 10);
         const yesterdayStr = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+        // Strict deduplication of agents by real DB _id
+        const seenAgentIds = new Set();
+        const uniqueAgents = [];
+        for (const a of agents) {
+            const aId = String(a._id);
+            if (!seenAgentIds.has(aId)) {
+                seenAgentIds.add(aId);
+                uniqueAgents.push(a);
+            }
+        }
         // Group agents into multi-tier hierarchy
-        const stateAgents = agents.filter(a => a.role === 'state');
-        const districtAgents = agents.filter(a => a.role === 'district');
-        const divisionAgents = agents.filter(a => a.role === 'division');
-        const pincodeAgents = agents.filter(a => a.role === 'pincode');
+        const stateAgents = uniqueAgents.filter(a => a.role === 'state');
+        const districtAgents = uniqueAgents.filter(a => a.role === 'district');
+        const divisionAgents = uniqueAgents.filter(a => a.role === 'division');
+        const pincodeAgents = uniqueAgents.filter(a => a.role === 'pincode');
         // Helper function to build detailed metrics for an agent based on REAL vendor data
         const enrichAgentData = (agent) => {
             const perf = agent.performanceScore || 0;
@@ -551,18 +561,18 @@ const getHierarchyTree = async (req, res) => {
         }
         const responseData = {
             tree,
-            states: tree,
+            states: stateAgents.length > 0 ? tree : [],
             districts: finalDistricts,
             divisions: finalDivisions,
             pincodes: enrichedPincodes,
-            totalAgents: agents.length,
+            totalAgents: uniqueAgents.length,
             metrics: {
                 totalState: stateAgents.length,
                 totalDistrict: districtAgents.length,
                 totalDivision: divisionAgents.length,
                 totalPincode: pincodeAgents.length,
-                pendingKycCount: agents.filter(a => a.kycStatus === 'pending').length,
-                approvedKycCount: agents.filter(a => a.kycStatus === 'approved').length,
+                pendingKycCount: uniqueAgents.filter(a => a.kycStatus === 'pending').length,
+                approvedKycCount: uniqueAgents.filter(a => a.kycStatus === 'approved').length,
                 totalEarnings: (tree.length > 0 ? tree : enrichedDistricts).reduce((acc, d) => acc + (d.teamEarnings || d.earnings), 0)
             }
         };

@@ -59,7 +59,9 @@ export const TargetsList: React.FC = () => {
         throw err;
       }
     },
-    staleTime: 60000,
+    enabled: Boolean(user?._id || user?.email),
+    retry: 1,
+    staleTime: 30000,
     refetchInterval: false,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: false

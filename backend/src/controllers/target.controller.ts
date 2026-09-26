@@ -307,8 +307,16 @@ export const getMyAssignments = async (req: Request, res: Response) => {
     const pageNum = parseInt(page as string, 10) || 1;
     const limitNum = parseInt(limit as string, 10) || 50;
 
+    const isObjId = mongoose.Types.ObjectId.isValid(agentId);
+    const objAgentId = isObjId ? new mongoose.Types.ObjectId(agentId) : null;
+
+    const idMatches: any[] = [{ assignedTo: agentId }, { assignedBy: agentId }];
+    if (objAgentId) {
+      idMatches.push({ assignedTo: objAgentId }, { assignedBy: objAgentId });
+    }
+
     let filter: Record<string, unknown> = {
-      $or: [{ assignedTo: agentId }, { assignedBy: agentId }]
+      $or: idMatches
     };
 
     const scope = await getAgentTerritoryScope(agentId);
@@ -319,8 +327,7 @@ export const getMyAssignments = async (req: Request, res: Response) => {
 
       filter = {
         $or: [
-          { assignedTo: agentId },
-          { assignedBy: agentId },
+          ...idMatches,
           { assignedTo: { $in: subordinateIds } }
         ]
       };
@@ -328,16 +335,18 @@ export const getMyAssignments = async (req: Request, res: Response) => {
 
     if (status) filter.status = status;
 
-    const total = await TargetAssignment.countDocuments(filter);
-    const assignments = await TargetAssignment.find(filter)
-      .select('target assignedTo assignedBy dueDate status completedAt createdAt updatedAt')
-      .populate('target', 'title description type targetValue')
-      .populate('assignedBy', 'name email role')
-      .populate('assignedTo', 'name email role territory')
-      .sort({ createdAt: -1 })
-      .skip((pageNum - 1) * limitNum)
-      .limit(limitNum)
-      .lean();
+    const [total, assignments] = await Promise.all([
+      TargetAssignment.countDocuments(filter),
+      TargetAssignment.find(filter)
+        .select('target assignedTo assignedBy dueDate status completedAt createdAt updatedAt')
+        .populate('target', 'title description type targetValue')
+        .populate('assignedBy', 'name email role')
+        .populate('assignedTo', 'name email role territory assignedTerritory')
+        .sort({ createdAt: -1 })
+        .skip((pageNum - 1) * limitNum)
+        .limit(limitNum)
+        .lean()
+    ]);
 
     return res.status(200).json({
       assignments,

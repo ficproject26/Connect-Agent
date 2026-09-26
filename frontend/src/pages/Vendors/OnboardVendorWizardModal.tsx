@@ -51,6 +51,8 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
   // Show/hide password states
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const showConfirmPwd = showConfirmPassword;
+  const setShowConfirmPwd = setShowConfirmPassword;
 
   // Determine logged-in Agent role and approved territory
   const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';

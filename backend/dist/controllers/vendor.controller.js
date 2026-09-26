@@ -35,21 +35,27 @@ const createVendorSchema = zod_1.z.object({
 }).passthrough();
 const updateVendorSchema = zod_1.z.object({
     businessName: zod_1.z.string().optional(),
+    name: zod_1.z.string().optional(),
     ownerName: zod_1.z.string().optional(),
     phone: zod_1.z.string().optional(),
     email: zod_1.z.string().optional(),
+    category: zod_1.z.string().optional(),
+    storeType: zod_1.z.string().optional(),
     gst: zod_1.z.string().optional(),
+    businessGst: zod_1.z.string().optional(),
     state: zod_1.z.string().optional(),
     district: zod_1.z.string().optional(),
     division: zod_1.z.string().optional(),
     pincode: zod_1.z.string().optional(),
     kycStatus: zod_1.z.string().optional(),
+    status: zod_1.z.string().optional(),
+    fullAddress: zod_1.z.string().optional(),
     location: zod_1.z.object({
         address: zod_1.z.string().optional(),
         latitude: zod_1.z.number().optional(),
         longitude: zod_1.z.number().optional()
     }).optional()
-});
+}).passthrough();
 // GET /api/vendors — paginated list with optional filters and date range
 const getVendors = async (req, res) => {
     try {
@@ -193,9 +199,15 @@ const getVendorById = async (req, res) => {
         const agentId = req.agent?.agentId;
         if (!agentId)
             return res.status(401).json({ message: 'Unauthorized' });
-        const vendor = await Vendor_1.default.findById(req.params.id)
+        const rawId = req.params.id;
+        const isObjectId = mongoose_1.default.Types.ObjectId.isValid(rawId);
+        const query = isObjectId
+            ? { $or: [{ _id: rawId }, { registrationId: rawId }] }
+            : { registrationId: rawId };
+        const vendor = await Vendor_1.default.findOne(query)
             .populate('assignedAgent', 'name email role phone')
-            .populate('documents');
+            .populate('documents')
+            .lean();
         if (!vendor)
             return res.status(404).json({ message: 'Vendor not found' });
         return res.status(200).json({ vendor });
@@ -362,7 +374,25 @@ const updateVendor = async (req, res) => {
         if (!agentId)
             return res.status(401).json({ message: 'Unauthorized' });
         const data = updateVendorSchema.parse(req.body);
-        const vendor = await Vendor_1.default.findByIdAndUpdate(req.params.id, { ...data, updatedAt: new Date() }, { new: true, runValidators: true }).populate('category', 'name');
+        const rawId = req.params.id;
+        const isObjectId = mongoose_1.default.Types.ObjectId.isValid(rawId);
+        const query = isObjectId
+            ? { $or: [{ _id: rawId }, { registrationId: rawId }] }
+            : { registrationId: rawId };
+        const updateFields = { ...data, updatedAt: new Date() };
+        if (data.businessName && !data.name) {
+            updateFields.name = data.businessName;
+        }
+        if (data.name && !data.businessName) {
+            updateFields.businessName = data.name;
+        }
+        if (data.fullAddress) {
+            updateFields.location = {
+                ...(updateFields.location || {}),
+                address: data.fullAddress
+            };
+        }
+        const vendor = await Vendor_1.default.findOneAndUpdate(query, { $set: updateFields }, { new: true, runValidators: true }).populate('category', 'name').populate('assignedAgent', 'name email role phone');
         if (!vendor)
             return res.status(404).json({ message: 'Vendor not found' });
         // Invalidate dashboard and hierarchy caches
@@ -392,7 +422,12 @@ const updateVendorStatus = async (req, res) => {
         if (!status || !validStatuses.includes(status)) {
             return res.status(400).json({ message: `Status must be one of: ${validStatuses.join(', ')}` });
         }
-        const vendor = await Vendor_1.default.findByIdAndUpdate(req.params.id, { status, updatedAt: new Date() }, { new: true }).populate('category', 'name');
+        const rawId = req.params.id;
+        const isObjectId = mongoose_1.default.Types.ObjectId.isValid(rawId);
+        const query = isObjectId
+            ? { $or: [{ _id: rawId }, { registrationId: rawId }] }
+            : { registrationId: rawId };
+        const vendor = await Vendor_1.default.findOneAndUpdate(query, { $set: { status, updatedAt: new Date() } }, { new: true }).populate('category', 'name');
         if (!vendor)
             return res.status(404).json({ message: 'Vendor not found' });
         // Invalidate dashboard and hierarchy caches

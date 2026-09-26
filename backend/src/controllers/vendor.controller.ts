@@ -36,21 +36,27 @@ const createVendorSchema = z.object({
 
 const updateVendorSchema = z.object({
   businessName: z.string().optional(),
+  name: z.string().optional(),
   ownerName: z.string().optional(),
   phone: z.string().optional(),
   email: z.string().optional(),
+  category: z.string().optional(),
+  storeType: z.string().optional(),
   gst: z.string().optional(),
+  businessGst: z.string().optional(),
   state: z.string().optional(),
   district: z.string().optional(),
   division: z.string().optional(),
   pincode: z.string().optional(),
   kycStatus: z.string().optional(),
+  status: z.string().optional(),
+  fullAddress: z.string().optional(),
   location: z.object({
     address: z.string().optional(),
     latitude: z.number().optional(),
     longitude: z.number().optional()
   }).optional()
-});
+}).passthrough();
 
 // GET /api/vendors — paginated list with optional filters and date range
 export const getVendors = async (req: Request, res: Response) => {
@@ -197,9 +203,16 @@ export const getVendorById = async (req: Request, res: Response) => {
     const agentId = (req as any).agent?.agentId;
     if (!agentId) return res.status(401).json({ message: 'Unauthorized' });
 
-    const vendor = await Vendor.findById(req.params.id)
+    const rawId = req.params.id;
+    const isObjectId = mongoose.Types.ObjectId.isValid(rawId);
+    const query = isObjectId
+      ? { $or: [{ _id: rawId }, { registrationId: rawId }] }
+      : { registrationId: rawId };
+
+    const vendor = await Vendor.findOne(query)
       .populate('assignedAgent', 'name email role phone')
-      .populate('documents');
+      .populate('documents')
+      .lean();
 
     if (!vendor) return res.status(404).json({ message: 'Vendor not found' });
     return res.status(200).json({ vendor });
@@ -380,12 +393,31 @@ export const updateVendor = async (req: Request, res: Response) => {
     if (!agentId) return res.status(401).json({ message: 'Unauthorized' });
 
     const data = updateVendorSchema.parse(req.body);
+    const rawId = req.params.id;
+    const isObjectId = mongoose.Types.ObjectId.isValid(rawId);
+    const query = isObjectId
+      ? { $or: [{ _id: rawId }, { registrationId: rawId }] }
+      : { registrationId: rawId };
 
-    const vendor = await Vendor.findByIdAndUpdate(
-      req.params.id,
-      { ...data, updatedAt: new Date() },
+    const updateFields: any = { ...data, updatedAt: new Date() };
+    if (data.businessName && !data.name) {
+      updateFields.name = data.businessName;
+    }
+    if ((data as any).name && !data.businessName) {
+      updateFields.businessName = (data as any).name;
+    }
+    if ((data as any).fullAddress) {
+      updateFields.location = {
+        ...(updateFields.location || {}),
+        address: (data as any).fullAddress
+      };
+    }
+
+    const vendor = await Vendor.findOneAndUpdate(
+      query,
+      { $set: updateFields },
       { new: true, runValidators: true }
-    ).populate('category', 'name');
+    ).populate('category', 'name').populate('assignedAgent', 'name email role phone');
 
     if (!vendor) return res.status(404).json({ message: 'Vendor not found' });
 
@@ -417,9 +449,15 @@ export const updateVendorStatus = async (req: Request, res: Response) => {
       return res.status(400).json({ message: `Status must be one of: ${validStatuses.join(', ')}` });
     }
 
-    const vendor = await Vendor.findByIdAndUpdate(
-      req.params.id,
-      { status, updatedAt: new Date() },
+    const rawId = req.params.id;
+    const isObjectId = mongoose.Types.ObjectId.isValid(rawId);
+    const query = isObjectId
+      ? { $or: [{ _id: rawId }, { registrationId: rawId }] }
+      : { registrationId: rawId };
+
+    const vendor = await Vendor.findOneAndUpdate(
+      query,
+      { $set: { status, updatedAt: new Date() } },
       { new: true }
     ).populate('category', 'name');
 

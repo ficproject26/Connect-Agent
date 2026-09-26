@@ -6,6 +6,7 @@ const auth_middleware_1 = require("../middleware/auth.middleware");
 const router = (0, express_1.Router)();
 router.use(auth_middleware_1.authMiddleware);
 router.get('/balance', wallet_controller_1.getBalance);
+router.get('/summary', wallet_controller_1.getWalletSummary);
 router.get('/transactions', wallet_controller_1.getTransactions);
 router.get('/bank-details', wallet_controller_1.getBankDetails);
 router.put('/bank-details', wallet_controller_1.updateBankDetails);
