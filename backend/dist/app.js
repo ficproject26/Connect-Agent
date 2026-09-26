@@ -20,6 +20,7 @@ const admin_routes_1 = __importDefault(require("./routes/admin.routes"));
 const wallet_routes_1 = __importDefault(require("./routes/wallet.routes"));
 const attendance_routes_1 = __importDefault(require("./routes/attendance.routes"));
 const fieldVisit_routes_1 = __importDefault(require("./routes/fieldVisit.routes"));
+const territory_routes_1 = __importDefault(require("./routes/territory.routes"));
 const admin_controller_1 = require("./controllers/admin.controller");
 const app = (0, express_1.default)();
 // Security and standard middlewares
@@ -54,6 +55,8 @@ app.use('/api/attendance', attendance_routes_1.default);
 app.use('/attendance', attendance_routes_1.default);
 app.use('/api/field-visits', fieldVisit_routes_1.default);
 app.use('/field-visits', fieldVisit_routes_1.default);
+app.use('/api/territory', territory_routes_1.default);
+app.use('/territory', territory_routes_1.default);
 // Detailed health check route with DB connectivity verification
 const healthHandler = (req, res) => {
     const dbState = mongoose_1.default.connection.readyState;

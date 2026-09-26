@@ -20,13 +20,37 @@ const registerSchema = zod_1.z.object({
     qualification: zod_1.z.string().optional(),
     experience: zod_1.z.string().optional(),
     previousCompany: zod_1.z.string().optional(),
-    address: zod_1.z.string().optional(),
+    address: zod_1.z.union([
+        zod_1.z.string(),
+        zod_1.z.object({
+            buildingNo: zod_1.z.string().optional().default(''),
+            street: zod_1.z.string().optional().default(''),
+            locality: zod_1.z.string().optional().default(''),
+            postOffice: zod_1.z.string().optional().default(''),
+            taluk: zod_1.z.string().optional().default(''),
+            state: zod_1.z.string().optional().default(''),
+            district: zod_1.z.string().optional().default(''),
+            pincode: zod_1.z.string().optional().default('')
+        })
+    ]).optional(),
     fullAddress: zod_1.z.string().optional(),
     buildingNo: zod_1.z.string().optional(),
     streetName: zod_1.z.string().optional(),
     postOffice: zod_1.z.string().optional(),
     aadhaarNumber: zod_1.z.string().optional(),
     panNumber: zod_1.z.string().optional(),
+    assignedTerritory: zod_1.z.object({
+        state: zod_1.z.string().optional().default(''),
+        stateId: zod_1.z.string().optional().default(''),
+        district: zod_1.z.string().optional().default(''),
+        districtId: zod_1.z.string().optional().default(''),
+        division: zod_1.z.string().optional().default(''),
+        divisionId: zod_1.z.string().optional().default(''),
+        taluk: zod_1.z.string().optional().default(''),
+        talukId: zod_1.z.string().optional().default(''),
+        pincode: zod_1.z.string().optional().default(''),
+        pincodeId: zod_1.z.string().optional().default('')
+    }).optional(),
     territory: zod_1.z.object({
         state: zod_1.z.string().optional().default(''),
         district: zod_1.z.string().optional().default(''),
@@ -70,11 +94,38 @@ const register = async (req, res) => {
             return res.status(400).json({ message: 'Phone number is already registered. Please use another phone number.' });
         }
         const agentRole = validatedData.role;
+        // 1. Process separate Assigned Territory
+        const rawTerritory = validatedData.assignedTerritory || validatedData.territory || {};
+        const cleanAssignedTerritory = {
+            state: (rawTerritory.state || '').trim(),
+            stateId: rawTerritory.stateId || '',
+            district: agentRole === 'state' ? '' : ((rawTerritory.district || '').trim()),
+            districtId: agentRole === 'state' ? '' : (rawTerritory.districtId || ''),
+            division: (agentRole === 'state' || agentRole === 'district') ? '' : ((rawTerritory.division || '').trim()),
+            divisionId: (agentRole === 'state' || agentRole === 'district') ? '' : (rawTerritory.divisionId || ''),
+            taluk: (agentRole === 'state' || agentRole === 'district') ? '' : (rawTerritory.taluk || '').trim(),
+            talukId: (agentRole === 'state' || agentRole === 'district') ? '' : (rawTerritory.talukId || ''),
+            pincode: agentRole === 'pincode' ? ((rawTerritory.pincode || '').trim()) : '',
+            pincodeId: agentRole === 'pincode' ? (rawTerritory.pincodeId || '') : ''
+        };
+        // Role-based territory validation
+        if (!cleanAssignedTerritory.state) {
+            return res.status(400).json({ message: 'Assigned State is required for territory jurisdiction.' });
+        }
+        if (agentRole !== 'state' && !cleanAssignedTerritory.district) {
+            return res.status(400).json({ message: 'Assigned District is required for District/Division/Pincode Agent.' });
+        }
+        if ((agentRole === 'division' || agentRole === 'pincode') && !cleanAssignedTerritory.division) {
+            return res.status(400).json({ message: 'Assigned Division is required for Division/Pincode Agent.' });
+        }
+        if (agentRole === 'pincode' && !cleanAssignedTerritory.pincode) {
+            return res.status(400).json({ message: 'Assigned PIN Code is required for Pincode Agent.' });
+        }
         const cleanTerritory = {
-            state: validatedData.territory?.state || '',
-            district: agentRole === 'state' ? '' : (validatedData.territory?.district || ''),
-            division: (agentRole === 'state' || agentRole === 'district') ? '' : (validatedData.territory?.division || ''),
-            pincode: agentRole === 'pincode' ? (validatedData.territory?.pincode || '') : (validatedData.territory?.pincode || '')
+            state: cleanAssignedTerritory.state,
+            district: cleanAssignedTerritory.district,
+            division: cleanAssignedTerritory.division,
+            pincode: cleanAssignedTerritory.pincode
         };
         // Enforce strictly 1 agent per pincode rule
         if (agentRole === 'pincode' && cleanTerritory.pincode) {
@@ -88,6 +139,41 @@ const register = async (req, res) => {
                 });
             }
         }
+        // 2. Process separate Address Details (Physical / Contact Address)
+        let cleanAddress = {};
+        if (typeof validatedData.address === 'object' && validatedData.address !== null) {
+            cleanAddress = {
+                buildingNo: (validatedData.address.buildingNo || validatedData.buildingNo || '').trim(),
+                street: (validatedData.address.street || validatedData.streetName || '').trim(),
+                locality: (validatedData.address.locality || '').trim(),
+                postOffice: (validatedData.address.postOffice || validatedData.postOffice || '').trim(),
+                taluk: (validatedData.address.taluk || '').trim(),
+                state: (validatedData.address.state || '').trim(),
+                district: (validatedData.address.district || '').trim(),
+                pincode: (validatedData.address.pincode || '').trim()
+            };
+        }
+        else {
+            cleanAddress = {
+                buildingNo: (validatedData.buildingNo || '').trim(),
+                street: (validatedData.streetName || '').trim(),
+                locality: '',
+                postOffice: (validatedData.postOffice || '').trim(),
+                taluk: '',
+                state: '',
+                district: '',
+                pincode: ''
+            };
+        }
+        const constructedFullAddress = [
+            cleanAddress.buildingNo,
+            cleanAddress.street,
+            cleanAddress.locality,
+            cleanAddress.postOffice ? `PO: ${cleanAddress.postOffice}` : '',
+            cleanAddress.taluk ? `Taluk: ${cleanAddress.taluk}` : '',
+            cleanAddress.district,
+            cleanAddress.state ? `${cleanAddress.state}${cleanAddress.pincode ? ` - ${cleanAddress.pincode}` : ''}` : cleanAddress.pincode
+        ].filter(Boolean).join(', ') || validatedData.fullAddress || (typeof validatedData.address === 'string' ? validatedData.address : '');
         let territoryParts = [];
         if (agentRole === 'state')
             territoryParts = [cleanTerritory.state].filter(Boolean);
@@ -102,6 +188,9 @@ const register = async (req, res) => {
         const newAgent = new Agent_1.default({
             ...validatedData,
             territory: cleanTerritory,
+            assignedTerritory: cleanAssignedTerritory,
+            address: cleanAddress,
+            fullAddress: constructedFullAddress,
             email: validatedData.email.toLowerCase(),
             dob: parsedDob,
             registrationId,
@@ -128,6 +217,7 @@ const register = async (req, res) => {
                         role: 'agent',
                         level: validatedData.role,
                         territory: cleanTerritory,
+                        assignedTerritory: cleanAssignedTerritory,
                         assignedArea: assignedAreaStr,
                         assignedState: cleanTerritory.state,
                         assignedDistrict: cleanTerritory.district,
@@ -136,9 +226,9 @@ const register = async (req, res) => {
                         district: cleanTerritory.district,
                         division: cleanTerritory.division,
                         pincode: cleanTerritory.pincode,
-                        postOffice: req.body.postOffice || req.body.postOfficeBranch || '',
-                        address: req.body.address || req.body.fullAddress || assignedAreaStr,
-                        fullAddress: req.body.fullAddress || req.body.address || assignedAreaStr,
+                        postOffice: cleanAddress.postOffice || req.body.postOffice || '',
+                        address: cleanAddress,
+                        fullAddress: constructedFullAddress,
                         registrationId,
                         status: 'pending',
                         kycStatus: 'pending',
@@ -507,11 +597,30 @@ const updateProfile = async (req, res) => {
         const agentId = req.agent?.agentId;
         if (!agentId)
             return res.status(401).json({ message: 'Unauthorized' });
-        const allowedFields = ['name', 'phone', 'territory'];
+        const allowedFields = ['name', 'phone', 'territory', 'assignedTerritory', 'address', 'fullAddress'];
         const updates = {};
         for (const field of allowedFields) {
             if (req.body[field] !== undefined)
                 updates[field] = req.body[field];
+        }
+        // Keep territory and assignedTerritory synchronized if either is passed without touching address
+        if (updates.assignedTerritory && !updates.territory) {
+            const at = updates.assignedTerritory;
+            updates.territory = {
+                state: at.state || '',
+                district: at.district || '',
+                division: at.division || '',
+                pincode: at.pincode || ''
+            };
+        }
+        else if (updates.territory && !updates.assignedTerritory) {
+            const t = updates.territory;
+            updates.assignedTerritory = {
+                state: t.state || '',
+                district: t.district || '',
+                division: t.division || '',
+                pincode: t.pincode || ''
+            };
         }
         const agent = await Agent_1.default.findByIdAndUpdate(agentId, { ...updates, updatedAt: new Date() }, { new: true, runValidators: true }).select('-password');
         if (!agent)

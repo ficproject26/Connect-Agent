@@ -7,7 +7,7 @@ import { useAuth, UserProfile } from '../../context/AuthContext';
 import { 
   User, Phone, MapPin, Landmark, ShieldCheck, 
   Settings, LogOut, ArrowRight, Save, ShieldAlert, Award,
-  Camera, Truck
+  Camera, Truck, Building2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { formatRegistrationDate } from '../../utils/date';
@@ -353,6 +353,67 @@ export const ProfileModule: React.FC = () => {
                       </div>
                     );
                   })()}
+                </div>
+
+                {/* Separate Physical Address Details Section */}
+                <div className="pt-6 border-t border-forgeGray-100 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <Building2 className="w-5 h-5 text-slate-700" />
+                      <h4 className="text-sm font-black text-forgeGray-900 font-sans">
+                        Physical Address Details
+                      </h4>
+                    </div>
+                    <span className="text-[10px] font-black text-slate-600 bg-slate-100 border border-slate-200 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                      Physical Contact
+                    </span>
+                  </div>
+
+                  <div className="p-4 bg-slate-50/80 rounded-xl border border-slate-200/90 text-xs font-semibold space-y-2">
+                    {typeof (user as any)?.address === 'object' && (user as any)?.address?.buildingNo ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        <div>
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">DOOR / BUILDING NO</span>
+                          <p className="text-slate-900 font-extrabold mt-0.5">{(user as any).address.buildingNo}</p>
+                        </div>
+                        <div>
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">STREET / AREA</span>
+                          <p className="text-slate-900 font-extrabold mt-0.5">{(user as any).address.street}</p>
+                        </div>
+                        {(user as any).address.locality && (
+                          <div>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">VILLAGE / LOCALITY</span>
+                            <p className="text-slate-900 font-extrabold mt-0.5">{(user as any).address.locality}</p>
+                          </div>
+                        )}
+                        {(user as any).address.postOffice && (
+                          <div>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">POST OFFICE</span>
+                            <p className="text-slate-900 font-extrabold mt-0.5">{(user as any).address.postOffice}</p>
+                          </div>
+                        )}
+                        {(user as any).address.taluk && (
+                          <div>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">TALUK</span>
+                            <p className="text-slate-900 font-extrabold mt-0.5">{(user as any).address.taluk}</p>
+                          </div>
+                        )}
+                        <div>
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">STATE & PINCODE</span>
+                          <p className="text-slate-900 font-extrabold mt-0.5">
+                            {((user as any).address.district ? `${(user as any).address.district}, ` : '') + ((user as any).address.state || '') + ((user as any).address.pincode ? ` - ${(user as any).address.pincode}` : '')}
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">REGISTERED RESIDENTIAL / COMMERCIAL ADDRESS</span>
+                        <p className="text-slate-900 font-bold mt-1 text-xs">
+                          {(user as any)?.fullAddress || (typeof (user as any)?.address === 'string' ? (user as any).address : 'Physical contact address verified during registration.')}
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Inline Vehicle Details Section */}

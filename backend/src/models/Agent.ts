@@ -19,6 +19,29 @@ export interface IAgent extends Document {
     division: string;
     pincode: string;
   };
+  assignedTerritory?: {
+    state: string;
+    stateId?: string;
+    district?: string;
+    districtId?: string;
+    division?: string;
+    divisionId?: string;
+    taluk?: string;
+    talukId?: string;
+    pincode?: string;
+    pincodeId?: string;
+  };
+  address?: {
+    buildingNo?: string;
+    street?: string;
+    locality?: string;
+    postOffice?: string;
+    taluk?: string;
+    state?: string;
+    district?: string;
+    pincode?: string;
+  };
+  fullAddress?: string;
   kycStatus: 'pending' | 'approved' | 'rejected';
   status?: 'pending' | 'approved' | 'active' | 'rejected' | 'suspended';
   kycDocs: {
@@ -60,6 +83,30 @@ const territorySchema = new Schema({
   pincode: { type: String, default: '' }
 }, { _id: false });
 
+const assignedTerritorySchema = new Schema({
+  state: { type: String, default: '' },
+  stateId: { type: String, default: '' },
+  district: { type: String, default: '' },
+  districtId: { type: String, default: '' },
+  division: { type: String, default: '' },
+  divisionId: { type: String, default: '' },
+  taluk: { type: String, default: '' },
+  talukId: { type: String, default: '' },
+  pincode: { type: String, default: '' },
+  pincodeId: { type: String, default: '' }
+}, { _id: false });
+
+const addressDetailsSchema = new Schema({
+  buildingNo: { type: String, default: '' },
+  street: { type: String, default: '' },
+  locality: { type: String, default: '' },
+  postOffice: { type: String, default: '' },
+  taluk: { type: String, default: '' },
+  state: { type: String, default: '' },
+  district: { type: String, default: '' },
+  pincode: { type: String, default: '' }
+}, { _id: false });
+
 const agentSchema = new Schema<IAgent>({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true, index: true },
@@ -80,6 +127,15 @@ const agentSchema = new Schema<IAgent>({
     type: territorySchema,
     default: () => ({})
   },
+  assignedTerritory: {
+    type: assignedTerritorySchema,
+    default: () => ({})
+  },
+  address: {
+    type: addressDetailsSchema,
+    default: () => ({})
+  },
+  fullAddress: { type: String, default: '' },
   kycStatus: {
     type: String,
     enum: ['pending', 'approved', 'rejected'],

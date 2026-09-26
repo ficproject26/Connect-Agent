@@ -38,6 +38,15 @@ export interface AgentNode {
     division?: string;
     pincode?: string;
   };
+  assignedTerritory?: {
+    state?: string;
+    district?: string;
+    division?: string;
+    taluk?: string;
+    pincode?: string;
+  };
+  address?: any;
+  fullAddress?: string;
   plusPoints: string[];
   minusPoints: string[];
   teamSize?: number;
@@ -1215,16 +1224,53 @@ export const AgentManagement: React.FC = () => {
                 </button>
               </div>
 
-              <div className="bg-[#fbf9f8] p-3.5 rounded-xl border border-[#d7c3b5]/40 flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-[#52443a]">
-                <div className="flex flex-wrap items-center gap-2">
-                  <MapPin className="w-4 h-4 text-[#864f19]" />
-                  <span>State: {selectedAgent.territory?.state || userState}</span>
-                  {selectedAgent.territory?.district && <span>› District: {selectedAgent.territory.district}</span>}
-                  {selectedAgent.territory?.division && <span>› Division: {selectedAgent.territory.division}</span>}
-                  {selectedAgent.role !== 'division' && selectedAgent.territory?.pincode && <span>› PIN: {selectedAgent.territory.pincode}</span>}
+              {/* Separate Section 1: ASSIGNED TERRITORY */}
+              <div className="bg-amber-50/60 p-4 rounded-xl border border-amber-200/80 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-[#864f19]" />
+                    <span className="text-[10px] font-black uppercase text-[#864f19] tracking-wider">ASSIGNED TERRITORY</span>
+                  </div>
+                  <div className="text-[11px] font-black text-[#864f19] bg-white px-2.5 py-0.5 rounded-lg border border-amber-200/80 shadow-2xs">
+                    Date of Registration: {formatRegistrationDate(selectedAgent.createdAt)}
+                  </div>
                 </div>
-                <div className="text-[11px] font-black text-[#864f19] bg-white px-2.5 py-1 rounded-lg border border-[#d7c3b5]/50 shadow-2xs">
-                  Date of Registration: {formatRegistrationDate(selectedAgent.createdAt)}
+                <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-slate-800">
+                  <span>State: {selectedAgent.assignedTerritory?.state || selectedAgent.territory?.state || userState}</span>
+                  {(selectedAgent.assignedTerritory?.district || selectedAgent.territory?.district) && (
+                    <span>› District: {selectedAgent.assignedTerritory?.district || selectedAgent.territory?.district}</span>
+                  )}
+                  {(selectedAgent.assignedTerritory?.division || selectedAgent.territory?.division) && (
+                    <span>› Division: {selectedAgent.assignedTerritory?.division || selectedAgent.territory?.division}</span>
+                  )}
+                  {selectedAgent.assignedTerritory?.taluk && (
+                    <span>› Taluk: {selectedAgent.assignedTerritory.taluk}</span>
+                  )}
+                  {selectedAgent.role !== 'division' && (selectedAgent.assignedTerritory?.pincode || selectedAgent.territory?.pincode) && (
+                    <span>› PIN: {selectedAgent.assignedTerritory?.pincode || selectedAgent.territory?.pincode}</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Separate Section 2: ADDRESS DETAILS */}
+              <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-200 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-slate-700" />
+                  <span className="text-[10px] font-black uppercase text-slate-700 tracking-wider">ADDRESS DETAILS</span>
+                </div>
+                <div className="text-xs font-medium text-slate-700 leading-relaxed">
+                  {typeof selectedAgent.address === 'object' && selectedAgent.address?.buildingNo ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                      <div><span className="text-slate-400 font-bold block text-[10px] uppercase">Door / Building:</span> {selectedAgent.address.buildingNo}</div>
+                      <div><span className="text-slate-400 font-bold block text-[10px] uppercase">Street / Area:</span> {selectedAgent.address.street}</div>
+                      {selectedAgent.address.locality && <div><span className="text-slate-400 font-bold block text-[10px] uppercase">Village / Locality:</span> {selectedAgent.address.locality}</div>}
+                      {selectedAgent.address.postOffice && <div><span className="text-slate-400 font-bold block text-[10px] uppercase">Post Office:</span> {selectedAgent.address.postOffice}</div>}
+                      {selectedAgent.address.taluk && <div><span className="text-slate-400 font-bold block text-[10px] uppercase">Taluk:</span> {selectedAgent.address.taluk}</div>}
+                      <div><span className="text-slate-400 font-bold block text-[10px] uppercase">State & PIN:</span> {selectedAgent.address.state || userState} - {selectedAgent.address.pincode}</div>
+                    </div>
+                  ) : (
+                    <span>{selectedAgent.fullAddress || (typeof selectedAgent.address === 'string' ? selectedAgent.address : 'Physical address details on file.')}</span>
+                  )}
                 </div>
               </div>
 

@@ -17,6 +17,29 @@ export interface IAgent extends Document {
         division: string;
         pincode: string;
     };
+    assignedTerritory?: {
+        state: string;
+        stateId?: string;
+        district?: string;
+        districtId?: string;
+        division?: string;
+        divisionId?: string;
+        taluk?: string;
+        talukId?: string;
+        pincode?: string;
+        pincodeId?: string;
+    };
+    address?: {
+        buildingNo?: string;
+        street?: string;
+        locality?: string;
+        postOffice?: string;
+        taluk?: string;
+        state?: string;
+        district?: string;
+        pincode?: string;
+    };
+    fullAddress?: string;
     kycStatus: 'pending' | 'approved' | 'rejected';
     status?: 'pending' | 'approved' | 'active' | 'rejected' | 'suspended';
     kycDocs: {

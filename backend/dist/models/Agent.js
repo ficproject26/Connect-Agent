@@ -20,6 +20,28 @@ const territorySchema = new mongoose_1.Schema({
     division: { type: String, default: '' },
     pincode: { type: String, default: '' }
 }, { _id: false });
+const assignedTerritorySchema = new mongoose_1.Schema({
+    state: { type: String, default: '' },
+    stateId: { type: String, default: '' },
+    district: { type: String, default: '' },
+    districtId: { type: String, default: '' },
+    division: { type: String, default: '' },
+    divisionId: { type: String, default: '' },
+    taluk: { type: String, default: '' },
+    talukId: { type: String, default: '' },
+    pincode: { type: String, default: '' },
+    pincodeId: { type: String, default: '' }
+}, { _id: false });
+const addressDetailsSchema = new mongoose_1.Schema({
+    buildingNo: { type: String, default: '' },
+    street: { type: String, default: '' },
+    locality: { type: String, default: '' },
+    postOffice: { type: String, default: '' },
+    taluk: { type: String, default: '' },
+    state: { type: String, default: '' },
+    district: { type: String, default: '' },
+    pincode: { type: String, default: '' }
+}, { _id: false });
 const agentSchema = new mongoose_1.Schema({
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true, index: true },
@@ -40,6 +62,15 @@ const agentSchema = new mongoose_1.Schema({
         type: territorySchema,
         default: () => ({})
     },
+    assignedTerritory: {
+        type: assignedTerritorySchema,
+        default: () => ({})
+    },
+    address: {
+        type: addressDetailsSchema,
+        default: () => ({})
+    },
+    fullAddress: { type: String, default: '' },
     kycStatus: {
         type: String,
         enum: ['pending', 'approved', 'rejected'],

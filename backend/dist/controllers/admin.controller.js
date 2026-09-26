@@ -33,7 +33,7 @@ const getRegistrations = async (req, res) => {
             }
         }
         let registrations = await Agent_1.default.find(filter)
-            .select('_id name email phone role registrationId territory kycStatus status remarks rejectionReason createdAt updatedAt')
+            .select('_id name email phone role registrationId territory assignedTerritory address fullAddress kycStatus status remarks rejectionReason createdAt updatedAt')
             .sort({ createdAt: -1 })
             .lean();
         // Also query 'users' collection in MongoDB for any agent registrations synced directly to users collection

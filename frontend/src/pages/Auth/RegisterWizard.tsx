@@ -6,7 +6,7 @@ import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
-import { ArrowLeft, ArrowRight, Save, Shield, FileText, CheckCircle, Eye, EyeOff, RotateCcw, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Save, Shield, FileText, CheckCircle, Eye, EyeOff, RotateCcw, Trash2, MapPin, Building2, Lock } from 'lucide-react';
 import { AgentNetworkHero } from '../../components/auth/AgentNetworkHero';
 import connectPortalLogo from '../../assets/connect_portal_logo.png';
 
@@ -176,41 +176,92 @@ export const RegisterWizard: React.FC = () => {
     panNumber: ''
   });
 
-  const [address, setAddress] = useState({
+  // 1. Dedicated Assigned Territory State (Dynamic from Central Database)
+  const [assignedTerritory, setAssignedTerritory] = useState({
     state: '',
-    division: '',
+    stateId: '',
     district: '',
+    districtId: '',
+    division: '',
+    divisionId: '',
+    taluk: '',
+    talukId: '',
     pincode: '',
-    postOffice: '',
-    buildingNo: '',
-    streetName: '',
-    fullAddress: ''
+    pincodeId: ''
   });
 
-  const handlePincodeChange = (pin: string) => {
-    const cleaned = pin.replace(/\D/g, '').slice(0, 6);
-    
-    let updatedAddress = {
-      ...address,
-      pincode: cleaned,
-    };
+  // 2. Dedicated Address Details State (Physical / Contact Address)
+  const [address, setAddress] = useState({
+    buildingNo: '',
+    street: '',
+    locality: '',
+    postOffice: '',
+    taluk: '',
+    state: '',
+    district: '',
+    pincode: ''
+  });
 
-    if (cleaned.length === 6) {
-      const match = PINCODE_DIRECTORY[cleaned];
-      if (match) {
-        if (!address.state) updatedAddress.state = match.state;
-        if (!address.district) updatedAddress.district = match.district;
-        if (!address.division) updatedAddress.division = match.division;
-        updatedAddress.postOffice = match.postOffice;
-      } else {
-        updatedAddress.postOffice = `Post Office Sec-${cleaned.slice(-3)}`;
+  // Dynamic Territory Loading from Central Territory Database (Admin Pincode Management)
+  useEffect(() => {
+    let isMounted = true;
+    getActiveStates().then(states => {
+      if (isMounted && states && states.length > 0) {
+        setAdminStates(states);
+        // If single state available in central DB, auto-select it
+        if (states.length === 1 && !assignedTerritory.state) {
+          setAssignedTerritory(prev => ({ ...prev, state: states[0] }));
+        }
       }
-    } else {
-      updatedAddress.postOffice = '';
+    }).catch(err => {
+      console.error('Failed to load active states from central territory DB:', err);
+    });
+    return () => { isMounted = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!assignedTerritory.state) {
+      setAdminDistricts([]);
+      return;
     }
-    
-    setAddress(updatedAddress);
-  };
+    let isMounted = true;
+    getActiveDistricts(assignedTerritory.state).then(districts => {
+      if (isMounted) setAdminDistricts(districts);
+    }).catch(err => {
+      console.error('Failed to load active districts:', err);
+    });
+    return () => { isMounted = false; };
+  }, [assignedTerritory.state]);
+
+  useEffect(() => {
+    if (!assignedTerritory.state || !assignedTerritory.district) {
+      setAdminDivisions([]);
+      return;
+    }
+    let isMounted = true;
+    getActiveDivisions(assignedTerritory.state, assignedTerritory.district).then(divisions => {
+      if (isMounted) setAdminDivisions(divisions);
+    }).catch(err => {
+      console.error('Failed to load active divisions:', err);
+    });
+    return () => { isMounted = false; };
+  }, [assignedTerritory.state, assignedTerritory.district]);
+
+  useEffect(() => {
+    if (!assignedTerritory.state || !assignedTerritory.district || !assignedTerritory.division) {
+      setAdminPincodes([]);
+      return;
+    }
+    let isMounted = true;
+    getActivePincodes(assignedTerritory.state, assignedTerritory.district, assignedTerritory.division).then(pincodes => {
+      if (isMounted) {
+        setAdminPincodes(pincodes);
+      }
+    }).catch(err => {
+      console.error('Failed to load active pincodes:', err);
+    });
+    return () => { isMounted = false; };
+  }, [assignedTerritory.state, assignedTerritory.district, assignedTerritory.division]);
 
   const [professionalInfo, setProfessionalInfo] = useState({
     qualification: '',
@@ -244,7 +295,28 @@ export const RegisterWizard: React.FC = () => {
     setCurrentStep(1);
     setRole('state');
     setPersonalInfo({ name: '', phone: '', altPhone: '', email: '', password: '', confirmPassword: '', dob: '', gender: 'male', aadhaarNumber: '', panNumber: '' });
-    setAddress({ state: '', division: '', district: '', pincode: '', postOffice: '', buildingNo: '', streetName: '', fullAddress: '' });
+    setAssignedTerritory({
+      state: '',
+      stateId: '',
+      district: '',
+      districtId: '',
+      division: '',
+      divisionId: '',
+      taluk: '',
+      talukId: '',
+      pincode: '',
+      pincodeId: ''
+    });
+    setAddress({
+      buildingNo: '',
+      street: '',
+      locality: '',
+      postOffice: '',
+      taluk: '',
+      state: '',
+      district: '',
+      pincode: ''
+    });
     setProfessionalInfo({ qualification: '', experience: 'fresher', previousCompany: '' });
     setDocuments({
       aadhaarCard: { fileName: '', dataUrl: '', size: 0 },
@@ -436,28 +508,55 @@ export const RegisterWizard: React.FC = () => {
         setFormErrors('Please enter a valid PAN Number in format ABCDE1234F.');
         return;
       }
-      if (!address.state) {
-        setFormErrors('Please select your assigned State.');
+      // 1. Territory validation (Role-based jurisdiction)
+      if (!assignedTerritory.state) {
+        setFormErrors('Please select your assigned State in Assigned Territory.');
         return;
       }
-      if (role !== 'state' && !address.district) {
-        setFormErrors('Please select your assigned District.');
+      if (role !== 'state' && !assignedTerritory.district) {
+        setFormErrors('Please select your assigned District in Assigned Territory.');
         return;
       }
-      if ((role === 'division' || role === 'pincode') && !address.division) {
-        setFormErrors('Please select your assigned Division.');
+      if ((role === 'division' || role === 'pincode') && !assignedTerritory.division) {
+        setFormErrors('Please select your assigned Division in Assigned Territory.');
         return;
       }
-      if (role === 'pincode' && !address.pincode) {
-        setFormErrors('Please select your assigned PIN Code.');
+      if (role === 'pincode' && !assignedTerritory.pincode) {
+        setFormErrors('Please select your assigned PIN Code in Assigned Territory.');
         return;
       }
+
+      // 2. Address validation (Independent physical address)
       if (!address.buildingNo.trim()) {
-        setFormErrors('Building No / Door No / Shop No is required.');
+        setFormErrors('Building No / Door No / Shop No is required in Address Details.');
         return;
       }
-      if (!address.streetName.trim()) {
-        setFormErrors('Street Name / Area is required.');
+      if (!address.street.trim()) {
+        setFormErrors('Street Name / Area is required in Address Details.');
+        return;
+      }
+      if (!address.locality.trim()) {
+        setFormErrors('Village / Locality is required in Address Details.');
+        return;
+      }
+      if (!address.postOffice.trim()) {
+        setFormErrors('Post Office is required in Address Details.');
+        return;
+      }
+      if (!address.taluk.trim()) {
+        setFormErrors('Taluk is required in Address Details.');
+        return;
+      }
+      if (!address.state.trim()) {
+        setFormErrors('State is required in Address Details.');
+        return;
+      }
+      if (!address.district.trim()) {
+        setFormErrors('District is required in Address Details.');
+        return;
+      }
+      if (!address.pincode.trim() || !/^\d{6}$/.test(address.pincode.trim())) {
+        setFormErrors('A valid 6-digit Pincode is required in Address Details.');
         return;
       }
     }
@@ -497,6 +596,8 @@ export const RegisterWizard: React.FC = () => {
 
     setIsSubmitting(true);
     try {
+      const formattedAddressString = `${address.buildingNo.trim()}, ${address.street.trim()}, ${address.locality.trim()}, ${address.postOffice.trim()} P.O., ${address.taluk.trim()} Taluk, ${address.district.trim()}, ${address.state.trim()} - ${address.pincode.trim()}`;
+
       const payload = {
         name: personalInfo.name,
         email: (personalInfo.email || '').toLowerCase().trim(),
@@ -511,16 +612,37 @@ export const RegisterWizard: React.FC = () => {
         qualification: professionalInfo.qualification,
         experience: professionalInfo.experience,
         previousCompany: professionalInfo.previousCompany,
-        address: `${address.buildingNo ? `${address.buildingNo.trim()}, ` : ''}${address.streetName ? `${address.streetName.trim()}, ` : ''}${address.division ? `${address.division}, ` : ''}${address.district ? `${address.district}, ` : ''}${address.state} - ${address.pincode}`.trim(),
-        fullAddress: `${address.buildingNo ? `${address.buildingNo.trim()}, ` : ''}${address.streetName ? `${address.streetName.trim()}, ` : ''}${address.division ? `${address.division}, ` : ''}${address.district ? `${address.district}, ` : ''}${address.state} - ${address.pincode}`.trim(),
+        address: {
+          buildingNo: address.buildingNo.trim(),
+          street: address.street.trim(),
+          locality: address.locality.trim(),
+          postOffice: address.postOffice.trim(),
+          taluk: address.taluk.trim(),
+          state: address.state.trim(),
+          district: address.district.trim(),
+          pincode: address.pincode.trim()
+        },
+        fullAddress: formattedAddressString,
         buildingNo: address.buildingNo.trim(),
-        streetName: address.streetName.trim(),
-        postOffice: address.postOffice || '',
+        streetName: address.street.trim(),
+        postOffice: address.postOffice.trim(),
+        assignedTerritory: {
+          state: assignedTerritory.state,
+          stateId: assignedTerritory.stateId,
+          district: role === 'state' ? '' : assignedTerritory.district,
+          districtId: role === 'state' ? '' : assignedTerritory.districtId,
+          division: (role === 'state' || role === 'district') ? '' : assignedTerritory.division,
+          divisionId: (role === 'state' || role === 'district') ? '' : assignedTerritory.divisionId,
+          taluk: (role === 'state' || role === 'district') ? '' : assignedTerritory.taluk,
+          talukId: (role === 'state' || role === 'district') ? '' : assignedTerritory.talukId,
+          pincode: role === 'pincode' ? assignedTerritory.pincode : '',
+          pincodeId: role === 'pincode' ? assignedTerritory.pincodeId : ''
+        },
         territory: {
-          state: address.state,
-          district: role === 'state' ? '' : address.district,
-          division: address.division,
-          pincode: address.pincode
+          state: assignedTerritory.state,
+          district: role === 'state' ? '' : assignedTerritory.district,
+          division: (role === 'state' || role === 'district') ? '' : assignedTerritory.division,
+          pincode: role === 'pincode' ? assignedTerritory.pincode : ''
         },
         kycDocs: {
           aadhaarNumber: personalInfo.aadhaarNumber || '',
@@ -699,15 +821,16 @@ export const RegisterWizard: React.FC = () => {
                     const newRole = e.target.value as any;
                     setRole(newRole);
                     setFormErrors('');
-                    setAddress(prev => ({
-                      state: prev.state,
+                    setAssignedTerritory(prev => ({
+                      ...prev,
                       district: newRole === 'state' ? '' : prev.district,
-                      division: prev.division,
-                      pincode: prev.pincode,
-                      postOffice: prev.postOffice,
-                      buildingNo: prev.buildingNo,
-                      streetName: prev.streetName,
-                      fullAddress: prev.fullAddress
+                      districtId: newRole === 'state' ? '' : prev.districtId,
+                      division: (newRole === 'state' || newRole === 'district') ? '' : prev.division,
+                      divisionId: (newRole === 'state' || newRole === 'district') ? '' : prev.divisionId,
+                      taluk: (newRole === 'state' || newRole === 'district') ? '' : prev.taluk,
+                      talukId: (newRole === 'state' || newRole === 'district') ? '' : prev.talukId,
+                      pincode: newRole === 'pincode' ? prev.pincode : '',
+                      pincodeId: newRole === 'pincode' ? prev.pincodeId : ''
                     }));
                   }}
                 />
@@ -926,119 +1049,307 @@ export const RegisterWizard: React.FC = () => {
                   />
                 </div>
 
-                                {/* 6. Address & Territory Details (Admin Territory Master Single Source of Truth) */}
-                <div className="p-4 bg-amber-50/50 border border-amber-200/80 rounded-xl space-y-3 mt-2">
-                  <div className="text-xs font-black text-[#864f19] uppercase tracking-wider">
-                    • Address & Territory Details ({role.toUpperCase()} AGENT)
+                {/* 6. Section 1: ASSIGNED TERRITORY (Admin Pincode Management Single Source of Truth) */}
+                <div className="p-5 bg-gradient-to-br from-amber-50/70 to-orange-50/30 border border-amber-200/90 rounded-2xl space-y-4 shadow-2xs mt-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-amber-200/70">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-300 flex items-center justify-center text-[#864f19]">
+                        <MapPin className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black text-[#864f19] uppercase tracking-wider">
+                          ASSIGNED TERRITORY ({role.toUpperCase()} AGENT)
+                        </h4>
+                        <p className="text-[11px] text-amber-900/70 font-semibold">
+                          Used strictly for role/territory permissions and organizational hierarchy.
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-amber-100 text-[#864f19] border border-amber-300">
+                      Hierarchy Jurisdiction
+                    </span>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {/* STATE: Required for ALL roles */}
-                    <Select
-                      label="State (Required)"
-                      options={[
-                        { value: '', label: '-- Select Assigned State --' },
-                        ...adminStates.map(s => ({ value: s, label: s }))
-                      ]}
-                      value={address.state}
-                      onChange={(e) => {
-                        const selState = e.target.value;
-                        setAddress({
-                          ...address,
-                          state: selState,
-                          district: '',
-                          division: '',
-                          pincode: '',
-                          postOffice: ''
-                        });
-                        setFormErrors('');
-                      }}
-                    />
 
-                    {/* DISTRICT: Required for District, Division, Pincode agents */}
-                    {role !== 'state' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                    {/* STATE: Required for all roles */}
+                    <div>
                       <Select
-                        label="District (Required)"
-                        disabled={!address.state}
+                        label="State (Required)"
                         options={[
-                          { value: '', label: address.state ? '-- Select Assigned District --' : 'Select State First' },
-                          ...adminDistricts.map(d => ({ value: d, label: d }))
+                          { value: '', label: '-- Select Assigned State --' },
+                          ...adminStates.map(s => ({ value: s, label: s }))
                         ]}
-                        value={address.district}
+                        value={assignedTerritory.state}
                         onChange={(e) => {
-                          const selDistrict = e.target.value;
-                          setAddress({
-                            ...address,
-                            district: selDistrict,
+                          const selState = e.target.value;
+                          setAssignedTerritory({
+                            state: selState,
+                            stateId: '',
+                            district: '',
+                            districtId: '',
                             division: '',
+                            divisionId: '',
+                            taluk: '',
+                            talukId: '',
                             pincode: '',
-                            postOffice: ''
+                            pincodeId: ''
                           });
                           setFormErrors('');
                         }}
                       />
+                    </div>
+
+                    {/* DISTRICT */}
+                    {role === 'state' ? (
+                      <div className="p-3 bg-amber-100/50 rounded-xl border border-amber-200/80 flex items-center gap-2.5">
+                        <Lock className="w-4 h-4 text-[#864f19] shrink-0" />
+                        <div>
+                          <span className="text-[9px] font-bold text-amber-800 uppercase block">District Jurisdiction</span>
+                          <span className="text-xs font-black text-[#864f19]">State-wide Scope (All Districts in State)</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <Select
+                          label="District (Required)"
+                          disabled={!assignedTerritory.state}
+                          options={[
+                            { value: '', label: assignedTerritory.state ? '-- Select Assigned District --' : 'Select State First' },
+                            ...adminDistricts.map(d => ({ value: d, label: d }))
+                          ]}
+                          value={assignedTerritory.district}
+                          onChange={(e) => {
+                            const selDistrict = e.target.value;
+                            setAssignedTerritory(prev => ({
+                              ...prev,
+                              district: selDistrict,
+                              districtId: '',
+                              division: '',
+                              divisionId: '',
+                              taluk: '',
+                              talukId: '',
+                              pincode: '',
+                              pincodeId: ''
+                            }));
+                            setFormErrors('');
+                          }}
+                        />
+                      </div>
                     )}
 
-                    {/* DIVISION: Required for Division & Pincode agents */}
+                    {/* DIVISION */}
+                    {(role === 'state' || role === 'district') ? (
+                      role === 'district' ? (
+                        <div className="p-3 bg-amber-100/50 rounded-xl border border-amber-200/80 flex items-center gap-2.5">
+                          <Lock className="w-4 h-4 text-[#864f19] shrink-0" />
+                          <div>
+                            <span className="text-[9px] font-bold text-amber-800 uppercase block">Division Jurisdiction</span>
+                            <span className="text-xs font-black text-[#864f19]">District-wide Scope (All Divisions in District)</span>
+                          </div>
+                        </div>
+                      ) : null
+                    ) : (
+                      <div>
+                        <Select
+                          label="Division (Required)"
+                          disabled={!assignedTerritory.district}
+                          options={[
+                            { value: '', label: assignedTerritory.district ? '-- Select Assigned Division --' : 'Select District First' },
+                            ...adminDivisions.map(div => ({ value: div, label: div }))
+                          ]}
+                          value={assignedTerritory.division}
+                          onChange={(e) => {
+                            const selDiv = e.target.value;
+                            const divPincodes = adminPincodes.filter(p => p.taluk);
+                            const matchedTaluk = divPincodes[0]?.taluk || '';
+                            setAssignedTerritory(prev => ({
+                              ...prev,
+                              division: selDiv,
+                              divisionId: '',
+                              taluk: matchedTaluk,
+                              talukId: '',
+                              pincode: '',
+                              pincodeId: ''
+                            }));
+                            setFormErrors('');
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {/* TALUK / LOCALITY (Central Territory Database) */}
                     {(role === 'division' || role === 'pincode') && (
-                      <Select
-                        label="Division (Required)"
-                        disabled={!address.district}
-                        options={[
-                          { value: '', label: address.district ? '-- Select Assigned Division --' : 'Select District First' },
-                          ...adminDivisions.map(div => ({ value: div, label: div }))
-                        ]}
-                        value={address.division}
-                        onChange={(e) => {
-                          const selDiv = e.target.value;
-                          setAddress({
-                            ...address,
-                            division: selDiv,
-                            pincode: '',
-                            postOffice: ''
-                          });
-                          setFormErrors('');
-                        }}
-                      />
+                      <div>
+                        <Input
+                          label="Taluk / Locality (Central Territory Database)"
+                          placeholder={assignedTerritory.taluk || (assignedTerritory.division ? 'Auto-mapped from Division' : 'Select Division first')}
+                          value={assignedTerritory.taluk}
+                          onChange={(e) => setAssignedTerritory(prev => ({ ...prev, taluk: e.target.value }))}
+                          className={assignedTerritory.taluk ? 'bg-amber-100/40 font-bold text-[#864f19]' : ''}
+                        />
+                      </div>
                     )}
 
-                    {/* PIN CODE: Required for Pincode Agent */}
-                    {role === 'pincode' && (
-                      <Select
-                        label="PIN Code (Required)"
-                        disabled={!address.division}
-                        options={[
-                          { value: '', label: address.division ? '-- Select Assigned PIN Code --' : 'Select Division First' },
-                          ...adminPincodes.map(p => ({ value: p.code, label: `${p.code}${p.name ? ' (' + p.name + ')' : ''}` }))
-                        ]}
-                        value={address.pincode}
-                        onChange={(e) => {
-                          const selPin = e.target.value;
-                          const pinObj = adminPincodes.find(p => p.code === selPin);
-                          setAddress({
-                            ...address,
-                            pincode: selPin,
-                            postOffice: pinObj?.name || pinObj?.postOffice || ''
-                          });
-                          setFormErrors('');
-                        }}
-                      />
+                    {/* PINCODE */}
+                    {role === 'pincode' ? (
+                      <div>
+                        <Select
+                          label="PIN Code (Required)"
+                          disabled={!assignedTerritory.division}
+                          options={[
+                            { value: '', label: assignedTerritory.division ? '-- Select Assigned PIN Code --' : 'Select Division First' },
+                            ...adminPincodes.map(p => ({
+                              value: p.code,
+                              label: `${p.code}${p.name ? ' (' + p.name + ')' : ''}${p.taluk ? ' - Taluk: ' + p.taluk : ''}`
+                            }))
+                          ]}
+                          value={assignedTerritory.pincode}
+                          onChange={(e) => {
+                            const selPin = e.target.value;
+                            const pinObj = adminPincodes.find(p => p.code === selPin);
+                            setAssignedTerritory(prev => ({
+                              ...prev,
+                              pincode: selPin,
+                              taluk: pinObj?.taluk || prev.taluk || ''
+                            }));
+                            setFormErrors('');
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      role !== 'state' && role !== 'district' ? (
+                        <div className="p-3 bg-amber-100/50 rounded-xl border border-amber-200/80 flex items-center gap-2.5">
+                          <Lock className="w-4 h-4 text-[#864f19] shrink-0" />
+                          <div>
+                            <span className="text-[9px] font-bold text-amber-800 uppercase block">Pincode Jurisdiction</span>
+                            <span className="text-xs font-black text-[#864f19]">Division-wide Scope (All Pincodes in Division)</span>
+                          </div>
+                        </div>
+                      ) : null
                     )}
                   </div>
+                </div>
 
-                  {/* Building No / Door No / Shop No * & Street Name / Area * */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                {/* 7. Section 2: ADDRESS DETAILS (Physical Contact Address) */}
+                <div className="p-5 bg-gradient-to-br from-slate-50/90 to-blue-50/20 border border-slate-200/90 rounded-2xl space-y-4 shadow-2xs mt-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-slate-200">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-slate-200/70 border border-slate-300 flex items-center justify-center text-slate-700">
+                        <Building2 className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                          ADDRESS DETAILS
+                        </h4>
+                        <p className="text-[11px] text-slate-500 font-semibold">
+                          Used only for the applicant's physical / contact address. Kept independent from assigned territory.
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-300">
+                      Physical Location
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                    {/* Building No / Door No / Shop No */}
                     <Input
                       label="Building No / Door No / Shop No *"
                       placeholder="e.g. Door #14-2, Shop #5, Commercial Complex"
-                      value={address.buildingNo || ''}
-                      onChange={(e) => setAddress({ ...address, buildingNo: e.target.value })}
+                      value={address.buildingNo}
+                      onChange={(e) => {
+                        setAddress({ ...address, buildingNo: e.target.value });
+                        if (formErrors) setFormErrors('');
+                      }}
                       required
                     />
+
+                    {/* Street Name / Area */}
                     <Input
                       label="Street Name / Area *"
                       placeholder="e.g. Main Market Road, Bus Stand Area"
-                      value={address.streetName || ''}
-                      onChange={(e) => setAddress({ ...address, streetName: e.target.value })}
+                      value={address.street}
+                      onChange={(e) => {
+                        setAddress({ ...address, street: e.target.value });
+                        if (formErrors) setFormErrors('');
+                      }}
+                      required
+                    />
+
+                    {/* Village / Locality */}
+                    <Input
+                      label="Village / Locality *"
+                      placeholder="e.g. Example Area, Gandhi Nagar, Town Hall"
+                      value={address.locality}
+                      onChange={(e) => {
+                        setAddress({ ...address, locality: e.target.value });
+                        if (formErrors) setFormErrors('');
+                      }}
+                      required
+                    />
+
+                    {/* Post Office */}
+                    <Input
+                      label="Post Office *"
+                      placeholder="e.g. Example Post Office, Central H.O."
+                      value={address.postOffice}
+                      onChange={(e) => {
+                        setAddress({ ...address, postOffice: e.target.value });
+                        if (formErrors) setFormErrors('');
+                      }}
+                      required
+                    />
+
+                    {/* Taluk */}
+                    <Input
+                      label="Taluk *"
+                      placeholder="e.g. Example Taluk, Harur"
+                      value={address.taluk}
+                      onChange={(e) => {
+                        setAddress({ ...address, taluk: e.target.value });
+                        if (formErrors) setFormErrors('');
+                      }}
+                      required
+                    />
+
+                    {/* State */}
+                    <Select
+                      label="State *"
+                      options={[
+                        { value: '', label: '-- Select State --' },
+                        ...ALL_INDIAN_STATES.map(s => ({ value: s, label: s }))
+                      ]}
+                      value={address.state}
+                      onChange={(e) => {
+                        setAddress({ ...address, state: e.target.value });
+                        if (formErrors) setFormErrors('');
+                      }}
+                    />
+
+                    {/* District */}
+                    <Input
+                      label="District *"
+                      placeholder="e.g. Dharmapuri, Krishnagiri"
+                      value={address.district}
+                      onChange={(e) => {
+                        setAddress({ ...address, district: e.target.value });
+                        if (formErrors) setFormErrors('');
+                      }}
+                      required
+                    />
+
+                    {/* Pincode */}
+                    <Input
+                      label="Pincode (6 Digits) *"
+                      maxLength={6}
+                      inputMode="numeric"
+                      placeholder="e.g. 635305"
+                      value={address.pincode}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '').slice(0, 6);
+                        setAddress({ ...address, pincode: val });
+                        if (formErrors) setFormErrors('');
+                      }}
                       required
                     />
                   </div>

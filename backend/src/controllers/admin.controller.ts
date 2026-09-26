@@ -31,7 +31,7 @@ export const getRegistrations = async (req: Request, res: Response) => {
     }
 
     let registrations = await Agent.find(filter)
-      .select('_id name email phone role registrationId territory kycStatus status remarks rejectionReason createdAt updatedAt')
+      .select('_id name email phone role registrationId territory assignedTerritory address fullAddress kycStatus status remarks rejectionReason createdAt updatedAt')
       .sort({ createdAt: -1 })
       .lean();
 
