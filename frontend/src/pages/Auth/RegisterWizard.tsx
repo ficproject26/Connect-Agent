@@ -1021,13 +1021,13 @@ export const RegisterWizard: React.FC = () => {
               </div>
             )}
 
-            {/* STEP 2: Profile Photo, Verification & Address Details */}
+            {/* STEP 2: Profile Photo, Verification, Territory & Address Details */}
             {currentStep === 2 && (
               <div className="space-y-5">
                 <div className="pb-2 border-b border-slate-100">
-                  <h3 className="font-extrabold text-lg text-slate-800">Verification & Address Details</h3>
+                  <h3 className="font-extrabold text-lg text-slate-800">Verification, Territory & Address Details</h3>
                   <p className="text-xs text-slate-500 font-semibold mt-1">
-                    Provide your profile photo, alternative contact, ID verification numbers, and address.
+                    Provide your profile photo, ID verification numbers, assigned territory jurisdiction, and physical contact address.
                   </p>
                 </div>
 
@@ -1145,7 +1145,7 @@ export const RegisterWizard: React.FC = () => {
                       </div>
                       <div>
                         <h4 className="text-xs font-black text-[#864f19] uppercase tracking-wider">
-                          ASSIGNED TERRITORY ({role.toUpperCase()} AGENT)
+                          • TERRITORY DETAILS ({role.toUpperCase()} AGENT)
                         </h4>
                         <p className="text-[11px] text-amber-900/70 font-semibold">
                           Used strictly for role/territory permissions and organizational hierarchy.
@@ -1360,7 +1360,7 @@ export const RegisterWizard: React.FC = () => {
                       </div>
                       <div>
                         <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                          ADDRESS DETAILS
+                          • ADDRESS DETAILS
                         </h4>
                         <p className="text-[11px] text-slate-500 font-semibold">
                           Used only for the applicant's physical / contact address. Kept independent from assigned territory.
