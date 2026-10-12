@@ -628,6 +628,7 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
     }
 
     const responseData = {
+      agents: uniqueAgents,
       tree,
       states: stateAgents.length > 0 ? tree : [],
       districts: finalDistricts,

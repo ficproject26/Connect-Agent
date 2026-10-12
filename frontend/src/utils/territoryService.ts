@@ -149,7 +149,22 @@ export async function fetchTerritoryHierarchy(forceRefresh = false): Promise<Ter
   }
 
   isFetchingPromise = (async () => {
-    // 1. Try Agent Backend /territory/all-hierarchy
+    // 1. Try Agent Backend /territory/hierarchy (scoped to authenticated agent)
+    try {
+      const res = await api.get('/territory/hierarchy');
+      const raw = res.data?.hierarchy || (Array.isArray(res.data) ? res.data : null);
+      if (raw && Array.isArray(raw)) {
+        const cleaned = parseHierarchyTree(raw);
+        if (cleaned.length > 0) {
+          cachedHierarchy = cleaned;
+          return cleaned;
+        }
+      }
+    } catch {
+      // Continue to next source
+    }
+
+    // 2. Try Agent Backend /territory/all-hierarchy
     try {
       const res = await api.get('/territory/all-hierarchy');
       const raw = res.data?.hierarchy || (Array.isArray(res.data) ? res.data : null);
@@ -164,7 +179,7 @@ export async function fetchTerritoryHierarchy(forceRefresh = false): Promise<Ter
       // Continue to next source
     }
 
-    // 2. Try Agent Backend /territory/hierarchy?all=true
+    // 3. Try Agent Backend /territory/hierarchy?all=true
     try {
       const res = await api.get('/territory/hierarchy?all=true');
       const raw = res.data?.hierarchy || (Array.isArray(res.data) ? res.data : null);
@@ -281,39 +296,64 @@ export function getActiveStatesSync(): string[] {
 /**
  * Returns full district objects with id and name for a given state.
  */
-export async function getActiveDistrictList(stateNameOrId: string, forceRefresh = false): Promise<TerritoryItem[]> {
-  if (!stateNameOrId) return [];
+export async function getActiveDistrictList(stateNameOrId?: string, forceRefresh = false): Promise<TerritoryItem[]> {
   const hierarchy = await fetchTerritoryHierarchy(forceRefresh);
-  const target = stateNameOrId.trim().toLowerCase();
-  const st = hierarchy.find(s =>
-    s.name.trim().toLowerCase() === target ||
-    s.id.toLowerCase() === target ||
-    (s.code && s.code.toLowerCase() === target)
-  );
+  if (!hierarchy || hierarchy.length === 0) return [];
+
+  let st: TerritoryState | undefined;
+  if (stateNameOrId && stateNameOrId.trim()) {
+    const target = stateNameOrId.trim().toLowerCase();
+    st = hierarchy.find(s => {
+      const sName = s.name.trim().toLowerCase();
+      const sId = s.id.toLowerCase();
+      const sCode = s.code ? s.code.toLowerCase() : '';
+      return (
+        sName === target ||
+        sId === target ||
+        sCode === target ||
+        sName.includes(target) ||
+        target.includes(sName)
+      );
+    });
+  }
+
+  // If not matched or no state parameter supplied, but hierarchy has 1 scoped state, use it
+  if (!st && hierarchy.length === 1) {
+    st = hierarchy[0];
+  }
+
   if (!st) return [];
   return st.districts.map(d => ({
     id: d.id,
     name: d.name,
     code: d.code,
-    stateId: st.id,
+    stateId: st!.id,
     status: d.status
   })).sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export async function getActiveDistricts(stateNameOrId: string, forceRefresh = false): Promise<string[]> {
+export async function getActiveDistricts(stateNameOrId?: string, forceRefresh = false): Promise<string[]> {
   const list = await getActiveDistrictList(stateNameOrId, forceRefresh);
   return list.map(d => d.name);
 }
 
 export function getActiveDistrictsSync(stateNameOrId?: string): string[] {
   const hierarchy = cachedHierarchy || [];
+  if (!hierarchy || hierarchy.length === 0) return [];
   if (!stateNameOrId) {
+    if (hierarchy.length === 1) {
+      return hierarchy[0].districts.map(d => d.name).sort();
+    }
     const all: string[] = [];
     hierarchy.forEach(st => st.districts.forEach(d => all.push(d.name)));
     return Array.from(new Set(all)).sort();
   }
   const target = stateNameOrId.trim().toLowerCase();
-  const st = hierarchy.find(s => s.name.trim().toLowerCase() === target || s.id.toLowerCase() === target);
+  const st = hierarchy.find(s => {
+    const sName = s.name.trim().toLowerCase();
+    const sId = s.id.toLowerCase();
+    return sName === target || sId === target || sName.includes(target) || target.includes(sName);
+  }) || (hierarchy.length === 1 ? hierarchy[0] : undefined);
   if (!st) return [];
   return st.districts.map(d => d.name).sort();
 }
@@ -333,12 +373,20 @@ export async function getActiveDivisionList(
   const dtTarget = districtNameOrId?.trim().toLowerCase();
 
   for (const st of hierarchy) {
-    if (stTarget && st.name.trim().toLowerCase() !== stTarget && st.id.toLowerCase() !== stTarget) {
-      continue;
+    if (stTarget && hierarchy.length > 1) {
+      const sName = st.name.trim().toLowerCase();
+      const sId = st.id.toLowerCase();
+      if (sName !== stTarget && sId !== stTarget && !sName.includes(stTarget) && !stTarget.includes(sName)) {
+        continue;
+      }
     }
     for (const dt of st.districts) {
-      if (dtTarget && dt.name.trim().toLowerCase() !== dtTarget && dt.id.toLowerCase() !== dtTarget) {
-        continue;
+      if (dtTarget) {
+        const dName = dt.name.trim().toLowerCase();
+        const dId = dt.id.toLowerCase();
+        if (dName !== dtTarget && dId !== dtTarget && !dName.includes(dtTarget) && !dtTarget.includes(dName)) {
+          continue;
+        }
       }
       for (const dv of dt.divisions) {
         allDivs.push({
@@ -377,14 +425,24 @@ export function getActiveDivisionsSync(stateNameOrId?: string, districtNameOrId?
 
 function getActiveDivisionsInternal(hierarchy: TerritoryState[], stateName?: string, districtName?: string): string[] {
   const allDivs: string[] = [];
+  const stTarget = stateName?.trim().toLowerCase();
+  const dtTarget = districtName?.trim().toLowerCase();
 
   for (const st of hierarchy) {
-    if (stateName && st.name.trim().toLowerCase() !== stateName.trim().toLowerCase() && st.id.toLowerCase() !== stateName.trim().toLowerCase()) {
-      continue;
+    if (stTarget && hierarchy.length > 1) {
+      const sName = st.name.trim().toLowerCase();
+      const sId = st.id.toLowerCase();
+      if (sName !== stTarget && sId !== stTarget && !sName.includes(stTarget) && !stTarget.includes(sName)) {
+        continue;
+      }
     }
     for (const dt of st.districts) {
-      if (districtName && dt.name.trim().toLowerCase() !== districtName.trim().toLowerCase() && dt.id.toLowerCase() !== districtName.trim().toLowerCase()) {
-        continue;
+      if (dtTarget) {
+        const dName = dt.name.trim().toLowerCase();
+        const dId = dt.id.toLowerCase();
+        if (dName !== dtTarget && dId !== dtTarget && !dName.includes(dtTarget) && !dtTarget.includes(dName)) {
+          continue;
+        }
       }
       for (const dv of dt.divisions) {
         allDivs.push(dv.name);
@@ -429,16 +487,28 @@ function getActivePincodesInternal(
   const dvTarget = divisionNameOrId?.trim().toLowerCase();
 
   for (const st of hierarchy) {
-    if (stTarget && st.name.trim().toLowerCase() !== stTarget && st.id.toLowerCase() !== stTarget) {
-      continue;
-    }
-    for (const dt of st.districts) {
-      if (dtTarget && dt.name.trim().toLowerCase() !== dtTarget && dt.id.toLowerCase() !== dtTarget) {
+    if (stTarget && hierarchy.length > 1) {
+      const sName = st.name.trim().toLowerCase();
+      const sId = st.id.toLowerCase();
+      if (sName !== stTarget && sId !== stTarget && !sName.includes(stTarget) && !stTarget.includes(sName)) {
         continue;
       }
-      for (const dv of dt.divisions) {
-        if (dvTarget && dv.name.trim().toLowerCase() !== dvTarget && dv.id.toLowerCase() !== dvTarget) {
+    }
+    for (const dt of st.districts) {
+      if (dtTarget) {
+        const dName = dt.name.trim().toLowerCase();
+        const dId = dt.id.toLowerCase();
+        if (dName !== dtTarget && dId !== dtTarget && !dName.includes(dtTarget) && !dtTarget.includes(dName)) {
           continue;
+        }
+      }
+      for (const dv of dt.divisions) {
+        if (dvTarget) {
+          const vName = dv.name.trim().toLowerCase();
+          const vId = dv.id.toLowerCase();
+          if (vName !== dvTarget && vId !== dvTarget && !vName.includes(dvTarget) && !dvTarget.includes(vName)) {
+            continue;
+          }
         }
         allPins.push(...dv.pincodes);
       }

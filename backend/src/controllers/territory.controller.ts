@@ -76,7 +76,14 @@ async function buildHierarchyTree(scope: any = null, forceAll = false) {
 
   let filteredStates = activeStates;
   if (!forceAll && scope?.role && scope.state) {
-    filteredStates = filteredStates.filter(s => s.name.trim().toLowerCase() === scope.state.trim().toLowerCase());
+    const scState = scope.state.trim().toLowerCase();
+    filteredStates = filteredStates.filter(s => {
+      const stName = s.name.trim().toLowerCase();
+      return stName === scState || stName.includes(scState) || scState.includes(stName);
+    });
+    if (filteredStates.length === 0 && activeStates.length === 1) {
+      filteredStates = activeStates;
+    }
   }
 
   const hierarchy = filteredStates.map(st => {
@@ -94,7 +101,11 @@ async function buildHierarchyTree(scope: any = null, forceAll = false) {
     });
 
     if (!forceAll && scope?.district && (scope.role === 'district' || scope.role === 'division' || scope.role === 'pincode')) {
-      stDistricts = stDistricts.filter(d => d.name.trim().toLowerCase() === scope.district.trim().toLowerCase());
+      const scDist = scope.district.trim().toLowerCase();
+      stDistricts = stDistricts.filter(d => {
+        const dName = d.name.trim().toLowerCase();
+        return dName === scDist || dName.includes(scDist) || scDist.includes(dName);
+      });
     }
 
     return {
@@ -118,7 +129,11 @@ async function buildHierarchyTree(scope: any = null, forceAll = false) {
         });
 
         if (!forceAll && scope?.division && (scope.role === 'division' || scope.role === 'pincode')) {
-          dtDivisions = dtDivisions.filter(v => v.name.trim().toLowerCase() === scope.division.trim().toLowerCase());
+          const scDiv = scope.division.trim().toLowerCase();
+          dtDivisions = dtDivisions.filter(v => {
+            const vName = v.name.trim().toLowerCase();
+            return vName === scDiv || vName.includes(scDiv) || scDiv.includes(vName);
+          });
         }
 
         return {
@@ -276,7 +291,9 @@ export const getDistricts = async (req: Request, res: Response) => {
         stateQueries.push({ name: stateId as string });
       }
       if (state) {
-        stateQueries.push({ name: { $regex: new RegExp(`^${(state as string).trim()}$`, 'i') } });
+        const trimmedState = (state as string).trim();
+        stateQueries.push({ name: { $regex: new RegExp(`^${trimmedState}$`, 'i') } });
+        stateQueries.push({ name: { $regex: new RegExp(trimmedState, 'i') } });
         stateQueries.push({ stateId: state as string });
       }
 

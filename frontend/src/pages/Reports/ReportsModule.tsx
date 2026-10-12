@@ -20,7 +20,7 @@ export const ReportsModule: React.FC = () => {
   const userPincode = (userTerritory?.pincode || (user as any)?.assignedPincode || (user as any)?.pincode || '').trim();
   const userDivision = (userTerritory?.division || (user as any)?.assignedDivision || (user as any)?.division || '').trim();
   const userDistrict = (userTerritory?.district || (user as any)?.assignedDistrict || (user as any)?.district || '').trim();
-  const userState = (userTerritory?.state || (user as any)?.assignedState || (user as any)?.state || '').trim();
+  const userState = (userTerritory?.state || (user as any)?.assignedState || (user as any)?.state || user?.address?.state || '').trim();
 
   const [activeTab, setActiveTab] = useState('overview');
   const [timeframe, setTimeframe] = useState<'today' | 'weekly' | 'monthly' | 'date'>('today');
@@ -190,25 +190,59 @@ export const ReportsModule: React.FC = () => {
   const [realTargets, setRealTargets] = useState<any[]>([]);
   const [realTickets, setRealTickets] = useState<any[]>([]);
   const [hierarchyAgents, setHierarchyAgents] = useState<any[]>([]);
+  const [categoriesMaster, setCategoriesMaster] = useState<any[]>([]);
 
   useEffect(() => {
-    // Fetch API data for tickets & vendors & hierarchy in parallel
+    // Fetch API data for tickets & vendors & hierarchy & categories in parallel
     const loadSystemData = async () => {
       try {
-        const [vRes, tRes, fRes, aRes] = await Promise.all([
-          api.get('/vendors').catch(() => ({ data: { vendors: [] } })),
+        const [vRes, tRes, fRes, aRes, cRes] = await Promise.all([
+          api.get('/vendors?limit=200').catch(() => ({ data: { vendors: [] } })),
           api.get('/tickets').catch(() => ({ data: { tickets: [] } })),
-          api.get('/field-visits').catch(() => ({ data: { visits: [] } })),
-          api.get('/admin/hierarchy').catch(() => ({ data: { agents: [] } }))
+          api.get('/field-visits?limit=200').catch(() => ({ data: { visits: [] } })),
+          api.get('/admin/hierarchy').catch(() => ({ data: { agents: [] } })),
+          api.get('/categories').catch(() => ({ data: { categories: [] } }))
         ]);
         if (vRes?.data?.vendors) setRealVendors(vRes.data.vendors);
         if (tRes?.data?.tickets) setRealTickets(tRes.data.tickets);
         if (fRes?.data?.visits) setRealVisits(fRes.data.visits);
-        if (aRes?.data?.agents) setHierarchyAgents(aRes.data.agents);
+        if (cRes?.data?.categories) setCategoriesMaster(cRes.data.categories);
+
+        // Populate hierarchy agents
+        if (aRes?.data) {
+          const agentsData: any[] = [];
+          if (Array.isArray(aRes.data.agents)) {
+            agentsData.push(...aRes.data.agents);
+          }
+          if (Array.isArray(aRes.data.districts)) {
+            aRes.data.districts.forEach((d: any) => { if (d.agent) agentsData.push(d.agent); });
+          }
+          if (Array.isArray(aRes.data.divisions)) {
+            aRes.data.divisions.forEach((dv: any) => { if (dv.agent) agentsData.push(dv.agent); });
+          }
+          if (Array.isArray(aRes.data.pincodes)) {
+            aRes.data.pincodes.forEach((p: any) => {
+              if (p.activeAgentId) agentsData.push(typeof p.activeAgentId === 'object' ? p.activeAgentId : { _id: p.activeAgentId, name: p.name });
+              if (p.agent) agentsData.push(p.agent);
+            });
+          }
+          const uniqueMap = new Map();
+          agentsData.forEach(a => {
+            const id = a._id || a.id || a.agentId;
+            if (id && !uniqueMap.has(String(id))) uniqueMap.set(String(id), a);
+          });
+          setHierarchyAgents(Array.from(uniqueMap.values()));
+        }
       } catch (e) {}
     };
     loadSystemData();
   }, [user]);
+
+  const effectiveState = useMemo(() => {
+    if (userState) return userState;
+    const found = hierarchyAgents.find(a => a.territory?.state || a.assignedState || a.state);
+    return found?.territory?.state || found?.assignedState || found?.state || '';
+  }, [userState, hierarchyAgents]);
 
   // Derived real metrics across Division
   const fieldVisitsCount = realVisits.length;
@@ -222,6 +256,128 @@ export const ReportsModule: React.FC = () => {
   const targetRatePercent = completedTasksCount > 0 && (completedTasksCount + pendingTasksCount) > 0
     ? Math.round((completedTasksCount / (completedTasksCount + pendingTasksCount)) * 1000) / 10
     : 0;
+
+  // Canonical Main Categories as mandated
+  const CANONICAL_CATEGORIES = [
+    'Service',
+    'Product',
+    'Food',
+    'Daily Needs',
+    'Stay',
+    'Travel',
+    'Jobs'
+  ] as const;
+  type CanonicalCategory = typeof CANONICAL_CATEGORIES[number];
+
+  const CANONICAL_COLORS = [
+    '#864f19', // Service (Brand Brown)
+    '#2563eb', // Product (Blue)
+    '#16a34a', // Food (Green)
+    '#d97706', // Daily Needs (Amber)
+    '#9333ea', // Stay (Purple)
+    '#0284c7', // Travel (Sky Blue)
+    '#dc2626'  // Jobs (Red)
+  ];
+
+  const categoryShares = useMemo(() => {
+    const counts: Record<CanonicalCategory, number> = {
+      'Service': 0,
+      'Product': 0,
+      'Food': 0,
+      'Daily Needs': 0,
+      'Stay': 0,
+      'Travel': 0,
+      'Jobs': 0
+    };
+
+    const mapVendor = (v: any): CanonicalCategory | null => {
+      if (!v) return null;
+      let rawCategory = v.category;
+      let categoryStr = '';
+
+      if (rawCategory && typeof rawCategory === 'object') {
+        categoryStr = (rawCategory.name || rawCategory.categoryName || rawCategory.title || '').trim();
+        if (!categoryStr && rawCategory._id) {
+          categoryStr = String(rawCategory._id);
+        }
+      } else if (rawCategory) {
+        categoryStr = String(rawCategory).trim();
+      }
+
+      if (categoriesMaster && categoriesMaster.length > 0 && categoryStr) {
+        let catDoc = categoriesMaster.find(c => String(c._id) === categoryStr || String(c.id) === categoryStr || (c.name && c.name.toLowerCase() === categoryStr.toLowerCase()));
+        if (catDoc) {
+          let current = catDoc;
+          let depth = 0;
+          while ((current.parent || current.parentId) && depth < 5) {
+            const parentId = String(current.parent?._id || current.parent || current.parentId);
+            const parentObj = categoriesMaster.find(c => String(c._id) === parentId || String(c.id) === parentId || (c.name && c.name.toLowerCase() === parentId.toLowerCase()));
+            if (parentObj && parentObj !== current) {
+              current = parentObj;
+              depth++;
+            } else {
+              break;
+            }
+          }
+          categoryStr = current.name || categoryStr;
+        }
+      }
+
+      const storeType = (v.storeType || v.vendorType || '').trim();
+      const combined = `${categoryStr} ${storeType} ${(v.businessName || '')}`.toLowerCase();
+
+      if (combined.includes('food') || combined.includes('restaurant') || combined.includes('cafe') || combined.includes('dining') || combined.includes('bakery') || combined.includes('sweets') || combined.includes('snack') || combined.includes('beverage') || combined.includes('tea') || combined.includes('coffee') || combined.includes('juice') || combined.includes('hotel and restaurant')) {
+        return 'Food';
+      }
+      if (combined.includes('daily needs') || combined.includes('daily') || combined.includes('grocery') || combined.includes('supermarket') || combined.includes('kirana') || combined.includes('provision') || combined.includes('dairy') || combined.includes('milk') || combined.includes('vegetable') || combined.includes('fruit') || combined.includes('meat') || combined.includes('fish') || combined.includes('poultry') || combined.includes('general store') || combined.includes('convenience store')) {
+        return 'Daily Needs';
+      }
+      if (combined.includes('stay') || combined.includes('hotel') || combined.includes('lodge') || combined.includes('resort') || combined.includes('homestay') || combined.includes('hostel') || combined.includes('guest house') || combined.includes('accommodation') || combined.includes('room rent') || combined.includes('pg ') || combined.includes('pg/')) {
+        return 'Stay';
+      }
+      if (combined.includes('travel') || combined.includes('tour') || combined.includes('taxi') || combined.includes('cab') || combined.includes('transport') || combined.includes('logistics') || combined.includes('bus') || combined.includes('auto') || combined.includes('car rental') || combined.includes('vehicle rental')) {
+        return 'Travel';
+      }
+      if (combined.includes('job') || combined.includes('recruitment') || combined.includes('hiring') || combined.includes('employment') || combined.includes('staffing') || combined.includes('placement') || combined.includes('manpower') || combined.includes('career') || combined.includes('consultancy')) {
+        return 'Jobs';
+      }
+      if (combined.includes('product') || combined.includes('electronic') || combined.includes('hardware') || combined.includes('mobile') || combined.includes('cloth') || combined.includes('fashion') || combined.includes('apparel') || combined.includes('footwear') || combined.includes('shoe') || combined.includes('retail') || combined.includes('jewelry') || combined.includes('jewel') || combined.includes('optician') || combined.includes('optical') || combined.includes('pharmacy') || combined.includes('medical store') || combined.includes('appliance') || combined.includes('furniture') || combined.includes('stationery') || combined.includes('book') || combined.includes('toy') || combined.includes('cosmetic')) {
+        return 'Product';
+      }
+      if (combined.includes('service') || combined.includes('salon') || combined.includes('spa') || combined.includes('beauty') || combined.includes('parlour') || combined.includes('barber') || combined.includes('plumb') || combined.includes('electri') || combined.includes('carpenter') || combined.includes('repair') || combined.includes('laundry') || combined.includes('dry clean') || combined.includes('cleaning') || combined.includes('hospital') || combined.includes('clinic') || combined.includes('healthcare') || combined.includes('fitness') || combined.includes('gym') || combined.includes('education') || combined.includes('tuition') || combined.includes('coaching') || combined.includes('automobile service') || combined.includes('mechanic')) {
+        return 'Service';
+      }
+
+      if (categoryStr.toLowerCase() === 'services') return 'Service';
+      if (categoryStr.toLowerCase() === 'products') return 'Product';
+
+      return null;
+    };
+
+    realVendors.forEach(v => {
+      const canonical = mapVendor(v);
+      if (canonical) {
+        counts[canonical] = (counts[canonical] || 0) + 1;
+      }
+    });
+
+    const totalCount = Object.values(counts).reduce((sum, n) => sum + n, 0);
+
+    const proportions = CANONICAL_CATEGORIES.map(cat => {
+      if (totalCount === 0) return 0;
+      return Math.round((counts[cat] / totalCount) * 100);
+    });
+
+    const rawCounts = CANONICAL_CATEGORIES.map(cat => counts[cat]);
+
+    return {
+      labels: [...CANONICAL_CATEGORIES],
+      shares: proportions,
+      counts: rawCounts,
+      totalCount,
+      colors: [...CANONICAL_COLORS]
+    };
+  }, [realVendors, categoriesMaster]);
 
   // Real Dynamic Chart Datasets based on division system state
   const merchantData = useMemo(() => {
@@ -250,8 +406,7 @@ export const ReportsModule: React.FC = () => {
         Math.min(totalApp, stepApp * 5),
         Math.min(totalApp, stepApp * 6),
         totalApp
-      ],
-      shares: [45, 25, 18, 12]
+      ]
     };
   }, [vendorsOnboardedCount]);
 
@@ -358,40 +513,40 @@ export const ReportsModule: React.FC = () => {
     <div className="space-y-4 animate-fade-in text-[#1b1c1c] font-sans">
       
       {/* Top Title HUD Panel */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-5 rounded-[16px] border border-[#eae8e7] shadow-sm gap-4">
-        <div>
-          <div className="flex items-center gap-2">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center bg-white p-5 rounded-[16px] border border-[#eae8e7] shadow-sm gap-4">
+        <div className="flex flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-2.5">
             <h1 className="text-2xl font-black text-[#1b1c1c] font-sans">
               {activeRole === 'state' && 'State Operations & Reports Analytics'}
               {activeRole === 'district' && 'District Operations & Reports Analytics'}
               {activeRole === 'division' && 'Division Operations & Reports Analytics'}
               {activeRole === 'pincode' && 'Pincode Operations & Reports Analytics'}
             </h1>
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-[#864f19] text-white">
+            <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-[#864f19] text-white tracking-wider">
               ROLE: {activeRole.toUpperCase()} AGENT
             </span>
           </div>
-          <p className="text-xs font-semibold text-[#52443a] mt-1">
+          <p className="text-xs font-semibold text-[#52443a]">
             {activeRole === 'state' && (
-              <>State Scope: <strong className="text-[#864f19]">{userState}</strong> (All Districts, Divisions & Downstream Pincodes)</>
+              <>State Scope: <strong className="text-[#864f19]">{effectiveState || userState || 'Assigned State'}</strong> (All Districts, Divisions & Downstream Pincodes)</>
             )}
             {activeRole === 'district' && (
-              <>District Scope: <strong className="text-[#864f19]">{userState}</strong> → <strong className="text-[#864f19]">{userDistrict}</strong> (Downstream Divisions & Pincodes)</>
+              <>District Scope: <strong className="text-[#864f19]">{effectiveState || userState}</strong> → <strong className="text-[#864f19]">{userDistrict}</strong> (Downstream Divisions & Pincodes)</>
             )}
             {activeRole === 'division' && (
-              <>Territory Scope: <strong className="text-[#864f19]">{userState}</strong> → <strong className="text-[#864f19]">{userDistrict}</strong> → <strong className="text-[#864f19]">{userDivision}</strong> (Downstream Pincodes)</>
+              <>Territory Scope: <strong className="text-[#864f19]">{effectiveState || userState}</strong> → <strong className="text-[#864f19]">{userDistrict}</strong> → <strong className="text-[#864f19]">{userDivision}</strong> (Downstream Pincodes)</>
             )}
             {activeRole === 'pincode' && (
-              <>Pincode Scope: <strong className="text-[#864f19]">{userState}</strong> → <strong className="text-[#864f19]">{userDistrict}</strong> → <strong className="text-[#864f19]">{userDivision}</strong> → <strong className="text-[#864f19]">PIN {userPincode}</strong></>
+              <>Pincode Scope: <strong className="text-[#864f19]">{effectiveState || userState}</strong> → <strong className="text-[#864f19]">{userDistrict}</strong> → <strong className="text-[#864f19]">{userDivision}</strong> → <strong className="text-[#864f19]">PIN {userPincode}</strong></>
             )}
           </p>
         </div>
 
         {/* Global Filter Bar with Calendar View */}
-        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+        <div className="flex flex-wrap items-end gap-3 w-full lg:w-auto">
           {/* Calendar View Date Picker */}
           <div className="flex flex-col">
-            <label className="text-[10px] font-extrabold uppercase text-[#52443a] tracking-wider mb-1 flex items-center gap-1">
+            <label className="text-[10px] font-extrabold uppercase text-[#52443a] tracking-wider mb-1 flex items-center gap-1 h-4">
               <Calendar className="w-3.5 h-3.5 text-[#864f19]" /> Select Date (Calendar View)
             </label>
             <input
@@ -401,30 +556,33 @@ export const ReportsModule: React.FC = () => {
                 setSelectedDate(e.target.value);
                 setTimeframe('date');
               }}
-              className="bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl px-3 py-2 text-xs font-bold text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19] cursor-pointer shadow-sm"
+              className="h-10 bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl px-3 py-2 text-xs font-bold text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19] cursor-pointer shadow-sm"
             />
           </div>
 
-          <div className="w-48">
-            <Select
-              label="Select Timeframe"
+          <div className="w-48 flex flex-col">
+            <label className="text-[10px] font-extrabold uppercase text-[#52443a] tracking-wider mb-1 flex items-center gap-1 h-4">
+              Select Timeframe
+            </label>
+            <select
               value={timeframe}
               onChange={(e) => setTimeframe(e.target.value as any)}
-              options={[
-                { value: 'today', label: 'Today (Live Hourly)' },
-                { value: 'weekly', label: 'This Week' },
-                { value: 'monthly', label: 'This Month' },
-                { value: 'date', label: `Chosen Date (${selectedDate})` }
-              ]}
-            />
+              className="h-10 w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl px-3 py-2 text-xs font-bold text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19] cursor-pointer shadow-sm"
+            >
+              <option value="today">Today (Live Hourly)</option>
+              <option value="weekly">This Week</option>
+              <option value="monthly">This Month</option>
+              <option value="date">Chosen Date ({selectedDate})</option>
+            </select>
           </div>
-          <div className="pt-5 shrink-0">
+
+          <div>
             <Button
               variant="primary"
               onClick={handleExport}
               isLoading={isExporting}
               leftIcon={<Download className="w-4 h-4" />}
-              className="whitespace-nowrap px-4 py-2.5 bg-[#864f19] hover:bg-[#a3672f] text-white border-none cursor-pointer font-bold rounded-xl text-xs uppercase tracking-wider shadow-sm transition"
+              className="h-10 whitespace-nowrap px-4 bg-[#864f19] hover:bg-[#a3672f] text-white border-none cursor-pointer font-bold rounded-xl text-xs uppercase tracking-wider shadow-sm transition flex items-center justify-center gap-2"
             >
               Export Report
             </Button>
@@ -437,39 +595,39 @@ export const ReportsModule: React.FC = () => {
 
       {/* Metrics KPI Cards Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
+        <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm flex flex-col justify-between min-h-[96px]">
           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">FIELD VISITS</span>
-          <p className="text-xl font-black text-[#864f19] mt-1">{fieldVisitsCount}</p>
+          <p className="text-xl font-black text-[#864f19] my-0.5">{fieldVisitsCount}</p>
           <span className="text-[10px] text-slate-500 font-semibold">{activeRole === 'state' ? 'State Scope' : activeRole === 'pincode' ? 'Pincode Scope' : activeRole === 'district' ? 'District Scope' : 'Division Scope'}</span>
         </div>
 
-        <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
+        <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm flex flex-col justify-between min-h-[96px]">
           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">VENDORS ONBOARDED</span>
-          <p className="text-xl font-black text-emerald-700 mt-1">{vendorsOnboardedCount}</p>
+          <p className="text-xl font-black text-emerald-700 my-0.5">{vendorsOnboardedCount}</p>
           <span className="text-[10px] text-emerald-600 font-semibold">Active merchants</span>
         </div>
 
-        <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
+        <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm flex flex-col justify-between min-h-[96px]">
           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">COMPLETED TASKS</span>
-          <p className="text-xl font-black text-blue-700 mt-1">{completedTasksCount}</p>
+          <p className="text-xl font-black text-blue-700 my-0.5">{completedTasksCount}</p>
           <span className="text-[10px] text-blue-600 font-semibold">Audits verified</span>
         </div>
 
-        <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
+        <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm flex flex-col justify-between min-h-[96px]">
           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">PENDING TASKS</span>
-          <p className="text-xl font-black text-amber-600 mt-1">{pendingTasksCount}</p>
+          <p className="text-xl font-black text-amber-600 my-0.5">{pendingTasksCount}</p>
           <span className="text-[10px] text-amber-600 font-semibold">Awaiting review</span>
         </div>
 
-        <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
+        <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm flex flex-col justify-between min-h-[96px]">
           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">SUPPORT TICKETS</span>
-          <p className="text-xl font-black text-purple-700 mt-1">{supportTicketsCount}</p>
+          <p className="text-xl font-black text-purple-700 my-0.5">{supportTicketsCount}</p>
           <span className="text-[10px] text-purple-600 font-semibold">Logged queries</span>
         </div>
 
-        <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm">
+        <div className="bg-white p-3.5 rounded-2xl border border-[#eae8e7] shadow-sm flex flex-col justify-between min-h-[96px]">
           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">PERFORMANCE SCORE</span>
-          <p className="text-xl font-black text-emerald-700 mt-1">{targetRatePercent}%</p>
+          <p className="text-xl font-black text-emerald-700 my-0.5">{targetRatePercent}%</p>
           <span className="text-[10px] text-emerald-600 font-extrabold">On Track</span>
         </div>
       </div>
@@ -477,16 +635,17 @@ export const ReportsModule: React.FC = () => {
       {activeTab === 'overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Onboarding Velocity Line Chart */}
-          <Card className="lg:col-span-2">
+          <Card className="lg:col-span-2 flex flex-col">
             <CardHeader>
               <div className="flex items-center space-x-2">
                 <TrendingUp className="w-5 h-5 text-[#864f19]" />
                 <CardTitle>{activeRole === 'state' ? 'State Merchant Onboarding Curve' : activeRole === 'pincode' ? 'Pincode Merchant Onboarding Curve' : activeRole === 'district' ? 'District Merchant Onboarding Curve' : 'Division Merchant Onboarding Curve'} — {timeframeOptions.find(o => o.value === timeframe)?.label || 'Live Overview'}</CardTitle>
               </div>
             </CardHeader>
-            <CardBody>
+            <CardBody className="flex-1 flex flex-col justify-center">
               <Charts
                 type="line"
+                className="h-[340px] min-h-[340px]"
                 labels={merchantData.labels}
                 datasets={[
                   {
@@ -509,21 +668,49 @@ export const ReportsModule: React.FC = () => {
           </Card>
 
           {/* Category Shares Doughnut Chart */}
-          <Card className="lg:col-span-1">
+          <Card className="lg:col-span-1 flex flex-col">
             <CardHeader>
               <CardTitle>{activeRole === 'state' ? 'State Category Shares' : activeRole === 'pincode' ? 'Pincode Category Shares' : activeRole === 'district' ? 'District Category Shares' : 'Division Category Shares'}</CardTitle>
             </CardHeader>
-            <CardBody>
+            <CardBody className="flex-1 flex flex-col justify-center">
               <Charts
                 type="doughnut"
-                labels={['Supermarket & Retail', 'Restaurant & Food', 'Electronics & Hardware', 'Services & Others']}
+                labels={categoryShares.labels}
+                className="h-[340px] min-h-[340px]"
                 datasets={[
                   {
                     label: 'Category Share (%)',
-                    data: merchantData.shares,
-                    backgroundColor: ['#864f19', '#34647b', '#f59e0b', '#10b981'],
+                    data: categoryShares.shares,
+                    backgroundColor: categoryShares.colors,
                   }
                 ]}
+                options={{
+                  plugins: {
+                    legend: {
+                      position: 'bottom',
+                      labels: {
+                        boxWidth: 12,
+                        padding: 10,
+                        font: {
+                          family: 'Outfit, Inter, sans-serif',
+                          size: 11,
+                          weight: 'bold'
+                        }
+                      }
+                    },
+                    tooltip: {
+                      callbacks: {
+                        label: (context: any) => {
+                          const label = context.label || '';
+                          const pct = context.raw ?? 0;
+                          const idx = context.dataIndex ?? 0;
+                          const cnt = categoryShares.counts[idx] ?? 0;
+                          return ` ${label}: ${pct}% (${cnt} vendor${cnt === 1 ? '' : 's'})`;
+                        }
+                      }
+                    }
+                  }
+                }}
               />
             </CardBody>
           </Card>

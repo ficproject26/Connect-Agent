@@ -32,10 +32,48 @@ export const TicketsList: React.FC = () => {
     division: (user as any)?.assignedDivision,
     pincode: (user as any)?.assignedPincode
   };
-  const userState = (userTerritory?.state || (user as any)?.assignedState || '').trim();
-  const userDistrict = (userTerritory?.district || (user as any)?.assignedDistrict || '').trim();
-  const userDivision = (userTerritory?.division || (user as any)?.assignedDivision || '').trim();
-  const userPincode = (userTerritory?.pincode || (user as any)?.assignedPincode || '').trim();
+  const userState = (
+    userTerritory?.state ||
+    (user as any)?.assignedState ||
+    (user as any)?.state ||
+    user?.address?.state ||
+    ''
+  ).trim();
+  const userDistrict = (
+    userTerritory?.district ||
+    (user as any)?.assignedDistrict ||
+    (user as any)?.district ||
+    user?.address?.district ||
+    ''
+  ).trim();
+  const userDivision = (
+    userTerritory?.division ||
+    (user as any)?.assignedDivision ||
+    (user as any)?.division ||
+    ''
+  ).trim();
+  const userPincode = (
+    userTerritory?.pincode ||
+    (user as any)?.assignedPincode ||
+    (user as any)?.pincode ||
+    ''
+  ).trim();
+
+  const [effectiveState, setEffectiveState] = useState<string>(userState);
+
+  useEffect(() => {
+    if (userState) {
+      setEffectiveState(userState);
+    } else {
+      // Fetch hierarchy to resolve the authenticated State Agent's assigned state
+      api.get('/territory/hierarchy').then(res => {
+        const hierarchy = res.data?.hierarchy;
+        if (Array.isArray(hierarchy) && hierarchy.length > 0 && hierarchy[0]?.name) {
+          setEffectiveState(hierarchy[0].name.trim());
+        }
+      }).catch(() => {});
+    }
+  }, [userState]);
 
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [assignedVendors, setAssignedVendors] = useState<any[]>([]);
@@ -63,50 +101,79 @@ export const TicketsList: React.FC = () => {
   const [availableDivisions, setAvailableDivisions] = useState<string[]>([]);
   const [availablePincodes, setAvailablePincodes] = useState<TerritoryPincode[]>([]);
 
-  // Load Active Districts for userState
+  const [isLoadingDistricts, setIsLoadingDistricts] = useState(false);
+  const [isLoadingDivisions, setIsLoadingDivisions] = useState(false);
+  const [isLoadingPincodes, setIsLoadingPincodes] = useState(false);
+  const [districtError, setDistrictError] = useState('');
+
+  // Load Active Districts for userState or effectiveState
   useEffect(() => {
     if (activeRole === 'state') {
-      getActiveDistricts(userState).then(dists => {
-        setAvailableDistricts(dists);
-        if (dists.length > 0 && (!selectedDistrict || !dists.includes(selectedDistrict))) {
-          setSelectedDistrict(dists[0]);
-        }
-      });
+      setIsLoadingDistricts(true);
+      setDistrictError('');
+      getActiveDistricts(effectiveState || userState)
+        .then(dists => {
+          setAvailableDistricts(dists);
+          if (selectedDistrict && !dists.includes(selectedDistrict)) {
+            setSelectedDistrict('');
+          }
+        })
+        .catch(err => {
+          console.error('Failed to load districts:', err);
+          setDistrictError('Failed to load districts from territory records.');
+        })
+        .finally(() => {
+          setIsLoadingDistricts(false);
+        });
     }
-  }, [activeRole, userState]);
+  }, [activeRole, effectiveState, userState]);
 
   // Load Active Divisions when District changes (with child reset)
   useEffect(() => {
     if (activeRole === 'state' && selectedDistrict) {
-      getActiveDivisions(userState, selectedDistrict).then(divs => {
-        setAvailableDivisions(divs);
-        if (divs.length > 0 && (!selectedDivision || !divs.includes(selectedDivision))) {
-          setSelectedDivision(divs[0]);
-        } else if (divs.length === 0) {
-          setSelectedDivision('');
-        }
-      });
+      setIsLoadingDivisions(true);
+      getActiveDivisions(effectiveState || userState, selectedDistrict)
+        .then(divs => {
+          setAvailableDivisions(divs);
+          if (selectedDivision && !divs.includes(selectedDivision)) {
+            setSelectedDivision('');
+          }
+        })
+        .catch(err => {
+          console.error('Failed to load divisions:', err);
+        })
+        .finally(() => {
+          setIsLoadingDivisions(false);
+        });
     } else {
       setAvailableDivisions([]);
       setSelectedDivision('');
       setSelectedPincode('');
     }
-  }, [activeRole, userState, selectedDistrict]);
+  }, [activeRole, effectiveState, userState, selectedDistrict]);
 
   // Load Active Pincodes when Division changes (with child reset)
   useEffect(() => {
     if (activeRole === 'state' && selectedDistrict && selectedDivision) {
-      getActivePincodes(userState, selectedDistrict, selectedDivision).then(pins => {
-        setAvailablePincodes(pins);
-        if (pins.length > 0 && (!selectedPincode || !pins.some(p => p.code === selectedPincode))) {
-          setSelectedPincode('');
-        }
-      });
+      setIsLoadingPincodes(true);
+      getActivePincodes(effectiveState || userState, selectedDistrict, selectedDivision)
+        .then(pins => {
+          setAvailablePincodes(pins);
+          if (selectedPincode && !pins.some(p => p.code === selectedPincode)) {
+            setSelectedPincode('');
+          }
+        })
+        .catch(err => {
+          console.error('Failed to load pincodes:', err);
+        })
+        .finally(() => {
+          setIsLoadingPincodes(false);
+        });
     } else {
       setAvailablePincodes([]);
       setSelectedPincode('');
     }
-  }, [activeRole, userState, selectedDistrict, selectedDivision]);
+  }, [activeRole, effectiveState, userState, selectedDistrict, selectedDivision]);
 
   // State Agent Ticket Inspection / Management State
   const [ticketRaised, setTicketRaised] = useState(false);
@@ -228,7 +295,7 @@ export const TicketsList: React.FC = () => {
       };
 
       if (activeRole === 'state') {
-        payload.state = userState;
+        payload.state = effectiveState || userState;
         payload.district = selectedDistrict.trim();
         payload.division = selectedDivision.trim();
         payload.pincode = selectedPincode.trim();
@@ -360,7 +427,7 @@ export const TicketsList: React.FC = () => {
           </div>
           <p className="text-xs font-semibold text-[#52443a] mt-1 uppercase tracking-wider">
             {activeRole === 'state'
-              ? `MANAGE AND RESOLVE STATE-WIDE ESCALATED SUPPORT TICKETS ACROSS ALL DISTRICTS, DIVISIONS, AND PINCODE AGENTS IN ${userState}.`
+              ? `MANAGE AND RESOLVE STATE-WIDE ESCALATED SUPPORT TICKETS ACROSS ALL DISTRICTS, DIVISIONS, AND PINCODE AGENTS IN ${(effectiveState || userState || 'Assigned State').toUpperCase()}.`
               : `SUBMIT MERCHANT QUERIES, KYC DOCUMENT DISPUTES, OR ESCALATE TICKETS ACROSS ASSIGNED ${activeRole.toUpperCase()} TERRITORY.`}
           </p>
         </div>
@@ -619,12 +686,21 @@ export const TicketsList: React.FC = () => {
                       setSelectedDivision('');
                       setSelectedPincode('');
                     }}
+                    disabled={isLoadingDistricts}
                     className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                   >
                     <option value="">-- Select District --</option>
-                    {availableDistricts.map(d => (
-                      <option key={d} value={d}>{d}</option>
-                    ))}
+                    {isLoadingDistricts ? (
+                      <option value="" disabled>Loading districts...</option>
+                    ) : districtError ? (
+                      <option value="" disabled>{districtError}</option>
+                    ) : availableDistricts.length === 0 ? (
+                      <option value="" disabled>No districts configured for {effectiveState || userState || 'assigned state'}</option>
+                    ) : (
+                      availableDistricts.map(d => (
+                        <option key={d} value={d}>{d}</option>
+                      ))
+                    )}
                   </select>
                 </div>
 
@@ -636,33 +712,45 @@ export const TicketsList: React.FC = () => {
                       setSelectedDivision(e.target.value);
                       setSelectedPincode('');
                     }}
-                    disabled={!selectedDistrict}
+                    disabled={!selectedDistrict || isLoadingDivisions}
                     className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19] disabled:opacity-50"
                   >
                     <option value="">-- Select Division --</option>
-                    {availableDivisions.map(v => (
-                      <option key={v} value={v}>{v}</option>
-                    ))}
+                    {isLoadingDivisions ? (
+                      <option value="" disabled>Loading divisions...</option>
+                    ) : selectedDistrict && availableDivisions.length === 0 ? (
+                      <option value="" disabled>No divisions configured for {selectedDistrict}</option>
+                    ) : (
+                      availableDivisions.map(v => (
+                        <option key={v} value={v}>{v}</option>
+                      ))
+                    )}
                   </select>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Pincode Sector & Responsible Agent</label>
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Pincode Sector & Responsible Agent (Optional)</label>
                   <select
                     value={selectedPincode}
                     onChange={(e) => setSelectedPincode(e.target.value)}
-                    disabled={!selectedDivision}
+                    disabled={!selectedDivision || isLoadingPincodes}
                     className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19] disabled:opacity-50"
                   >
                     <option value="">-- Select Pincode (Optional) --</option>
-                    {availablePincodes.map(p => {
-                      const agentLabel = p.activeAgentId?.name ? ` (${p.activeAgentId.name} - Pincode Agent)` : '';
-                      return (
-                        <option key={p.code} value={p.code}>
-                          {p.code}{agentLabel}
-                        </option>
-                      );
-                    })}
+                    {isLoadingPincodes ? (
+                      <option value="" disabled>Loading pincodes...</option>
+                    ) : selectedDivision && availablePincodes.length === 0 ? (
+                      <option value="" disabled>No pincodes configured for {selectedDivision}</option>
+                    ) : (
+                      availablePincodes.map(p => {
+                        const agentLabel = p.activeAgentId?.name ? ` (${p.activeAgentId.name} - Pincode Agent)` : '';
+                        return (
+                          <option key={p.code} value={p.code}>
+                            {p.code}{p.area ? ` - ${p.area}` : ''}{agentLabel}
+                          </option>
+                        );
+                      })
+                    )}
                   </select>
                 </div>
 

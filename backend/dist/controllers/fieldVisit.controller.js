@@ -100,7 +100,7 @@ const getFieldVisits = async (req, res) => {
         const agentRole = req.agent?.role;
         if (!agentId)
             return res.status(401).json({ message: 'Unauthorized' });
-        const { page = '1', limit = '20', status, vendorId } = req.query;
+        const { page = '1', limit = '100', status, vendorId, agent: specificAgent } = req.query;
         const pageNum = parseInt(page, 10);
         const limitNum = parseInt(limit, 10);
         const filter = {};
@@ -112,16 +112,27 @@ const getFieldVisits = async (req, res) => {
             const territoryFilter = (0, territoryScope_1.buildTerritoryFilter)(scope);
             const subordinates = await Agent_1.default.find(territoryFilter).select('_id').lean();
             const allowedAgentIds = [agentId, ...subordinates.map(s => s._id.toString())];
-            filter.agent = { $in: allowedAgentIds };
+            if (specificAgent && allowedAgentIds.includes(String(specificAgent))) {
+                filter.agent = specificAgent;
+            }
+            else {
+                filter.agent = { $in: allowedAgentIds };
+            }
         }
-        if (status)
-            filter.status = status;
+        if (status && status !== 'all') {
+            if (status === 'in_progress') {
+                filter.status = { $in: ['in_progress', 'started'] };
+            }
+            else {
+                filter.status = status;
+            }
+        }
         if (vendorId)
             filter.vendor = vendorId;
         const total = await FieldVisit_1.default.countDocuments(filter);
         const visits = await FieldVisit_1.default.find(filter)
-            .populate('agent', 'name email role phone territory')
-            .populate('vendor', 'storeName contactPerson phone pincode address district division state')
+            .populate('agent', 'name email role phone territory assignedTerritory registrationId')
+            .populate('vendor', 'storeName businessName contactPerson phone pincode address district division state')
             .sort({ createdAt: -1 })
             .skip((pageNum - 1) * limitNum)
             .limit(limitNum)

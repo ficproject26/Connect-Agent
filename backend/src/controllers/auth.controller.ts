@@ -670,10 +670,47 @@ export const getMe = async (req: Request, res: Response) => {
             agent.role = String(userDoc.role).toLowerCase() as any;
             await agent.save();
           }
+
+          // Sync territory if present in admin user record
+          const docState = (userDoc.assignedTerritory?.state || userDoc.territory?.state || userDoc.state || userDoc.assignedState || '').trim();
+          const docDistrict = (userDoc.assignedTerritory?.district || userDoc.territory?.district || userDoc.district || userDoc.assignedDistrict || '').trim();
+          const docDivision = (userDoc.assignedTerritory?.division || userDoc.territory?.division || userDoc.division || userDoc.assignedDivision || '').trim();
+          const docPincode = (userDoc.assignedTerritory?.pincode || userDoc.territory?.pincode || userDoc.pincode || userDoc.assignedPincode || '').trim();
+
+          if (docState && (!agent.territory?.state || !(agent as any).assignedTerritory?.state)) {
+            const rawAgent = agent as any;
+            if (!rawAgent.territory) rawAgent.territory = {};
+            if (!rawAgent.assignedTerritory) rawAgent.assignedTerritory = {};
+            rawAgent.territory.state = rawAgent.territory.state || docState;
+            rawAgent.assignedTerritory.state = rawAgent.assignedTerritory.state || docState;
+            if (docDistrict) {
+              rawAgent.territory.district = rawAgent.territory.district || docDistrict;
+              rawAgent.assignedTerritory.district = rawAgent.assignedTerritory.district || docDistrict;
+            }
+            if (docDivision) {
+              rawAgent.territory.division = rawAgent.territory.division || docDivision;
+              rawAgent.assignedTerritory.division = rawAgent.assignedTerritory.division || docDivision;
+            }
+            if (docPincode) {
+              rawAgent.territory.pincode = rawAgent.territory.pincode || docPincode;
+              rawAgent.assignedTerritory.pincode = rawAgent.assignedTerritory.pincode || docPincode;
+            }
+            await agent.save();
+          }
         }
       }
     } catch (statusSyncErr) {
       console.error('Error syncing status from admin collection in getMe:', statusSyncErr);
+    }
+
+    // Ensure territory object state is fallback-populated from address if still blank
+    if (!agent.territory?.state && agent.address?.state) {
+      const rawAgent = agent as any;
+      if (!rawAgent.territory) rawAgent.territory = {};
+      if (!rawAgent.assignedTerritory) rawAgent.assignedTerritory = {};
+      rawAgent.territory.state = agent.address.state;
+      rawAgent.assignedTerritory.state = agent.address.state;
+      await agent.save();
     }
 
     const currentKycStatus = (agent.kycStatus || '').toLowerCase();

@@ -100,7 +100,7 @@ export const getFieldVisits = async (req: Request, res: Response) => {
     const agentRole = (req as any).agent?.role;
     if (!agentId) return res.status(401).json({ message: 'Unauthorized' });
 
-    const { page = '1', limit = '20', status, vendorId } = req.query;
+    const { page = '1', limit = '100', status, vendorId, agent: specificAgent } = req.query;
     const pageNum = parseInt(page as string, 10);
     const limitNum = parseInt(limit as string, 10);
 
@@ -112,15 +112,26 @@ export const getFieldVisits = async (req: Request, res: Response) => {
       const territoryFilter = buildTerritoryFilter(scope);
       const subordinates = await Agent.find(territoryFilter).select('_id').lean();
       const allowedAgentIds = [agentId, ...subordinates.map(s => s._id.toString())];
-      filter.agent = { $in: allowedAgentIds };
+
+      if (specificAgent && allowedAgentIds.includes(String(specificAgent))) {
+        filter.agent = specificAgent;
+      } else {
+        filter.agent = { $in: allowedAgentIds };
+      }
     }
-    if (status) filter.status = status;
+    if (status && status !== 'all') {
+      if (status === 'in_progress') {
+        filter.status = { $in: ['in_progress', 'started'] };
+      } else {
+        filter.status = status;
+      }
+    }
     if (vendorId) filter.vendor = vendorId;
 
     const total = await FieldVisit.countDocuments(filter);
     const visits = await FieldVisit.find(filter)
-      .populate('agent', 'name email role phone territory')
-      .populate('vendor', 'storeName contactPerson phone pincode address district division state')
+      .populate('agent', 'name email role phone territory assignedTerritory registrationId')
+      .populate('vendor', 'storeName businessName contactPerson phone pincode address district division state')
       .sort({ createdAt: -1 })
       .skip((pageNum - 1) * limitNum)
       .limit(limitNum)

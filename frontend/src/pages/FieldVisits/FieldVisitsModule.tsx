@@ -21,6 +21,7 @@ interface FieldVisitRecord {
   latitude: number;
   longitude: number;
   remarks?: string;
+  agentId?: string;
   visitedBy: string;
   visitedByRole: string;
   state: string;
@@ -43,10 +44,35 @@ export const FieldVisitsModule: React.FC = () => {
     division: (user as any)?.assignedDivision,
     pincode: (user as any)?.assignedPincode
   };
-  const userState = (userTerritory?.state || (user as any)?.assignedState || '').trim();
-  const userDistrict = (userTerritory?.district || (user as any)?.assignedDistrict || '').trim();
-  const userDivision = (userTerritory?.division || (user as any)?.assignedDivision || '').trim();
-  const userPincode = (userTerritory?.pincode || (user as any)?.assignedPincode || '').trim();
+  const userState = (
+    user?.assignedTerritory?.state ||
+    user?.territory?.state ||
+    (user as any)?.assignedState ||
+    (user as any)?.state ||
+    (user as any)?.address?.state ||
+    ''
+  ).trim();
+  const userDistrict = (
+    user?.assignedTerritory?.district ||
+    user?.territory?.district ||
+    (user as any)?.assignedDistrict ||
+    (user as any)?.district ||
+    ''
+  ).trim();
+  const userDivision = (
+    user?.assignedTerritory?.division ||
+    user?.territory?.division ||
+    (user as any)?.assignedDivision ||
+    (user as any)?.division ||
+    ''
+  ).trim();
+  const userPincode = (
+    user?.assignedTerritory?.pincode ||
+    user?.territory?.pincode ||
+    (user as any)?.assignedPincode ||
+    (user as any)?.pincode ||
+    ''
+  ).trim();
   const userName = user?.name || 'Logged Agent';
 
   const userVisitsKey = useMemo(() => {
@@ -92,8 +118,19 @@ export const FieldVisitsModule: React.FC = () => {
     const fetchHierarchy = async () => {
       try {
         const res = await api.get('/admin/hierarchy');
-        if (res.data && Array.isArray(res.data.agents)) {
-          setHierarchyAgents(res.data.agents);
+        const data = res.data;
+        if (data) {
+          if (Array.isArray(data.agents)) {
+            setHierarchyAgents(data.agents);
+          } else {
+            const all = [
+              ...(Array.isArray(data.districts) ? data.districts : []),
+              ...(Array.isArray(data.divisions) ? data.divisions : []),
+              ...(Array.isArray(data.pincodes) ? data.pincodes : []),
+              ...(Array.isArray(data.states) ? data.states : (Array.isArray(data.tree) ? data.tree : []))
+            ];
+            setHierarchyAgents(all);
+          }
         }
       } catch (e) {
         console.log('Using visit logs for hierarchy');
@@ -135,19 +172,21 @@ export const FieldVisitsModule: React.FC = () => {
       const backendVisits = res.data.visits || [];
       if (backendVisits.length > 0) {
         const mapped: FieldVisitRecord[] = backendVisits.map((v: any) => {
+          const agentId = v.agent?._id ? String(v.agent._id) : (v.agentId ? String(v.agentId) : '');
           const agentName = v.agent?.name || v.visitedBy || userName;
           const agentRoleStr = v.agent?.role
             ? `${v.agent.role.charAt(0).toUpperCase() + v.agent.role.slice(1)} Agent`
             : v.visitedByRole || `${activeRole.charAt(0).toUpperCase() + activeRole.slice(1)} Agent`;
           const vStoreName = v.vendor?.storeName || v.vendor?.businessName || v.vendorName || 'Merchant Store';
-          const vState = v.vendor?.state || v.state || userState;
-          const vDistrict = v.vendor?.district || v.territoryDistrict || userDistrict;
-          const vDivision = v.vendor?.division || v.territoryDivision || userDivision;
-          const vPincode = v.vendor?.pincode || v.territoryPincode || userPincode;
+          const vState = v.vendor?.state || v.state || v.agent?.territory?.state || v.agent?.assignedTerritory?.state || userState;
+          const vDistrict = v.vendor?.district || v.territoryDistrict || v.agent?.territory?.district || v.agent?.assignedTerritory?.district || userDistrict;
+          const vDivision = v.vendor?.division || v.territoryDivision || v.agent?.territory?.division || v.agent?.assignedTerritory?.division || userDivision;
+          const vPincode = v.vendor?.pincode || v.territoryPincode || v.agent?.territory?.pincode || v.agent?.assignedTerritory?.pincode || userPincode;
           const vAddress = v.vendor?.address || v.vendor?.fullAddress || v.storeAddress || 'Store Address';
 
           return {
             _id: v._id || `VIS-${Math.floor(1000 + Math.random() * 9000)}`,
+            agentId,
             vendorId: v.vendor?._id || 'VEND-REF',
             vendorName: vStoreName,
             storeAddress: vAddress,
@@ -226,103 +265,224 @@ export const FieldVisitsModule: React.FC = () => {
     }
   };
 
+  // State territory scope fallback-safe resolution
+  const effectiveState = useMemo(() => {
+    if (userState) return userState;
+    const hState = hierarchyAgents.find(a => a.territory?.state || a.assignedState || a.state)?.territory?.state;
+    if (hState) return hState;
+    const vState = visits.find(v => v.state)?.state;
+    return vState || '';
+  }, [userState, hierarchyAgents, visits]);
+
   // Scoped visits based on role & assigned territory
   const scopedVisits = useMemo(() => {
+    const stTarget = effectiveState.toLowerCase();
     return visits.filter(v => {
       if (activeRole === 'pincode') {
         return !v.territoryPincode || v.territoryPincode === userPincode || v.visitedBy === userName || (v as any).agent?.phone === user?.mobile;
       }
       if (activeRole === 'division') {
-        return v.territoryDistrict === userDistrict || v.state === userState;
+        return !v.territoryDistrict || v.territoryDistrict === userDistrict || v.state === userState;
+      }
+      if (activeRole === 'state') {
+        return !stTarget || !v.state || v.state.toLowerCase() === stTarget;
       }
       return true;
     });
-  }, [visits, activeRole, userPincode, userDistrict, userState, userName, user?.mobile]);
+  }, [visits, activeRole, userPincode, userDistrict, userState, userName, user?.mobile, effectiveState]);
 
   // Dynamically populated agents by role & authorized territory scope
   const districtAgentsList = useMemo(() => {
     if (activeRole !== 'state') return [];
-    const list = hierarchyAgents.filter(a => {
+    const stTarget = effectiveState.toLowerCase();
+
+    const map = new Map<string, { id: string; name: string; district: string; label: string; registrationId?: string }>();
+
+    hierarchyAgents.forEach(a => {
       const roleStr = (a.role || a.level || '').toLowerCase();
-      const st = a.territory?.state || a.assignedState || a.state;
-      return roleStr === 'district' && (!st || st.toLowerCase() === userState.toLowerCase());
+      if (roleStr !== 'district') return;
+      const st = (a.territory?.state || a.assignedState || a.state || a.assignedTerritory?.state || '').toLowerCase();
+      if (stTarget && st && !st.includes(stTarget) && !stTarget.includes(st)) return;
+
+      const dist = a.territory?.district || a.assignedDistrict || a.district || a.assignedTerritory?.district || userDistrict || 'District';
+      const id = String(a._id || a.id || a.agentId || a.name);
+      const regId = a.registrationId || '';
+      const label = `${a.name} (${dist}${regId ? ` - ${regId}` : ' District Agent'})`;
+
+      map.set(id, { id, name: a.name, district: dist, label, registrationId: regId });
     });
-    const fromVisits = visits.filter(v => v.visitedByRole?.toLowerCase().includes('district') && (!v.state || v.state.toLowerCase() === userState.toLowerCase())).map(v => ({ name: v.visitedBy, territoryStr: v.territoryDistrict || userDistrict }));
 
-    const map = new Map<string, string>();
-    list.forEach(a => map.set(a.name, a.territory?.district || a.assignedDistrict || userDistrict));
-    fromVisits.forEach(v => { if (!map.has(v.name)) map.set(v.name, v.territoryStr); });
+    visits.forEach(v => {
+      const roleStr = (v.visitedByRole || '').toLowerCase();
+      if (!roleStr.includes('district')) return;
+      const st = (v.state || '').toLowerCase();
+      if (stTarget && st && !st.includes(stTarget) && !stTarget.includes(st)) return;
 
-    return Array.from(map.entries()).map(([name, district]) => ({
-      name,
-      label: `${name} (${district} District Agent)`
-    }));
-  }, [hierarchyAgents, visits, activeRole, userState, userDistrict]);
+      const dist = v.territoryDistrict || userDistrict || 'District';
+      const id = v.agentId || v.visitedBy;
+      if (!map.has(id)) {
+        map.set(id, {
+          id,
+          name: v.visitedBy,
+          district: dist,
+          label: `${v.visitedBy} (${dist} District Agent)`
+        });
+      }
+    });
+
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [hierarchyAgents, visits, activeRole, effectiveState, userDistrict]);
 
   const divisionalAgentsList = useMemo(() => {
     if (activeRole !== 'state' && activeRole !== 'district') return [];
-    const list = hierarchyAgents.filter(a => {
+    const stTarget = effectiveState.toLowerCase();
+
+    let filterDistrict = '';
+    if (activeRole === 'district') {
+      filterDistrict = userDistrict.toLowerCase();
+    } else if (districtAgentFilter !== 'all') {
+      const selDist = districtAgentsList.find(d => d.id === districtAgentFilter || d.name === districtAgentFilter);
+      filterDistrict = (selDist?.district || '').toLowerCase();
+    }
+
+    const map = new Map<string, { id: string; name: string; district: string; division: string; label: string; registrationId?: string }>();
+
+    hierarchyAgents.forEach(a => {
       const roleStr = (a.role || a.level || '').toLowerCase();
-      const st = a.territory?.state || a.assignedState || a.state;
-      const dist = a.territory?.district || a.assignedDistrict || a.district;
+      if (roleStr !== 'division') return;
+      const st = (a.territory?.state || a.assignedState || a.state || a.assignedTerritory?.state || '').toLowerCase();
+      if (stTarget && st && !st.includes(stTarget) && !stTarget.includes(st)) return;
 
-      const matchState = !st || st.toLowerCase() === userState.toLowerCase();
-      const matchDistrict = activeRole === 'state' || (!dist || dist.toLowerCase() === userDistrict.toLowerCase());
+      const dist = (a.territory?.district || a.assignedDistrict || a.district || a.assignedTerritory?.district || '').toLowerCase();
+      if (filterDistrict && dist && !dist.includes(filterDistrict) && !filterDistrict.includes(dist)) return;
 
-      return roleStr === 'division' && matchState && matchDistrict;
+      const div = a.territory?.division || a.assignedDivision || a.division || a.assignedTerritory?.division || userDivision || 'Division';
+      const id = String(a._id || a.id || a.agentId || a.name);
+      const regId = a.registrationId || '';
+      const label = `${a.name} (${div}${regId ? ` - ${regId}` : ''})`;
+
+      map.set(id, { id, name: a.name, district: dist, division: div, label, registrationId: regId });
     });
 
-    const fromVisits = visits.filter(v => {
-      const isDiv = v.visitedByRole?.toLowerCase().includes('division');
-      const matchState = !v.state || v.state.toLowerCase() === userState.toLowerCase();
-      const matchDistrict = activeRole === 'state' || (!v.territoryDistrict || v.territoryDistrict.toLowerCase() === userDistrict.toLowerCase());
-      return isDiv && matchState && matchDistrict;
-    }).map(v => ({ name: v.visitedBy, division: v.territoryDivision || userDivision }));
+    visits.forEach(v => {
+      const roleStr = (v.visitedByRole || '').toLowerCase();
+      if (!roleStr.includes('division')) return;
+      const st = (v.state || '').toLowerCase();
+      if (stTarget && st && !st.includes(stTarget) && !stTarget.includes(st)) return;
 
-    const map = new Map<string, string>();
-    list.forEach(a => map.set(a.name, a.territory?.division || a.assignedDivision || userDivision));
-    fromVisits.forEach(v => { if (!map.has(v.name)) map.set(v.name, v.division); });
+      const dist = (v.territoryDistrict || '').toLowerCase();
+      if (filterDistrict && dist && !dist.includes(filterDistrict) && !filterDistrict.includes(dist)) return;
 
-    return Array.from(map.entries()).map(([name, div]) => ({
-      name,
-      label: `${name} (${div})`
-    }));
-  }, [hierarchyAgents, visits, activeRole, userState, userDistrict, userDivision]);
+      const div = v.territoryDivision || userDivision || 'Division';
+      const id = v.agentId || v.visitedBy;
+      if (!map.has(id)) {
+        map.set(id, {
+          id,
+          name: v.visitedBy,
+          district: dist,
+          division: div,
+          label: `${v.visitedBy} (${div})`
+        });
+      }
+    });
+
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [hierarchyAgents, visits, activeRole, effectiveState, districtAgentFilter, districtAgentsList, userDistrict, userDivision]);
 
   const pincodeAgentsList = useMemo(() => {
     if (activeRole === 'pincode') return [];
-    const list = hierarchyAgents.filter(a => {
+    const stTarget = effectiveState.toLowerCase();
+
+    let filterDistrict = '';
+    let filterDivision = '';
+
+    if (activeRole === 'district') {
+      filterDistrict = userDistrict.toLowerCase();
+    } else if (activeRole === 'division') {
+      filterDistrict = userDistrict.toLowerCase();
+      filterDivision = userDivision.toLowerCase();
+    }
+
+    if (districtAgentFilter !== 'all') {
+      const selDist = districtAgentsList.find(d => d.id === districtAgentFilter || d.name === districtAgentFilter);
+      if (selDist) filterDistrict = selDist.district.toLowerCase();
+    }
+    if (divisionAgentFilter !== 'all') {
+      const selDiv = divisionalAgentsList.find(d => d.id === divisionAgentFilter || d.name === divisionAgentFilter);
+      if (selDiv) filterDivision = selDiv.division.toLowerCase();
+    }
+
+    const map = new Map<string, { id: string; name: string; district: string; division: string; pincode: string; label: string; registrationId?: string }>();
+
+    hierarchyAgents.forEach(a => {
       const roleStr = (a.role || a.level || '').toLowerCase();
-      const st = a.territory?.state || a.assignedState || a.state;
-      const dist = a.territory?.district || a.assignedDistrict || a.district;
-      const div = a.territory?.division || a.assignedDivision || a.division;
+      if (roleStr !== 'pincode' && roleStr !== 'agent') return;
+      const st = (a.territory?.state || a.assignedState || a.state || a.assignedTerritory?.state || '').toLowerCase();
+      if (stTarget && st && !st.includes(stTarget) && !stTarget.includes(st)) return;
 
-      const matchState = !st || st.toLowerCase() === userState.toLowerCase();
-      const matchDistrict = activeRole === 'state' || (!dist || dist.toLowerCase() === userDistrict.toLowerCase());
-      const matchDivision = (activeRole === 'state' || activeRole === 'district') || (!div || div.toLowerCase() === userDivision.toLowerCase());
+      const dist = (a.territory?.district || a.assignedDistrict || a.district || a.assignedTerritory?.district || '').toLowerCase();
+      if (filterDistrict && dist && !dist.includes(filterDistrict) && !filterDistrict.includes(dist)) return;
 
-      return (roleStr === 'pincode' || roleStr === 'agent') && matchState && matchDistrict && matchDivision;
+      const div = (a.territory?.division || a.assignedDivision || a.division || a.assignedTerritory?.division || '').toLowerCase();
+      if (filterDivision && div && !div.includes(filterDivision) && !filterDivision.includes(div)) return;
+
+      const pin = a.territory?.pincode || a.assignedPincode || a.pincode || a.assignedTerritory?.pincode || userPincode || 'Pincode';
+      const id = String(a._id || a.id || a.agentId || a.name);
+      const regId = a.registrationId || '';
+      const label = `${a.name} (PIN ${pin}${regId ? ` - ${regId}` : ''})`;
+
+      map.set(id, { id, name: a.name, district: dist, division: div, pincode: pin, label, registrationId: regId });
     });
 
-    const fromVisits = visits.filter(v => {
-      const isPin = !v.visitedByRole || v.visitedByRole?.toLowerCase().includes('pincode');
-      const matchState = !v.state || v.state.toLowerCase() === userState.toLowerCase();
-      const matchDistrict = activeRole === 'state' || (!v.territoryDistrict || v.territoryDistrict.toLowerCase() === userDistrict.toLowerCase());
-      const matchDivision = (activeRole === 'state' || activeRole === 'district') || (!v.territoryDivision || v.territoryDivision.toLowerCase() === userDivision.toLowerCase());
-      return isPin && matchState && matchDistrict && matchDivision;
-    }).map(v => ({ name: v.visitedBy, pin: v.territoryPincode || userPincode }));
+    visits.forEach(v => {
+      const roleStr = (v.visitedByRole || '').toLowerCase();
+      if (roleStr && !roleStr.includes('pincode') && !roleStr.includes('agent')) return;
+      const st = (v.state || '').toLowerCase();
+      if (stTarget && st && !st.includes(stTarget) && !stTarget.includes(st)) return;
 
-    const map = new Map<string, string>();
-    list.forEach(a => map.set(a.name, a.territory?.pincode || a.assignedPincode || userPincode));
-    fromVisits.forEach(v => { if (!map.has(v.name)) map.set(v.name, v.pin); });
+      const dist = (v.territoryDistrict || '').toLowerCase();
+      if (filterDistrict && dist && !dist.includes(filterDistrict) && !filterDistrict.includes(dist)) return;
 
-    return Array.from(map.entries()).map(([name, pin]) => ({
-      name,
-      label: `${name} (PIN ${pin})`
-    }));
-  }, [hierarchyAgents, visits, activeRole, userState, userDistrict, userDivision, userPincode]);
+      const div = (v.territoryDivision || '').toLowerCase();
+      if (filterDivision && div && !div.includes(filterDivision) && !filterDivision.includes(div)) return;
 
-  // Filtered visits
+      const pin = v.territoryPincode || userPincode || 'Pincode';
+      const id = v.agentId || v.visitedBy;
+      if (!map.has(id)) {
+        map.set(id, {
+          id,
+          name: v.visitedBy,
+          district: dist,
+          division: div,
+          pincode: pin,
+          label: `${v.visitedBy} (PIN ${pin})`
+        });
+      }
+    });
+
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [hierarchyAgents, visits, activeRole, effectiveState, districtAgentFilter, divisionAgentFilter, districtAgentsList, divisionalAgentsList, userDistrict, userDivision, userPincode]);
+
+  // Reset dependent filters when parent filters change
+  useEffect(() => {
+    if (divisionAgentFilter !== 'all') {
+      const isValid = divisionalAgentsList.some(d => d.id === divisionAgentFilter || d.name === divisionAgentFilter);
+      if (!isValid) {
+        setDivisionAgentFilter('all');
+      }
+    }
+  }, [districtAgentFilter, divisionalAgentsList, divisionAgentFilter]);
+
+  useEffect(() => {
+    if (pincodeAgentFilter !== 'all') {
+      const isValid = pincodeAgentsList.some(p => p.id === pincodeAgentFilter || p.name === pincodeAgentFilter);
+      if (!isValid) {
+        setPincodeAgentFilter('all');
+      }
+    }
+  }, [districtAgentFilter, divisionAgentFilter, pincodeAgentsList, pincodeAgentFilter]);
+
+  // Filtered visits with unified AND logic
   const filteredVisits = useMemo(() => {
     return scopedVisits.filter(v => {
       const q = searchTerm.toLowerCase().trim();
@@ -330,32 +490,57 @@ export const FieldVisitsModule: React.FC = () => {
         v.vendorName.toLowerCase().includes(q) ||
         v._id.toLowerCase().includes(q) ||
         v.storeAddress.toLowerCase().includes(q) ||
-        v.visitedBy.toLowerCase().includes(q)
+        v.visitedBy.toLowerCase().includes(q) ||
+        (v.territoryDistrict && v.territoryDistrict.toLowerCase().includes(q)) ||
+        (v.territoryDivision && v.territoryDivision.toLowerCase().includes(q)) ||
+        (v.territoryPincode && v.territoryPincode.includes(q))
       );
 
       let matchesDistrictAgent = true;
       if (activeRole === 'state' && districtAgentFilter !== 'all') {
-        matchesDistrictAgent = v.visitedBy === districtAgentFilter;
+        const selDist = districtAgentsList.find(d => d.id === districtAgentFilter || d.name === districtAgentFilter);
+        if (selDist) {
+          matchesDistrictAgent =
+            v.visitedBy === selDist.name ||
+            v.agentId === selDist.id ||
+            Boolean(v.territoryDistrict && selDist.district && v.territoryDistrict.toLowerCase() === selDist.district.toLowerCase());
+        }
       }
 
       let matchesDivisionAgent = true;
       if ((activeRole === 'state' || activeRole === 'district') && divisionAgentFilter !== 'all') {
-        matchesDivisionAgent = v.visitedBy === divisionAgentFilter;
+        const selDiv = divisionalAgentsList.find(d => d.id === divisionAgentFilter || d.name === divisionAgentFilter);
+        if (selDiv) {
+          matchesDivisionAgent =
+            v.visitedBy === selDiv.name ||
+            v.agentId === selDiv.id ||
+            Boolean(v.territoryDivision && selDiv.division && v.territoryDivision.toLowerCase() === selDiv.division.toLowerCase());
+        }
       }
 
       let matchesPincodeAgent = true;
       if (activeRole !== 'pincode' && pincodeAgentFilter !== 'all') {
-        matchesPincodeAgent = v.visitedBy === pincodeAgentFilter;
+        const selPin = pincodeAgentsList.find(p => p.id === pincodeAgentFilter || p.name === pincodeAgentFilter);
+        if (selPin) {
+          matchesPincodeAgent =
+            v.visitedBy === selPin.name ||
+            v.agentId === selPin.id ||
+            Boolean(v.territoryPincode && selPin.pincode && v.territoryPincode === selPin.pincode);
+        }
       }
 
       let matchesStatus = true;
       if (statusFilter !== 'all') {
-        matchesStatus = v.status === statusFilter;
+        if (statusFilter === 'in_progress') {
+          matchesStatus = v.status === 'in_progress' || v.status === 'started';
+        } else {
+          matchesStatus = v.status === statusFilter;
+        }
       }
 
       return matchesSearch && matchesDistrictAgent && matchesDivisionAgent && matchesPincodeAgent && matchesStatus;
     });
-  }, [scopedVisits, searchTerm, districtAgentFilter, divisionAgentFilter, pincodeAgentFilter, statusFilter, activeRole]);
+  }, [scopedVisits, searchTerm, districtAgentFilter, divisionAgentFilter, pincodeAgentFilter, statusFilter, activeRole, districtAgentsList, divisionalAgentsList, pincodeAgentsList]);
 
   const visitsTodayCount = scopedVisits.length;
   const completedVisitsCount = scopedVisits.filter(v => v.status === 'completed').length;
@@ -717,9 +902,9 @@ export const FieldVisitsModule: React.FC = () => {
                       onChange={(e) => setDistrictAgentFilter(e.target.value)}
                       className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                     >
-                      <option value="all">📍 All District Agents ({userState})</option>
+                      <option value="all">📍 All District Agents ({districtAgentsList.length})</option>
                       {districtAgentsList.map((a) => (
-                        <option key={a.name} value={a.name}>{a.label}</option>
+                        <option key={a.id} value={a.id}>{a.label}</option>
                       ))}
                     </select>
                   </div>
@@ -730,9 +915,9 @@ export const FieldVisitsModule: React.FC = () => {
                       onChange={(e) => setDivisionAgentFilter(e.target.value)}
                       className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                     >
-                      <option value="all">🏢 All Divisional Agents ({userState})</option>
+                      <option value="all">🏢 All Divisional Agents ({divisionalAgentsList.length})</option>
                       {divisionalAgentsList.map((a) => (
-                        <option key={a.name} value={a.name}>{a.label}</option>
+                        <option key={a.id} value={a.id}>{a.label}</option>
                       ))}
                     </select>
                   </div>
@@ -743,9 +928,9 @@ export const FieldVisitsModule: React.FC = () => {
                       onChange={(e) => setPincodeAgentFilter(e.target.value)}
                       className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                     >
-                      <option value="all">👤 All Pincode Agents ({userState})</option>
+                      <option value="all">👤 All Pincode Agents ({pincodeAgentsList.length})</option>
                       {pincodeAgentsList.map((a) => (
-                        <option key={a.name} value={a.name}>{a.label}</option>
+                        <option key={a.id} value={a.id}>{a.label}</option>
                       ))}
                     </select>
                   </div>
@@ -760,9 +945,9 @@ export const FieldVisitsModule: React.FC = () => {
                       onChange={(e) => setDivisionAgentFilter(e.target.value)}
                       className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                     >
-                      <option value="all">🏢 All Divisional Agents in District ({userDistrict})</option>
+                      <option value="all">🏢 All Divisional Agents in District ({divisionalAgentsList.length})</option>
                       {divisionalAgentsList.map((a) => (
-                        <option key={a.name} value={a.name}>{a.label}</option>
+                        <option key={a.id} value={a.id}>{a.label}</option>
                       ))}
                     </select>
                   </div>
@@ -773,9 +958,9 @@ export const FieldVisitsModule: React.FC = () => {
                       onChange={(e) => setPincodeAgentFilter(e.target.value)}
                       className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                     >
-                      <option value="all">👤 All Pincode Agents in District ({userDistrict})</option>
+                      <option value="all">👤 All Pincode Agents in District ({pincodeAgentsList.length})</option>
                       {pincodeAgentsList.map((a) => (
-                        <option key={a.name} value={a.name}>{a.label}</option>
+                        <option key={a.id} value={a.id}>{a.label}</option>
                       ))}
                     </select>
                   </div>
@@ -789,9 +974,9 @@ export const FieldVisitsModule: React.FC = () => {
                     onChange={(e) => setPincodeAgentFilter(e.target.value)}
                     className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                   >
-                    <option value="all">👤 All Pincode Agents in Division ({userDivision})</option>
+                    <option value="all">👤 All Pincode Agents in Division ({pincodeAgentsList.length})</option>
                     {pincodeAgentsList.map((a) => (
-                      <option key={a.name} value={a.name}>{a.label}</option>
+                      <option key={a.id} value={a.id}>{a.label}</option>
                     ))}
                   </select>
                 </div>

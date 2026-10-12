@@ -27,7 +27,14 @@ async function buildHierarchyTree(scope = null, forceAll = false) {
     const activePincodes = pincodes.filter(isActive);
     let filteredStates = activeStates;
     if (!forceAll && scope?.role && scope.state) {
-        filteredStates = filteredStates.filter(s => s.name.trim().toLowerCase() === scope.state.trim().toLowerCase());
+        const scState = scope.state.trim().toLowerCase();
+        filteredStates = filteredStates.filter(s => {
+            const stName = s.name.trim().toLowerCase();
+            return stName === scState || stName.includes(scState) || scState.includes(stName);
+        });
+        if (filteredStates.length === 0 && activeStates.length === 1) {
+            filteredStates = activeStates;
+        }
     }
     const hierarchy = filteredStates.map(st => {
         const stIdStr = st._id.toString();
@@ -40,7 +47,11 @@ async function buildHierarchyTree(scope = null, forceAll = false) {
                 (dt.state && dt.state.trim().toLowerCase() === stNameLower));
         });
         if (!forceAll && scope?.district && (scope.role === 'district' || scope.role === 'division' || scope.role === 'pincode')) {
-            stDistricts = stDistricts.filter(d => d.name.trim().toLowerCase() === scope.district.trim().toLowerCase());
+            const scDist = scope.district.trim().toLowerCase();
+            stDistricts = stDistricts.filter(d => {
+                const dName = d.name.trim().toLowerCase();
+                return dName === scDist || dName.includes(scDist) || scDist.includes(dName);
+            });
         }
         return {
             id: stIdStr,
@@ -59,7 +70,11 @@ async function buildHierarchyTree(scope = null, forceAll = false) {
                         (dv.district && dv.district.trim().toLowerCase() === dtNameLower));
                 });
                 if (!forceAll && scope?.division && (scope.role === 'division' || scope.role === 'pincode')) {
-                    dtDivisions = dtDivisions.filter(v => v.name.trim().toLowerCase() === scope.division.trim().toLowerCase());
+                    const scDiv = scope.division.trim().toLowerCase();
+                    dtDivisions = dtDivisions.filter(v => {
+                        const vName = v.name.trim().toLowerCase();
+                        return vName === scDiv || vName.includes(scDiv) || scDiv.includes(vName);
+                    });
                 }
                 return {
                     id: dtIdStr,
@@ -207,7 +222,9 @@ const getDistricts = async (req, res) => {
                 stateQueries.push({ name: stateId });
             }
             if (state) {
-                stateQueries.push({ name: { $regex: new RegExp(`^${state.trim()}$`, 'i') } });
+                const trimmedState = state.trim();
+                stateQueries.push({ name: { $regex: new RegExp(`^${trimmedState}$`, 'i') } });
+                stateQueries.push({ name: { $regex: new RegExp(trimmedState, 'i') } });
                 stateQueries.push({ stateId: state });
             }
             const stateDoc = await db.collection('states').findOne({ $or: stateQueries });
