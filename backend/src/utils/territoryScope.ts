@@ -33,19 +33,40 @@ export async function getAgentTerritoryScope(agentId: string): Promise<Territory
       return cachedScope;
     }
 
-    let agent: any = await Agent.findById(agentId)
+    let agent: any = null;
+    if (agentId && mongoose.Types.ObjectId.isValid(agentId)) {
+      agent = await Agent.findById(agentId)
+        .select('role level assignedTerritory territory state district division pincode assignedState assignedDistrict assignedDivision assignedPincode')
+        .lean();
+    }
+    if (!agent) {
+      agent = await Agent.findOne({
+        $or: [
+          { _id: agentId },
+          { agentId: agentId },
+          { registrationId: agentId }
+        ]
+      })
       .select('role level assignedTerritory territory state district division pincode assignedState assignedDistrict assignedDivision assignedPincode')
       .lean();
+    }
 
     if (!agent) {
       const db = mongoose.connection.db;
       if (db) {
+        const orClauses: any[] = [{ agentId: agentId }];
+        if (mongoose.Types.ObjectId.isValid(agentId)) {
+          orClauses.push({ _id: new mongoose.Types.ObjectId(agentId) });
+        }
+        orClauses.push({ _id: agentId });
+
         agent = await db.collection('users').findOne(
-          { _id: agentId as any },
+          { $or: orClauses },
           {
             projection: {
               role: 1,
               level: 1,
+              email: 1,
               assignedTerritory: 1,
               territory: 1,
               state: 1,

@@ -31,16 +31,36 @@ async function getAgentTerritoryScope(agentId) {
         if (cachedScope) {
             return cachedScope;
         }
-        let agent = await Agent_1.default.findById(agentId)
-            .select('role level assignedTerritory territory state district division pincode assignedState assignedDistrict assignedDivision assignedPincode')
-            .lean();
+        let agent = null;
+        if (agentId && mongoose_1.default.Types.ObjectId.isValid(agentId)) {
+            agent = await Agent_1.default.findById(agentId)
+                .select('role level assignedTerritory territory state district division pincode assignedState assignedDistrict assignedDivision assignedPincode')
+                .lean();
+        }
+        if (!agent) {
+            agent = await Agent_1.default.findOne({
+                $or: [
+                    { _id: agentId },
+                    { agentId: agentId },
+                    { registrationId: agentId }
+                ]
+            })
+                .select('role level assignedTerritory territory state district division pincode assignedState assignedDistrict assignedDivision assignedPincode')
+                .lean();
+        }
         if (!agent) {
             const db = mongoose_1.default.connection.db;
             if (db) {
-                agent = await db.collection('users').findOne({ _id: agentId }, {
+                const orClauses = [{ agentId: agentId }];
+                if (mongoose_1.default.Types.ObjectId.isValid(agentId)) {
+                    orClauses.push({ _id: new mongoose_1.default.Types.ObjectId(agentId) });
+                }
+                orClauses.push({ _id: agentId });
+                agent = await db.collection('users').findOne({ $or: orClauses }, {
                     projection: {
                         role: 1,
                         level: 1,
+                        email: 1,
                         assignedTerritory: 1,
                         territory: 1,
                         state: 1,

@@ -90,8 +90,11 @@ app.get('/api/realtime/status', (req, res) => {
         realtime: socketServer_1.default.getStatus()
     });
 });
-// WebSocket HTTP fallback endpoint (returns 200 with guidance if accessed via regular HTTP GET)
+// WebSocket HTTP fallback endpoint
 app.get(['/api/ws', '/ws'], (req, res) => {
+    if (req.headers.upgrade) {
+        return res.status(426).send('Upgrade Required');
+    }
     res.status(200).json({
         status: 'ok',
         message: 'Forge Connect Realtime WebSocket endpoint. Please connect with a WebSocket client (wss://).',

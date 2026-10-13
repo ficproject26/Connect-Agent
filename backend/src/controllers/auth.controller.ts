@@ -660,6 +660,60 @@ export const getMe = async (req: Request, res: Response) => {
       agent = await Agent.findOne({ email: email.toLowerCase() }).select('-password');
     }
 
+    // Fallback: If agent is not in Agent collection, find in 'users' collection and sync
+    if (!agent) {
+      const db = mongoose.connection.db;
+      if (db) {
+        const userOrClauses: any[] = [];
+        if (agentId && mongoose.Types.ObjectId.isValid(agentId)) {
+          userOrClauses.push({ _id: new mongoose.Types.ObjectId(agentId) });
+        }
+        if (agentId) {
+          userOrClauses.push({ _id: agentId });
+          userOrClauses.push({ agentId: agentId });
+        }
+        if (email) {
+          userOrClauses.push({ email: email.toLowerCase() });
+        }
+
+        const userDoc = await db.collection('users').findOne({ $or: userOrClauses });
+        if (userDoc) {
+          const userRole = (userDoc.level || userDoc.role || agentPayload?.role || 'pincode').toLowerCase();
+          const role = ['state', 'district', 'division', 'pincode'].includes(userRole) ? userRole : 'pincode';
+          const rawAssigned = userDoc.assignedTerritory || userDoc.territory || {};
+
+          agent = new Agent({
+            ...(userDoc._id ? { _id: userDoc._id } : {}),
+            name: userDoc.name || 'Agent User',
+            email: (userDoc.email || email).toLowerCase(),
+            password: userDoc.password || 'synced_user',
+            phone: userDoc.phone || userDoc.mobile || '',
+            role: role,
+            assignedTerritory: {
+              state: (rawAssigned.state || userDoc.state || userDoc.assignedState || '').trim(),
+              district: (rawAssigned.district || userDoc.district || userDoc.assignedDistrict || '').trim(),
+              division: (rawAssigned.division || userDoc.division || userDoc.assignedDivision || '').trim(),
+              pincode: (rawAssigned.pincode || userDoc.pincode || userDoc.assignedPincode || '').trim()
+            },
+            territory: {
+              state: (rawAssigned.state || userDoc.state || userDoc.assignedState || '').trim(),
+              district: (rawAssigned.district || userDoc.district || userDoc.assignedDistrict || '').trim(),
+              division: (rawAssigned.division || userDoc.division || userDoc.assignedDivision || '').trim(),
+              pincode: (rawAssigned.pincode || userDoc.pincode || userDoc.assignedPincode || '').trim()
+            },
+            kycStatus: userDoc.kycStatus || userDoc.status || 'approved',
+            status: userDoc.status || 'approved',
+            registrationId: userDoc.registrationId || `REG-${Date.now()}`
+          });
+          try {
+            await agent.save();
+          } catch (saveErr) {
+            agent = await Agent.findOne({ email: (userDoc.email || email).toLowerCase() }).select('-password');
+          }
+        }
+      }
+    }
+
     if (!agent) {
       return res.status(404).json({ message: 'Agent not found' });
     }

@@ -39,6 +39,7 @@ class RealtimeClient {
   private pingInterval: any = null;
   private isIntentionallyClosed = false;
   private hasReportedFailure = false;
+  private hasEverConnected = false;
 
   // Deduplication & versioning tracking
   private seenEvents: Set<string> = new Set();
@@ -146,6 +147,7 @@ class RealtimeClient {
       this.socket.onopen = () => {
         this.reconnectAttempts = 0;
         this.hasReportedFailure = false;
+        this.hasEverConnected = true;
         this.setStatus('CONNECTED');
         console.log('[RealtimeClient] Connected to centralized real-time server.');
 
@@ -164,9 +166,19 @@ class RealtimeClient {
         this.handleMessage(event.data);
       };
 
-      this.socket.onclose = () => {
+      this.socket.onclose = (event: any) => {
         clearInterval(this.pingInterval);
         this.setStatus('DISCONNECTED');
+
+        // If the socket closed without ever connecting (e.g. handshake 200/404 or connection refused),
+        // do not keep looping reconnects. Gracefully fallback to React Query REST polling.
+        if (!this.hasEverConnected || event?.code === 1006) {
+          if (!this.hasReportedFailure) {
+            this.hasReportedFailure = true;
+            console.debug('[RealtimeClient] Realtime server unavailable over WebSocket. Operating in REST sync mode.');
+          }
+          return;
+        }
 
         if (!this.isIntentionallyClosed && this.token) {
           this.scheduleReconnect();
