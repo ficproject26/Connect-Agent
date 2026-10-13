@@ -43,7 +43,6 @@ const addressDetailsSchema = new mongoose_1.Schema({
     pincode: { type: String, default: '' }
 }, { _id: false });
 const agentSchema = new mongoose_1.Schema({
-    _id: { type: mongoose_1.Schema.Types.Mixed, default: () => new mongoose_1.Types.ObjectId() },
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true, index: true },
     password: { type: String, required: true },

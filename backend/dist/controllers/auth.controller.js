@@ -585,11 +585,28 @@ const login = async (req, res) => {
 exports.login = login;
 const getMe = async (req, res) => {
     try {
-        const agentId = req.agent?.agentId;
-        if (!agentId) {
+        const agentPayload = req.agent;
+        const agentId = agentPayload?.agentId;
+        const email = agentPayload?.email;
+        if (!agentId && !email) {
             return res.status(401).json({ message: 'Unauthorized' });
         }
-        const agent = await Agent_1.default.findById(agentId).select('-password');
+        let agent = null;
+        if (agentId && mongoose_1.default.Types.ObjectId.isValid(agentId)) {
+            agent = await Agent_1.default.findById(agentId).select('-password');
+        }
+        if (!agent && agentId) {
+            agent = await Agent_1.default.findOne({
+                $or: [
+                    { _id: agentId },
+                    { agentId: agentId },
+                    { registrationId: agentId }
+                ]
+            }).select('-password');
+        }
+        if (!agent && email) {
+            agent = await Agent_1.default.findOne({ email: email.toLowerCase() }).select('-password');
+        }
         if (!agent) {
             return res.status(404).json({ message: 'Agent not found' });
         }

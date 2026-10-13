@@ -34,7 +34,7 @@ class RealtimeClient {
   private token: string | null = null;
   private status: ConnectionStatus = 'DISCONNECTED';
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
+  private maxReconnectAttempts = 3;
   private reconnectTimeout: any = null;
   private pingInterval: any = null;
   private isIntentionallyClosed = false;
@@ -73,26 +73,17 @@ class RealtimeClient {
   public getWebSocketUrl(token?: string): string {
     const rawApiUrl = (import.meta as any).env?.VITE_API_URL || '/api';
     let baseWsUrl = '';
-    let wsPath = '/api/ws';
 
     if (rawApiUrl.startsWith('http://') || rawApiUrl.startsWith('https://')) {
       baseWsUrl = rawApiUrl
         .replace(/^http:\/\//, 'ws://')
-        .replace(/^https:\/\//, 'wss://');
-
-      if (baseWsUrl.endsWith('/api') || baseWsUrl.endsWith('/api/')) {
-        baseWsUrl = baseWsUrl.replace(/\/+$/, '');
-        wsPath = '/ws'; // results in wss://.../api/ws
-      } else {
-        baseWsUrl = baseWsUrl.replace(/\/+$/, '');
-        wsPath = '/api/ws';
-      }
+        .replace(/^https:\/\//, 'wss://')
+        .replace(/\/api\/?$/, ''); // Strip /api to connect directly to root /ws
     } else {
       // Relative URL — derive from window.location
       const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const host = typeof window !== 'undefined' ? window.location.host : 'localhost:8083';
       baseWsUrl = `${protocol}//${host}`;
-      wsPath = '/api/ws';
     }
 
     // Ensure port 8083 if localhost
@@ -100,7 +91,8 @@ class RealtimeClient {
       baseWsUrl = baseWsUrl.replace(/localhost(:\d+)?/, 'localhost:8083');
     }
 
-    const wsUrl = `${baseWsUrl}${wsPath.startsWith('/') ? '' : '/'}${wsPath}`;
+    baseWsUrl = baseWsUrl.replace(/\/+$/, '');
+    const wsUrl = `${baseWsUrl}/ws`;
     return token ? `${wsUrl}?token=${encodeURIComponent(token)}` : wsUrl;
   }
 
@@ -125,6 +117,11 @@ class RealtimeClient {
 
     // If already connected with the same token, do nothing
     if (this.socket && this.status === 'CONNECTED' && this.token === token) {
+      return;
+    }
+
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      this.setStatus('DISCONNECTED');
       return;
     }
 
