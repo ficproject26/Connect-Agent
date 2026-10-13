@@ -121,7 +121,7 @@ class RealtimeClient {
       return;
     }
 
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts || this.hasReportedFailure) {
       this.setStatus('DISCONNECTED');
       return;
     }

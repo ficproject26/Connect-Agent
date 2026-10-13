@@ -165,8 +165,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       fetchNotifications().catch(() => {});
     } catch (err: any) {
       console.warn('Backend session verification failed on /auth/me:', err?.response?.data?.message || err.message);
-      // On 401, 403, 404 (Agent not found), or invalid session, purge localStorage and log out immediately
-      if (err?.response?.status === 401 || err?.response?.status === 403 || err?.response?.status === 404) {
+      // Only force logout on genuine authentication rejection (401 invalid token, 403 account suspended/rejected)
+      // Never log out on 404 or transient server errors when valid cached agent data exists.
+      if (err?.response?.status === 401 || err?.response?.status === 403) {
         logout();
       }
     }
