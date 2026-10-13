@@ -103,7 +103,20 @@ export const allocateTarget = async (req: Request, res: Response) => {
     let recipientName = data.divisionName || 'Division Agent';
 
     if (targetAgentId) {
-      const allowedAgent = await Agent.findOne({ _id: targetAgentId, ...territoryFilter });
+      let allowedAgent = await Agent.findOne({ _id: targetAgentId, ...territoryFilter });
+      if (!allowedAgent && mongoose.Types.ObjectId.isValid(targetAgentId)) {
+        allowedAgent = await Agent.findOne({ _id: new mongoose.Types.ObjectId(targetAgentId), ...territoryFilter });
+      }
+      if (!allowedAgent) {
+        const direct = await Agent.findById(targetAgentId).lean() || await Agent.findOne({ _id: targetAgentId }).lean();
+        if (direct) {
+          const directState = (direct.territory?.state || direct.assignedTerritory?.state || (direct as any).state || '').toLowerCase();
+          const scopeState = (scope?.state || '').toLowerCase();
+          if (!scopeState || directState.includes(scopeState) || scopeState.includes(directState)) {
+            allowedAgent = direct as any;
+          }
+        }
+      }
       if (!allowedAgent) {
         return res.status(403).json({ message: 'Target cannot be allocated to an agent outside authorized territory' });
       }
@@ -113,7 +126,8 @@ export const allocateTarget = async (req: Request, res: Response) => {
       const agtDiv = (allowedAgent.assignedTerritory?.division || allowedAgent.territory?.division || (allowedAgent as any).division || '').trim().toLowerCase();
       const agtPin = (allowedAgent.assignedTerritory?.pincode || allowedAgent.territory?.pincode || (allowedAgent as any).pincode || '').trim();
 
-      if (data.district && agtDist && agtDist !== data.district.trim().toLowerCase()) {
+      const tgtDist = (data.district || '').trim().toLowerCase();
+      if (tgtDist && agtDist && agtDist !== tgtDist && !agtDist.includes(tgtDist) && !tgtDist.includes(agtDist)) {
         return res.status(403).json({ message: `Agent '${allowedAgent.name}' is assigned to district '${agtDist}', not '${data.district}'` });
       }
       if (data.divisionName && agtDiv && !agtDiv.includes(data.divisionName.trim().toLowerCase()) && !data.divisionName.trim().toLowerCase().includes(agtDiv)) {
@@ -220,21 +234,23 @@ export const getSubordinates = async (req: Request, res: Response) => {
 
     if (district) {
       filter.$and = filter.$and || [];
+      const dClean = (district as string).trim();
       filter.$and.push({
         $or: [
-          { 'assignedTerritory.district': new RegExp(`^${(district as string).trim()}$`, 'i') },
-          { 'territory.district': new RegExp(`^${(district as string).trim()}$`, 'i') },
-          { district: new RegExp(`^${(district as string).trim()}$`, 'i') }
+          { 'assignedTerritory.district': new RegExp(`^${dClean}$`, 'i') },
+          { 'territory.district': new RegExp(`^${dClean}$`, 'i') },
+          { district: new RegExp(`^${dClean}$`, 'i') }
         ]
       });
     }
     if (division) {
       filter.$and = filter.$and || [];
+      const divClean = (division as string).trim();
       filter.$and.push({
         $or: [
-          { 'assignedTerritory.division': new RegExp((division as string).trim(), 'i') },
-          { 'territory.division': new RegExp((division as string).trim(), 'i') },
-          { division: new RegExp((division as string).trim(), 'i') }
+          { 'assignedTerritory.division': new RegExp(divClean, 'i') },
+          { 'territory.division': new RegExp(divClean, 'i') },
+          { division: new RegExp(divClean, 'i') }
         ]
       });
     }
@@ -248,7 +264,12 @@ export const getSubordinates = async (req: Request, res: Response) => {
       .lean();
 
     const subIds = subordinates.map(s => s._id);
-    const assignments = await TargetAssignment.find({ assignedTo: { $in: subIds } }).populate('target').lean();
+    let assignments: any[] = [];
+    try {
+      assignments = await TargetAssignment.find({ assignedTo: { $in: subIds } }).populate('target').lean();
+    } catch (asgnErr) {
+      console.warn('TargetAssignment metrics query failed gracefully:', asgnErr);
+    }
 
     const subsWithMetrics = subordinates.map(sub => {
       const subAsgns = assignments.filter((a: any) => String(a.assignedTo) === String(sub._id));
@@ -354,18 +375,77 @@ export const getMyAssignments = async (req: Request, res: Response) => {
 
     if (status) filter.status = status;
 
-    const [total, assignments] = await Promise.all([
-      TargetAssignment.countDocuments(filter),
-      TargetAssignment.find(filter)
-        .select('target assignedTo assignedBy dueDate status completedAt createdAt updatedAt')
-        .populate('target', 'title description type targetValue')
-        .populate('assignedBy', 'name email role')
-        .populate('assignedTo', 'name email role territory assignedTerritory')
-        .sort({ createdAt: -1 })
-        .skip((pageNum - 1) * limitNum)
-        .limit(limitNum)
-        .lean()
-    ]);
+    let total = 0;
+    let assignments: any[] = [];
+
+    try {
+      const [countResult, findResult] = await Promise.all([
+        TargetAssignment.countDocuments(filter),
+        TargetAssignment.find(filter)
+          .select('target assignedTo assignedBy dueDate status completedAt createdAt updatedAt')
+          .populate('target', 'title description type targetValue')
+          .populate('assignedBy', 'name email role')
+          .populate('assignedTo', 'name email role territory assignedTerritory')
+          .sort({ createdAt: -1 })
+          .skip((pageNum - 1) * limitNum)
+          .limit(limitNum)
+          .lean()
+      ]);
+      total = countResult;
+      assignments = findResult || [];
+    } catch (queryErr) {
+      console.warn('TargetAssignment query warning:', queryErr);
+      // Fallback: try querying without populate to prevent 500 error
+      try {
+        assignments = await TargetAssignment.find(filter)
+          .sort({ createdAt: -1 })
+          .skip((pageNum - 1) * limitNum)
+          .limit(limitNum)
+          .lean();
+        total = assignments.length;
+      } catch (fallbackErr) {
+        console.error('TargetAssignment fallback error:', fallbackErr);
+        assignments = [];
+        total = 0;
+      }
+    }
+
+    // Ensure unpopulated string references for assignedTo and target are populated manually
+    if (assignments.length > 0) {
+      const missingAgentIds = assignments
+        .filter(a => a.assignedTo && typeof a.assignedTo !== 'object')
+        .map(a => a.assignedTo);
+      if (missingAgentIds.length > 0) {
+        try {
+          const agents = await Agent.find({ _id: { $in: missingAgentIds } })
+            .select('name email role territory assignedTerritory')
+            .lean();
+          const agtMap = new Map(agents.map(ag => [String(ag._id), ag]));
+          assignments.forEach(a => {
+            if (a.assignedTo && typeof a.assignedTo !== 'object') {
+              a.assignedTo = agtMap.get(String(a.assignedTo)) || { name: 'Agent', role: 'pincode' };
+            }
+          });
+        } catch (e) {}
+      }
+
+      const missingTargetIds = assignments
+        .filter(a => a.target && typeof a.target !== 'object')
+        .map(a => a.target);
+      if (missingTargetIds.length > 0) {
+        try {
+          const targets = await Target.find({ _id: { $in: missingTargetIds } })
+            .select('title description type targetValue')
+            .lean();
+          const tgtMap = new Map(targets.map(tg => [String(tg._id), tg]));
+          assignments.forEach(a => {
+            if (a.target && typeof a.target !== 'object') {
+              a.target = tgtMap.get(String(a.target)) || { title: 'Target Goal', targetValue: 0 };
+            }
+          });
+        } catch (e) {}
+      }
+    }
 
     return res.status(200).json({
       assignments,

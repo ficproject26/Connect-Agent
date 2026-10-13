@@ -70,10 +70,34 @@ export const StateDashboard: React.FC = () => {
     return st1.includes(st2) || st2.includes(st1);
   }, [userState]);
 
-  // State-scoped raw data
+  // State-scoped raw data with canonical district deduplication
   const stateDistricts = React.useMemo(() => {
-    const raw = hierarchyRes?.districts || hierarchyRes?.tree?.flatMap((s: any) => s.districts || []) || [];
-    return raw.filter((d: any) => isSameState(d.territory?.state || d.state || userState));
+    const raw: any[] = hierarchyRes?.districts || hierarchyRes?.tree?.flatMap((s: any) => s.districts || []) || [];
+    const filtered = raw.filter((d: any) => isSameState(d.territory?.state || d.state || userState));
+
+    // Deduplicate by canonical district identifier or district name
+    const districtMap = new Map<string, any>();
+    filtered.forEach((d: any) => {
+      const canonicalName = (d.territory?.district || d.district || d.name || '').trim();
+      const key = (d.districtId || canonicalName).toLowerCase();
+      if (!districtMap.has(key)) {
+        districtMap.set(key, { ...d, agents: d.agents || [d] });
+      } else {
+        const existing = districtMap.get(key);
+        const existingAgentIds = new Set((existing.agents || []).map((a: any) => String(a._id || a.id)));
+        const newAgents = (d.agents || [d]).filter((a: any) => !existingAgentIds.has(String(a._id || a.id)));
+        existing.agents = [...(existing.agents || []), ...newAgents];
+        const existingDivIds = new Set((existing.divisions || []).map((dv: any) => String(dv._id || dv.id || dv.name)));
+        const newDivs = (d.divisions || []).filter((dv: any) => !existingDivIds.has(String(dv._id || dv.id || dv.name)));
+        existing.divisions = [...(existing.divisions || []), ...newDivs];
+      }
+    });
+
+    return Array.from(districtMap.values()).sort((a, b) => {
+      const nameA = a.territory?.district || a.district || a.name || '';
+      const nameB = b.territory?.district || b.district || b.name || '';
+      return nameA.localeCompare(nameB);
+    });
   }, [hierarchyRes, userState, isSameState]);
 
   const stateDivisions = React.useMemo(() => {
@@ -382,6 +406,7 @@ export const StateDashboard: React.FC = () => {
               ) : (
                 stateDistricts.map((dist: any) => {
                   const territoryStr = dist.territory?.district || dist.district || 'District Area';
+                  const agentCount = dist.agents?.length || (dist.agentCount ? dist.agentCount : 1);
                   const agentName = formatCleanAgentName(dist.name, 'District Agent', territoryStr);
                   const divCount = dist.divisions?.length || 0;
                   return (
@@ -400,7 +425,14 @@ export const StateDashboard: React.FC = () => {
                       </div>
                       <div>
                         <h4 className="text-sm font-extrabold text-[#1b1c1c]">{territoryStr}</h4>
-                        <p className="text-[11px] text-slate-500 font-semibold mt-0.5">{agentName}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                          <p className="text-[11px] text-slate-500 font-semibold">{agentName}</p>
+                          {agentCount > 1 && (
+                            <span className="px-1.5 py-0.5 bg-[#864f19]/10 text-[#864f19] font-black text-[9px] rounded-full">
+                              +{agentCount - 1} agent{agentCount > 2 ? 's' : ''}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <div className="pt-2 border-t border-[#d7c3b5]/40 flex justify-between text-[10px] font-extrabold text-slate-600">
                         <span>{divCount} Divisions</span>
@@ -431,6 +463,20 @@ export const StateDashboard: React.FC = () => {
                 ← Change District
               </button>
             </div>
+
+            {/* Display all associated district agents when multiple belong to this district */}
+            {activeDrilledDistrict.agents && activeDrilledDistrict.agents.length > 1 && (
+              <div className="p-3 bg-[#fbf9f8] border border-[#d7c3b5]/50 rounded-xl">
+                <p className="text-[10px] font-black uppercase text-[#864f19]">Registered District Agents in this Territory ({activeDrilledDistrict.agents.length}):</p>
+                <div className="flex flex-wrap gap-2 mt-1.5">
+                  {activeDrilledDistrict.agents.map((ag: any) => (
+                    <span key={ag._id || ag.id} className="px-2.5 py-1 bg-white border border-[#d7c3b5]/60 rounded-lg text-xs font-bold text-[#1b1c1c] shadow-2xs">
+                      {ag.name} <span className="text-slate-400 font-semibold text-[10px]">({ag.registrationId || ag.email})</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <p className="text-xs font-semibold text-[#52443a]">
               Divisions in <span className="font-extrabold text-[#1b1c1c]">{activeDrilledDistrict.territory?.district || activeDrilledDistrict.name}</span> ({activeDrilledDistrict.divisions?.length || 0}):

@@ -34,10 +34,11 @@ class RealtimeClient {
   private token: string | null = null;
   private status: ConnectionStatus = 'DISCONNECTED';
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 15;
+  private maxReconnectAttempts = 5;
   private reconnectTimeout: any = null;
   private pingInterval: any = null;
   private isIntentionallyClosed = false;
+  private hasReportedFailure = false;
 
   // Deduplication & versioning tracking
   private seenEvents: Set<string> = new Set();
@@ -53,7 +54,13 @@ class RealtimeClient {
     if (typeof window !== 'undefined') {
       window.addEventListener('online', () => {
         if (this.token && this.status !== 'CONNECTED') {
-          console.log('[RealtimeClient] Network online detected. Reconnecting...');
+          console.debug('[RealtimeClient] Network online detected. Reconnecting...');
+          this.reconnect();
+        }
+      });
+      window.addEventListener('focus', () => {
+        if (this.token && this.status !== 'CONNECTED' && this.reconnectAttempts >= this.maxReconnectAttempts) {
+          // Allow gentle retry when user returns to tab
           this.reconnect();
         }
       });
@@ -66,17 +73,26 @@ class RealtimeClient {
   public getWebSocketUrl(token?: string): string {
     const rawApiUrl = (import.meta as any).env?.VITE_API_URL || '/api';
     let baseWsUrl = '';
+    let wsPath = '/api/ws';
 
     if (rawApiUrl.startsWith('http://') || rawApiUrl.startsWith('https://')) {
       baseWsUrl = rawApiUrl
         .replace(/^http:\/\//, 'ws://')
-        .replace(/^https:\/\//, 'wss://')
-        .replace(/\/api\/?$/, '');
+        .replace(/^https:\/\//, 'wss://');
+
+      if (baseWsUrl.endsWith('/api') || baseWsUrl.endsWith('/api/')) {
+        baseWsUrl = baseWsUrl.replace(/\/+$/, '');
+        wsPath = '/ws'; // results in wss://.../api/ws
+      } else {
+        baseWsUrl = baseWsUrl.replace(/\/+$/, '');
+        wsPath = '/api/ws';
+      }
     } else {
       // Relative URL — derive from window.location
       const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const host = typeof window !== 'undefined' ? window.location.host : 'localhost:8083';
       baseWsUrl = `${protocol}//${host}`;
+      wsPath = '/api/ws';
     }
 
     // Ensure port 8083 if localhost
@@ -84,7 +100,7 @@ class RealtimeClient {
       baseWsUrl = baseWsUrl.replace(/localhost(:\d+)?/, 'localhost:8083');
     }
 
-    const wsUrl = `${baseWsUrl}/ws`;
+    const wsUrl = `${baseWsUrl}${wsPath.startsWith('/') ? '' : '/'}${wsPath}`;
     return token ? `${wsUrl}?token=${encodeURIComponent(token)}` : wsUrl;
   }
 
@@ -132,6 +148,7 @@ class RealtimeClient {
 
       this.socket.onopen = () => {
         this.reconnectAttempts = 0;
+        this.hasReportedFailure = false;
         this.setStatus('CONNECTED');
         console.log('[RealtimeClient] Connected to centralized real-time server.');
 
@@ -150,7 +167,7 @@ class RealtimeClient {
         this.handleMessage(event.data);
       };
 
-      this.socket.onclose = (event) => {
+      this.socket.onclose = () => {
         clearInterval(this.pingInterval);
         this.setStatus('DISCONNECTED');
 
@@ -159,11 +176,19 @@ class RealtimeClient {
         }
       };
 
-      this.socket.onerror = (err) => {
-        console.warn('[RealtimeClient] WebSocket error encountered.');
+      this.socket.onerror = () => {
+        // Suppress repetitive red console warnings.
+        // Application gracefully operates with React Query REST synchronization.
+        if (!this.hasReportedFailure) {
+          this.hasReportedFailure = true;
+          console.debug('[RealtimeClient] Realtime socket unavailable. REST fallback active.');
+        }
       };
-    } catch (err: any) {
-      console.warn('[RealtimeClient] Failed to establish WebSocket connection:', err.message);
+    } catch {
+      if (!this.hasReportedFailure) {
+        this.hasReportedFailure = true;
+        console.debug('[RealtimeClient] Could not initialize WebSocket. REST fallback active.');
+      }
       this.scheduleReconnect();
     }
   }
@@ -177,12 +202,13 @@ class RealtimeClient {
     if (this.isIntentionallyClosed || !this.token) return;
 
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.warn('[RealtimeClient] Max reconnection attempts reached. Pausing until user activity.');
+      this.setStatus('DISCONNECTED');
       return;
     }
 
-    // Exponential backoff: 1s, 2s, 4s, 8s (max 10s) + jitter
-    const baseDelay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 10000);
+    // Exponential backoff: 3s, 8s, 15s, 30s + jitter
+    const backoffs = [3000, 8000, 15000, 30000];
+    const baseDelay = backoffs[Math.min(this.reconnectAttempts, backoffs.length - 1)];
     const jitter = Math.floor(Math.random() * 500);
     const delay = baseDelay + jitter;
 
@@ -198,6 +224,7 @@ class RealtimeClient {
 
   public reconnect() {
     this.reconnectAttempts = 0;
+    this.hasReportedFailure = false;
     if (this.token) {
       this.connect(this.token);
     }

@@ -145,15 +145,39 @@ export const AgentManagement: React.FC = () => {
       return targetState && (sState.includes(targetState) || targetState.includes(sState));
     });
 
-    const stateFilteredDistricts = (hierarchyData?.districts || []).filter((d: any) => {
+    const rawDistricts = (found?.districts && found.districts.length > 0)
+      ? found.districts
+      : (hierarchyData?.districts || []);
+
+    const stateFilteredDistricts = rawDistricts.filter((d: any) => {
       const st = (d.territory?.state || d.state || userState).toLowerCase();
       return targetState && (st.includes(targetState) || targetState.includes(st));
     });
 
+    // Deduplicate districts by canonical district identifier or district name
+    const uniqueDistMap = new Map<string, any>();
+    stateFilteredDistricts.forEach((d: any) => {
+      const canonicalName = (d.territory?.district || d.district || d.name || '').trim();
+      const key = (d.districtId || canonicalName).toLowerCase();
+      if (!uniqueDistMap.has(key)) {
+        uniqueDistMap.set(key, { ...d, agents: d.agents || [d] });
+      } else {
+        const existing = uniqueDistMap.get(key);
+        const existingAgentIds = new Set((existing.agents || []).map((a: any) => String(a._id || a.id)));
+        const newAgents = (d.agents || [d]).filter((a: any) => !existingAgentIds.has(String(a._id || a.id)));
+        existing.agents = [...(existing.agents || []), ...newAgents];
+        const existingDivIds = new Set((existing.divisions || []).map((dv: any) => String(dv._id || dv.id || dv.name)));
+        const newDivs = (d.divisions || []).filter((dv: any) => !existingDivIds.has(String(dv._id || dv.id || dv.name)));
+        existing.divisions = [...(existing.divisions || []), ...newDivs];
+      }
+    });
+
+    const canonicalDistricts = Array.from(uniqueDistMap.values());
+
     if (found) {
       return {
         ...found,
-        districts: (found.districts && found.districts.length > 0) ? found.districts : stateFilteredDistricts
+        districts: canonicalDistricts
       };
     }
 
@@ -655,7 +679,14 @@ export const AgentManagement: React.FC = () => {
                                 <span className="text-xs font-semibold text-slate-400">ID: {dist.registrationId}</span>
                                 {getKycBadge(dist.kycStatus)}
                               </div>
-                              <h3 className="text-base font-black text-[#1b1c1c] mt-1">{formatCleanAgentName(dist.name, 'District Agent', dist.territory?.district)}</h3>
+                              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                <h3 className="text-base font-black text-[#1b1c1c]">{formatCleanAgentName(dist.name, 'District Agent', dist.territory?.district)}</h3>
+                                {(((dist as any).agents?.length || 1) > 1) && (
+                                  <span className="px-2 py-0.5 bg-[#864f19]/10 text-[#864f19] font-black text-[10px] rounded-full border border-[#864f19]/20">
+                                    +{((dist as any).agents.length - 1)} more agent{((dist as any).agents.length - 1) > 1 ? 's' : ''}
+                                  </span>
+                                )}
+                              </div>
                               <p className="text-xs font-bold text-[#52443a] flex items-center gap-1.5 mt-0.5">
                                 <MapPin className="w-3.5 h-3.5 text-[#864f19]" />
                                 District: {dist.territory?.district || dist.name} ({userState})
@@ -728,6 +759,33 @@ export const AgentManagement: React.FC = () => {
                     <Eye className="w-4 h-4" /> View District Scorecard
                   </button>
                 </div>
+
+                {/* Display all associated registered district agents when multiple exist in this district */}
+                {(activeDistrictNode as any).agents && (activeDistrictNode as any).agents.length > 1 && (
+                  <div className="bg-white p-4 rounded-xl border border-[#d7c3b5]/60 shadow-2xs space-y-3">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-[#864f19] flex items-center gap-1.5">
+                      <MapPin className="w-4 h-4 text-[#864f19]" />
+                      Registered District Agents in {activeDistrictNode.territory?.district || activeDistrictNode.name} ({(activeDistrictNode as any).agents.length})
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      {(activeDistrictNode as any).agents.map((ag: any) => (
+                        <div key={ag._id || ag.id} className="p-3 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/50 flex items-center justify-between">
+                          <div>
+                            <p className="text-xs font-bold text-[#1b1c1c]">{ag.name}</p>
+                            <p className="text-[10px] text-slate-500 font-semibold">{ag.registrationId || ag.email}</p>
+                            <span className="inline-block mt-1 text-[9px] font-black uppercase text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">{ag.kycStatus || 'approved'}</span>
+                          </div>
+                          <button
+                            onClick={() => setSelectedAgent(ag)}
+                            className="px-2.5 py-1 text-[11px] font-bold text-[#864f19] bg-white border border-[#d7c3b5] hover:bg-[#eae8e7] rounded-lg transition cursor-pointer"
+                          >
+                            Details
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="space-y-3">
                   <h4 className="text-xs font-black uppercase tracking-wider text-[#864f19] flex items-center gap-1.5">

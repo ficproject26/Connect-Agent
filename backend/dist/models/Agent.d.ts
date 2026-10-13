@@ -1,4 +1,4 @@
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 export interface IAgent extends Document {
     name: string;
     email: string;
@@ -81,7 +81,7 @@ export interface IAgent extends Document {
     comparePassword(password: string): Promise<boolean>;
 }
 export declare const Agent: import("mongoose").Model<IAgent, {}, {}, {}, Document<unknown, {}, IAgent, {}, {}> & IAgent & Required<{
-    _id: import("mongoose").Types.ObjectId;
+    _id: Types.ObjectId;
 }> & {
     __v: number;
 }, any>;

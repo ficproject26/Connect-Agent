@@ -9,6 +9,7 @@ import {
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { getActiveDistricts, getActiveDivisions, getActivePincodes } from '../../utils/territoryService';
 
 interface FieldVisitRecord {
   _id: string;
@@ -113,6 +114,11 @@ export const FieldVisitsModule: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [dateFilter, setDateFilter] = useState<string>('today');
   const [hierarchyAgents, setHierarchyAgents] = useState<any[]>([]);
+
+  // Cascading territory metadata from Admin Territory DB
+  const [availableDistricts, setAvailableDistricts] = useState<string[]>([]);
+  const [districtDivisions, setDistrictDivisions] = useState<string[]>([]);
+  const [divisionPincodes, setDivisionPincodes] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchHierarchy = async () => {
@@ -291,48 +297,89 @@ export const FieldVisitsModule: React.FC = () => {
     });
   }, [visits, activeRole, userPincode, userDistrict, userState, userName, user?.mobile, effectiveState]);
 
-  // Dynamically populated agents by role & authorized territory scope
+  // Load active districts for state
+  useEffect(() => {
+    getActiveDistricts(effectiveState || userState).then(dists => {
+      if (Array.isArray(dists)) setAvailableDistricts(dists);
+    }).catch(() => {});
+  }, [effectiveState, userState]);
+
+  // 1. UNIQUE DISTRICT FILTER (Display each canonical district once without duplicates)
   const districtAgentsList = useMemo(() => {
     if (activeRole !== 'state') return [];
     const stTarget = effectiveState.toLowerCase();
 
     const map = new Map<string, { id: string; name: string; district: string; label: string; registrationId?: string }>();
 
+    // Seed with canonical districts from central Admin Territory DB
+    availableDistricts.forEach(dName => {
+      const clean = dName.trim();
+      map.set(clean.toLowerCase(), {
+        id: clean,
+        name: clean,
+        district: clean,
+        label: `📍 ${clean} District`
+      });
+    });
+
+    // Attach registered district agents
     hierarchyAgents.forEach(a => {
       const roleStr = (a.role || a.level || '').toLowerCase();
       if (roleStr !== 'district') return;
       const st = (a.territory?.state || a.assignedState || a.state || a.assignedTerritory?.state || '').toLowerCase();
       if (stTarget && st && !st.includes(stTarget) && !stTarget.includes(st)) return;
 
-      const dist = a.territory?.district || a.assignedDistrict || a.district || a.assignedTerritory?.district || userDistrict || 'District';
-      const id = String(a._id || a.id || a.agentId || a.name);
-      const regId = a.registrationId || '';
-      const label = `${a.name} (${dist}${regId ? ` - ${regId}` : ' District Agent'})`;
+      const dist = (a.territory?.district || a.assignedDistrict || a.district || a.assignedTerritory?.district || '').trim();
+      if (!dist) return;
 
-      map.set(id, { id, name: a.name, district: dist, label, registrationId: regId });
+      const key = dist.toLowerCase();
+      const existing = map.get(key);
+      const agentCleanName = a.name && a.name.length > 2 && a.name !== 'old' ? a.name : 'District Agent';
+      const label = `📍 ${dist} (${agentCleanName})`;
+
+      if (existing) {
+        existing.label = label;
+        existing.name = a.name;
+        existing.registrationId = a.registrationId;
+      } else {
+        map.set(key, { id: dist, name: a.name, district: dist, label, registrationId: a.registrationId });
+      }
     });
 
+    // Merge from visit records if any
     visits.forEach(v => {
-      const roleStr = (v.visitedByRole || '').toLowerCase();
-      if (!roleStr.includes('district')) return;
-      const st = (v.state || '').toLowerCase();
-      if (stTarget && st && !st.includes(stTarget) && !stTarget.includes(st)) return;
-
-      const dist = v.territoryDistrict || userDistrict || 'District';
-      const id = v.agentId || v.visitedBy;
-      if (!map.has(id)) {
-        map.set(id, {
-          id,
-          name: v.visitedBy,
+      const dist = (v.territoryDistrict || '').trim();
+      if (!dist) return;
+      const key = dist.toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, {
+          id: dist,
+          name: dist,
           district: dist,
-          label: `${v.visitedBy} (${dist} District Agent)`
+          label: `📍 ${dist} District`
         });
       }
     });
 
-    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [hierarchyAgents, visits, activeRole, effectiveState, userDistrict]);
+    return Array.from(map.values()).sort((a, b) => a.district.localeCompare(b.district));
+  }, [hierarchyAgents, visits, activeRole, effectiveState, availableDistricts]);
 
+  // Dynamically load valid child divisions when district changes
+  useEffect(() => {
+    const selDist = districtAgentFilter === 'all'
+      ? (activeRole === 'district' ? userDistrict : '')
+      : (districtAgentsList.find(d => d.id === districtAgentFilter || d.district === districtAgentFilter)?.district || districtAgentFilter);
+
+    if (selDist) {
+      getActiveDivisions(effectiveState || userState, selDist).then(divs => {
+        if (Array.isArray(divs)) setDistrictDivisions(divs);
+      }).catch(() => {});
+    } else {
+      setDistrictDivisions([]);
+    }
+  }, [districtAgentFilter, activeRole, userDistrict, effectiveState, userState, districtAgentsList]);
+
+  // 2. DIVISIONAL AGENTS (Strictly isolated to selected District)
   const divisionalAgentsList = useMemo(() => {
     if (activeRole !== 'state' && activeRole !== 'district') return [];
     const stTarget = effectiveState.toLowerCase();
@@ -341,11 +388,12 @@ export const FieldVisitsModule: React.FC = () => {
     if (activeRole === 'district') {
       filterDistrict = userDistrict.toLowerCase();
     } else if (districtAgentFilter !== 'all') {
-      const selDist = districtAgentsList.find(d => d.id === districtAgentFilter || d.name === districtAgentFilter);
-      filterDistrict = (selDist?.district || '').toLowerCase();
+      const selDist = districtAgentsList.find(d => d.id === districtAgentFilter || d.district === districtAgentFilter);
+      filterDistrict = (selDist?.district || districtAgentFilter).toLowerCase();
     }
 
     const map = new Map<string, { id: string; name: string; district: string; division: string; label: string; registrationId?: string }>();
+    const validDivsLower = districtDivisions.map(d => d.toLowerCase());
 
     hierarchyAgents.forEach(a => {
       const roleStr = (a.role || a.level || '').toLowerCase();
@@ -353,13 +401,24 @@ export const FieldVisitsModule: React.FC = () => {
       const st = (a.territory?.state || a.assignedState || a.state || a.assignedTerritory?.state || '').toLowerCase();
       if (stTarget && st && !st.includes(stTarget) && !stTarget.includes(st)) return;
 
-      const dist = (a.territory?.district || a.assignedDistrict || a.district || a.assignedTerritory?.district || '').toLowerCase();
-      if (filterDistrict && dist && !dist.includes(filterDistrict) && !filterDistrict.includes(dist)) return;
+      const dist = (a.territory?.district || a.assignedDistrict || a.district || a.assignedTerritory?.district || '').trim().toLowerCase();
+      const div = (a.territory?.division || a.assignedDivision || a.division || a.assignedTerritory?.division || '').trim();
+      const divLower = div.toLowerCase();
 
-      const div = a.territory?.division || a.assignedDivision || a.division || a.assignedTerritory?.division || userDivision || 'Division';
+      // STRICT TERRITORY HIERARCHY:
+      // If a district filter is active, only include division agents that genuinely belong to that district
+      if (filterDistrict) {
+        const matchesDistrictDirectly = dist && (dist === filterDistrict || dist.includes(filterDistrict) || filterDistrict.includes(dist));
+        const matchesDistrictDivision = validDivsLower.length > 0 && validDivsLower.some(vd => divLower.includes(vd) || vd.includes(divLower));
+
+        if (!matchesDistrictDirectly && !matchesDistrictDivision) {
+          return;
+        }
+      }
+
       const id = String(a._id || a.id || a.agentId || a.name);
       const regId = a.registrationId || '';
-      const label = `${a.name} (${div}${regId ? ` - ${regId}` : ''})`;
+      const label = `${a.name} (${div || 'Division'}${regId ? ` - ${regId}` : ''})`;
 
       map.set(id, { id, name: a.name, district: dist, division: div, label, registrationId: regId });
     });
@@ -370,10 +429,16 @@ export const FieldVisitsModule: React.FC = () => {
       const st = (v.state || '').toLowerCase();
       if (stTarget && st && !st.includes(stTarget) && !stTarget.includes(st)) return;
 
-      const dist = (v.territoryDistrict || '').toLowerCase();
-      if (filterDistrict && dist && !dist.includes(filterDistrict) && !filterDistrict.includes(dist)) return;
+      const dist = (v.territoryDistrict || '').trim().toLowerCase();
+      const div = (v.territoryDivision || '').trim();
+      const divLower = div.toLowerCase();
 
-      const div = v.territoryDivision || userDivision || 'Division';
+      if (filterDistrict) {
+        const matchesDistrictDirectly = dist && (dist === filterDistrict || dist.includes(filterDistrict) || filterDistrict.includes(dist));
+        const matchesDistrictDivision = validDivsLower.length > 0 && validDivsLower.some(vd => divLower.includes(vd) || vd.includes(divLower));
+        if (!matchesDistrictDirectly && !matchesDistrictDivision) return;
+      }
+
       const id = v.agentId || v.visitedBy;
       if (!map.has(id)) {
         map.set(id, {
@@ -381,14 +446,35 @@ export const FieldVisitsModule: React.FC = () => {
           name: v.visitedBy,
           district: dist,
           division: div,
-          label: `${v.visitedBy} (${div})`
+          label: `${v.visitedBy} (${div || 'Division'})`
         });
       }
     });
 
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [hierarchyAgents, visits, activeRole, effectiveState, districtAgentFilter, districtAgentsList, userDistrict, userDivision]);
+  }, [hierarchyAgents, visits, activeRole, effectiveState, districtAgentFilter, districtAgentsList, districtDivisions, userDistrict]);
 
+  // Dynamically load valid child pincodes when division changes
+  useEffect(() => {
+    const selDist = districtAgentFilter === 'all'
+      ? (activeRole === 'district' ? userDistrict : '')
+      : (districtAgentsList.find(d => d.id === districtAgentFilter || d.district === districtAgentFilter)?.district || districtAgentFilter);
+
+    const selDiv = divisionAgentFilter === 'all'
+      ? (activeRole === 'division' ? userDivision : '')
+      : (divisionalAgentsList.find(d => d.id === divisionAgentFilter || d.division === divisionAgentFilter)?.division || divisionAgentFilter);
+
+    if (selDist && selDiv) {
+      getActivePincodes(effectiveState || userState, selDist, selDiv).then(pins => {
+        if (Array.isArray(pins)) setDivisionPincodes(pins.map(p => p.code));
+      }).catch(() => {});
+    } else {
+      setDivisionPincodes([]);
+    }
+  }, [divisionAgentFilter, districtAgentFilter, activeRole, userDistrict, userDivision, effectiveState, userState, districtAgentsList, divisionalAgentsList]);
+
+
+  // 3. PINCODE AGENTS (Strictly isolated to selected Division)
   const pincodeAgentsList = useMemo(() => {
     if (activeRole === 'pincode') return [];
     const stTarget = effectiveState.toLowerCase();
@@ -404,15 +490,16 @@ export const FieldVisitsModule: React.FC = () => {
     }
 
     if (districtAgentFilter !== 'all') {
-      const selDist = districtAgentsList.find(d => d.id === districtAgentFilter || d.name === districtAgentFilter);
+      const selDist = districtAgentsList.find(d => d.id === districtAgentFilter || d.district === districtAgentFilter);
       if (selDist) filterDistrict = selDist.district.toLowerCase();
     }
     if (divisionAgentFilter !== 'all') {
       const selDiv = divisionalAgentsList.find(d => d.id === divisionAgentFilter || d.name === divisionAgentFilter);
-      if (selDiv) filterDivision = selDiv.division.toLowerCase();
+      if (selDiv && selDiv.division) filterDivision = selDiv.division.toLowerCase();
     }
 
     const map = new Map<string, { id: string; name: string; district: string; division: string; pincode: string; label: string; registrationId?: string }>();
+    const validPins = divisionPincodes;
 
     hierarchyAgents.forEach(a => {
       const roleStr = (a.role || a.level || '').toLowerCase();
@@ -420,16 +507,21 @@ export const FieldVisitsModule: React.FC = () => {
       const st = (a.territory?.state || a.assignedState || a.state || a.assignedTerritory?.state || '').toLowerCase();
       if (stTarget && st && !st.includes(stTarget) && !stTarget.includes(st)) return;
 
-      const dist = (a.territory?.district || a.assignedDistrict || a.district || a.assignedTerritory?.district || '').toLowerCase();
+      const dist = (a.territory?.district || a.assignedDistrict || a.district || a.assignedTerritory?.district || '').trim().toLowerCase();
+      const div = (a.territory?.division || a.assignedDivision || a.division || a.assignedTerritory?.division || '').trim().toLowerCase();
+      const pin = (a.territory?.pincode || a.assignedPincode || a.pincode || a.assignedTerritory?.pincode || userPincode || '').trim();
+
       if (filterDistrict && dist && !dist.includes(filterDistrict) && !filterDistrict.includes(dist)) return;
 
-      const div = (a.territory?.division || a.assignedDivision || a.division || a.assignedTerritory?.division || '').toLowerCase();
-      if (filterDivision && div && !div.includes(filterDivision) && !filterDivision.includes(div)) return;
+      if (filterDivision) {
+        const matchesDivDirectly = div && (div.includes(filterDivision) || filterDivision.includes(div));
+        const matchesPin = validPins.length > 0 && validPins.includes(pin);
+        if (!matchesDivDirectly && !matchesPin) return;
+      }
 
-      const pin = a.territory?.pincode || a.assignedPincode || a.pincode || a.assignedTerritory?.pincode || userPincode || 'Pincode';
       const id = String(a._id || a.id || a.agentId || a.name);
       const regId = a.registrationId || '';
-      const label = `${a.name} (PIN ${pin}${regId ? ` - ${regId}` : ''})`;
+      const label = `${a.name} (PIN ${pin || 'Sector'}${regId ? ` - ${regId}` : ''})`;
 
       map.set(id, { id, name: a.name, district: dist, division: div, pincode: pin, label, registrationId: regId });
     });
@@ -440,13 +532,17 @@ export const FieldVisitsModule: React.FC = () => {
       const st = (v.state || '').toLowerCase();
       if (stTarget && st && !st.includes(stTarget) && !stTarget.includes(st)) return;
 
-      const dist = (v.territoryDistrict || '').toLowerCase();
+      const dist = (v.territoryDistrict || '').trim().toLowerCase();
+      const div = (v.territoryDivision || '').trim().toLowerCase();
+      const pin = (v.territoryPincode || userPincode || '').trim();
+
       if (filterDistrict && dist && !dist.includes(filterDistrict) && !filterDistrict.includes(dist)) return;
+      if (filterDivision) {
+        const matchesDivDirectly = div && (div.includes(filterDivision) || filterDivision.includes(div));
+        const matchesPin = validPins.length > 0 && validPins.includes(pin);
+        if (!matchesDivDirectly && !matchesPin) return;
+      }
 
-      const div = (v.territoryDivision || '').toLowerCase();
-      if (filterDivision && div && !div.includes(filterDivision) && !filterDivision.includes(div)) return;
-
-      const pin = v.territoryPincode || userPincode || 'Pincode';
       const id = v.agentId || v.visitedBy;
       if (!map.has(id)) {
         map.set(id, {
@@ -455,34 +551,25 @@ export const FieldVisitsModule: React.FC = () => {
           district: dist,
           division: div,
           pincode: pin,
-          label: `${v.visitedBy} (PIN ${pin})`
+          label: `${v.visitedBy} (PIN ${pin || 'Sector'})`
         });
       }
     });
 
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [hierarchyAgents, visits, activeRole, effectiveState, districtAgentFilter, divisionAgentFilter, districtAgentsList, divisionalAgentsList, userDistrict, userDivision, userPincode]);
+  }, [hierarchyAgents, visits, activeRole, effectiveState, districtAgentFilter, divisionAgentFilter, districtAgentsList, divisionalAgentsList, divisionPincodes, userDistrict, userDivision, userPincode]);
 
-  // Reset dependent filters when parent filters change
+  // Dynamic filter reset: parent filter change resets children immediately
   useEffect(() => {
-    if (divisionAgentFilter !== 'all') {
-      const isValid = divisionalAgentsList.some(d => d.id === divisionAgentFilter || d.name === divisionAgentFilter);
-      if (!isValid) {
-        setDivisionAgentFilter('all');
-      }
-    }
-  }, [districtAgentFilter, divisionalAgentsList, divisionAgentFilter]);
+    setDivisionAgentFilter('all');
+    setPincodeAgentFilter('all');
+  }, [districtAgentFilter]);
 
   useEffect(() => {
-    if (pincodeAgentFilter !== 'all') {
-      const isValid = pincodeAgentsList.some(p => p.id === pincodeAgentFilter || p.name === pincodeAgentFilter);
-      if (!isValid) {
-        setPincodeAgentFilter('all');
-      }
-    }
-  }, [districtAgentFilter, divisionAgentFilter, pincodeAgentsList, pincodeAgentFilter]);
+    setPincodeAgentFilter('all');
+  }, [divisionAgentFilter]);
 
-  // Filtered visits with unified AND logic
+  // Filtered visits with cascading hierarchy AND logic
   const filteredVisits = useMemo(() => {
     return scopedVisits.filter(v => {
       const q = searchTerm.toLowerCase().trim();
@@ -498,13 +585,11 @@ export const FieldVisitsModule: React.FC = () => {
 
       let matchesDistrictAgent = true;
       if (activeRole === 'state' && districtAgentFilter !== 'all') {
-        const selDist = districtAgentsList.find(d => d.id === districtAgentFilter || d.name === districtAgentFilter);
-        if (selDist) {
-          matchesDistrictAgent =
-            v.visitedBy === selDist.name ||
-            v.agentId === selDist.id ||
-            Boolean(v.territoryDistrict && selDist.district && v.territoryDistrict.toLowerCase() === selDist.district.toLowerCase());
-        }
+        const selDist = districtAgentsList.find(d => d.id === districtAgentFilter || d.district === districtAgentFilter);
+        const targetDist = (selDist?.district || districtAgentFilter).toLowerCase();
+        matchesDistrictAgent =
+          Boolean(v.territoryDistrict && v.territoryDistrict.toLowerCase() === targetDist) ||
+          Boolean(v.agentId && selDist && (v.agentId === selDist.id || v.visitedBy === selDist.name));
       }
 
       let matchesDivisionAgent = true;
@@ -902,7 +987,7 @@ export const FieldVisitsModule: React.FC = () => {
                       onChange={(e) => setDistrictAgentFilter(e.target.value)}
                       className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                     >
-                      <option value="all">📍 All District Agents ({districtAgentsList.length})</option>
+                      <option value="all">📍 All Districts ({districtAgentsList.length})</option>
                       {districtAgentsList.map((a) => (
                         <option key={a.id} value={a.id}>{a.label}</option>
                       ))}
@@ -915,7 +1000,7 @@ export const FieldVisitsModule: React.FC = () => {
                       onChange={(e) => setDivisionAgentFilter(e.target.value)}
                       className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                     >
-                      <option value="all">🏢 All Divisional Agents ({divisionalAgentsList.length})</option>
+                      <option value="all">🏢 All Divisional Agents {districtAgentFilter !== 'all' ? `(${districtAgentFilter})` : ''} ({divisionalAgentsList.length})</option>
                       {divisionalAgentsList.map((a) => (
                         <option key={a.id} value={a.id}>{a.label}</option>
                       ))}

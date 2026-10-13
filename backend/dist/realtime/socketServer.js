@@ -26,14 +26,34 @@ class CentralizedSocketServer {
     }
     /**
      * Initializes the WebSocket server attached to the Node HTTP server.
+     * Intercepts upgrade requests for /api/ws, /ws, /realtime, or any path ending with /ws.
      */
     init(httpServer) {
         this.wss = new ws_1.WebSocketServer({
-            server: httpServer,
-            path: '/ws',
+            noServer: true,
             clientTracking: false // We maintain our own rich client map
         });
-        console.log('[SocketServer] Centralized WebSocket server initialized on path /ws');
+        console.log('[SocketServer] Centralized WebSocket server initialized (handling /api/ws, /ws, /realtime)');
+        httpServer.on('upgrade', (request, socket, head) => {
+            let pathname = '';
+            try {
+                pathname = url_1.default.parse(request.url || '').pathname || '';
+            }
+            catch (e) {
+                socket.destroy();
+                return;
+            }
+            const cleanPath = pathname.replace(/\/+$/, '');
+            if (cleanPath === '/ws' ||
+                cleanPath === '/api/ws' ||
+                cleanPath === '/realtime' ||
+                cleanPath === '/api/realtime' ||
+                cleanPath.endsWith('/ws')) {
+                this.wss.handleUpgrade(request, socket, head, (ws) => {
+                    this.wss.emit('connection', ws, request);
+                });
+            }
+        });
         this.wss.on('connection', (ws, req) => {
             this.handleConnection(ws, req);
         });

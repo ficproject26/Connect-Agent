@@ -8,6 +8,7 @@ declare class CentralizedSocketServer {
     private metrics;
     /**
      * Initializes the WebSocket server attached to the Node HTTP server.
+     * Intercepts upgrade requests for /api/ws, /ws, /realtime, or any path ending with /ws.
      */
     init(httpServer: HttpServer): void;
     /**

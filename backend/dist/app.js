@@ -90,6 +90,15 @@ app.get('/api/realtime/status', (req, res) => {
         realtime: socketServer_1.default.getStatus()
     });
 });
+// WebSocket HTTP fallback endpoint (returns 200 with guidance if accessed via regular HTTP GET)
+app.get(['/api/ws', '/ws'], (req, res) => {
+    res.status(200).json({
+        status: 'ok',
+        message: 'Forge Connect Realtime WebSocket endpoint. Please connect with a WebSocket client (wss://).',
+        protocol: 'ws',
+        realtime: socketServer_1.default.getStatus()
+    });
+});
 // Real-time Event Trigger Endpoint for testing & inter-service triggers
 app.post('/api/realtime/test-emit', async (req, res) => {
     try {

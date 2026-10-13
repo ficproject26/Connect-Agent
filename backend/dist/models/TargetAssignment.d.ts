@@ -1,8 +1,8 @@
 import { Document, Types } from 'mongoose';
 export interface ITargetAssignment extends Document {
-    target: Types.ObjectId;
-    assignedTo: Types.ObjectId;
-    assignedBy: Types.ObjectId;
+    target: any;
+    assignedTo: any;
+    assignedBy: any;
     dueDate: Date;
     status: 'assigned' | 'accepted' | 'in_progress' | 'completed' | 'pending' | 'overdue' | 'rejected' | 'cancelled';
     completedAt?: Date;

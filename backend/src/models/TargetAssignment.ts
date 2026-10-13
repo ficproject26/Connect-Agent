@@ -1,9 +1,9 @@
 import { Schema, model, Document, Types } from 'mongoose';
 
 export interface ITargetAssignment extends Document {
-  target: Types.ObjectId;
-  assignedTo: Types.ObjectId;
-  assignedBy: Types.ObjectId;
+  target: any;
+  assignedTo: any;
+  assignedBy: any;
   dueDate: Date;
   status: 'assigned' | 'accepted' | 'in_progress' | 'completed' | 'pending' | 'overdue' | 'rejected' | 'cancelled';
   completedAt?: Date;
@@ -12,9 +12,9 @@ export interface ITargetAssignment extends Document {
 }
 
 const targetAssignmentSchema = new Schema<ITargetAssignment>({
-  target: { type: Schema.Types.ObjectId, ref: 'Target', required: true },
-  assignedTo: { type: Schema.Types.ObjectId, ref: 'Agent', required: true },
-  assignedBy: { type: Schema.Types.ObjectId, ref: 'Agent', required: true },
+  target: { type: Schema.Types.Mixed, ref: 'Target', required: true },
+  assignedTo: { type: Schema.Types.Mixed, ref: 'Agent', required: true },
+  assignedBy: { type: Schema.Types.Mixed, ref: 'Agent', required: true },
   dueDate: { type: Date, required: true },
   status: {
     type: String,

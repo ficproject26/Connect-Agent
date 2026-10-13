@@ -205,27 +205,30 @@ export const TargetsList: React.FC = () => {
       const r = (s.role || '').toLowerCase();
       if (r !== agentType) return false;
 
-      // Strict territory matching:
+      // Robust territory matching handling IDs, objects, and canonical names:
       if (agentType === 'district') {
         const agtDist = (s.assignedTerritory?.district || s.territory?.district || s.district || '').trim().toLowerCase();
         const targetDist = (selectedDistrict || userDistrict || '').trim().toLowerCase();
-        return agtDist === targetDist;
+        if (!targetDist) return true;
+        return agtDist === targetDist || (agtDist && targetDist && (agtDist.includes(targetDist) || targetDist.includes(agtDist)));
       }
       if (agentType === 'division') {
         const agtDiv = (s.assignedTerritory?.division || s.territory?.division || s.division || '').trim().toLowerCase();
         const targetDiv = (selectedDivision || userDivision || '').trim().toLowerCase();
-        return agtDiv.includes(targetDiv) || targetDiv.includes(agtDiv);
+        if (!targetDiv) return true;
+        return agtDiv === targetDiv || (agtDiv && targetDiv && (agtDiv.includes(targetDiv) || targetDiv.includes(agtDiv)));
       }
       if (agentType === 'pincode') {
         const agtPin = (s.assignedTerritory?.pincode || s.territory?.pincode || s.pincode || '').trim();
         const targetPin = (selectedPincode || userPincode || '').trim();
+        if (!targetPin) return true;
         return agtPin === targetPin;
       }
       return true;
     });
 
     return matched.map((s: any) => ({
-      id: s._id,
+      id: String(s._id || s.id),
       name: s.name,
       role: `${s.role || agentType} Agent`,
       territory: typeof s.territory === 'object'
@@ -236,28 +239,32 @@ export const TargetsList: React.FC = () => {
 
   useEffect(() => {
     if (candidateAgents.length > 0) {
-      setSelectedAgent(candidateAgents[0].name);
+      const exists = candidateAgents.some(a => a.id === selectedAgent || a.name === selectedAgent);
+      if (!exists) {
+        setSelectedAgent(candidateAgents[0].id);
+      }
     } else {
       setSelectedAgent('');
     }
-  }, [candidateAgents]);
+  }, [candidateAgents, selectedAgent]);
 
   useEffect(() => {
     if (isCreateModalOpen) {
       const def = userRole === 'state' ? 'district' : userRole === 'district' ? 'division' : 'pincode';
       setAgentType(def);
-      setSelectedDistrict(userDistrict);
+      const initialDist = userDistrict || (availableDistricts.length > 0 ? availableDistricts[0] : '');
+      setSelectedDistrict(initialDist);
       setSelectedDivision(userDivision);
       setSelectedPincode(userPincode);
     }
-  }, [isCreateModalOpen, userRole, userDistrict, userDivision, userPincode]);
+  }, [isCreateModalOpen, userRole, userDistrict, availableDistricts, userDivision, userPincode]);
 
   const handleCreateTargetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title || !isManager) return;
 
     setIsSubmitting(true);
-    const assignedAgentObj = candidateAgents.find(a => a.name === selectedAgent) || candidateAgents[0];
+    const assignedAgentObj = candidateAgents.find(a => a.id === selectedAgent || a.name === selectedAgent) || candidateAgents[0];
 
     try {
       await api.post('/targets/allocate', {
@@ -777,7 +784,10 @@ export const TargetsList: React.FC = () => {
                     <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target District *</label>
                     <select
                       value={selectedDistrict}
-                      onChange={(e) => setSelectedDistrict(e.target.value)}
+                      onChange={(e) => {
+                        setSelectedDistrict(e.target.value);
+                        setSelectedAgent('');
+                      }}
                       className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                     >
                       {availableDistricts.map(d => (
@@ -795,12 +805,12 @@ export const TargetsList: React.FC = () => {
                     >
                       {candidateAgents.length > 0 ? (
                         candidateAgents.map(agt => (
-                          <option key={agt.id} value={agt.name}>
+                          <option key={agt.id} value={agt.id}>
                             {agt.name} ({agt.territory})
                           </option>
                         ))
                       ) : (
-                        <option value="">No district agents found in territory</option>
+                        <option value="">No eligible district agents found</option>
                       )}
                     </select>
                   </div>
@@ -814,7 +824,11 @@ export const TargetsList: React.FC = () => {
                       <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target District *</label>
                       <select
                         value={selectedDistrict}
-                        onChange={(e) => setSelectedDistrict(e.target.value)}
+                        onChange={(e) => {
+                          setSelectedDistrict(e.target.value);
+                          setSelectedDivision('');
+                          setSelectedAgent('');
+                        }}
                         className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                       >
                         {availableDistricts.map(d => (
@@ -827,7 +841,10 @@ export const TargetsList: React.FC = () => {
                       <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target Division *</label>
                       <select
                         value={selectedDivision}
-                        onChange={(e) => setSelectedDivision(e.target.value)}
+                        onChange={(e) => {
+                          setSelectedDivision(e.target.value);
+                          setSelectedAgent('');
+                        }}
                         className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                       >
                         {availableDivisions.map(div => (
@@ -846,12 +863,12 @@ export const TargetsList: React.FC = () => {
                     >
                       {candidateAgents.length > 0 ? (
                         candidateAgents.map(agt => (
-                          <option key={agt.id} value={agt.name}>
+                          <option key={agt.id} value={agt.id}>
                             {agt.name} ({agt.territory})
                           </option>
                         ))
                       ) : (
-                        <option value="">No division agents found in territory</option>
+                        <option value="">No eligible division agents found</option>
                       )}
                     </select>
                   </div>
@@ -865,7 +882,12 @@ export const TargetsList: React.FC = () => {
                       <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target District *</label>
                       <select
                         value={selectedDistrict}
-                        onChange={(e) => setSelectedDistrict(e.target.value)}
+                        onChange={(e) => {
+                          setSelectedDistrict(e.target.value);
+                          setSelectedDivision('');
+                          setSelectedPincode('');
+                          setSelectedAgent('');
+                        }}
                         className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                       >
                         {availableDistricts.map(d => (
@@ -878,7 +900,11 @@ export const TargetsList: React.FC = () => {
                       <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target Division *</label>
                       <select
                         value={selectedDivision}
-                        onChange={(e) => setSelectedDivision(e.target.value)}
+                        onChange={(e) => {
+                          setSelectedDivision(e.target.value);
+                          setSelectedPincode('');
+                          setSelectedAgent('');
+                        }}
                         className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                       >
                         {availableDivisions.map(div => (
@@ -893,7 +919,10 @@ export const TargetsList: React.FC = () => {
                       <label className="block text-[#52443a] uppercase text-[10px] font-bold">Target Pincode *</label>
                       <select
                         value={selectedPincode}
-                        onChange={(e) => setSelectedPincode(e.target.value)}
+                        onChange={(e) => {
+                          setSelectedPincode(e.target.value);
+                          setSelectedAgent('');
+                        }}
                         className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                       >
                         {availablePincodes.map(pin => (
@@ -911,12 +940,12 @@ export const TargetsList: React.FC = () => {
                       >
                         {candidateAgents.length > 0 ? (
                           candidateAgents.map(agt => (
-                            <option key={agt.id} value={agt.name}>
+                            <option key={agt.id} value={agt.id}>
                               {agt.name} ({agt.territory})
                             </option>
                           ))
                         ) : (
-                          <option value="">No pincode agents found in territory</option>
+                          <option value="">No eligible pincode agents found</option>
                         )}
                       </select>
                     </div>

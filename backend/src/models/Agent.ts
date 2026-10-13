@@ -1,4 +1,4 @@
-import { Schema, model, Document } from 'mongoose';
+import { Schema, model, Document, Types } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
 export interface IAgent extends Document {
@@ -121,6 +121,7 @@ const addressDetailsSchema = new Schema({
 }, { _id: false });
 
 const agentSchema = new Schema<IAgent>({
+  _id: { type: Schema.Types.Mixed, default: () => new Types.ObjectId() },
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true, index: true },
   password: { type: String, required: true },

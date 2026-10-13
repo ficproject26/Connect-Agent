@@ -485,75 +485,7 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
       };
     };
 
-    const enrichedDistricts = districtAgents.map(dist => {
-      const distTerritory = dist.territory?.district || (dist as any).district;
-      const distState = dist.territory?.state || (dist as any).state;
-      const enrichedDist = enrichAgentData(dist);
-
-      // Find child division agents strictly under this district
-      const matchingDivisions = divisionAgents
-        .filter(div => {
-          const divDist = div.territory?.district || (div as any).district;
-          const divState = div.territory?.state || (div as any).state;
-          if (distState && divState && distState.toLowerCase() !== divState.toLowerCase()) return false;
-          return Boolean(divDist && distTerritory && divDist.toLowerCase() === distTerritory.toLowerCase());
-        })
-        .map(div => {
-          const divTerritory = div.territory?.division || (div as any).division;
-          const divDist = div.territory?.district || (div as any).district;
-          const enrichedDiv = enrichAgentData(div);
-
-          // Find child pincode agents strictly under this division
-          const seenPincodes = new Set<string>();
-          const matchingPincodes = pincodeAgents
-            .filter(pin => {
-              const pinDiv = pin.territory?.division || (pin as any).division;
-              const pinDist = pin.territory?.district || (pin as any).district;
-              const pinCode = pin.territory?.pincode || (pin as any).pincode;
-              if (pinCode && seenPincodes.has(pinCode)) {
-                return false;
-              }
-              if (divDist && pinDist && divDist.toLowerCase() !== pinDist.toLowerCase()) return false;
-              const isMatch = Boolean(pinDiv && divTerritory && pinDiv.toLowerCase() === divTerritory.toLowerCase());
-              if (isMatch && pinCode) {
-                seenPincodes.add(pinCode);
-              }
-              return isMatch;
-            })
-            .map(pin => enrichAgentData(pin));
-
-          // Team metrics for division
-          const divTeamEarnings = matchingPincodes.reduce((acc, p) => acc + p.earnings, 0) + enrichedDiv.earnings;
-          const divPendingKyc = matchingPincodes.filter(p => p.kycStatus === 'pending').length + (enrichedDiv.kycStatus === 'pending' ? 1 : 0);
-          const divApprovedKyc = matchingPincodes.filter(p => p.kycStatus === 'approved').length + (enrichedDiv.kycStatus === 'approved' ? 1 : 0);
-
-          return {
-            ...enrichedDiv,
-            pincodes: matchingPincodes,
-            teamSize: matchingPincodes.length,
-            teamEarnings: divTeamEarnings,
-            teamPendingKyc: divPendingKyc,
-            teamApprovedKyc: divApprovedKyc
-          };
-        });
-
-      // Team metrics for district
-      const totalPincodes = matchingDivisions.reduce((acc, d) => acc + d.teamSize, 0);
-      const districtTeamEarnings = matchingDivisions.reduce((acc, d) => acc + d.teamEarnings, 0) + enrichedDist.earnings;
-      const districtPendingKyc = matchingDivisions.reduce((acc, d) => acc + d.teamPendingKyc, 0) + (enrichedDist.kycStatus === 'pending' ? 1 : 0);
-      const districtApprovedKyc = matchingDivisions.reduce((acc, d) => acc + d.teamApprovedKyc, 0) + (enrichedDist.kycStatus === 'approved' ? 1 : 0);
-
-      return {
-        ...enrichedDist,
-        divisions: matchingDivisions,
-        teamSize: matchingDivisions.length + totalPincodes,
-        teamEarnings: districtTeamEarnings,
-        teamPendingKyc: districtPendingKyc,
-        teamApprovedKyc: districtApprovedKyc
-      };
-    });
-
-    // Build division list for division-level scoping
+    // 1. Pre-enrich division agents with their pincodes
     const enrichedDivisions = divisionAgents.map(div => {
       const divTerritory = div.territory?.division || (div as any).division;
       const divDist = div.territory?.district || (div as any).district;
@@ -571,11 +503,92 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
         ...enrichedDiv,
         pincodes: matchingPincodes,
         teamSize: matchingPincodes.length,
-        teamEarnings: matchingPincodes.reduce((acc, p) => acc + p.earnings, 0) + enrichedDiv.earnings
+        teamEarnings: matchingPincodes.reduce((acc, p) => acc + p.earnings, 0) + enrichedDiv.earnings,
+        teamPendingKyc: matchingPincodes.filter(p => p.kycStatus === 'pending').length + (enrichedDiv.kycStatus === 'pending' ? 1 : 0),
+        teamApprovedKyc: matchingPincodes.filter(p => p.kycStatus === 'approved').length + (enrichedDiv.kycStatus === 'approved' ? 1 : 0)
       };
     });
 
     const enrichedPincodes = pincodeAgents.map(pin => enrichAgentData(pin));
+
+    // 2. Group district agents by canonical district to prevent duplicate district cards
+    const districtAgentsByDistrict = new Map<string, any[]>();
+    for (const dist of districtAgents) {
+      const distTerritory = (
+        dist.assignedTerritory?.district ||
+        dist.territory?.district ||
+        (dist as any).district ||
+        'Unassigned District'
+      ).trim();
+      const key = distTerritory.toLowerCase();
+      const list = districtAgentsByDistrict.get(key) || [];
+      list.push(dist);
+      districtAgentsByDistrict.set(key, list);
+    }
+
+    // 3. Create unique canonical district representations
+    const uniqueDistrictsList: any[] = [];
+    districtAgentsByDistrict.forEach((agentsInDist, distKey) => {
+      const canonicalName = (
+        agentsInDist[0].assignedTerritory?.district ||
+        agentsInDist[0].territory?.district ||
+        (agentsInDist[0] as any).district ||
+        distKey
+      ).trim();
+      const distState = (
+        agentsInDist[0].assignedTerritory?.state ||
+        agentsInDist[0].territory?.state ||
+        (agentsInDist[0] as any).state ||
+        ''
+      ).trim();
+
+      // Enrich all agents belonging to this district (preserving all legitimate registrations)
+      const enrichedAgents = agentsInDist.map(a => enrichAgentData(a));
+
+      // Choose lead / primary agent (prefer approved KYC, then highest performance score)
+      const leadAgent = enrichedAgents.slice().sort((a, b) => {
+        if (a.kycStatus === 'approved' && b.kycStatus !== 'approved') return -1;
+        if (b.kycStatus === 'approved' && a.kycStatus !== 'approved') return 1;
+        return (b.performanceScore || 0) - (a.performanceScore || 0);
+      })[0];
+
+      // Match child divisions strictly belonging to this district
+      const matchingDivisions = enrichedDivisions.filter(div => {
+        const divDist = (div.territory?.district || (div as any).district || '').trim().toLowerCase();
+        const divState = (div.territory?.state || (div as any).state || '').trim().toLowerCase();
+        if (distState && divState && distState.toLowerCase() !== divState) return false;
+        return Boolean(divDist && divDist === distKey);
+      });
+
+      const totalPincodes = matchingDivisions.reduce((acc, d) => acc + d.teamSize, 0);
+      const allDistrictAgentsEarnings = enrichedAgents.reduce((acc, a) => acc + a.earnings, 0);
+      const districtTeamEarnings = matchingDivisions.reduce((acc, d) => acc + d.teamEarnings, 0) + allDistrictAgentsEarnings;
+      const districtPendingKyc = matchingDivisions.reduce((acc, d) => acc + d.teamPendingKyc, 0) + enrichedAgents.filter(a => a.kycStatus === 'pending').length;
+      const districtApprovedKyc = matchingDivisions.reduce((acc, d) => acc + d.teamApprovedKyc, 0) + enrichedAgents.filter(a => a.kycStatus === 'approved').length;
+
+      uniqueDistrictsList.push({
+        ...leadAgent,
+        name: leadAgent.name,
+        territory: {
+          ...leadAgent.territory,
+          district: canonicalName,
+          state: distState || leadAgent.territory?.state
+        },
+        district: canonicalName,
+        agents: enrichedAgents,
+        agentCount: enrichedAgents.length,
+        divisions: matchingDivisions,
+        teamSize: enrichedAgents.length + matchingDivisions.length + totalPincodes,
+        teamEarnings: districtTeamEarnings,
+        teamPendingKyc: districtPendingKyc,
+        teamApprovedKyc: districtApprovedKyc
+      });
+    });
+
+    // Sort districts alphabetically
+    uniqueDistrictsList.sort((a, b) => (a.district || a.name || '').localeCompare(b.district || b.name || ''));
+
+    const enrichedDistricts = uniqueDistrictsList;
 
     // Nest districts strictly under their matching state
     let finalDistricts = enrichedDistricts;
