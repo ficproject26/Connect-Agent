@@ -126,6 +126,20 @@ class RealtimeClient {
       return;
     }
 
+    const url = this.getWebSocketUrl(token);
+
+    // In production on agent.ficapp.in, Nginx reverse proxy does not have WebSocket upgrade configured.
+    // Skip raw WebSocket initiation to prevent browser console handshake failure errors.
+    const isExplicitlyEnabled = (import.meta as any).env?.VITE_ENABLE_WS === 'true';
+    if (url.includes('agent.ficapp.in') && !isExplicitlyEnabled) {
+      this.setStatus('DISCONNECTED');
+      if (!this.hasReportedFailure) {
+        this.hasReportedFailure = true;
+        console.debug('[RealtimeClient] Operating in REST sync mode on agent.ficapp.in.');
+      }
+      return;
+    }
+
     this.token = token;
     this.isIntentionallyClosed = false;
     this.setStatus(this.reconnectAttempts > 0 ? 'RECONNECTING' : 'CONNECTING');
@@ -141,7 +155,6 @@ class RealtimeClient {
     clearInterval(this.pingInterval);
 
     try {
-      const url = this.getWebSocketUrl(token);
       this.socket = new WebSocket(url);
 
       this.socket.onopen = () => {
