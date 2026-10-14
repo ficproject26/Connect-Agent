@@ -96,7 +96,8 @@ export const allocateTarget = async (req: Request, res: Response) => {
 
     const data = allocateTargetSchema.parse(req.body);
 
-    const scope = await getAgentTerritoryScope(agentId);
+    const agentEmail = (req as any).agent?.email;
+    const scope = await getAgentTerritoryScope(agentId, agentEmail);
     const territoryFilter = buildTerritoryFilter(scope);
 
     let targetAgentId = data.assignedTo;
@@ -118,17 +119,37 @@ export const allocateTarget = async (req: Request, res: Response) => {
         }
       }
       if (!allowedAgent) {
+        const db = mongoose.connection.db;
+        if (db) {
+          const userDoc = await db.collection('users').findOne({
+            $or: [
+              { _id: targetAgentId as any },
+              { id: targetAgentId },
+              { agentId: targetAgentId }
+            ]
+          });
+          if (userDoc) {
+            const uState = (userDoc.territory?.state || userDoc.assignedTerritory?.state || userDoc.state || '').toLowerCase();
+            const scopeState = (scope?.state || '').toLowerCase();
+            if (!scopeState || uState.includes(scopeState) || scopeState.includes(uState)) {
+              allowedAgent = userDoc as any;
+            }
+          }
+        }
+      }
+      if (!allowedAgent) {
         return res.status(403).json({ message: 'Target cannot be allocated to an agent outside authorized territory' });
       }
 
       // If specific district / division / pincode was selected for the target, verify agent matches
       const agtDist = (allowedAgent.assignedTerritory?.district || allowedAgent.territory?.district || (allowedAgent as any).district || '').trim().toLowerCase();
+      const agtDistId = (allowedAgent.assignedTerritory?.districtId || '').trim().toLowerCase();
       const agtDiv = (allowedAgent.assignedTerritory?.division || allowedAgent.territory?.division || (allowedAgent as any).division || '').trim().toLowerCase();
       const agtPin = (allowedAgent.assignedTerritory?.pincode || allowedAgent.territory?.pincode || (allowedAgent as any).pincode || '').trim();
 
       const tgtDist = (data.district || '').trim().toLowerCase();
-      if (tgtDist && agtDist && agtDist !== tgtDist && !agtDist.includes(tgtDist) && !tgtDist.includes(agtDist)) {
-        return res.status(403).json({ message: `Agent '${allowedAgent.name}' is assigned to district '${agtDist}', not '${data.district}'` });
+      if (tgtDist && agtDist && agtDist !== tgtDist && !agtDist.includes(tgtDist) && !tgtDist.includes(agtDist) && agtDistId !== tgtDist) {
+        return res.status(403).json({ message: `Agent '${allowedAgent.name}' is assigned to district '${agtDist || agtDistId}', not '${data.district}'` });
       }
       if (data.divisionName && agtDiv && !agtDiv.includes(data.divisionName.trim().toLowerCase()) && !data.divisionName.trim().toLowerCase().includes(agtDiv)) {
         return res.status(403).json({ message: `Agent '${allowedAgent.name}' is assigned to division '${agtDiv}', not '${data.divisionName}'` });
@@ -226,42 +247,164 @@ export const allocateTarget = async (req: Request, res: Response) => {
 export const getSubordinates = async (req: Request, res: Response) => {
   try {
     const agentId = (req as any).agent?.agentId;
-    if (!agentId) return res.status(401).json({ message: 'Unauthorized' });
+    const agentEmail = (req as any).agent?.email;
+    if (!agentId && !agentEmail) return res.status(401).json({ message: 'Unauthorized' });
 
     const { district, division, role } = req.query;
-    const scope = await getAgentTerritoryScope(agentId);
+    const scope = await getAgentTerritoryScope(agentId, agentEmail);
     const filter: any = buildTerritoryFilter(scope);
+
+    filter.status = { $nin: ['rejected', 'suspended'] };
 
     if (district) {
       filter.$and = filter.$and || [];
       const dClean = (district as string).trim();
+      const baseDist = dClean.replace(/\s+district$/i, '').trim();
+      const distRegex = new RegExp(`^\\s*${baseDist}(\\s+district)?\\s*$`, 'i');
       filter.$and.push({
         $or: [
-          { 'assignedTerritory.district': new RegExp(`^${dClean}$`, 'i') },
-          { 'territory.district': new RegExp(`^${dClean}$`, 'i') },
-          { district: new RegExp(`^${dClean}$`, 'i') }
+          { 'assignedTerritory.district': distRegex },
+          { 'assignedTerritory.districtId': new RegExp(`^\\s*${dClean}\\s*$`, 'i') },
+          { 'territory.district': distRegex },
+          { district: distRegex },
+          { assignedDistrict: distRegex }
         ]
       });
     }
     if (division) {
       filter.$and = filter.$and || [];
       const divClean = (division as string).trim();
+      const baseDiv = divClean.replace(/\s+division$/i, '').trim();
+      const divRegex = new RegExp(`^\\s*${baseDiv}(\\s+division)?\\s*$`, 'i');
       filter.$and.push({
         $or: [
-          { 'assignedTerritory.division': new RegExp(divClean, 'i') },
-          { 'territory.division': new RegExp(divClean, 'i') },
-          { division: new RegExp(divClean, 'i') }
+          { 'assignedTerritory.division': divRegex },
+          { 'assignedTerritory.divisionId': new RegExp(`^\\s*${divClean}\\s*$`, 'i') },
+          { 'territory.division': divRegex },
+          { division: divRegex },
+          { assignedDivision: divRegex }
         ]
       });
     }
     if (role) {
-      filter.role = (role as string).toLowerCase();
+      const rClean = (role as string).toLowerCase().trim();
+      filter.$and = filter.$and || [];
+      let rolePatterns = [rClean];
+      if (rClean === 'district') {
+        rolePatterns = ['district', 'district_agent', 'district_lead', 'district admin'];
+      } else if (rClean === 'division') {
+        rolePatterns = ['division', 'division_agent', 'division_lead', 'division_manager'];
+      } else if (rClean === 'pincode') {
+        rolePatterns = ['pincode', 'pincode_agent'];
+      }
+
+      filter.$and.push({
+        $or: [
+          { role: { $in: rolePatterns.map(p => new RegExp(`^${p}$`, 'i')) } },
+          { level: { $in: [rClean, ...rolePatterns].map(p => new RegExp(`^${p}$`, 'i')) } },
+          { role: 'agent', level: { $in: [rClean, ...rolePatterns].map(p => new RegExp(`^${p}$`, 'i')) } }
+        ]
+      });
     }
 
-    const subordinates = await Agent.find(filter)
-      .select('_id name role assignedTerritory territory state district division pincode email phone status performanceScore')
+    let subordinates = await Agent.find(filter)
+      .select('_id name role level assignedTerritory territory state district division pincode email phone status kycStatus performanceScore')
       .sort({ createdAt: -1 })
       .lean();
+
+    // Query 'users' collection in MongoDB for agents registered or stored in users collection
+    try {
+      const db = mongoose.connection.db;
+      if (db) {
+        const userFilter: any = { status: { $nin: ['rejected', 'suspended'] } };
+        const rClean = role ? (role as string).toLowerCase().trim() : '';
+
+        if (rClean === 'district') {
+          userFilter.$or = [
+            { role: { $in: ['district', 'district_agent', 'district_lead', 'District Admin', 'agent'] } },
+            { level: /district/i }
+          ];
+        } else if (rClean === 'division') {
+          userFilter.$or = [
+            { role: { $in: ['division', 'division_agent', 'division_lead', 'division_manager', 'agent'] } },
+            { level: /division/i }
+          ];
+        } else if (rClean === 'pincode') {
+          userFilter.$or = [
+            { role: { $in: ['pincode', 'pincode_agent', 'agent'] } },
+            { level: /pincode/i }
+          ];
+        }
+
+        const userDocs = await db.collection('users').find(userFilter).limit(50).maxTimeMS(4000).toArray();
+        const existingEmails = new Set(subordinates.map(s => (s.email || '').toLowerCase()));
+        const existingIds = new Set(subordinates.map(s => String(s._id)));
+
+        for (const u of userDocs) {
+          const uId = String(u._id);
+          const uEmail = (u.email || '').toLowerCase();
+          if (existingIds.has(uId) || (uEmail && existingEmails.has(uEmail))) continue;
+
+          const uRole = (u.role || u.level || 'pincode').toLowerCase();
+          const uState = (u.assignedTerritory?.state || u.territory?.state || u.state || u.assignedState || '').trim();
+          const uDist = (u.assignedTerritory?.district || u.territory?.district || u.district || u.assignedDistrict || '').trim();
+          const uDiv = (u.assignedTerritory?.division || u.territory?.division || u.division || u.assignedDivision || '').trim();
+
+          // Check scope authorization
+          if (scope?.state && uState && !uState.toLowerCase().includes(scope.state.toLowerCase()) && !scope.state.toLowerCase().includes(uState.toLowerCase())) {
+            continue;
+          }
+          if (district) {
+            const baseDist = (district as string).replace(/\s+district$/i, '').trim().toLowerCase();
+            if (!uDist || (!uDist.toLowerCase().includes(baseDist) && !baseDist.includes(uDist.toLowerCase()))) {
+              continue;
+            }
+          }
+          if (division) {
+            const baseDiv = (division as string).replace(/\s+division$/i, '').trim().toLowerCase();
+            if (!uDiv || (!uDiv.toLowerCase().includes(baseDiv) && !baseDiv.includes(uDiv.toLowerCase()))) {
+              continue;
+            }
+          }
+
+          // Map normalized role
+          let normRole = rClean || (uRole.includes('district') ? 'district' : uRole.includes('division') ? 'division' : 'pincode');
+
+          subordinates.push({
+            _id: u._id,
+            name: u.name || 'District Agent',
+            role: normRole as any,
+            level: normRole,
+            assignedTerritory: u.assignedTerritory || {
+              state: uState,
+              district: uDist,
+              division: uDiv,
+              pincode: u.pincode || u.assignedPincode || ''
+            },
+            territory: u.territory || {
+              state: uState,
+              district: uDist,
+              division: uDiv,
+              pincode: u.pincode || u.assignedPincode || ''
+            },
+            state: uState,
+            district: uDist,
+            division: uDiv,
+            pincode: u.pincode || u.assignedPincode || '',
+            email: u.email || '',
+            phone: u.phone || u.mobile || '',
+            status: u.status || 'approved',
+            kycStatus: u.kycStatus || 'approved',
+            performanceScore: u.performanceScore || 0
+          } as any);
+
+          if (uEmail) existingEmails.add(uEmail);
+          existingIds.add(uId);
+        }
+      }
+    } catch (usersErr) {
+      console.warn('Fallback users query in getSubordinates failed gracefully:', usersErr);
+    }
 
     const subIds = subordinates.map(s => s._id);
     let assignments: any[] = [];
@@ -276,8 +419,16 @@ export const getSubordinates = async (req: Request, res: Response) => {
       const assignedTargets = subAsgns.reduce((acc, a: any) => acc + (a.target?.targetValue || 1), 0);
       const completedTargets = subAsgns.filter((a: any) => a.status === 'completed').reduce((acc, a: any) => acc + (a.target?.targetValue || 1), 0);
 
+      const rawRole = (sub.role || (sub as any).level || 'pincode').toLowerCase();
+      const normalizedRole = rawRole.includes('district')
+        ? 'district'
+        : rawRole.includes('division')
+        ? 'division'
+        : 'pincode';
+
       return {
         ...sub,
+        role: normalizedRole,
         assignedTargets,
         completedTargets
       };

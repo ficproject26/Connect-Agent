@@ -819,16 +819,31 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                         className="w-full bg-slate-100 border border-slate-300 rounded-xl px-3 py-2 text-xs font-black text-[#864f19] cursor-not-allowed select-none"
                       />
                     </div>
+                  ) : !formData.division ? (
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-extrabold text-slate-700 uppercase flex items-center justify-between">
+                        <span>Postal Code (Pincode) *</span>
+                        <span className="text-[9px] text-slate-500 font-bold">SELECT DIVISION</span>
+                      </label>
+                      <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 text-xs font-medium flex items-center gap-2">
+                        <Info className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                        <span>Please select a division territory above first.</span>
+                      </div>
+                    </div>
                   ) : availablePincodes.length === 0 ? (
                     <div className="space-y-1">
                       <label className="block text-[10px] font-extrabold text-slate-700 uppercase flex items-center justify-between">
                         <span>Postal Code (Pincode) *</span>
-                        <span className="text-[9px] text-amber-600 font-bold">UNAVAILABLE</span>
+                        <span className="text-[9px] text-blue-600 font-bold">ENTER 6-DIGIT PIN</span>
                       </label>
-                      <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs font-medium flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                        <span>No pincode available in this division.</span>
-                      </div>
+                      <input
+                        type="text"
+                        maxLength={6}
+                        placeholder="e.g. 635126"
+                        value={formData.pincode}
+                        onChange={(e) => handlePincodeSelect(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#f18701]"
+                      />
                     </div>
                   ) : (
                     <Select

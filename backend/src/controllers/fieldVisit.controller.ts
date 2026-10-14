@@ -93,32 +93,59 @@ export const completeFieldVisit = async (req: Request, res: Response) => {
   }
 };
 
-// GET /api/field-visits — get list of field visits
+import mongoose from 'mongoose';
+
+// GET /api/field-visits — get list of field visits with territory cascading filters and authorization
 export const getFieldVisits = async (req: Request, res: Response) => {
   try {
     const agentId = (req as any).agent?.agentId;
+    const agentEmail = (req as any).agent?.email;
     const agentRole = (req as any).agent?.role;
-    if (!agentId) return res.status(401).json({ message: 'Unauthorized' });
+    if (!agentId && !agentEmail) return res.status(401).json({ message: 'Unauthorized' });
 
-    const { page = '1', limit = '100', status, vendorId, agent: specificAgent } = req.query;
+    const { page = '1', limit = '100', status, vendorId, agent: specificAgent, district, division, pincode, startDate, endDate, date } = req.query;
     const pageNum = parseInt(page as string, 10);
     const limitNum = parseInt(limit as string, 10);
 
     const filter: Record<string, unknown> = {};
-    const scope = await getAgentTerritoryScope(agentId);
-    if (agentRole === 'pincode' || agentRole === 'delivery_partner' || agentRole === 'technician') {
+    const scope = await getAgentTerritoryScope(agentId, agentEmail);
+    if (!scope) return res.status(403).json({ message: 'Forbidden: Missing territory scope' });
+
+    // Base authorization scoping
+    if (scope.role === 'pincode' || agentRole === 'pincode' || agentRole === 'delivery_partner' || agentRole === 'technician') {
       filter.agent = agentId;
     } else {
       const territoryFilter = buildTerritoryFilter(scope);
-      const subordinates = await Agent.find(territoryFilter).select('_id').lean();
-      const allowedAgentIds = [agentId, ...subordinates.map(s => s._id.toString())];
+      const subordinates = await Agent.find(territoryFilter).select('_id email').lean();
+      const allowedAgentIds = new Set([agentId, ...subordinates.map(s => String(s._id))]);
 
-      if (specificAgent && allowedAgentIds.includes(String(specificAgent))) {
+      // If specificAgent requested, verify it's within authorized territory
+      if (specificAgent) {
+        if (!allowedAgentIds.has(String(specificAgent))) {
+          // Check if specificAgent exists by email or id in users
+          const db = mongoose.connection.db;
+          let allowedDirect = false;
+          if (db) {
+            const u = await db.collection('users').findOne({
+              $or: [{ _id: specificAgent as any }, { agentId: specificAgent }, { email: specificAgent }]
+            });
+            if (u) {
+              const uState = (u.assignedTerritory?.state || u.territory?.state || u.state || '').toLowerCase();
+              if (!scope.state || uState.includes(scope.state.toLowerCase()) || scope.state.toLowerCase().includes(uState)) {
+                allowedDirect = true;
+              }
+            }
+          }
+          if (!allowedDirect) {
+            return res.status(403).json({ message: 'Forbidden: Agent outside authorized territory' });
+          }
+        }
         filter.agent = specificAgent;
       } else {
-        filter.agent = { $in: allowedAgentIds };
+        filter.agent = { $in: Array.from(allowedAgentIds) };
       }
     }
+
     if (status && status !== 'all') {
       if (status === 'in_progress') {
         filter.status = { $in: ['in_progress', 'started'] };
@@ -127,6 +154,58 @@ export const getFieldVisits = async (req: Request, res: Response) => {
       }
     }
     if (vendorId) filter.vendor = vendorId;
+
+    // Optional Date filtering
+    if (date || startDate || endDate) {
+      const dateFilterObj: any = {};
+      if (date) {
+        const dStart = new Date(date as string);
+        dStart.setHours(0, 0, 0, 0);
+        const dEnd = new Date(date as string);
+        dEnd.setHours(23, 59, 59, 999);
+        dateFilterObj.$gte = dStart;
+        dateFilterObj.$lte = dEnd;
+      } else {
+        if (startDate) {
+          const s = new Date(startDate as string);
+          s.setHours(0, 0, 0, 0);
+          dateFilterObj.$gte = s;
+        }
+        if (endDate) {
+          const e = new Date(endDate as string);
+          e.setHours(23, 59, 59, 999);
+          dateFilterObj.$lte = e;
+        }
+      }
+      filter.$or = [
+        { visitDate: dateFilterObj },
+        { createdAt: dateFilterObj }
+      ];
+    }
+
+    // Optional Vendor territory filtering
+    if (district || division || pincode) {
+      const vendorQuery: any = {};
+      if (district && district !== 'all') {
+        const baseDist = (district as string).replace(/\s+district$/i, '').trim();
+        vendorQuery.district = new RegExp(`^\\s*${baseDist}(\\s+district)?\\s*$`, 'i');
+      }
+      if (division && division !== 'all') {
+        const baseDiv = (division as string).replace(/\s+division$/i, '').trim();
+        vendorQuery.division = new RegExp(`^\\s*${baseDiv}(\\s+division)?\\s*$`, 'i');
+      }
+      if (pincode && pincode !== 'all') {
+        vendorQuery.pincode = (pincode as string).trim();
+      }
+
+      const matchingVendors = await Vendor.find(vendorQuery).select('_id').lean();
+      const vIds = matchingVendors.map(v => v._id);
+      if (filter.vendor) {
+        // Intersect
+      } else {
+        filter.vendor = { $in: vIds };
+      }
+    }
 
     const total = await FieldVisit.countDocuments(filter);
     const visits = await FieldVisit.find(filter)
@@ -143,6 +222,229 @@ export const getFieldVisits = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Get field visits error:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+// GET /api/field-visits/agents — list cascading eligible agents strictly scoped to territory
+export const getFieldVisitAgents = async (req: Request, res: Response) => {
+  try {
+    const agentId = (req as any).agent?.agentId;
+    const agentEmail = (req as any).agent?.email;
+    if (!agentId && !agentEmail) return res.status(401).json({ message: 'Unauthorized' });
+
+    const scope = await getAgentTerritoryScope(agentId, agentEmail);
+    if (!scope) return res.status(403).json({ message: 'Unauthorized territory' });
+
+    const { role = 'division', district, division } = req.query;
+    const rClean = (role as string).toLowerCase().trim();
+
+    let reqDistrict = (district as string || '').trim();
+    let reqDivision = (division as string || '').trim();
+
+    // If district is an ID, resolve to canonical district name
+    if (reqDistrict && reqDistrict !== 'all' && mongoose.isValidObjectId(reqDistrict)) {
+      const foundA = await Agent.findById(reqDistrict).select('assignedTerritory territory').lean();
+      if (foundA) {
+        reqDistrict = foundA.assignedTerritory?.district || foundA.territory?.district || reqDistrict;
+      } else {
+        const db = mongoose.connection.db;
+        if (db) {
+          const foundU = await db.collection('users').findOne({ _id: new mongoose.Types.ObjectId(reqDistrict) });
+          if (foundU) {
+            reqDistrict = foundU.assignedTerritory?.district || foundU.territory?.district || foundU.district || reqDistrict;
+          }
+        }
+      }
+    }
+
+    // If division is an ID, resolve to canonical division name
+    if (reqDivision && reqDivision !== 'all' && mongoose.isValidObjectId(reqDivision)) {
+      const foundA = await Agent.findById(reqDivision).select('assignedTerritory territory').lean();
+      if (foundA) {
+        reqDivision = foundA.assignedTerritory?.division || foundA.territory?.division || reqDivision;
+      } else {
+        const db = mongoose.connection.db;
+        if (db) {
+          const foundU = await db.collection('users').findOne({ _id: new mongoose.Types.ObjectId(reqDivision) });
+          if (foundU) {
+            reqDivision = foundU.assignedTerritory?.division || foundU.territory?.division || foundU.division || reqDivision;
+          }
+        }
+      }
+    }
+
+    // Enforce role hierarchy access:
+    // District agent cannot query other districts
+    if (scope.role === 'district' && reqDistrict) {
+      const scopeDist = scope.district.toLowerCase();
+      const checkDist = reqDistrict.replace(/\s+district$/i, '').trim().toLowerCase();
+      if (!scopeDist.includes(checkDist) && !checkDist.includes(scopeDist)) {
+        return res.status(403).json({ message: 'Access denied outside assigned district' });
+      }
+    }
+    // Division agent can only query within assigned division
+    if (scope.role === 'division' && reqDivision) {
+      const scopeDiv = scope.division.toLowerCase();
+      const checkDiv = reqDivision.replace(/\s+division$/i, '').trim().toLowerCase();
+      if (!scopeDiv.includes(checkDiv) && !checkDiv.includes(scopeDiv)) {
+        return res.status(403).json({ message: 'Access denied outside assigned division' });
+      }
+    }
+
+    const filter: any = buildTerritoryFilter(scope);
+    filter.status = { $nin: ['rejected', 'suspended'] };
+
+    // Apply role filter
+    let rolePatterns = [rClean];
+    if (rClean === 'district') {
+      rolePatterns = ['district', 'district_agent', 'district_lead', 'district admin'];
+    } else if (rClean === 'division') {
+      rolePatterns = ['division', 'division_agent', 'division_lead', 'division_manager'];
+    } else if (rClean === 'pincode') {
+      rolePatterns = ['pincode', 'pincode_agent'];
+    }
+
+    filter.$and = filter.$and || [];
+    filter.$and.push({
+      $or: [
+        { role: { $in: rolePatterns.map(p => new RegExp(`^${p}$`, 'i')) } },
+        { level: { $in: [rClean, ...rolePatterns].map(p => new RegExp(`^${p}$`, 'i')) } },
+        { role: 'agent', level: { $in: [rClean, ...rolePatterns].map(p => new RegExp(`^${p}$`, 'i')) } }
+      ]
+    });
+
+    // Apply district filter
+    if (reqDistrict && reqDistrict !== 'all') {
+      const baseDist = reqDistrict.replace(/\s+district$/i, '').trim();
+      const distRegex = new RegExp(`^\\s*${baseDist}(\\s+district)?\\s*$`, 'i');
+      filter.$and.push({
+        $or: [
+          { 'assignedTerritory.district': distRegex },
+          { 'assignedTerritory.districtId': new RegExp(`^\\s*${reqDistrict}\\s*$`, 'i') },
+          { 'territory.district': distRegex },
+          { district: distRegex },
+          { assignedDistrict: distRegex }
+        ]
+      });
+    }
+
+    // Apply division filter
+    if (reqDivision && reqDivision !== 'all') {
+      const baseDiv = reqDivision.replace(/\s+division$/i, '').trim();
+      const divRegex = new RegExp(`^\\s*${baseDiv}(\\s+division)?\\s*$`, 'i');
+      filter.$and.push({
+        $or: [
+          { 'assignedTerritory.division': divRegex },
+          { 'assignedTerritory.divisionId': new RegExp(`^\\s*${reqDivision}\\s*$`, 'i') },
+          { 'territory.division': divRegex },
+          { division: divRegex },
+          { assignedDivision: divRegex }
+        ]
+      });
+    }
+
+    let agents = await Agent.find(filter)
+      .select('_id name role level registrationId assignedTerritory territory state district division pincode email phone status')
+      .sort({ name: 1 })
+      .lean();
+
+    // Merge registered agents from users collection
+    try {
+      const db = mongoose.connection.db;
+      if (db) {
+        const userFilter: any = { status: { $nin: ['rejected', 'suspended'] } };
+        if (rClean === 'district') {
+          userFilter.$or = [
+            { role: { $in: ['district', 'district_agent', 'district_lead', 'District Admin', 'agent'] } },
+            { level: /district/i }
+          ];
+        } else if (rClean === 'division') {
+          userFilter.$or = [
+            { role: { $in: ['division', 'division_agent', 'division_lead', 'division_manager', 'agent'] } },
+            { level: /division/i }
+          ];
+        } else if (rClean === 'pincode') {
+          userFilter.$or = [
+            { role: { $in: ['pincode', 'pincode_agent', 'agent'] } },
+            { level: /pincode/i }
+          ];
+        }
+
+        const userDocs = await db.collection('users').find(userFilter).limit(50).maxTimeMS(4000).toArray();
+        const existingEmails = new Set(agents.map(a => (a.email || '').toLowerCase()));
+        const existingIds = new Set(agents.map(a => String(a._id)));
+
+        for (const u of userDocs) {
+          const uId = String(u._id);
+          const uEmail = (u.email || '').toLowerCase();
+          if (existingIds.has(uId) || (uEmail && existingEmails.has(uEmail))) continue;
+
+          const uState = (u.assignedTerritory?.state || u.territory?.state || u.state || u.assignedState || '').trim();
+          const uDist = (u.assignedTerritory?.district || u.territory?.district || u.district || u.assignedDistrict || '').trim();
+          const uDiv = (u.assignedTerritory?.division || u.territory?.division || u.division || u.assignedDivision || '').trim();
+
+          if (scope.state && uState && !uState.toLowerCase().includes(scope.state.toLowerCase()) && !scope.state.toLowerCase().includes(uState.toLowerCase())) {
+            continue;
+          }
+          if (reqDistrict && reqDistrict !== 'all') {
+            const baseDist = reqDistrict.replace(/\s+district$/i, '').trim().toLowerCase();
+            if (!uDist || (!uDist.toLowerCase().includes(baseDist) && !baseDist.includes(uDist.toLowerCase()))) {
+              continue;
+            }
+          }
+          if (reqDivision && reqDivision !== 'all') {
+            const baseDiv = reqDivision.replace(/\s+division$/i, '').trim().toLowerCase();
+            if (!uDiv || (!uDiv.toLowerCase().includes(baseDiv) && !baseDiv.includes(uDiv.toLowerCase()))) {
+              continue;
+            }
+          }
+
+          agents.push({
+            _id: u._id,
+            name: u.name || 'Agent',
+            role: rClean as any,
+            level: rClean,
+            registrationId: u.registrationId || '',
+            assignedTerritory: u.assignedTerritory || { state: uState, district: uDist, division: uDiv, pincode: u.pincode || '' },
+            territory: u.territory || { state: uState, district: uDist, division: uDiv, pincode: u.pincode || '' },
+            email: u.email || '',
+            phone: u.phone || u.mobile || '',
+            status: u.status || 'approved'
+          } as any);
+
+          if (uEmail) existingEmails.add(uEmail);
+          existingIds.add(uId);
+        }
+      }
+    } catch (usersErr) {
+      console.warn('Fallback users lookup for field-visits agents failed gracefully:', usersErr);
+    }
+
+    const mapped = agents.map(a => {
+      const canonicalDistrict = (a.assignedTerritory?.district || a.territory?.district || (a as any).district || '').trim();
+      const canonicalDivision = (a.assignedTerritory?.division || a.territory?.division || (a as any).division || '').trim();
+      const canonicalPincode = (a.assignedTerritory?.pincode || a.territory?.pincode || (a as any).pincode || '').trim();
+
+      return {
+        id: String(a._id),
+        name: a.name,
+        role: rClean,
+        registrationId: a.registrationId || '',
+        district: canonicalDistrict,
+        division: canonicalDivision,
+        pincode: canonicalPincode,
+        label: rClean === 'district'
+          ? `📍 ${canonicalDistrict} (${a.name})`
+          : rClean === 'division'
+          ? `${a.name} (${canonicalDivision || 'Division'})`
+          : `${a.name} (PIN ${canonicalPincode})`
+      };
+    });
+
+    return res.status(200).json({ success: true, agents: mapped });
+  } catch (error) {
+    console.error('Get field visit agents error:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
 };

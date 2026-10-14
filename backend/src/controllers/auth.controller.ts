@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import Agent from '../models/Agent';
 import { generateToken } from '../utils/jwt';
 import { invalidateAgentTerritoryScope } from '../utils/territoryScope';
+import { checkExistingDistrictAssignment } from '../utils/districtAssignment';
 import { publishEntityEvent } from '../realtime/eventBus';
 import { z } from 'zod';
 
@@ -292,6 +293,20 @@ export const register = async (req: Request, res: Response) => {
       division: cleanAssignedTerritory.division,
       pincode: cleanAssignedTerritory.pincode
     };
+
+    // Enforce strictly 1 active District Agent per district rule
+    if (agentRole === 'district' && cleanTerritory.district) {
+      const existingDistrictAgent = await checkExistingDistrictAssignment(
+        cleanTerritory.state,
+        cleanTerritory.district,
+        cleanAssignedTerritory.districtId
+      );
+      if (existingDistrictAgent.exists) {
+        return res.status(400).json({
+          message: 'A District Agent is already assigned to this district.'
+        });
+      }
+    }
 
     // Enforce strictly 1 agent per pincode rule
     if (agentRole === 'pincode' && cleanTerritory.pincode) {
@@ -857,6 +872,31 @@ export const updateProfile = async (req: Request, res: Response) => {
         division: t.division || '',
         pincode: t.pincode || ''
       };
+    }
+
+    const currentAgent = await Agent.findById(agentId);
+    if (!currentAgent) return res.status(404).json({ message: 'Agent not found' });
+
+    // If updating territory for a District Agent, ensure no other active District Agent exists in that district
+    if ((currentAgent.role === 'district' || (updates as any).role === 'district') && (updates.assignedTerritory || updates.territory)) {
+      const at: any = updates.assignedTerritory || updates.territory;
+      const targetDist = (at.district || '').trim();
+      const targetState = (at.state || currentAgent.territory?.state || '').trim();
+      const targetDistId = (at.districtId || '').trim();
+
+      if (targetDist) {
+        const distCheck = await checkExistingDistrictAssignment(
+          targetState,
+          targetDist,
+          targetDistId,
+          agentId
+        );
+        if (distCheck.exists) {
+          return res.status(400).json({
+            message: 'A District Agent is already assigned to this district.'
+          });
+        }
+      }
     }
 
     const agent = await Agent.findByIdAndUpdate(

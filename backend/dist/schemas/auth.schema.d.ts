@@ -31,7 +31,7 @@ export declare const registerSchema: z.ZodObject<{
         email: string;
         password: string;
         phone?: string | undefined;
-        role?: "state" | "district" | "division" | "pincode" | "delivery_partner" | "technician" | "admin" | "state_head" | "zonal_head" | "district_head" | "division_agent" | "field_agent" | undefined;
+        role?: "state" | "district" | "division" | "pincode" | "delivery_partner" | "technician" | "division_agent" | "admin" | "state_head" | "zonal_head" | "district_head" | "field_agent" | undefined;
         phoneNumber?: string | undefined;
     } & {
         [k: string]: unknown;
@@ -42,7 +42,7 @@ export declare const registerSchema: z.ZodObject<{
         email: string;
         password: string;
         phone?: string | undefined;
-        role?: "state" | "district" | "division" | "pincode" | "delivery_partner" | "technician" | "admin" | "state_head" | "zonal_head" | "district_head" | "division_agent" | "field_agent" | undefined;
+        role?: "state" | "district" | "division" | "pincode" | "delivery_partner" | "technician" | "division_agent" | "admin" | "state_head" | "zonal_head" | "district_head" | "field_agent" | undefined;
         phoneNumber?: string | undefined;
     } & {
         [k: string]: unknown;

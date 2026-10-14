@@ -14,7 +14,7 @@ export declare function invalidateAgentTerritoryScope(agentId: string): Promise<
  * Fetch territory scope of the authenticated agent.
  * Checks cache first, then Agent model and fallback users collection using tight projections.
  */
-export declare function getAgentTerritoryScope(agentId: string): Promise<TerritoryScope | null>;
+export declare function getAgentTerritoryScope(agentId: string, email?: string): Promise<TerritoryScope | null>;
 /**
  * Build territory filter for Agent model and agent directory queries.
  * Strictly enforces State -> District -> Division -> Pincode visibility hierarchy.

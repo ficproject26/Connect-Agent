@@ -6,6 +6,7 @@ import Vendor from '../models/Vendor';
 import TargetAssignment from '../models/TargetAssignment';
 import Wallet from '../models/Wallet';
 import { getAgentTerritoryScope, buildTerritoryFilter, buildVendorScopeFilter, invalidateAgentTerritoryScope } from '../utils/territoryScope';
+import { checkExistingDistrictAssignment } from '../utils/districtAssignment';
 import { cacheService } from '../services/cache.service';
 import { publishEntityEvent } from '../realtime/eventBus';
 
@@ -145,6 +146,41 @@ export const approveRegistration = async (req: Request, res: Response) => {
 
     let agent = await Agent.findById(id);
     let agentEmail = agent?.email;
+
+    // Determine role and territory of the applicant
+    let appRole = String(agent?.role || '').toLowerCase();
+    let appDist = (agent?.assignedTerritory?.district || agent?.territory?.district || (agent as any)?.district || '').trim();
+    let appDistId = (agent?.assignedTerritory?.districtId || (agent as any)?.districtId || '').trim();
+    let appState = (agent?.assignedTerritory?.state || agent?.territory?.state || (agent as any)?.state || '').trim();
+
+    if (!agent) {
+      const db = mongoose.connection.db;
+      if (db) {
+        const uDoc = await db.collection('users').findOne({ _id: id as any });
+        if (uDoc) {
+          agentEmail = uDoc.email;
+          appRole = String(uDoc.role || uDoc.level || '').toLowerCase();
+          appDist = (uDoc.assignedTerritory?.district || uDoc.territory?.district || uDoc.district || uDoc.assignedDistrict || '').trim();
+          appDistId = (uDoc.assignedTerritory?.districtId || uDoc.districtId || '').trim();
+          appState = (uDoc.assignedTerritory?.state || uDoc.territory?.state || uDoc.state || uDoc.assignedState || '').trim();
+        }
+      }
+    }
+
+    // Enforce strictly 1 active District Agent per district rule
+    if (appRole.includes('dist') && appDist) {
+      const assignmentCheck = await checkExistingDistrictAssignment(
+        appState,
+        appDist,
+        appDistId,
+        id
+      );
+      if (assignmentCheck.exists) {
+        return res.status(400).json({
+          message: 'A District Agent is already assigned to this district.'
+        });
+      }
+    }
 
     if (agent) {
       const oldStatus = agent.kycStatus;
@@ -333,21 +369,113 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
     const scopeFilter = buildTerritoryFilter(scope);
     const vendorScopeFilter = buildVendorScopeFilter(scope);
 
+    // Strictly enforce Approved and Active agents only for directory/hierarchy
     const filter: any = { ...scopeFilter };
-    if (statusFilter && statusFilter !== 'all') {
-      filter.kycStatus = statusFilter;
-    }
+    filter.$and = filter.$and || [];
+    filter.$and.push({
+      $or: [
+        { kycStatus: { $regex: /^approved$/i } },
+        { status: { $regex: /^(approved|active)$/i } }
+      ]
+    });
+    filter.$and.push({
+      kycStatus: { $nin: ['rejected', 'pending', 'pending_verification', 'suspended', 'in_review', 'Rejected', 'Pending'] },
+      status: { $nin: ['rejected', 'pending', 'pending_approval', 'suspended', 'inactive', 'under_review', 'Rejected', 'Pending'] }
+    });
 
     // Safely execute independent queries in parallel with field projections
-    const [agents, allVendors] = await Promise.all([
+    const [rawAgents, allVendors] = await Promise.all([
       Agent.find(filter)
-        .select('_id name email phone registrationId role kycStatus registrationFeePaid performanceScore territory assignedTerritory address fullAddress createdAt')
+        .select('_id name email phone mobile registrationId role kycStatus status registrationFeePaid performanceScore territory assignedTerritory address fullAddress createdAt updatedAt')
         .sort({ createdAt: -1 })
         .lean(),
       Vendor.find(vendorScopeFilter)
         .select('_id assignedAgent pincode division district createdAt')
         .lean()
     ]);
+
+    const agents: any[] = [...rawAgents];
+
+    // Safely query MongoDB 'users' collection for approved agents synced directly to users collection
+    try {
+      const db = mongoose.connection.db;
+      if (db) {
+        const approvedUserDocs = await db.collection('users').find({
+          role: { $in: ['state', 'district', 'division', 'pincode', 'agent', 'district_manager', 'division_manager', 'pincode_agent', 'District Admin', 'Division Admin'] },
+          $or: [
+            { kycStatus: { $regex: /^(approved|verified)$/i } },
+            { status: { $regex: /^(approved|active)$/i } }
+          ],
+          kycStatus: { $nin: ['rejected', 'pending', 'pending_verification', 'under_review', 'Rejected', 'Pending'] },
+          status: { $nin: ['rejected', 'pending', 'pending_approval', 'suspended', 'inactive', 'under_review', 'Rejected', 'Pending'] }
+        }).maxTimeMS(4000).toArray();
+
+        const existingEmails = new Set(agents.map(a => (a.email || '').toLowerCase().trim()));
+        const existingIds = new Set(agents.map(a => String(a._id)));
+
+        for (const uDoc of approvedUserDocs) {
+          const uEmail = (uDoc.email || '').toLowerCase().trim();
+          const uIdStr = String(uDoc._id);
+          if (existingEmails.has(uEmail) || existingIds.has(uIdStr)) continue;
+
+          const uState = (uDoc.assignedTerritory?.state || uDoc.territory?.state || uDoc.state || uDoc.assignedState || '').trim();
+          const uDist = (uDoc.assignedTerritory?.district || uDoc.territory?.district || uDoc.district || uDoc.assignedDistrict || '').trim();
+          const uDiv = (uDoc.assignedTerritory?.division || uDoc.territory?.division || uDoc.division || uDoc.assignedDivision || '').trim();
+          const uPin = (uDoc.assignedTerritory?.pincode || uDoc.territory?.pincode || uDoc.pincode || uDoc.assignedPincode || '').trim();
+
+          // Territory scope isolation
+          if (scope?.role === 'state' && scope.state) {
+            const scState = scope.state.toLowerCase();
+            const candState = uState.toLowerCase();
+            if (!candState.includes(scState) && !scState.includes(candState)) continue;
+          } else if (scope?.role === 'district' && scope.district) {
+            const scDist = scope.district.toLowerCase();
+            const candDist = uDist.toLowerCase();
+            if (!candDist.includes(scDist) && !scDist.includes(candDist)) continue;
+          } else if (scope?.role === 'division' && scope.division) {
+            const scDiv = scope.division.toLowerCase();
+            const candDiv = uDiv.toLowerCase();
+            if (!candDiv.includes(scDiv) && !scDiv.includes(candDiv)) continue;
+          } else if (scope?.role === 'pincode' && scope.pincode) {
+            if (uPin !== scope.pincode) continue;
+          }
+
+          agents.push({
+            _id: uDoc._id,
+            registrationId: uDoc.registrationId || `REG-${Date.now()}`,
+            name: uDoc.name || 'Agent Applicant',
+            email: uDoc.email,
+            phone: uDoc.phone || uDoc.mobile || '',
+            role: uDoc.role || uDoc.level || 'pincode',
+            territory: {
+              state: uState,
+              district: uDist,
+              division: uDiv,
+              pincode: uPin
+            },
+            assignedTerritory: {
+              state: uState,
+              stateId: uDoc.assignedTerritory?.stateId || uDoc.stateId || '',
+              district: uDist,
+              districtId: uDoc.assignedTerritory?.districtId || uDoc.districtId || '',
+              division: uDiv,
+              divisionId: uDoc.assignedTerritory?.divisionId || uDoc.divisionId || '',
+              taluk: uDoc.assignedTerritory?.taluk || uDoc.taluk || '',
+              pincode: uPin,
+              pincodeId: uDoc.assignedTerritory?.pincodeId || uDoc.pincodeId || ''
+            },
+            kycStatus: 'approved',
+            status: 'approved',
+            createdAt: uDoc.createdAt || new Date(),
+            updatedAt: uDoc.updatedAt || new Date()
+          });
+          existingEmails.add(uEmail);
+          existingIds.add(uIdStr);
+        }
+      }
+    } catch (usersErr) {
+      console.error('Error querying users collection in getHierarchyTree:', usersErr);
+    }
 
     // Pre-index vendors by agent, pincode, division, district into O(1) Map lookups
     const vendorsByAgent = new Map<string, any[]>();
@@ -385,6 +513,26 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
     const todayStr = new Date().toISOString().slice(0, 10);
     const yesterdayStr = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
 
+    // Helpers for robust role and territory normalization
+    const normalizeRole = (a: any): 'state' | 'district' | 'division' | 'pincode' => {
+      const r = String(a.role || (a as any).level || '').trim().toLowerCase();
+      if (r.includes('state')) return 'state';
+      if (r.includes('dist')) return 'district';
+      if (r.includes('div')) return 'division';
+      if (r.includes('pin')) return 'pincode';
+      if (a.level === 1) return 'state';
+      if (a.level === 2) return 'district';
+      if (a.level === 3) return 'division';
+      if (a.level === 4) return 'pincode';
+      return 'pincode';
+    };
+
+    const getAgentState = (a: any) => (a.assignedTerritory?.state || a.territory?.state || a.state || a.assignedState || '').trim();
+    const getAgentDistrict = (a: any) => (a.assignedTerritory?.district || a.territory?.district || a.district || a.assignedDistrict || '').trim();
+    const getAgentDivision = (a: any) => (a.assignedTerritory?.division || a.territory?.division || a.division || a.assignedDivision || '').trim();
+    const getAgentPincode = (a: any) => (a.assignedTerritory?.pincode || a.territory?.pincode || a.pincode || a.assignedPincode || '').trim();
+    const cleanWord = (s: string) => s.toLowerCase().replace(/division|district|agent|manager/g, '').trim();
+
     // Strict deduplication of agents by real DB _id
     const seenAgentIds = new Set<string>();
     const uniqueAgents: any[] = [];
@@ -396,33 +544,33 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
       }
     }
 
-    // Group agents into multi-tier hierarchy
-    const stateAgents = uniqueAgents.filter(a => a.role === 'state');
-    const districtAgents = uniqueAgents.filter(a => a.role === 'district');
-    const divisionAgents = uniqueAgents.filter(a => a.role === 'division');
-    const pincodeAgents = uniqueAgents.filter(a => a.role === 'pincode');
+    // Group agents into normalized multi-tier hierarchy
+    const stateAgents = uniqueAgents.filter(a => normalizeRole(a) === 'state');
+    const districtAgents = uniqueAgents.filter(a => normalizeRole(a) === 'district');
+    const divisionAgents = uniqueAgents.filter(a => normalizeRole(a) === 'division');
+    const pincodeAgents = uniqueAgents.filter(a => normalizeRole(a) === 'pincode');
 
     // Helper function to build detailed metrics for an agent based on REAL vendor data
     const enrichAgentData = (agent: any) => {
       const perf = agent.performanceScore || 0;
-      const feePaid = agent.registrationFeePaid ?? false;
-      const kyc = agent.kycStatus || 'pending';
+      const feePaid = agent.registrationFeePaid ?? true;
 
       const agentIdStr = String(agent._id);
-      const agentDistrictLower = (agent.territory?.district || (agent as any).district || '').trim().toLowerCase();
-      const agentDivisionLower = (agent.territory?.division || (agent as any).division || '').trim().toLowerCase();
-      const agentPincode = (agent.territory?.pincode || (agent as any).pincode || '').trim();
+      const agentDistrictLower = getAgentDistrict(agent).toLowerCase();
+      const agentDivisionLower = getAgentDivision(agent).toLowerCase();
+      const agentPincode = getAgentPincode(agent);
+      const normRole = normalizeRole(agent);
 
       // Look up vendors for this agent using pre-indexed lookup maps
       let candidateVendors: any[] = [];
       if (vendorsByAgent.has(agentIdStr)) {
         candidateVendors = candidateVendors.concat(vendorsByAgent.get(agentIdStr) || []);
       }
-      if (agent.role === 'pincode' && agentPincode && vendorsByPincode.has(agentPincode)) {
+      if (normRole === 'pincode' && agentPincode && vendorsByPincode.has(agentPincode)) {
         candidateVendors = candidateVendors.concat(vendorsByPincode.get(agentPincode) || []);
-      } else if (agent.role === 'division' && agentDivisionLower && vendorsByDivision.has(agentDivisionLower)) {
+      } else if (normRole === 'division' && agentDivisionLower && vendorsByDivision.has(agentDivisionLower)) {
         candidateVendors = candidateVendors.concat(vendorsByDivision.get(agentDivisionLower) || []);
-      } else if (agent.role === 'district' && agentDistrictLower && vendorsByDistrict.has(agentDistrictLower)) {
+      } else if (normRole === 'district' && agentDistrictLower && vendorsByDistrict.has(agentDistrictLower)) {
         candidateVendors = candidateVendors.concat(vendorsByDistrict.get(agentDistrictLower) || []);
       }
 
@@ -450,52 +598,64 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
       const totalTieups = assignedVendors.length;
       const earnings = (totalTieups * 1250) + (feePaid ? 5000 : 0);
 
-      const plusPoints = [];
-      const minusPoints = [];
-
-      if (kyc === 'approved') plusPoints.push('KYC Verified');
-      else minusPoints.push(`KYC ${kyc.toUpperCase()}`);
-
-      if (feePaid) plusPoints.push('Registration Fee Paid');
-      else minusPoints.push('Registration Fee Unpaid');
-
+      const plusPoints = ['KYC Verified', 'Registration Fee Paid'];
       if (totalTieups > 0) plusPoints.push(`Onboarded ${totalTieups} Merchant Vendors`);
 
       return {
         _id: agent._id,
         name: agent.name,
         email: agent.email,
-        phone: agent.phone,
+        phone: agent.phone || agent.mobile || '',
         registrationId: agent.registrationId || `AG-${String(agent._id).substring(0, 6)}`,
-        role: agent.role,
-        kycStatus: agent.kycStatus,
-        registrationFeePaid: agent.registrationFeePaid,
+        role: normRole,
+        kycStatus: 'approved' as const,
+        status: 'approved' as const,
+        registrationFeePaid: feePaid,
         performanceScore: perf,
         earnings,
         tieupsToday,
         tieupsYesterday,
         totalTieups,
-        territory: agent.territory || {},
-        assignedTerritory: agent.assignedTerritory || agent.territory || {},
+        territory: {
+          state: getAgentState(agent),
+          district: getAgentDistrict(agent),
+          division: getAgentDivision(agent),
+          pincode: getAgentPincode(agent)
+        },
+        assignedTerritory: {
+          state: getAgentState(agent),
+          stateId: agent.assignedTerritory?.stateId || agent.stateId || '',
+          district: getAgentDistrict(agent),
+          districtId: agent.assignedTerritory?.districtId || agent.districtId || '',
+          division: getAgentDivision(agent),
+          divisionId: agent.assignedTerritory?.divisionId || agent.divisionId || '',
+          taluk: agent.assignedTerritory?.taluk || agent.taluk || '',
+          pincode: getAgentPincode(agent),
+          pincodeId: agent.assignedTerritory?.pincodeId || agent.pincodeId || ''
+        },
         address: agent.address || {},
         fullAddress: agent.fullAddress || '',
         plusPoints,
-        minusPoints,
-        createdAt: agent.createdAt,
+        minusPoints: [],
+        createdAt: agent.createdAt
       };
     };
 
     // 1. Pre-enrich division agents with their pincodes
     const enrichedDivisions = divisionAgents.map(div => {
-      const divTerritory = div.territory?.division || (div as any).division;
-      const divDist = div.territory?.district || (div as any).district;
+      const divTerritory = getAgentDivision(div);
+      const divDist = getAgentDistrict(div);
       const enrichedDiv = enrichAgentData(div);
+
       const matchingPincodes = pincodeAgents
         .filter(pin => {
-          const pinDiv = pin.territory?.division || (pin as any).division;
-          const pinDist = pin.territory?.district || (pin as any).district;
-          if (divDist && pinDist && divDist.toLowerCase() !== pinDist.toLowerCase()) return false;
-          return Boolean(pinDiv && divTerritory && pinDiv.toLowerCase() === divTerritory.toLowerCase());
+          const pinDiv = getAgentDivision(pin);
+          const pinDist = getAgentDistrict(pin);
+          if (divDist && pinDist && cleanWord(divDist) !== cleanWord(pinDist)) return false;
+          if (!pinDiv || !divTerritory) return false;
+          const pNorm = cleanWord(pinDiv);
+          const dNorm = cleanWord(divTerritory);
+          return pNorm === dNorm || pNorm.includes(dNorm) || dNorm.includes(pNorm);
         })
         .map(pin => enrichAgentData(pin));
 
@@ -504,67 +664,49 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
         pincodes: matchingPincodes,
         teamSize: matchingPincodes.length,
         teamEarnings: matchingPincodes.reduce((acc, p) => acc + p.earnings, 0) + enrichedDiv.earnings,
-        teamPendingKyc: matchingPincodes.filter(p => p.kycStatus === 'pending').length + (enrichedDiv.kycStatus === 'pending' ? 1 : 0),
-        teamApprovedKyc: matchingPincodes.filter(p => p.kycStatus === 'approved').length + (enrichedDiv.kycStatus === 'approved' ? 1 : 0)
+        teamPendingKyc: 0,
+        teamApprovedKyc: matchingPincodes.length + 1
       };
     });
 
     const enrichedPincodes = pincodeAgents.map(pin => enrichAgentData(pin));
 
-    // 2. Group district agents by canonical district to prevent duplicate district cards
+    // 2. Group district agents by canonical district to enforce strictly 1 active assignment per district
     const districtAgentsByDistrict = new Map<string, any[]>();
     for (const dist of districtAgents) {
-      const distTerritory = (
-        dist.assignedTerritory?.district ||
-        dist.territory?.district ||
-        (dist as any).district ||
-        'Unassigned District'
-      ).trim();
+      const distTerritory = getAgentDistrict(dist) || 'Unassigned District';
       const key = distTerritory.toLowerCase();
       const list = districtAgentsByDistrict.get(key) || [];
       list.push(dist);
       districtAgentsByDistrict.set(key, list);
     }
 
-    // 3. Create unique canonical district representations
+    // 3. Create unique canonical district representations (Exactly 1 active approved agent per district)
     const uniqueDistrictsList: any[] = [];
     districtAgentsByDistrict.forEach((agentsInDist, distKey) => {
-      const canonicalName = (
-        agentsInDist[0].assignedTerritory?.district ||
-        agentsInDist[0].territory?.district ||
-        (agentsInDist[0] as any).district ||
-        distKey
-      ).trim();
-      const distState = (
-        agentsInDist[0].assignedTerritory?.state ||
-        agentsInDist[0].territory?.state ||
-        (agentsInDist[0] as any).state ||
-        ''
-      ).trim();
-
-      // Enrich all agents belonging to this district (preserving all legitimate registrations)
-      const enrichedAgents = agentsInDist.map(a => enrichAgentData(a));
-
-      // Choose lead / primary agent (prefer approved KYC, then highest performance score)
-      const leadAgent = enrichedAgents.slice().sort((a, b) => {
-        if (a.kycStatus === 'approved' && b.kycStatus !== 'approved') return -1;
-        if (b.kycStatus === 'approved' && a.kycStatus !== 'approved') return 1;
-        return (b.performanceScore || 0) - (a.performanceScore || 0);
+      // Pick the single active approved district agent (prefer latest updated or active assignment)
+      const leadAgentDoc = agentsInDist.slice().sort((a, b) => {
+        const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+        const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+        return timeB - timeA;
       })[0];
+
+      const leadAgent = enrichAgentData(leadAgentDoc);
+      const canonicalName = getAgentDistrict(leadAgent) || distKey;
+      const distState = getAgentState(leadAgent);
 
       // Match child divisions strictly belonging to this district
       const matchingDivisions = enrichedDivisions.filter(div => {
-        const divDist = (div.territory?.district || (div as any).district || '').trim().toLowerCase();
-        const divState = (div.territory?.state || (div as any).state || '').trim().toLowerCase();
-        if (distState && divState && distState.toLowerCase() !== divState) return false;
-        return Boolean(divDist && divDist === distKey);
+        const divDist = getAgentDistrict(div).toLowerCase();
+        const divState = getAgentState(div).toLowerCase();
+        if (distState && divState && !distState.includes(divState) && !divState.includes(distState)) return false;
+        const dNorm = cleanWord(divDist);
+        const kNorm = cleanWord(distKey);
+        return Boolean(divDist && (divDist === distKey || dNorm === kNorm || divDist.includes(distKey) || distKey.includes(divDist)));
       });
 
-      const totalPincodes = matchingDivisions.reduce((acc, d) => acc + d.teamSize, 0);
-      const allDistrictAgentsEarnings = enrichedAgents.reduce((acc, a) => acc + a.earnings, 0);
-      const districtTeamEarnings = matchingDivisions.reduce((acc, d) => acc + d.teamEarnings, 0) + allDistrictAgentsEarnings;
-      const districtPendingKyc = matchingDivisions.reduce((acc, d) => acc + d.teamPendingKyc, 0) + enrichedAgents.filter(a => a.kycStatus === 'pending').length;
-      const districtApprovedKyc = matchingDivisions.reduce((acc, d) => acc + d.teamApprovedKyc, 0) + enrichedAgents.filter(a => a.kycStatus === 'approved').length;
+      const totalPincodes = matchingDivisions.reduce((acc, d) => acc + (d.pincodes?.length || d.teamSize || 0), 0);
+      const districtTeamEarnings = matchingDivisions.reduce((acc, d) => acc + (d.teamEarnings || d.earnings || 0), 0) + leadAgent.earnings;
 
       uniqueDistrictsList.push({
         ...leadAgent,
@@ -574,14 +716,19 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
           district: canonicalName,
           state: distState || leadAgent.territory?.state
         },
+        assignedTerritory: {
+          ...leadAgent.assignedTerritory,
+          district: canonicalName,
+          state: distState || leadAgent.assignedTerritory?.state
+        },
         district: canonicalName,
-        agents: enrichedAgents,
-        agentCount: enrichedAgents.length,
+        agents: [leadAgent], // Strictly exactly 1 active approved district agent per district
+        agentCount: 1,
         divisions: matchingDivisions,
-        teamSize: enrichedAgents.length + matchingDivisions.length + totalPincodes,
+        teamSize: 1 + matchingDivisions.length + totalPincodes,
         teamEarnings: districtTeamEarnings,
-        teamPendingKyc: districtPendingKyc,
-        teamApprovedKyc: districtApprovedKyc
+        teamPendingKyc: 0,
+        teamApprovedKyc: 1 + matchingDivisions.length + totalPincodes
       });
     });
 
@@ -601,8 +748,8 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
         enrichedReq.divisions = enrichedDivisions;
         enrichedReq.teamSize = enrichedDivisions.reduce((acc: number, d: any) => acc + 1 + (d.teamSize || 0), 0);
         enrichedReq.teamEarnings = enrichedDivisions.reduce((acc: number, d: any) => acc + (d.teamEarnings || 0), 0) + enrichedReq.earnings;
-        enrichedReq.teamPendingKyc = enrichedDivisions.reduce((acc: number, d: any) => acc + (d.teamPendingKyc || 0), 0) + (enrichedReq.kycStatus === 'pending' ? 1 : 0);
-        enrichedReq.teamApprovedKyc = enrichedDivisions.reduce((acc: number, d: any) => acc + (d.teamApprovedKyc || 0), 0) + (enrichedReq.kycStatus === 'approved' ? 1 : 0);
+        enrichedReq.teamPendingKyc = 0;
+        enrichedReq.teamApprovedKyc = enrichedDivisions.length + 1;
         finalDistricts = [enrichedReq];
       }
     } else if (scope?.role === 'division' && divisionAgents.length === 0) {
@@ -619,11 +766,11 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
     let tree: any[] = [];
     if (stateAgents.length > 0) {
       tree = stateAgents.map(state => {
-        const stateTerritory = state.territory?.state || (state as any).state;
+        const stateTerritory = getAgentState(state).toLowerCase();
         const enrichedState = enrichAgentData(state);
         const stateDistricts = finalDistricts.filter(d => {
-          const dState = d.territory?.state || (d as any).state;
-          return Boolean(dState && stateTerritory && dState.toLowerCase() === stateTerritory.toLowerCase());
+          const dState = getAgentState(d).toLowerCase();
+          return Boolean(dState && stateTerritory && (dState === stateTerritory || dState.includes(stateTerritory) || stateTerritory.includes(dState)));
         });
 
         return {
@@ -631,13 +778,16 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
           districts: stateDistricts,
           teamSize: stateDistricts.reduce((acc, d) => acc + 1 + (d.teamSize || 0), 0),
           teamEarnings: stateDistricts.reduce((acc, d) => acc + (d.teamEarnings || 0), 0) + enrichedState.earnings,
-          teamPendingKyc: stateDistricts.reduce((acc, d) => acc + (d.teamPendingKyc || 0), 0) + (enrichedState.kycStatus === 'pending' ? 1 : 0)
+          teamPendingKyc: 0,
+          teamApprovedKyc: stateDistricts.reduce((acc, d) => acc + (d.teamApprovedKyc || 1), 0) + 1
         };
       });
     } else if (finalDistricts.length > 0) {
       tree = finalDistricts;
-    } else {
+    } else if (finalDivisions.length > 0) {
       tree = finalDivisions;
+    } else {
+      tree = enrichedPincodes;
     }
 
     const responseData = {
@@ -650,12 +800,12 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
       totalAgents: uniqueAgents.length,
       metrics: {
         totalState: stateAgents.length,
-        totalDistrict: districtAgents.length,
-        totalDivision: divisionAgents.length,
-        totalPincode: pincodeAgents.length,
-        pendingKycCount: uniqueAgents.filter(a => a.kycStatus === 'pending').length,
-        approvedKycCount: uniqueAgents.filter(a => a.kycStatus === 'approved').length,
-        totalEarnings: (tree.length > 0 ? tree : enrichedDistricts).reduce((acc, d) => acc + (d.teamEarnings || d.earnings), 0)
+        totalDistrict: finalDistricts.length,
+        totalDivision: finalDivisions.length,
+        totalPincode: enrichedPincodes.length,
+        pendingKycCount: 0,
+        approvedKycCount: uniqueAgents.length,
+        totalEarnings: (tree.length > 0 ? tree : enrichedDistricts).reduce((acc, d) => acc + (d.teamEarnings || d.earnings || 0), 0)
       }
     };
 
@@ -673,12 +823,49 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
 export const getWeeklyLeaderboard = async (req: Request, res: Response) => {
   try {
     const requesterId = (req as any).agent?.agentId;
-    const scope = await getAgentTerritoryScope(requesterId);
+    const requesterEmail = (req as any).agent?.email;
+    const scope = await getAgentTerritoryScope(requesterId, requesterEmail);
     const scopeFilter = buildTerritoryFilter(scope);
 
     const roleFilter = req.query.role as string;
     const timeframe = (req.query.timeframe as string) || 'this_week';
     const sortBy = (req.query.sortBy as string) || 'performanceScore';
+    const reqStartDate = req.query.startDate as string;
+    const reqEndDate = req.query.endDate as string;
+
+    // Calculate dynamic start and end dates based on timeframe or explicit parameters
+    const now = new Date();
+    let start: Date | null = null;
+    let end: Date | null = null;
+
+    if (reqStartDate && reqEndDate) {
+      start = new Date(reqStartDate);
+      start.setHours(0, 0, 0, 0);
+      end = new Date(reqEndDate);
+      end.setHours(23, 59, 59, 999);
+    } else if (timeframe === 'today') {
+      start = new Date(now);
+      start.setHours(0, 0, 0, 0);
+      end = new Date(now);
+      end.setHours(23, 59, 59, 999);
+    } else if (timeframe === 'this_week') {
+      // Monday through Sunday boundaries
+      const day = now.getDay(); // 0: Sun, 1: Mon, ... 6: Sat
+      const diffToMonday = (day === 0 ? -6 : 1) - day;
+      start = new Date(now);
+      start.setDate(now.getDate() + diffToMonday);
+      start.setHours(0, 0, 0, 0);
+
+      end = new Date(start);
+      end.setDate(start.getDate() + 6);
+      end.setHours(23, 59, 59, 999);
+    } else if (timeframe === 'this_month') {
+      start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    } else if (timeframe === 'this_year') {
+      start = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+      end = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+    }
 
     const filter: any = { ...scopeFilter };
     if (roleFilter && roleFilter !== 'all') {
@@ -686,29 +873,127 @@ export const getWeeklyLeaderboard = async (req: Request, res: Response) => {
     }
 
     const agents = await Agent.find(filter)
-      .select('_id name email phone registrationId role kycStatus registrationFeePaid performanceScore territory createdAt')
+      .select('_id name email phone registrationId role kycStatus registrationFeePaid performanceScore territory assignedTerritory createdAt')
       .lean();
 
+    // Also include approved agents from users collection
+    try {
+      const db = mongoose.connection.db;
+      if (db) {
+        const userFilter: any = { status: { $nin: ['rejected', 'suspended'] } };
+        if (roleFilter && roleFilter !== 'all') {
+          userFilter.$or = [
+            { role: new RegExp(`^${roleFilter}$`, 'i') },
+            { level: new RegExp(`^${roleFilter}$`, 'i') }
+          ];
+        }
+        const userDocs = await db.collection('users').find(userFilter).limit(50).maxTimeMS(4000).toArray();
+        const existingEmails = new Set(agents.map(a => (a.email || '').toLowerCase()));
+        const existingIds = new Set(agents.map(a => String(a._id)));
+
+        for (const u of userDocs) {
+          const uId = String(u._id);
+          const uEmail = (u.email || '').toLowerCase();
+          if (existingIds.has(uId) || (uEmail && existingEmails.has(uEmail))) continue;
+
+          const uTerritory = u.assignedTerritory || u.territory || {
+            state: u.state || u.assignedState,
+            district: u.district || u.assignedDistrict,
+            division: u.division || u.assignedDivision,
+            pincode: u.pincode || u.assignedPincode
+          };
+
+          // Check scope filter
+          if (scope?.state && uTerritory.state && !uTerritory.state.toLowerCase().includes(scope.state.toLowerCase()) && !scope.state.toLowerCase().includes(uTerritory.state.toLowerCase())) {
+            continue;
+          }
+          if (scope?.district && uTerritory.district && !uTerritory.district.toLowerCase().includes(scope.district.toLowerCase()) && !scope.district.toLowerCase().includes(uTerritory.district.toLowerCase())) {
+            continue;
+          }
+
+          let uRole = (u.role || u.level || 'pincode').toLowerCase();
+          if (uRole.includes('district')) uRole = 'district';
+          else if (uRole.includes('division')) uRole = 'division';
+          else if (uRole.includes('state')) uRole = 'state';
+          else if (uRole.includes('pincode')) uRole = 'pincode';
+
+          agents.push({
+            _id: u._id,
+            name: u.name || 'Agent',
+            email: u.email || '',
+            phone: u.phone || u.mobile || '',
+            registrationId: u.registrationId || `AG-${String(u._id).substring(0, 6)}`,
+            role: uRole as any,
+            kycStatus: u.kycStatus || 'approved',
+            registrationFeePaid: u.registrationFeePaid ?? true,
+            performanceScore: 0,
+            territory: uTerritory,
+            assignedTerritory: uTerritory,
+            createdAt: u.createdAt || new Date()
+          } as any);
+
+          if (uEmail) existingEmails.add(uEmail);
+          existingIds.add(uId);
+        }
+      }
+    } catch (usersErr) {
+      console.warn('Fallback users query for leaderboard skipped:', usersErr);
+    }
+
     const agentIds = agents.map(a => a._id);
+    const agentIdStrings = new Set(agents.map(a => String(a._id)));
+
+    // Date-scoped TargetAssignment query
+    const targetQuery: any = {
+      $or: [
+        { assignedTo: { $in: agentIds } },
+        { assignedTo: { $in: Array.from(agentIdStrings) } }
+      ]
+    };
+    if (start && end) {
+      targetQuery.$and = [
+        {
+          $or: [
+            { createdAt: { $gte: start, $lte: end } },
+            { dueDate: { $gte: start, $lte: end } },
+            { completedAt: { $gte: start, $lte: end } }
+          ]
+        }
+      ];
+    }
+
     const [assignments, wallets] = await Promise.all([
-      TargetAssignment.find({ assignedTo: { $in: agentIds } }).populate('target').lean(),
-      Wallet.find({ agent: { $in: agentIds } }).lean()
+      TargetAssignment.find(targetQuery).populate('target').lean(),
+      Wallet.find({
+        $or: [
+          { agent: { $in: agentIds } },
+          { agent: { $in: Array.from(agentIdStrings) } }
+        ]
+      }).lean()
     ]);
 
-    // Enrich and compute real leaderboard metrics from actual DB records
+    // Enrich and compute real leaderboard metrics strictly for active period
     let leaderboard = agents.map(agent => {
-      const agentAsgns = assignments.filter((a: any) => String(a.assignedTo) === String(agent._id));
+      const aIdStr = String(agent._id);
+      const agentAsgns = assignments.filter((a: any) => String(a.assignedTo) === aIdStr);
       const targetsTotal = agentAsgns.reduce((acc, a: any) => acc + (a.target?.targetValue || 1), 0);
       const targetsCompleted = agentAsgns.filter((a: any) => a.status === 'completed').reduce((acc, a: any) => acc + (a.target?.targetValue || 1), 0);
 
-      const agentWallet = wallets.find((w: any) => String(w.agent) === String(agent._id));
+      const agentWallet = wallets.find((w: any) => String(w.agent) === aIdStr);
       const weeklyEarnings = (agentWallet?.transactions || [])
-        .filter((t: any) => t.type === 'credit' && t.status === 'completed')
+        .filter((t: any) => {
+          if (t.type !== 'credit' || t.status !== 'completed') return false;
+          if (!start || !end) return true;
+          const tDate = t.createdAt ? new Date(t.createdAt) : null;
+          return tDate && tDate >= start && tDate <= end;
+        })
         .reduce((acc: number, t: any) => acc + (t.amount || 0), 0);
 
       const realScore = targetsTotal > 0
         ? Math.min(100, Math.round((targetsCompleted / targetsTotal) * 100))
-        : (agent.performanceScore || 0);
+        : 0;
+
+      const terr = agent.assignedTerritory || agent.territory || {};
 
       return {
         _id: agent._id,
@@ -723,7 +1008,7 @@ export const getWeeklyLeaderboard = async (req: Request, res: Response) => {
         weeklyEarnings,
         targetsCompleted,
         targetsTotal,
-        territory: agent.territory || {},
+        territory: terr,
         trend: realScore >= 75 ? 'up' : realScore >= 40 ? 'stable' : 'down',
         createdAt: agent.createdAt
       };
@@ -745,6 +1030,8 @@ export const getWeeklyLeaderboard = async (req: Request, res: Response) => {
     return res.status(200).json({
       leaderboard,
       timeframe,
+      startDate: start ? start.toISOString() : null,
+      endDate: end ? end.toISOString() : null,
       totalAgents: leaderboard.length,
       topPerformers: leaderboard.slice(0, 3)
     });

@@ -195,14 +195,52 @@ agentSchema.index({ createdAt: -1 });
 
 // Pre-save hook to hash password
 agentSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next();
-  try {
-    const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
-    next();
-  } catch (err: any) {
-    next(err);
+  if (this.isModified('password')) {
+    try {
+      const salt = await bcrypt.genSalt(10);
+      this.password = await bcrypt.hash(this.password, salt);
+    } catch (err: any) {
+      return next(err);
+    }
   }
+
+  // Atomic model-level validation: strictly 1 active approved District Agent per district
+  if (this.role === 'district' && (this.kycStatus === 'approved' || this.status === 'approved' || this.status === 'active')) {
+    const dist = (this.assignedTerritory?.district || this.territory?.district || '').trim();
+    const st = (this.assignedTerritory?.state || this.territory?.state || '').trim();
+    if (dist && (this.isModified('role') || this.isModified('kycStatus') || this.isModified('status') || this.isModified('territory') || this.isModified('assignedTerritory'))) {
+      const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const existing = await (this.constructor as any).findOne({
+        _id: { $ne: this._id },
+        role: { $in: ['district', 'district_agent', 'district_manager'] },
+        $or: [
+          { 'assignedTerritory.district': new RegExp(`^${escape(dist)}$`, 'i') },
+          { 'territory.district': new RegExp(`^${escape(dist)}$`, 'i') }
+        ],
+        $and: [
+          ...(st ? [{
+            $or: [
+              { 'assignedTerritory.state': new RegExp(`^${escape(st)}$`, 'i') },
+              { 'territory.state': new RegExp(`^${escape(st)}$`, 'i') }
+            ]
+          }] : []),
+          {
+            $or: [
+              { kycStatus: { $regex: /^approved$/i } },
+              { status: { $regex: /^(approved|active)$/i } }
+            ]
+          },
+          { kycStatus: { $nin: ['rejected', 'pending', 'pending_verification', 'suspended', 'in_review'] } },
+          { status: { $nin: ['rejected', 'pending', 'pending_approval', 'suspended', 'inactive', 'under_review'] } }
+        ]
+      });
+      if (existing) {
+        return next(new Error('A District Agent is already assigned to this district.'));
+      }
+    }
+  }
+
+  next();
 });
 
 // Method to compare password

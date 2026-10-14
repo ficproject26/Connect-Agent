@@ -144,12 +144,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
     );
   }
 
-  const visibleSidebarItems = sidebarItems.filter(item => {
-    if (item.path === '/agents' && effectiveRole === 'pincode') {
-      return false;
-    }
-    return true;
-  });
+  const visibleSidebarItems = sidebarItems;
 
   const unreadNotifs = notifications?.filter(n => !n.read) || [];
 

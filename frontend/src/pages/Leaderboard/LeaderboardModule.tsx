@@ -6,7 +6,7 @@ import {
   Trophy, Medal, Award, Search, Filter, RefreshCw, MapPin, CheckCircle,
   Clock, XCircle, ArrowUpRight, ArrowDownRight, BarChart3, Building2,
   TrendingUp, Users, Target, Shield, Zap, Globe, Landmark, Building, Layers,
-  Download, FileText
+  Download, FileText, Calendar
 } from 'lucide-react';
 import { formatRegistrationDate } from '../../utils/date';
 
@@ -34,6 +34,88 @@ interface LeaderboardItem {
   createdAt?: string;
 }
 
+// Calculate dynamic dates relative to current local date
+const formatDynamicDate = (d: Date) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const getDynamicDateRanges = () => {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  const dayOfWeek = now.getDay(); // 0 is Sun, 1 is Mon, ... 6 is Sat
+
+  // 1. Today
+  const todayStr = formatDynamicDate(now);
+
+  // 2. This Week (Monday through Sunday)
+  const diffToMonday = (dayOfWeek === 0 ? -6 : 1) - dayOfWeek;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() + diffToMonday);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+
+  const monShort = monday.toLocaleDateString('en-US', { month: 'short' });
+  const sunShort = sunday.toLocaleDateString('en-US', { month: 'short' });
+  const weekLabelDates = monShort === sunShort
+    ? `${monShort} ${monday.getDate()}–${sunday.getDate()}, ${sunday.getFullYear()}`
+    : `${monShort} ${monday.getDate()} – ${sunShort} ${sunday.getDate()}, ${sunday.getFullYear()}`;
+
+  // 3. This Month (First to last day of current calendar month)
+  const firstOfMonth = new Date(currentYear, currentMonth, 1);
+  const lastOfMonth = new Date(currentYear, currentMonth + 1, 0);
+  const monthName = now.toLocaleDateString('en-US', { month: 'long' });
+
+  // 4. This Year (Jan 1 to Dec 31 of current calendar year)
+  const firstOfYear = new Date(currentYear, 0, 1);
+  const lastOfYear = new Date(currentYear, 11, 31);
+
+  return {
+    today: {
+      label: 'Today',
+      startDate: todayStr,
+      endDate: todayStr
+    },
+    this_week: {
+      label: `This Week (${weekLabelDates})`,
+      startDate: formatDynamicDate(monday),
+      endDate: formatDynamicDate(sunday)
+    },
+    this_month: {
+      label: `This Month (${monthName} ${currentYear})`,
+      startDate: formatDynamicDate(firstOfMonth),
+      endDate: formatDynamicDate(lastOfMonth)
+    },
+    this_year: {
+      label: `This Year (${currentYear})`,
+      startDate: formatDynamicDate(firstOfYear),
+      endDate: formatDynamicDate(lastOfYear)
+    }
+  };
+};
+
+const formatCustomDisplayRange = (startStr: string, endStr: string) => {
+  if (!startStr || !endStr) return 'Custom Date Range';
+  const s = new Date(startStr);
+  const e = new Date(endStr);
+  const sMon = s.toLocaleDateString('en-US', { month: 'short' });
+  const eMon = e.toLocaleDateString('en-US', { month: 'short' });
+  const sDay = String(s.getDate()).padStart(2, '0');
+  const eDay = String(e.getDate()).padStart(2, '0');
+  const sYear = s.getFullYear();
+  const eYear = e.getFullYear();
+
+  if (sYear === eYear) {
+    if (sMon === eMon) {
+      return `${sMon} ${sDay} – ${eDay}, ${sYear}`;
+    }
+    return `${sMon} ${sDay} – ${eMon} ${eDay}, ${sYear}`;
+  }
+  return `${sMon} ${sDay}, ${sYear} – ${eMon} ${eDay}, ${eYear}`;
+};
 
 export const LeaderboardModule: React.FC = () => {
   const { user, addNotification } = useAuth();
@@ -41,17 +123,50 @@ export const LeaderboardModule: React.FC = () => {
   // Active 4-Tier Tab: 'overall' | 'state' | 'district' | 'division' | 'pincode'
   const [tierTab, setTierTab] = useState<'overall' | 'state' | 'district' | 'division' | 'pincode'>('overall');
   const [timeframe, setTimeframe] = useState<string>('this_week');
+  const [customStartDate, setCustomStartDate] = useState<string>('');
+  const [customEndDate, setCustomEndDate] = useState<string>('');
+  const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
+  const [tempStartDate, setTempStartDate] = useState<string>('');
+  const [tempEndDate, setTempEndDate] = useState<string>('');
+  const [dateError, setDateError] = useState<string>('');
+
   const [sortBy, setSortBy] = useState<string>('performanceScore');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAgent, setSelectedAgent] = useState<LeaderboardItem | null>(null);
 
+  const dynamicRanges = useMemo(() => getDynamicDateRanges(), []);
+
+  const activeDateBoundaries = useMemo(() => {
+    if (timeframe === 'custom' && customStartDate && customEndDate) {
+      return {
+        startDate: customStartDate,
+        endDate: customEndDate,
+        label: formatCustomDisplayRange(customStartDate, customEndDate)
+      };
+    }
+    const standard = (dynamicRanges as any)[timeframe] || dynamicRanges.this_week;
+    return {
+      startDate: standard.startDate,
+      endDate: standard.endDate,
+      label: standard.label
+    };
+  }, [timeframe, customStartDate, customEndDate, dynamicRanges]);
+
   // Query leaderboard data
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['leaderboard', tierTab, timeframe, sortBy],
+    queryKey: ['leaderboard', tierTab, timeframe, activeDateBoundaries.startDate, activeDateBoundaries.endDate, sortBy],
     queryFn: async () => {
       try {
         const roleQuery = tierTab === 'overall' ? 'all' : tierTab;
-        const res = await api.get(`/admin/leaderboard?role=${roleQuery}&timeframe=${timeframe}&sortBy=${sortBy}`);
+        const res = await api.get('/admin/leaderboard', {
+          params: {
+            role: roleQuery,
+            timeframe,
+            startDate: activeDateBoundaries.startDate,
+            endDate: activeDateBoundaries.endDate,
+            sortBy
+          }
+        });
         return res.data;
       } catch (err: any) {
         if (err?.response?.status !== 401) {
@@ -180,11 +295,12 @@ export const LeaderboardModule: React.FC = () => {
       `"${item.rank}","${item.registrationId}","${item.name}","${item.role.toUpperCase()}","${item.territory?.district || item.territory?.state || 'N/A'}","${item.targetsCompleted}/${item.targetsTotal}","${item.weeklyEarnings}","${item.performanceScore}%"`
     ).join('\n');
 
+    const cleanPeriod = activeDateBoundaries.label.replace(/[^a-zA-Z0-9_\-]/g, '_');
     const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `Weekly_Leaderboard_Report_${tierTab}_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `Leaderboard_Report_${tierTab}_${cleanPeriod}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -208,7 +324,7 @@ export const LeaderboardModule: React.FC = () => {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Weekly Agent Performance & Territory Growth Report</title>
+          <title>Agent Performance & Territory Growth Report</title>
           <style>
             body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 25px; color: #1b1c1c; }
             h1 { color: #864f19; font-size: 22px; margin-bottom: 4px; }
@@ -224,7 +340,7 @@ export const LeaderboardModule: React.FC = () => {
         </head>
         <body>
           <h1>ConnectPortal — Executive Performance Leaderboard Report</h1>
-          <div class="meta">Active Tier Scope: ${getTierTabLabel(tierTab)} • Period: ${timeframe.replace('_', ' ')} • Total Agents: ${leaderboardList.length} • Generated: ${new Date().toLocaleDateString()}</div>
+          <div class="meta">Active Tier Scope: ${getTierTabLabel(tierTab)} • Period: ${activeDateBoundaries.label} • Total Agents: ${leaderboardList.length} • Generated: ${new Date().toLocaleDateString()}</div>
           
           ${topPerformers.length >= 3 ? `
             <div class="podium">
@@ -289,6 +405,40 @@ export const LeaderboardModule: React.FC = () => {
         'system'
       );
     }
+  };
+
+  const handleTimeframeChange = (val: string) => {
+    if (val === 'custom') {
+      const defaultStart = customStartDate || dynamicRanges.this_month.startDate;
+      const defaultEnd = customEndDate || dynamicRanges.this_month.endDate;
+      setTempStartDate(defaultStart);
+      setTempEndDate(defaultEnd);
+      setDateError('');
+      setIsCustomModalOpen(true);
+    } else {
+      setTimeframe(val);
+    }
+  };
+
+  const handleApplyCustomDates = () => {
+    if (!tempStartDate || !tempEndDate) {
+      setDateError('Please select both Start Date and End Date.');
+      return;
+    }
+    if (new Date(tempEndDate) < new Date(tempStartDate)) {
+      setDateError('End Date cannot be earlier than Start Date.');
+      return;
+    }
+    setDateError('');
+    setCustomStartDate(tempStartDate);
+    setCustomEndDate(tempEndDate);
+    setTimeframe('custom');
+    setIsCustomModalOpen(false);
+  };
+
+  const handleCancelCustomDates = () => {
+    setIsCustomModalOpen(false);
+    setDateError('');
   };
 
   return (
@@ -371,16 +521,40 @@ export const LeaderboardModule: React.FC = () => {
             />
           </div>
 
-          {/* Timeframe Filter */}
-          <select
-            value={timeframe}
-            onChange={(e) => setTimeframe(e.target.value)}
-            className="bg-white border border-[#d7c3b5]/60 rounded-xl px-3 py-2 text-xs font-bold text-[#52443a] focus:outline-none focus:ring-2 focus:ring-[#864f19]/30"
-          >
-            <option value="this_week">This Week (Jul 20 - 26)</option>
-            <option value="last_week">Last Week (Jul 13 - 19)</option>
-            <option value="this_month">This Month (July 2026)</option>
-          </select>
+          {/* Dynamic 5 Timeframe Filters & Custom Date Range */}
+          <div className="flex items-center gap-1.5">
+            <select
+              value={timeframe}
+              onChange={(e) => handleTimeframeChange(e.target.value)}
+              className="bg-white border border-[#d7c3b5]/60 rounded-xl px-3 py-2 text-xs font-bold text-[#52443a] focus:outline-none focus:ring-2 focus:ring-[#864f19]/30"
+            >
+              <option value="today">{dynamicRanges.today.label}</option>
+              <option value="this_week">{dynamicRanges.this_week.label}</option>
+              <option value="this_month">{dynamicRanges.this_month.label}</option>
+              <option value="this_year">{dynamicRanges.this_year.label}</option>
+              <option value="custom">
+                {customStartDate && customEndDate
+                  ? formatCustomDisplayRange(customStartDate, customEndDate)
+                  : 'Custom Date Range'}
+              </option>
+            </select>
+
+            {timeframe === 'custom' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setTempStartDate(customStartDate);
+                  setTempEndDate(customEndDate);
+                  setDateError('');
+                  setIsCustomModalOpen(true);
+                }}
+                className="p-2 bg-[#864f19]/10 hover:bg-[#864f19]/20 text-[#864f19] rounded-xl border border-[#864f19]/30 transition cursor-pointer"
+                title="Edit Custom Date Range"
+              >
+                <Calendar className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
 
           {/* Sort By Metric Filter */}
           <select
@@ -490,7 +664,7 @@ export const LeaderboardModule: React.FC = () => {
             <BarChart3 className="w-4 h-4 text-[#864f19]" />
             Rankings ({getTierTabLabel(tierTab)} — {leaderboardList.length} Agents)
           </h3>
-          <span className="text-xs font-bold text-slate-500 uppercase">Period: {timeframe.replace('_', ' ')}</span>
+          <span className="text-xs font-bold text-[#864f19] uppercase">Period: {activeDateBoundaries.label}</span>
         </div>
 
         <div className="overflow-x-auto">
@@ -510,7 +684,7 @@ export const LeaderboardModule: React.FC = () => {
               {leaderboardList.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-8 text-center text-xs font-semibold text-slate-400">
-                    No agents ranked under this tier tab.
+                    No agents ranked under this tier tab for {activeDateBoundaries.label}.
                   </td>
                 </tr>
               ) : (
@@ -658,6 +832,82 @@ export const LeaderboardModule: React.FC = () => {
                 className="px-6 py-2.5 bg-[#864f19] text-white text-xs font-black rounded-xl hover:bg-[#864f19]/90 transition border-none cursor-pointer"
               >
                 Close Scorecard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CUSTOM DATE RANGE PICKER MODAL */}
+      {isCustomModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-[#d7c3b5]/50 p-6 space-y-5">
+            <div className="flex items-center justify-between border-b border-[#eae8e7] pb-3">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-[#864f19]" />
+                <h3 className="text-base font-black text-[#1b1c1c]">Select Custom Date Range</h3>
+              </div>
+              <button
+                onClick={handleCancelCustomDates}
+                className="p-1.5 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-700 border-none bg-transparent cursor-pointer"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs font-bold text-[#52443a]">
+              <div>
+                <label className="block text-[11px] uppercase tracking-wider mb-1 font-bold text-[#52443a]">
+                  Start Date *
+                </label>
+                <input
+                  type="date"
+                  value={tempStartDate}
+                  onChange={(e) => {
+                    setTempStartDate(e.target.value);
+                    setDateError('');
+                  }}
+                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl px-3 py-2 text-xs font-semibold text-[#1b1c1c] focus:outline-none focus:ring-2 focus:ring-[#864f19]/30"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] uppercase tracking-wider mb-1 font-bold text-[#52443a]">
+                  End Date *
+                </label>
+                <input
+                  type="date"
+                  value={tempEndDate}
+                  onChange={(e) => {
+                    setTempEndDate(e.target.value);
+                    setDateError('');
+                  }}
+                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl px-3 py-2 text-xs font-semibold text-[#1b1c1c] focus:outline-none focus:ring-2 focus:ring-[#864f19]/30"
+                />
+              </div>
+
+              {dateError && (
+                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
+                  <XCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>{dateError}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end items-center gap-2 pt-3 border-t border-[#eae8e7]">
+              <button
+                type="button"
+                onClick={handleCancelCustomDates}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition border-none cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleApplyCustomDates}
+                className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-[#864f19] hover:bg-[#a3672f] transition border-none cursor-pointer shadow-sm"
+              >
+                Apply Range
               </button>
             </div>
           </div>

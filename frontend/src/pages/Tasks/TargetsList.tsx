@@ -182,44 +182,63 @@ export const TargetsList: React.FC = () => {
     }
   }, [userState, selectedDistrict, userDistrict, selectedDivision, userDivision]);
 
-  // Fetch real subordinates strictly scoped to user's assigned territory
-  const { data: subordinatesData } = useQuery({
-    queryKey: ['targetSubordinates', user?._id],
+  // Fetch real subordinates strictly scoped to user's assigned territory and active modal filters
+  const {
+    data: subordinatesData,
+    isLoading: isLoadingSubordinates,
+    isError: isSubordinatesError
+  } = useQuery({
+    queryKey: ['targetSubordinates', user?._id, agentType, selectedDistrict, selectedDivision, selectedPincode],
     queryFn: async () => {
       if (!isManager) return [];
       try {
-        const res = await api.get('/targets/subordinates');
+        const params: Record<string, string> = { role: agentType };
+        if (selectedDistrict) params.district = selectedDistrict;
+        if (agentType !== 'district' && selectedDivision) params.division = selectedDivision;
+        const res = await api.get('/targets/subordinates', { params });
         return res.data?.subordinates || [];
-      } catch (err) {
-        return [];
+      } catch (err: any) {
+        console.error('Target subordinates fetch error:', err?.response?.data || err.message);
+        throw err;
       }
     },
-    enabled: isManager,
-    staleTime: 60000
+    enabled: Boolean(isManager && isCreateModalOpen),
+    staleTime: 15000,
+    retry: 1
   });
 
   // Dynamic Agent list strictly based on selected Agent Type & territory matching
   const candidateAgents = useMemo(() => {
     const subs: any[] = Array.isArray(subordinatesData) ? subordinatesData : [];
     const matched = subs.filter((s: any) => {
-      const r = (s.role || '').toLowerCase();
-      if (r !== agentType) return false;
+      const r = (s.role || s.level || '').toLowerCase();
+      const matchesRole = r.includes(agentType);
+      if (!matchesRole) return false;
 
       // Robust territory matching handling IDs, objects, and canonical names:
       if (agentType === 'district') {
-        const agtDist = (s.assignedTerritory?.district || s.territory?.district || s.district || '').trim().toLowerCase();
+        const agtDist = (s.assignedTerritory?.district || s.territory?.district || s.district || s.assignedDistrict || '').trim().toLowerCase();
+        const agtDistId = (s.assignedTerritory?.districtId || '').trim().toLowerCase();
         const targetDist = (selectedDistrict || userDistrict || '').trim().toLowerCase();
         if (!targetDist) return true;
-        return agtDist === targetDist || (agtDist && targetDist && (agtDist.includes(targetDist) || targetDist.includes(agtDist)));
+        const baseTarget = targetDist.replace(/\s+district$/i, '');
+        return agtDist === targetDist || agtDist === baseTarget || agtDist.includes(baseTarget) || baseTarget.includes(agtDist) || agtDistId === targetDist;
       }
       if (agentType === 'division') {
-        const agtDiv = (s.assignedTerritory?.division || s.territory?.division || s.division || '').trim().toLowerCase();
+        const agtDist = (s.assignedTerritory?.district || s.territory?.district || s.district || s.assignedDistrict || '').trim().toLowerCase();
+        const targetDist = (selectedDistrict || userDistrict || '').trim().toLowerCase();
+        if (targetDist) {
+          const baseTarget = targetDist.replace(/\s+district$/i, '');
+          if (agtDist && !agtDist.includes(baseTarget) && !baseTarget.includes(agtDist)) return false;
+        }
+        const agtDiv = (s.assignedTerritory?.division || s.territory?.division || s.division || s.assignedDivision || '').trim().toLowerCase();
         const targetDiv = (selectedDivision || userDivision || '').trim().toLowerCase();
         if (!targetDiv) return true;
-        return agtDiv === targetDiv || (agtDiv && targetDiv && (agtDiv.includes(targetDiv) || targetDiv.includes(agtDiv)));
+        const baseDiv = targetDiv.replace(/\s+division$/i, '');
+        return agtDiv === targetDiv || agtDiv === baseDiv || agtDiv.includes(baseDiv) || baseDiv.includes(agtDiv);
       }
       if (agentType === 'pincode') {
-        const agtPin = (s.assignedTerritory?.pincode || s.territory?.pincode || s.pincode || '').trim();
+        const agtPin = (s.assignedTerritory?.pincode || s.territory?.pincode || s.pincode || s.assignedPincode || '').trim();
         const targetPin = (selectedPincode || userPincode || '').trim();
         if (!targetPin) return true;
         return agtPin === targetPin;
@@ -801,16 +820,21 @@ export const TargetsList: React.FC = () => {
                     <select
                       value={selectedAgent}
                       onChange={(e) => setSelectedAgent(e.target.value)}
-                      className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                      disabled={isLoadingSubordinates}
+                      className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19] disabled:opacity-60"
                     >
-                      {candidateAgents.length > 0 ? (
+                      {isLoadingSubordinates ? (
+                        <option value="" disabled>Loading district agents...</option>
+                      ) : isSubordinatesError ? (
+                        <option value="" disabled>Failed to load district agents. Please try again.</option>
+                      ) : candidateAgents.length > 0 ? (
                         candidateAgents.map(agt => (
                           <option key={agt.id} value={agt.id}>
                             {agt.name} ({agt.territory})
                           </option>
                         ))
                       ) : (
-                        <option value="">No eligible district agents found</option>
+                        <option value="" disabled>No district agents found in territory</option>
                       )}
                     </select>
                   </div>
@@ -859,16 +883,21 @@ export const TargetsList: React.FC = () => {
                     <select
                       value={selectedAgent}
                       onChange={(e) => setSelectedAgent(e.target.value)}
-                      className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                      disabled={isLoadingSubordinates}
+                      className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19] disabled:opacity-60"
                     >
-                      {candidateAgents.length > 0 ? (
+                      {isLoadingSubordinates ? (
+                        <option value="" disabled>Loading division agents...</option>
+                      ) : isSubordinatesError ? (
+                        <option value="" disabled>Failed to load division agents. Please try again.</option>
+                      ) : candidateAgents.length > 0 ? (
                         candidateAgents.map(agt => (
                           <option key={agt.id} value={agt.id}>
                             {agt.name} ({agt.territory})
                           </option>
                         ))
                       ) : (
-                        <option value="">No eligible division agents found</option>
+                        <option value="" disabled>No division agents found in territory</option>
                       )}
                     </select>
                   </div>
@@ -936,16 +965,21 @@ export const TargetsList: React.FC = () => {
                       <select
                         value={selectedAgent}
                         onChange={(e) => setSelectedAgent(e.target.value)}
-                        className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                        disabled={isLoadingSubordinates}
+                        className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19] disabled:opacity-60"
                       >
-                        {candidateAgents.length > 0 ? (
+                        {isLoadingSubordinates ? (
+                          <option value="" disabled>Loading pincode agents...</option>
+                        ) : isSubordinatesError ? (
+                          <option value="" disabled>Failed to load pincode agents. Please try again.</option>
+                        ) : candidateAgents.length > 0 ? (
                           candidateAgents.map(agt => (
                             <option key={agt.id} value={agt.id}>
                               {agt.name} ({agt.territory})
                             </option>
                           ))
                         ) : (
-                          <option value="">No eligible pincode agents found</option>
+                          <option value="" disabled>No pincode agents found in territory</option>
                         )}
                       </select>
                     </div>

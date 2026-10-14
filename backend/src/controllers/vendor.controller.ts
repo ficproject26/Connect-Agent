@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import Vendor from '../models/Vendor';
+import Agent from '../models/Agent';
 import { getAgentTerritoryScope, buildVendorScopeFilter } from '../utils/territoryScope';
 import { cacheService } from '../services/cache.service';
 import {
@@ -304,7 +305,151 @@ export const createVendor = async (req: Request, res: Response) => {
     const randDigits = Math.floor(1000 + Math.random() * 9000);
     const generatedRegId = `REG-${dateStr}-${randDigits}`;
 
+    // Fetch onboarding agent details
+    let agentDoc: any = null;
+    try {
+      agentDoc = await Agent.findById(agentId);
+    } catch (e) {
+      // non-blocking
+    }
+
+    const rawRole = agentDoc?.role || (req as any).agent?.role || 'pincode';
+    const roleLower = String(rawRole).toLowerCase();
+    const formattedAgentRole = roleLower.includes('state') ? 'State Agent'
+      : roleLower.includes('dist') ? 'District Agent'
+      : roleLower.includes('divis') ? 'Divisional Agent'
+      : 'Pincode Agent';
+
+    const onboardingAgent = {
+      id: agentDoc?.registrationId || String(agentId),
+      name: agentDoc?.name || (req as any).agent?.name || 'Field Agent',
+      phone: agentDoc?.phone || (agentDoc as any)?.mobile || '',
+      mobile: agentDoc?.phone || (agentDoc as any)?.mobile || '',
+      role: formattedAgentRole,
+      tier: formattedAgentRole,
+      submittedAt: new Date().toISOString()
+    };
+
+    // Dynamically resolve responsible admin using the vendor's actual business PIN code
+    const db = mongoose.connection.db;
+    let responsibleAdmin: any = null;
+    let initialApprovalStatus = 'PENDING_PINCODE_APPROVAL';
+
+    if (db && data.pincode) {
+      const pin = String(data.pincode).trim();
+      const div = String((data as any).division || '').trim();
+      const dist = String(data.district || '').trim();
+      const st = String(data.state || '').trim();
+
+      // 1. Pincode Admin specifically assigned to this PIN code
+      const pinAdmin = await db.collection('users').findOne({
+        $and: [
+          {
+            $or: [
+              { role: { $regex: '^pincode admin', $options: 'i' } },
+              { adminRole: 'pincode-admin' },
+              { role: { $regex: 'pincode.*admin', $options: 'i' } }
+            ]
+          },
+          {
+            $or: [
+              { pincode: pin },
+              { assignedPincode: pin }
+            ]
+          }
+        ],
+        status: { $in: ['approved', 'active'] }
+      });
+
+      if (pinAdmin) {
+        responsibleAdmin = {
+          id: String(pinAdmin._id || pinAdmin.id),
+          adminId: String(pinAdmin._id || pinAdmin.id),
+          name: pinAdmin.name,
+          phone: pinAdmin.mobile || pinAdmin.phone || '',
+          mobile: pinAdmin.mobile || pinAdmin.phone || '',
+          email: pinAdmin.email || '',
+          role: 'Pincode Admin',
+          adminRole: 'pincode-admin',
+          state: pinAdmin.state || st,
+          district: pinAdmin.district || dist,
+          division: pinAdmin.division || div,
+          pincode: pin
+        };
+      } else if (div) {
+        // 2. Division Admin
+        const divAdmin = await db.collection('users').findOne({
+          $or: [
+            { role: { $regex: 'division.*admin', $options: 'i' } },
+            { adminRole: { $regex: 'division', $options: 'i' } }
+          ],
+          district: { $regex: `^${dist}`, $options: 'i' },
+          division: { $regex: `^${div}`, $options: 'i' },
+          status: { $in: ['approved', 'active'] }
+        });
+
+        if (divAdmin) {
+          responsibleAdmin = {
+            id: String(divAdmin._id || divAdmin.id),
+            adminId: String(divAdmin._id || divAdmin.id),
+            name: divAdmin.name,
+            phone: divAdmin.mobile || divAdmin.phone || '',
+            role: 'Divisional Admin',
+            adminRole: 'divisional-admin',
+            state: divAdmin.state || st,
+            district: divAdmin.district || dist,
+            division: div,
+            pincode: pin
+          };
+          initialApprovalStatus = 'PENDING_ADMIN_ASSIGNMENT';
+        }
+      } else if (dist) {
+        // 3. District Admin
+        const distAdmin = await db.collection('users').findOne({
+          $or: [
+            { role: { $regex: 'district.*admin', $options: 'i' } },
+            { adminRole: { $regex: 'district', $options: 'i' } }
+          ],
+          district: { $regex: `^${dist}`, $options: 'i' },
+          status: { $in: ['approved', 'active'] }
+        });
+
+        if (distAdmin) {
+          responsibleAdmin = {
+            id: String(distAdmin._id || distAdmin.id),
+            adminId: String(distAdmin._id || distAdmin.id),
+            name: distAdmin.name,
+            phone: distAdmin.mobile || distAdmin.phone || '',
+            role: 'District Admin',
+            adminRole: 'district-admin',
+            state: distAdmin.state || st,
+            district: distAdmin.district || dist,
+            division: div,
+            pincode: pin
+          };
+          initialApprovalStatus = 'PENDING_ADMIN_ASSIGNMENT';
+        }
+      }
+    }
+
+    if (!responsibleAdmin) {
+      initialApprovalStatus = 'PENDING_ADMIN_ASSIGNMENT';
+    }
+
     const vendor = new Vendor({
+      onboardingAgent,
+      onboardingAgentName: onboardingAgent.name,
+      onboardingAgentPhone: onboardingAgent.phone,
+      onboardingAgentRole: onboardingAgent.role,
+      onboardingAgentId: onboardingAgent.id,
+      responsibleAdmin,
+      responsibleAdminId: responsibleAdmin?.id || null,
+      responsibleAdminName: responsibleAdmin?.name || null,
+      responsibleAdminRole: responsibleAdmin?.role || null,
+      responsibleAdminPhone: responsibleAdmin?.phone || null,
+      responsibleAdminPincode: responsibleAdmin?.pincode || data.pincode,
+      approvalStatus: initialApprovalStatus,
+      submittedAt: new Date(),
       ...data,
       businessName: data.businessName || (data as any).name || 'Merchant Store',
       ownerName: data.ownerName || (data as any).contactPerson || 'Merchant Owner',
@@ -360,6 +505,10 @@ export const createVendor = async (req: Request, res: Response) => {
               assignedDistrict: data.district || '',
               assignedDivision: (data as any).division || '',
               pincode: data.pincode || '',
+              onboardingAgent,
+              responsibleAdmin,
+              approvalStatus: initialApprovalStatus,
+              submittedAt: new Date(),
               address: data.location?.address || `${data.district || ''}, ${data.state || ''} ${data.pincode || ''}`,
               registrationId: (vendor as any).registrationId || `REG-${Date.now().toString().slice(-6)}-${Math.floor(1000 + Math.random() * 9000)}`,
               createdAt: new Date()

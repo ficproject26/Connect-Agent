@@ -22,10 +22,10 @@ async function invalidateAgentTerritoryScope(agentId) {
  * Fetch territory scope of the authenticated agent.
  * Checks cache first, then Agent model and fallback users collection using tight projections.
  */
-async function getAgentTerritoryScope(agentId) {
-    if (!agentId)
+async function getAgentTerritoryScope(agentId, email) {
+    if (!agentId && !email)
         return null;
-    const cacheKey = `scope:${agentId}`;
+    const cacheKey = `scope:${agentId || email}`;
     try {
         const cachedScope = await cache_service_1.cacheService.get(cacheKey);
         if (cachedScope) {
@@ -34,10 +34,10 @@ async function getAgentTerritoryScope(agentId) {
         let agent = null;
         if (agentId && mongoose_1.default.Types.ObjectId.isValid(agentId)) {
             agent = await Agent_1.default.findById(agentId)
-                .select('role level assignedTerritory territory state district division pincode assignedState assignedDistrict assignedDivision assignedPincode')
+                .select('role level assignedTerritory territory state district division pincode assignedState assignedDistrict assignedDivision assignedPincode email')
                 .lean();
         }
-        if (!agent) {
+        if (!agent && agentId) {
             agent = await Agent_1.default.findOne({
                 $or: [
                     { _id: agentId },
@@ -45,34 +45,47 @@ async function getAgentTerritoryScope(agentId) {
                     { registrationId: agentId }
                 ]
             })
-                .select('role level assignedTerritory territory state district division pincode assignedState assignedDistrict assignedDivision assignedPincode')
+                .select('role level assignedTerritory territory state district division pincode assignedState assignedDistrict assignedDivision assignedPincode email')
+                .lean();
+        }
+        if (!agent && email) {
+            agent = await Agent_1.default.findOne({ email: email.toLowerCase().trim() })
+                .select('role level assignedTerritory territory state district division pincode assignedState assignedDistrict assignedDivision assignedPincode email')
                 .lean();
         }
         if (!agent) {
             const db = mongoose_1.default.connection.db;
             if (db) {
-                const orClauses = [{ agentId: agentId }];
-                if (mongoose_1.default.Types.ObjectId.isValid(agentId)) {
-                    orClauses.push({ _id: new mongoose_1.default.Types.ObjectId(agentId) });
-                }
-                orClauses.push({ _id: agentId });
-                agent = await db.collection('users').findOne({ $or: orClauses }, {
-                    projection: {
-                        role: 1,
-                        level: 1,
-                        email: 1,
-                        assignedTerritory: 1,
-                        territory: 1,
-                        state: 1,
-                        district: 1,
-                        division: 1,
-                        pincode: 1,
-                        assignedState: 1,
-                        assignedDistrict: 1,
-                        assignedDivision: 1,
-                        assignedPincode: 1
+                const orClauses = [];
+                if (agentId) {
+                    orClauses.push({ agentId: agentId });
+                    if (mongoose_1.default.Types.ObjectId.isValid(agentId)) {
+                        orClauses.push({ _id: new mongoose_1.default.Types.ObjectId(agentId) });
                     }
-                });
+                    orClauses.push({ _id: agentId });
+                }
+                if (email) {
+                    orClauses.push({ email: email.toLowerCase().trim() });
+                }
+                if (orClauses.length > 0) {
+                    agent = await db.collection('users').findOne({ $or: orClauses }, {
+                        projection: {
+                            role: 1,
+                            level: 1,
+                            email: 1,
+                            assignedTerritory: 1,
+                            territory: 1,
+                            state: 1,
+                            district: 1,
+                            division: 1,
+                            pincode: 1,
+                            assignedState: 1,
+                            assignedDistrict: 1,
+                            assignedDivision: 1,
+                            assignedPincode: 1
+                        }
+                    });
+                }
             }
         }
         if (!agent)
@@ -108,17 +121,18 @@ function buildTerritoryFilter(scope) {
     // Empty or missing scope must NEVER fall back to showing all agents
     if (!scope)
         return { _id: null };
+    const validRoles = ['state', 'district', 'division', 'pincode', 'agent', 'district_agent', 'district_lead', 'division_agent', 'division_manager', 'pincode_agent'];
     if (scope.role === 'state') {
         if (!scope.state)
             return { _id: null };
         return {
-            role: { $in: ['state', 'district', 'division', 'pincode'] },
             $or: [
                 { 'assignedTerritory.state': exactRegex(scope.state) },
                 { 'territory.state': exactRegex(scope.state) },
                 { state: exactRegex(scope.state) },
                 { assignedState: exactRegex(scope.state) }
-            ]
+            ],
+            role: { $in: validRoles }
         };
     }
     if (scope.role === 'district') {

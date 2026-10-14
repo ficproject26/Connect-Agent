@@ -61,13 +61,23 @@ export interface AgentNode {
 }
 
 export const AgentManagement: React.FC = () => {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+
+  if (authLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-3">
+        <div className="animate-spin rounded-full h-8 w-8 border-3 border-[#864f19] border-t-transparent" />
+        <span className="text-xs font-semibold text-slate-400">Loading Agent Directory...</span>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
   const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';
   const effectiveRole = (rawRole === 'agent' ? ((user as any)?.level || 'pincode') : rawRole).toLowerCase();
-
-  if (effectiveRole === 'pincode') {
-    return <Navigate to="/dashboard" replace />;
-  }
 
   const activeRole = effectiveRole;
 
@@ -83,6 +93,27 @@ export const AgentManagement: React.FC = () => {
   const userDivision = (userTerritory?.division || '').trim();
   const userPincode = (userTerritory?.pincode || '').trim();
 
+  // Helper function to strictly verify approved status
+  const isApprovedAgent = (a: any): boolean => {
+    if (!a) return false;
+    const kyc = String(a.kycStatus || '').trim().toLowerCase();
+    const st = String(a.status || '').trim().toLowerCase();
+    if (kyc === 'rejected' || st === 'rejected' || st === 'suspended' || st === 'inactive' || kyc === 'pending' || st === 'pending' || st === 'pending_approval') {
+      return false;
+    }
+    return kyc === 'approved' || st === 'approved' || st === 'active' || kyc === 'verified';
+  };
+
+  // Helper to normalize roles
+  const normalizeRoleName = (r?: string, level?: any): 'state' | 'district' | 'division' | 'pincode' => {
+    const s = String(r || level || '').trim().toLowerCase();
+    if (s.includes('state')) return 'state';
+    if (s.includes('dist')) return 'district';
+    if (s.includes('div')) return 'division';
+    if (s.includes('pin')) return 'pincode';
+    return 'pincode';
+  };
+
   // Division Agent's active pincodes dynamically from Admin Pincode Management DB
   const divisionPincodes = useMemo(() => {
     if (!userDivision) return [];
@@ -91,7 +122,7 @@ export const AgentManagement: React.FC = () => {
 
   // Search & Filter controls
   const [searchTerm, setSearchTerm] = useState('');
-  const [kycFilter, setKycFilter] = useState<string>('all');
+  const [kycFilter, setKycFilter] = useState<string>('approved');
   const [pincodeFilter, setPincodeFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [scopeFilter, setScopeFilter] = useState<string>(() => {
@@ -112,12 +143,12 @@ export const AgentManagement: React.FC = () => {
   const [selectedDistrictId, setSelectedDistrictId] = useState<string | null>(null);
   const [selectedDivisionId, setSelectedDivisionId] = useState<string | null>(null);
 
-  // Fetch live backend hierarchy
+  // Fetch live backend hierarchy strictly for approved agents
   const { data: hierarchyData, isLoading: isHierarchyLoading, refetch: refetchHierarchy } = useQuery({
-    queryKey: ['agentHierarchy', kycFilter],
+    queryKey: ['agentHierarchy'],
     queryFn: async () => {
       try {
-        const res = await api.get(`/admin/hierarchy?status=${kycFilter}`);
+        const res = await api.get('/admin/hierarchy?status=approved');
         return res.data;
       } catch (err: any) {
         if (err?.response?.status !== 401) {
@@ -150,29 +181,41 @@ export const AgentManagement: React.FC = () => {
       : (hierarchyData?.districts || []);
 
     const stateFilteredDistricts = rawDistricts.filter((d: any) => {
+      if (!isApprovedAgent(d)) return false;
       const st = (d.territory?.state || d.state || userState).toLowerCase();
       return targetState && (st.includes(targetState) || targetState.includes(st));
     });
 
-    // Deduplicate districts by canonical district identifier or district name
+    // Deduplicate districts by canonical district identifier or district name, strictly 1 agent per district
     const uniqueDistMap = new Map<string, any>();
     stateFilteredDistricts.forEach((d: any) => {
       const canonicalName = (d.territory?.district || d.district || d.name || '').trim();
       const key = (d.districtId || canonicalName).toLowerCase();
       if (!uniqueDistMap.has(key)) {
-        uniqueDistMap.set(key, { ...d, agents: d.agents || [d] });
+        uniqueDistMap.set(key, { ...d, agents: [d], agentCount: 1 });
       } else {
         const existing = uniqueDistMap.get(key);
-        const existingAgentIds = new Set((existing.agents || []).map((a: any) => String(a._id || a.id)));
-        const newAgents = (d.agents || [d]).filter((a: any) => !existingAgentIds.has(String(a._id || a.id)));
-        existing.agents = [...(existing.agents || []), ...newAgents];
+        // Only keep 1 active approved district agent (prefer latest updated)
+        if (d.updatedAt && existing.updatedAt && new Date(d.updatedAt) > new Date(existing.updatedAt)) {
+          existing._id = d._id;
+          existing.name = d.name;
+          existing.email = d.email;
+          existing.phone = d.phone;
+          existing.registrationId = d.registrationId;
+          existing.performanceScore = d.performanceScore;
+          existing.earnings = d.earnings;
+        }
         const existingDivIds = new Set((existing.divisions || []).map((dv: any) => String(dv._id || dv.id || dv.name)));
-        const newDivs = (d.divisions || []).filter((dv: any) => !existingDivIds.has(String(dv._id || dv.id || dv.name)));
+        const newDivs = (d.divisions || []).filter((dv: any) => isApprovedAgent(dv) && !existingDivIds.has(String(dv._id || dv.id || dv.name)));
         existing.divisions = [...(existing.divisions || []), ...newDivs];
       }
     });
 
-    const canonicalDistricts = Array.from(uniqueDistMap.values());
+    const canonicalDistricts = Array.from(uniqueDistMap.values()).map(d => ({
+      ...d,
+      agents: [d],
+      agentCount: 1
+    }));
 
     if (found) {
       return {
@@ -189,7 +232,8 @@ export const AgentManagement: React.FC = () => {
       phone: user?.phone || user?.mobile || '',
       registrationId: user?.registrationId || 'REG-STATE',
       role: 'state' as const,
-      kycStatus: user?.kycStatus || 'approved',
+      kycStatus: 'approved' as const,
+      status: 'approved' as const,
       registrationFeePaid: true,
       performanceScore: user?.performanceScore || 100,
       earnings: user?.earnings || 0,
@@ -199,7 +243,7 @@ export const AgentManagement: React.FC = () => {
       territory: { state: userState },
       plusPoints: ['KYC Verified', 'Assigned State Lead'],
       minusPoints: [],
-      districts: stateFilteredDistricts,
+      districts: canonicalDistricts,
       createdAt: user?.createdAt
     };
   }, [allStates, hierarchyData, userState, user]);
@@ -413,18 +457,149 @@ export const AgentManagement: React.FC = () => {
     }
   };
 
-  // Filter items by search & KYC filter with strict database _id deduplication
+  // Memoized Approved Agents by Scope for State Role:
+  // 1. District Agents
+  const stateDistrictAgents: AgentNode[] = useMemo(() => {
+    return (assignedStateNode.districts || []).filter(isApprovedAgent).map(d => ({
+      ...d,
+      role: 'district' as const
+    }));
+  }, [assignedStateNode]);
+
+  // 2. Division Agents belonging to State
+  const stateDivisionAgents: AgentNode[] = useMemo(() => {
+    const fromDistricts = (assignedStateNode.districts || []).flatMap(d => {
+      const distName = d.territory?.district || d.name || '';
+      return (d.divisions || []).map((div: any) => ({
+        ...div,
+        role: 'division' as const,
+        territory: {
+          ...div.territory,
+          state: div.territory?.state || userState,
+          district: div.territory?.district || distName,
+          division: div.territory?.division || div.name
+        },
+        district: distName,
+        districtId: d._id
+      }));
+    });
+
+    const fromHierarchy = (hierarchyData?.divisions || []).map((div: any) => ({
+      ...div,
+      role: 'division' as const,
+      territory: {
+        ...div.territory,
+        state: div.territory?.state || div.assignedTerritory?.state || userState,
+        district: div.territory?.district || div.assignedTerritory?.district || div.district,
+        division: div.territory?.division || div.assignedTerritory?.division || div.name
+      }
+    }));
+
+    const fromRawAgents = (hierarchyData?.agents || [])
+      .filter((a: any) => normalizeRoleName(a.role) === 'division')
+      .map((a: any) => ({
+        ...a,
+        role: 'division' as const,
+        territory: {
+          ...a.territory,
+          state: a.assignedTerritory?.state || a.territory?.state || userState,
+          district: a.assignedTerritory?.district || a.territory?.district || a.district,
+          division: a.assignedTerritory?.division || a.territory?.division || a.name
+        }
+      }));
+
+    const combined = [...fromDistricts, ...fromHierarchy, ...fromRawAgents].filter(isApprovedAgent);
+    const seen = new Set<string>();
+    const unique: AgentNode[] = [];
+    for (const div of combined) {
+      const id = String(div._id || (div as any).id);
+      if (!seen.has(id)) {
+        seen.add(id);
+        unique.push(div);
+      }
+    }
+    return unique.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  }, [assignedStateNode, hierarchyData, userState]);
+
+  // 3. Pincode Agents belonging to State
+  const statePincodeAgents: AgentNode[] = useMemo(() => {
+    const fromDivisions = stateDivisionAgents.flatMap((div: any) => {
+      const distName = div.territory?.district || div.district || '';
+      const divName = div.territory?.division || div.name || '';
+      return (div.pincodes || []).map((pin: any) => ({
+        ...pin,
+        role: 'pincode' as const,
+        territory: {
+          ...pin.territory,
+          state: pin.territory?.state || userState,
+          district: pin.territory?.district || distName,
+          division: pin.territory?.division || divName,
+          pincode: pin.territory?.pincode || pin.pincode
+        }
+      }));
+    });
+
+    const fromHierarchy = (hierarchyData?.pincodes || []).map((pin: any) => ({
+      ...pin,
+      role: 'pincode' as const,
+      territory: {
+        ...pin.territory,
+        state: pin.territory?.state || pin.assignedTerritory?.state || userState,
+        district: pin.territory?.district || pin.assignedTerritory?.district,
+        division: pin.territory?.division || pin.assignedTerritory?.division,
+        pincode: pin.territory?.pincode || pin.assignedTerritory?.pincode || pin.pincode
+      }
+    }));
+
+    const fromRawAgents = (hierarchyData?.agents || [])
+      .filter((a: any) => normalizeRoleName(a.role) === 'pincode')
+      .map((a: any) => ({
+        ...a,
+        role: 'pincode' as const,
+        territory: {
+          ...a.territory,
+          state: a.assignedTerritory?.state || a.territory?.state || userState,
+          district: a.assignedTerritory?.district || a.territory?.district,
+          division: a.assignedTerritory?.division || a.territory?.division,
+          pincode: a.assignedTerritory?.pincode || a.territory?.pincode || a.pincode
+        }
+      }));
+
+    const combined = [...fromDivisions, ...fromHierarchy, ...fromRawAgents].filter(isApprovedAgent);
+    const seen = new Set<string>();
+    const unique: AgentNode[] = [];
+    for (const pin of combined) {
+      const id = String(pin._id || (pin as any).id);
+      if (!seen.has(id)) {
+        seen.add(id);
+        unique.push(pin);
+      }
+    }
+    return unique.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  }, [stateDivisionAgents, hierarchyData, userState]);
+
+  // 4. District Agent's scoped agents
+  const districtDivisionAgents: AgentNode[] = useMemo(() => {
+    return (assignedDistrictNode.divisions || []).filter(isApprovedAgent);
+  }, [assignedDistrictNode]);
+
+  const districtPincodeAgents: AgentNode[] = useMemo(() => {
+    const list = (assignedDistrictNode.divisions || []).flatMap((d: any) => d.pincodes || []);
+    return list.filter(isApprovedAgent);
+  }, [assignedDistrictNode]);
+
+  // Filter items by search with strict Approved-only validation and database _id deduplication
   const filterList = (items: AgentNode[]) => {
     const seenIds = new Set<string>();
     return items.filter(item => {
       if (!item || !item._id) return false;
+      if (!isApprovedAgent(item)) return false; // Strict Approved Only enforcement
       const id = String(item._id);
       if (seenIds.has(id)) return false;
       seenIds.add(id);
 
-      if (kycFilter !== 'all' && item.kycStatus !== kycFilter) return false;
       if (pincodeFilter !== 'all') {
-        const itemPin = item.territory?.pincode || (item as any)?.assignedTerritory?.pincode;
+        const itemPin = item.territory?.pincode || (item as any)?.assignedTerritory?.pincode || (item as any)?.pincode;
         if (itemPin !== pincodeFilter) return false;
       }
       if (searchTerm.trim()) {
@@ -432,10 +607,11 @@ export const AgentManagement: React.FC = () => {
         const name = (item.name || '').toLowerCase();
         const email = (item.email || '').toLowerCase();
         const regId = (item.registrationId || '').toLowerCase();
-        const pincode = (item.territory?.pincode || (item as any)?.assignedTerritory?.pincode || '').toLowerCase();
-        const dist = (item.territory?.district || (item as any)?.assignedTerritory?.district || '').toLowerCase();
-        const div = (item.territory?.division || (item as any)?.assignedTerritory?.division || '').toLowerCase();
-        return name.includes(q) || email.includes(q) || regId.includes(q) || pincode.includes(q) || dist.includes(q) || div.includes(q);
+        const phone = (item.phone || '').toLowerCase();
+        const pincode = (item.territory?.pincode || (item as any)?.assignedTerritory?.pincode || (item as any)?.pincode || '').toLowerCase();
+        const dist = (item.territory?.district || (item as any)?.assignedTerritory?.district || (item as any)?.district || '').toLowerCase();
+        const div = (item.territory?.division || (item as any)?.assignedTerritory?.division || (item as any)?.division || '').toLowerCase();
+        return name.includes(q) || email.includes(q) || regId.includes(q) || phone.includes(q) || pincode.includes(q) || dist.includes(q) || div.includes(q);
       }
       return true;
     });
@@ -612,17 +788,11 @@ export const AgentManagement: React.FC = () => {
               </select>
             )}
 
-            {/* KYC Status Filter */}
-            <select
-              value={kycFilter}
-              onChange={(e) => setKycFilter(e.target.value)}
-              className="bg-[#fbf9f8] border border-[#d7c3b5]/70 text-[#1b1c1c] text-xs font-extrabold rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-[#864f19] cursor-pointer shadow-2xs"
-            >
-              <option value="all">🌐 All KYC Statuses</option>
-              <option value="approved">✓ Approved KYC</option>
-              <option value="pending">⏳ Pending Verification</option>
-              <option value="rejected">✕ Rejected</option>
-            </select>
+            {/* Approved KYC Indicator Badge */}
+            <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200/80 rounded-xl px-3 py-2 text-emerald-800 text-xs font-black shadow-2xs">
+              <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Status: Approved Agents Only</span>
+            </div>
           </div>
 
           {(selectedDistrictId || selectedDivisionId) && (
@@ -641,31 +811,31 @@ export const AgentManagement: React.FC = () => {
         {(activeRole === 'state' || (activeRole as string) === 'admin' || activeRole === 'executive') && (
           <div className="space-y-6">
             
-            {/* LEVEL A: STATE DRILL-DOWN STEP 1 — Show Districts in Assigned State */}
-            {!selectedDistrictId && (
+            {/* 1. DISTRICT MANAGERS LEVEL SCOPE */}
+            {scopeFilter === 'district' && (
               <div className="space-y-4">
                 <div className="flex justify-between items-center bg-[#fbf9f8] p-4 rounded-xl border border-[#d7c3b5]/40">
                   <div>
                     <h3 className="text-base font-black text-[#1b1c1c] flex items-center gap-2">
-                      <Building2 className="w-5 h-5 text-blue-600" />
-                      Assigned State: {assignedStateNode.territory?.state || userState}
+                      <MapPin className="w-5 h-5 text-[#864f19]" />
+                      District Managers Level: {assignedStateNode.territory?.state || userState}
                     </h3>
                     <p className="text-xs font-semibold text-[#52443a] mt-0.5">
-                      Select a District to view its Divisions and Pincodes.
+                      Showing eligible active District Agents in {assignedStateNode.territory?.state || userState}.
                     </p>
                   </div>
-                  <span className="px-3 py-1 bg-blue-100 text-blue-900 font-extrabold text-xs rounded-lg border border-blue-200">
-                    {assignedStateNode.districts?.length || 0} Districts Total
+                  <span className="px-3 py-1 bg-[#864f19]/10 text-[#864f19] font-extrabold text-xs rounded-lg border border-[#864f19]/20">
+                    {filterList(stateDistrictAgents).length} District Agents Total
                   </span>
                 </div>
 
                 <div className="grid grid-cols-1 gap-4">
-                  {filterList(assignedStateNode.districts || []).length === 0 ? (
+                  {filterList(stateDistrictAgents).length === 0 ? (
                     <p className="text-center text-xs font-semibold text-slate-400 py-8 bg-slate-50 rounded-xl border border-slate-200">
-                      No districts found matching filters under {userState}.
+                      No district agents found matching filters under {userState}.
                     </p>
                   ) : (
-                    filterList(assignedStateNode.districts || []).map((dist) => {
+                    filterList(stateDistrictAgents).map((dist) => {
                       const metrics = getNodeTierCounts(dist);
                       return (
                         <div
@@ -681,11 +851,6 @@ export const AgentManagement: React.FC = () => {
                               </div>
                               <div className="flex items-center gap-2 mt-1 flex-wrap">
                                 <h3 className="text-base font-black text-[#1b1c1c]">{formatCleanAgentName(dist.name, 'District Agent', dist.territory?.district)}</h3>
-                                {(((dist as any).agents?.length || 1) > 1) && (
-                                  <span className="px-2 py-0.5 bg-[#864f19]/10 text-[#864f19] font-black text-[10px] rounded-full border border-[#864f19]/20">
-                                    +{((dist as any).agents.length - 1)} more agent{((dist as any).agents.length - 1) > 1 ? 's' : ''}
-                                  </span>
-                                )}
                               </div>
                               <p className="text-xs font-bold text-[#52443a] flex items-center gap-1.5 mt-0.5">
                                 <MapPin className="w-3.5 h-3.5 text-[#864f19]" />
@@ -721,7 +886,11 @@ export const AgentManagement: React.FC = () => {
                                   <Eye className="w-3.5 h-3.5" /> Details
                                 </button>
                                 <button
-                                  onClick={() => setSelectedDistrictId(dist._id)}
+                                  onClick={() => {
+                                    setScopeFilter('hierarchy');
+                                    setSelectedDistrictId(dist._id);
+                                    setSelectedDivisionId(null);
+                                  }}
                                   className="px-4 py-1.5 bg-[#864f19] hover:bg-[#a3672f] text-white font-extrabold text-xs rounded-xl transition cursor-pointer shadow-2xs flex items-center gap-1"
                                 >
                                   <span>Explore Divisions</span>
@@ -738,89 +907,56 @@ export const AgentManagement: React.FC = () => {
               </div>
             )}
 
-            {/* LEVEL B: STATE DRILL-DOWN STEP 2 — Show Divisions within Selected District */}
-            {selectedDistrictId && !selectedDivisionId && activeDistrictNode && (
+            {/* 2. DIVISION MANAGERS LEVEL SCOPE */}
+            {scopeFilter === 'division' && (
               <div className="space-y-4">
-                <div className="bg-[#fbf9f8] p-5 rounded-2xl border border-[#d7c3b5]/60 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex justify-between items-center bg-amber-50/60 p-4 rounded-xl border border-amber-200">
                   <div>
-                    <span className="text-[10px] font-black uppercase text-[#864f19] tracking-wider block">Selected District Level</span>
-                    <h3 className="text-lg font-black text-[#1b1c1c] flex items-center gap-2 mt-0.5">
-                      <MapPin className="w-5 h-5 text-[#864f19]" />
-                      District: {activeDistrictNode.territory?.district || activeDistrictNode.name}
+                    <h3 className="text-base font-black text-[#1b1c1c] flex items-center gap-2">
+                      <Layers className="w-5 h-5 text-amber-600" />
+                      Division Managers Level: {assignedStateNode.territory?.state || userState}
                     </h3>
                     <p className="text-xs font-semibold text-[#52443a] mt-0.5">
-                      District Lead: {activeDistrictNode.name} ({activeDistrictNode.email})
+                      Showing eligible Division Managers and their assigned districts and divisions.
                     </p>
                   </div>
-                  <button
-                    onClick={() => setSelectedAgent(activeDistrictNode)}
-                    className="px-3.5 py-2 bg-white hover:bg-[#f6f3f2] text-[#864f19] font-extrabold text-xs rounded-xl border border-[#d7c3b5] transition cursor-pointer flex items-center gap-1.5 self-start md:self-auto shadow-2xs"
-                  >
-                    <Eye className="w-4 h-4" /> View District Scorecard
-                  </button>
+                  <span className="px-3 py-1 bg-amber-100 text-amber-900 font-extrabold text-xs rounded-lg border border-amber-200">
+                    {filterList(stateDivisionAgents).length} Division Managers Total
+                  </span>
                 </div>
 
-                {/* Display all associated registered district agents when multiple exist in this district */}
-                {(activeDistrictNode as any).agents && (activeDistrictNode as any).agents.length > 1 && (
-                  <div className="bg-white p-4 rounded-xl border border-[#d7c3b5]/60 shadow-2xs space-y-3">
-                    <h4 className="text-xs font-black uppercase tracking-wider text-[#864f19] flex items-center gap-1.5">
-                      <MapPin className="w-4 h-4 text-[#864f19]" />
-                      Registered District Agents in {activeDistrictNode.territory?.district || activeDistrictNode.name} ({(activeDistrictNode as any).agents.length})
-                    </h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                      {(activeDistrictNode as any).agents.map((ag: any) => (
-                        <div key={ag._id || ag.id} className="p-3 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/50 flex items-center justify-between">
-                          <div>
-                            <p className="text-xs font-bold text-[#1b1c1c]">{ag.name}</p>
-                            <p className="text-[10px] text-slate-500 font-semibold">{ag.registrationId || ag.email}</p>
-                            <span className="inline-block mt-1 text-[9px] font-black uppercase text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">{ag.kycStatus || 'approved'}</span>
-                          </div>
-                          <button
-                            onClick={() => setSelectedAgent(ag)}
-                            className="px-2.5 py-1 text-[11px] font-bold text-[#864f19] bg-white border border-[#d7c3b5] hover:bg-[#eae8e7] rounded-lg transition cursor-pointer"
-                          >
-                            Details
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="space-y-3">
-                  <h4 className="text-xs font-black uppercase tracking-wider text-[#864f19] flex items-center gap-1.5">
-                    <Layers className="w-4 h-4 text-amber-600" />
-                    Divisions within {activeDistrictNode.territory?.district || activeDistrictNode.name} ({activeDistrictNode.divisions?.length || 0})
-                  </h4>
-
-                  {filterList(activeDistrictNode.divisions || []).length === 0 ? (
+                <div className="grid grid-cols-1 gap-4">
+                  {filterList(stateDivisionAgents).length === 0 ? (
                     <p className="text-center text-xs font-semibold text-slate-400 py-8 bg-slate-50 rounded-xl border border-slate-200">
-                      No division agents registered in this district.
+                      No division managers found matching filters under {userState}.
                     </p>
                   ) : (
-                    filterList(activeDistrictNode.divisions || []).map((div) => {
+                    filterList(stateDivisionAgents).map((div) => {
                       const metrics = getNodeTierCounts(div);
+                      const divDist = div.territory?.district || (div as any).district || 'Assigned District';
+                      const divName = div.territory?.division || div.name;
                       return (
                         <div
                           key={div._id}
-                          className="border border-[#d7c3b5]/40 rounded-xl bg-white p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-2xs hover:border-[#864f19]/60 transition border-l-4 border-l-amber-600"
+                          className="border border-[#d7c3b5]/40 rounded-2xl bg-white p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-2xs hover:border-[#864f19]/60 transition border-l-4 border-l-amber-600"
                         >
                           <div>
                             <div className="flex items-center gap-2">
                               {getRoleBadge('division')}
-                              <span className="text-[11px] font-semibold text-slate-400">{div.registrationId}</span>
+                              <span className="text-[11px] font-semibold text-slate-400">ID: {div.registrationId}</span>
                               {getKycBadge(div.kycStatus)}
                             </div>
-                            <h4 className="text-sm font-bold text-[#1b1c1c] mt-1">{formatCleanAgentName(div.name, 'Division Manager', div.territory?.division)}</h4>
-                            <p className="text-[11px] text-slate-500 font-medium">
-                              Division: <span className="font-bold text-slate-700">{div.territory?.division || div.name}</span>
+                            <h4 className="text-base font-black text-[#1b1c1c] mt-1">{formatCleanAgentName(div.name, 'Division Manager', divName)}</h4>
+                            <p className="text-xs font-bold text-[#52443a] flex items-center gap-1.5 mt-0.5">
+                              <MapPin className="w-3.5 h-3.5 text-[#864f19]" />
+                              District: <span className="font-extrabold text-[#1b1c1c]">{divDist}</span> • Division: <span className="font-extrabold text-amber-800">{divName}</span> ({userState})
                             </p>
                           </div>
 
                           <div className="flex flex-wrap items-center gap-4">
                             <div className="text-right">
                               <p className="text-[9px] uppercase font-bold text-slate-400">Revenue</p>
-                              <p className="text-sm font-black text-emerald-700">₹{metrics.totalRevenue.toLocaleString()}</p>
+                              <p className="text-base font-black text-emerald-700">₹{metrics.totalRevenue.toLocaleString()}</p>
                             </div>
 
                             <div className="text-right border-l border-slate-200 pl-3">
@@ -845,7 +981,11 @@ export const AgentManagement: React.FC = () => {
                                 <Eye className="w-3.5 h-3.5" /> Details
                               </button>
                               <button
-                                onClick={() => setSelectedDivisionId(div._id)}
+                                onClick={() => {
+                                  setScopeFilter('hierarchy');
+                                  setSelectedDistrictId((div as any).districtId || null);
+                                  setSelectedDivisionId(div._id);
+                                }}
                                 className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs rounded-xl transition cursor-pointer shadow-2xs flex items-center gap-1"
                               >
                                 <span>Explore Pincodes</span>
@@ -861,40 +1001,400 @@ export const AgentManagement: React.FC = () => {
               </div>
             )}
 
-            {/* LEVEL C: STATE DRILL-DOWN STEP 3 — Show Pincodes within Selected Division */}
-            {selectedDivisionId && activeDivisionNode && (
+            {/* 3. PINCODE AGENTS LEVEL SCOPE */}
+            {scopeFilter === 'pincode' && (
               <div className="space-y-4">
-                <div className="bg-amber-50/60 p-5 rounded-2xl border border-amber-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex justify-between items-center bg-slate-50 p-4 rounded-xl border border-slate-200">
                   <div>
-                    <span className="text-[10px] font-black uppercase text-amber-900 tracking-wider block">Selected Division Level</span>
-                    <h3 className="text-lg font-black text-amber-950 flex items-center gap-2 mt-0.5">
-                      <Layers className="w-5 h-5 text-amber-600" />
-                      Division: {activeDivisionNode.territory?.division || activeDivisionNode.name}
+                    <h3 className="text-base font-black text-[#1b1c1c] flex items-center gap-2">
+                      <MapPin className="w-5 h-5 text-slate-700" />
+                      Pincode Agents Level: {assignedStateNode.territory?.state || userState}
                     </h3>
-                    <p className="text-xs font-semibold text-amber-800 mt-0.5">
-                      Division Manager: {activeDivisionNode.name} ({activeDivisionNode.email})
+                    <p className="text-xs font-semibold text-[#52443a] mt-0.5">
+                      Showing eligible Pincode Agents belonging to the state hierarchy.
                     </p>
                   </div>
-                  <button
-                    onClick={() => setSelectedAgent(activeDivisionNode)}
-                    className="px-3.5 py-2 bg-white hover:bg-amber-50 text-amber-900 font-extrabold text-xs rounded-xl border border-amber-300 transition cursor-pointer flex items-center gap-1.5 self-start md:self-auto shadow-2xs"
-                  >
-                    <Eye className="w-4 h-4 text-amber-600" /> View Division Scorecard
-                  </button>
+                  <span className="px-3 py-1 bg-slate-200 text-slate-800 font-extrabold text-xs rounded-lg border border-slate-300">
+                    {filterList(statePincodeAgents).length} Pincode Agents Total
+                  </span>
                 </div>
 
-                <div className="space-y-3">
-                  <h4 className="text-xs font-black uppercase tracking-wider text-[#864f19] flex items-center gap-1.5">
-                    <MapPin className="w-4 h-4 text-slate-700" />
-                    Pincode Agents in {activeDivisionNode.territory?.division || activeDivisionNode.name} ({activeDivisionNode.pincodes?.length || 0})
-                  </h4>
-
-                  {filterList(activeDivisionNode.pincodes || []).length === 0 ? (
+                <div className="grid grid-cols-1 gap-3">
+                  {filterList(statePincodeAgents).length === 0 ? (
                     <p className="text-center text-xs font-semibold text-slate-400 py-8 bg-slate-50 rounded-xl border border-slate-200">
-                      No pincode agents registered under this division.
+                      No pincode agents found matching filters under {userState}.
                     </p>
                   ) : (
-                    filterList(activeDivisionNode.pincodes || []).map((pin) => {
+                    filterList(statePincodeAgents).map((pin) => {
+                      const metrics = getNodeTierCounts(pin);
+                      const pinDist = pin.territory?.district || (pin as any).district || '';
+                      const pinDiv = pin.territory?.division || (pin as any).division || '';
+                      return (
+                        <div
+                          key={pin._id}
+                          onClick={() => setSelectedAgent(pin)}
+                          className="p-4 bg-white border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-[#864f19] cursor-pointer transition shadow-2xs"
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="p-2 bg-slate-100 text-slate-700 rounded-lg">
+                              <MapPin className="w-4 h-4" />
+                            </span>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-extrabold text-xs text-[#1b1c1c]">{pin.name}</span>
+                                <span className="px-2 py-0.5 bg-slate-800 text-white text-[10px] font-black rounded">
+                                  PIN: {pin.territory?.pincode || (pin as any).pincode || 'N/A'}
+                                </span>
+                                {getKycBadge(pin.kycStatus)}
+                              </div>
+                              <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
+                                District: <span className="font-bold text-slate-700">{pinDist}</span> • Division: <span className="font-bold text-slate-700">{pinDiv}</span> • {pin.phone} • ID: {pin.registrationId}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-4">
+                            <div className="text-right">
+                              <p className="text-[8px] uppercase font-bold text-slate-400">Revenue</p>
+                              <p className="text-xs font-black text-emerald-700">₹{metrics.totalRevenue.toLocaleString()}</p>
+                            </div>
+
+                            <div className="text-right border-l border-slate-200 pl-3">
+                              <p className="text-[8px] uppercase font-bold text-slate-400">Tieups (Today / Yest / Total)</p>
+                              <p className="text-[10px] font-black text-[#1b1c1c]">
+                                <span className="text-emerald-700">{metrics.tieupsToday}</span> / <span className="text-blue-700">{metrics.tieupsYesterday}</span> / <span className="text-[#864f19]">{metrics.totalTieups}</span>
+                              </p>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setSelectedAgent(pin); }}
+                              className="px-3 py-1 bg-[#fbf9f8] hover:bg-[#eae8e7] text-[#864f19] font-bold text-xs rounded-lg border border-[#d7c3b5] transition cursor-pointer flex items-center gap-1"
+                            >
+                              <Eye className="w-3.5 h-3.5" /> Profile
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* 4. FULL HIERARCHY DRILLDOWN SCOPE */}
+            {scopeFilter === 'hierarchy' && (
+              <>
+                {/* STEP 1 — Show Districts in Assigned State */}
+                {!selectedDistrictId && (
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center bg-[#fbf9f8] p-4 rounded-xl border border-[#d7c3b5]/40">
+                      <div>
+                        <h3 className="text-base font-black text-[#1b1c1c] flex items-center gap-2">
+                          <Building2 className="w-5 h-5 text-blue-600" />
+                          Assigned State: {assignedStateNode.territory?.state || userState}
+                        </h3>
+                        <p className="text-xs font-semibold text-[#52443a] mt-0.5">
+                          Select a District to view its Divisions and Pincodes.
+                        </p>
+                      </div>
+                      <span className="px-3 py-1 bg-blue-100 text-blue-900 font-extrabold text-xs rounded-lg border border-blue-200">
+                        {assignedStateNode.districts?.length || 0} Districts Total
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4">
+                      {filterList(assignedStateNode.districts || []).length === 0 ? (
+                        <p className="text-center text-xs font-semibold text-slate-400 py-8 bg-slate-50 rounded-xl border border-slate-200">
+                          No districts found matching filters under {userState}.
+                        </p>
+                      ) : (
+                        filterList(assignedStateNode.districts || []).map((dist) => {
+                          const metrics = getNodeTierCounts(dist);
+                          return (
+                            <div
+                              key={dist._id}
+                              className="border border-[#d7c3b5]/50 rounded-2xl overflow-hidden bg-white shadow-xs transition-all hover:border-[#864f19] hover:shadow-md"
+                            >
+                              <div className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 border-l-4 border-l-[#864f19]">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    {getRoleBadge('district')}
+                                    <span className="text-xs font-semibold text-slate-400">ID: {dist.registrationId}</span>
+                                    {getKycBadge(dist.kycStatus)}
+                                  </div>
+                                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                    <h3 className="text-base font-black text-[#1b1c1c]">{formatCleanAgentName(dist.name, 'District Agent', dist.territory?.district)}</h3>
+                                  </div>
+                                  <p className="text-xs font-bold text-[#52443a] flex items-center gap-1.5 mt-0.5">
+                                    <MapPin className="w-3.5 h-3.5 text-[#864f19]" />
+                                    District: {dist.territory?.district || dist.name} ({userState})
+                                  </p>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-4">
+                                  <div className="text-right">
+                                    <p className="text-[10px] uppercase font-extrabold text-slate-400">Revenue</p>
+                                    <p className="text-base font-black text-emerald-700">₹{metrics.totalRevenue.toLocaleString()}</p>
+                                  </div>
+
+                                  <div className="text-right border-l border-slate-200 pl-3">
+                                    <p className="text-[10px] uppercase font-extrabold text-slate-400">Tieups (Today / Yest / Total)</p>
+                                    <p className="text-xs font-black text-[#1b1c1c]">
+                                      <span className="text-emerald-700">{metrics.tieupsToday}</span> / <span className="text-blue-700">{metrics.tieupsYesterday}</span> / <span className="text-[#864f19]">{metrics.totalTieups}</span>
+                                    </p>
+                                  </div>
+
+                                  <div className="text-right border-l border-slate-200 pl-3">
+                                    <p className="text-[10px] uppercase font-extrabold text-slate-400">Sub-Divisions</p>
+                                    <span className="px-2 py-0.5 bg-amber-600 text-white font-black text-[10px] rounded">
+                                      {metrics.divCount} Divisions
+                                    </span>
+                                  </div>
+
+                                  <div className="flex gap-2 border-l border-slate-200 pl-3">
+                                    <button
+                                      onClick={() => setSelectedAgent(dist)}
+                                      className="px-3 py-1.5 bg-[#fbf9f8] hover:bg-[#eae8e7] text-[#864f19] font-bold text-xs rounded-xl border border-[#d7c3b5] transition cursor-pointer flex items-center gap-1"
+                                    >
+                                      <Eye className="w-3.5 h-3.5" /> Details
+                                    </button>
+                                    <button
+                                      onClick={() => setSelectedDistrictId(dist._id)}
+                                      className="px-4 py-1.5 bg-[#864f19] hover:bg-[#a3672f] text-white font-extrabold text-xs rounded-xl transition cursor-pointer shadow-2xs flex items-center gap-1"
+                                    >
+                                      <span>Explore Divisions</span>
+                                      <ChevronRight className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* STEP 2 — Show Divisions within Selected District */}
+                {selectedDistrictId && !selectedDivisionId && activeDistrictNode && (
+                  <div className="space-y-4">
+                    <div className="bg-[#fbf9f8] p-5 rounded-2xl border border-[#d7c3b5]/60 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div>
+                        <span className="text-[10px] font-black uppercase text-[#864f19] tracking-wider block">Selected District Level</span>
+                        <h3 className="text-lg font-black text-[#1b1c1c] flex items-center gap-2 mt-0.5">
+                          <MapPin className="w-5 h-5 text-[#864f19]" />
+                          District: {activeDistrictNode.territory?.district || activeDistrictNode.name}
+                        </h3>
+                        <p className="text-xs font-semibold text-[#52443a] mt-0.5">
+                          District Lead: {activeDistrictNode.name} ({activeDistrictNode.email})
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setSelectedAgent(activeDistrictNode)}
+                        className="px-3.5 py-2 bg-white hover:bg-[#f6f3f2] text-[#864f19] font-extrabold text-xs rounded-xl border border-[#d7c3b5] transition cursor-pointer flex items-center gap-1.5 self-start md:self-auto shadow-2xs"
+                      >
+                        <Eye className="w-4 h-4" /> View District Scorecard
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      <h4 className="text-xs font-black uppercase tracking-wider text-[#864f19] flex items-center gap-1.5">
+                        <Layers className="w-4 h-4 text-amber-600" />
+                        Divisions within {activeDistrictNode.territory?.district || activeDistrictNode.name} ({activeDistrictNode.divisions?.length || 0})
+                      </h4>
+
+                      {filterList(activeDistrictNode.divisions || []).length === 0 ? (
+                        <p className="text-center text-xs font-semibold text-slate-400 py-8 bg-slate-50 rounded-xl border border-slate-200">
+                          No division agents registered in this district.
+                        </p>
+                      ) : (
+                        filterList(activeDistrictNode.divisions || []).map((div) => {
+                          const metrics = getNodeTierCounts(div);
+                          return (
+                            <div
+                              key={div._id}
+                              className="border border-[#d7c3b5]/40 rounded-xl bg-white p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-2xs hover:border-[#864f19]/60 transition border-l-4 border-l-amber-600"
+                            >
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  {getRoleBadge('division')}
+                                  <span className="text-[11px] font-semibold text-slate-400">{div.registrationId}</span>
+                                  {getKycBadge(div.kycStatus)}
+                                </div>
+                                <h4 className="text-sm font-bold text-[#1b1c1c] mt-1">{formatCleanAgentName(div.name, 'Division Manager', div.territory?.division)}</h4>
+                                <p className="text-[11px] text-slate-500 font-medium">
+                                  Division: <span className="font-bold text-slate-700">{div.territory?.division || div.name}</span>
+                                </p>
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-4">
+                                <div className="text-right">
+                                  <p className="text-[9px] uppercase font-bold text-slate-400">Revenue</p>
+                                  <p className="text-sm font-black text-emerald-700">₹{metrics.totalRevenue.toLocaleString()}</p>
+                                </div>
+
+                                <div className="text-right border-l border-slate-200 pl-3">
+                                  <p className="text-[9px] uppercase font-bold text-slate-400">Tieups (Today / Yest / Total)</p>
+                                  <p className="text-xs font-black text-[#1b1c1c]">
+                                    <span className="text-emerald-700">{metrics.tieupsToday}</span> / <span className="text-blue-700">{metrics.tieupsYesterday}</span> / <span className="text-[#864f19]">{metrics.totalTieups}</span>
+                                  </p>
+                                </div>
+
+                                <div className="text-right border-l border-slate-200 pl-3">
+                                  <p className="text-[9px] uppercase font-bold text-slate-400">Pincode Sectors</p>
+                                  <span className="px-2 py-0.5 bg-slate-700 text-white font-black text-[10px] rounded">
+                                    {metrics.pinCount} Pincodes
+                                  </span>
+                                </div>
+
+                                <div className="flex gap-2 border-l border-slate-200 pl-3">
+                                  <button
+                                    onClick={() => setSelectedAgent(div)}
+                                    className="px-3 py-1.5 bg-[#fbf9f8] hover:bg-[#eae8e7] text-[#864f19] font-bold text-xs rounded-xl border border-[#d7c3b5] transition cursor-pointer flex items-center gap-1"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" /> Details
+                                  </button>
+                                  <button
+                                    onClick={() => setSelectedDivisionId(div._id)}
+                                    className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs rounded-xl transition cursor-pointer shadow-2xs flex items-center gap-1"
+                                  >
+                                    <span>Explore Pincodes</span>
+                                    <ChevronRight className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* STEP 3 — Show Pincodes within Selected Division */}
+                {selectedDivisionId && activeDivisionNode && (
+                  <div className="space-y-4">
+                    <div className="bg-amber-50/60 p-5 rounded-2xl border border-amber-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div>
+                        <span className="text-[10px] font-black uppercase text-amber-900 tracking-wider block">Selected Division Level</span>
+                        <h3 className="text-lg font-black text-amber-950 flex items-center gap-2 mt-0.5">
+                          <Layers className="w-5 h-5 text-amber-600" />
+                          Division: {activeDivisionNode.territory?.division || activeDivisionNode.name}
+                        </h3>
+                        <p className="text-xs font-semibold text-amber-800 mt-0.5">
+                          Division Manager: {activeDivisionNode.name} ({activeDivisionNode.email})
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setSelectedAgent(activeDivisionNode)}
+                        className="px-3.5 py-2 bg-white hover:bg-amber-50 text-amber-900 font-extrabold text-xs rounded-xl border border-amber-300 transition cursor-pointer flex items-center gap-1.5 self-start md:self-auto shadow-2xs"
+                      >
+                        <Eye className="w-4 h-4 text-amber-600" /> View Division Scorecard
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      <h4 className="text-xs font-black uppercase tracking-wider text-[#864f19] flex items-center gap-1.5">
+                        <MapPin className="w-4 h-4 text-slate-700" />
+                        Pincode Agents in {activeDivisionNode.territory?.division || activeDivisionNode.name} ({activeDivisionNode.pincodes?.length || 0})
+                      </h4>
+
+                      {filterList(activeDivisionNode.pincodes || []).length === 0 ? (
+                        <p className="text-center text-xs font-semibold text-slate-400 py-8 bg-slate-50 rounded-xl border border-slate-200">
+                          No pincode agents registered under this division.
+                        </p>
+                      ) : (
+                        filterList(activeDivisionNode.pincodes || []).map((pin) => {
+                          const metrics = getNodeTierCounts(pin);
+                          return (
+                            <div
+                              key={pin._id}
+                              onClick={() => setSelectedAgent(pin)}
+                              className="p-4 bg-white border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-[#864f19] cursor-pointer transition shadow-2xs"
+                            >
+                              <div className="flex items-center gap-3">
+                                <span className="p-2 bg-slate-100 text-slate-700 rounded-lg">
+                                  <MapPin className="w-4 h-4" />
+                                </span>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-extrabold text-xs text-[#1b1c1c]">{pin.name}</span>
+                                    <span className="px-2 py-0.5 bg-slate-800 text-white text-[10px] font-black rounded">
+                                      PIN: {pin.territory?.pincode || 'N/A'}
+                                    </span>
+                                    {getKycBadge(pin.kycStatus)}
+                                  </div>
+                                  <p className="text-[10px] text-slate-400 font-semibold mt-0.5">{pin.phone} • ID: {pin.registrationId}</p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-4">
+                                <div className="text-right">
+                                  <p className="text-[8px] uppercase font-bold text-slate-400">Revenue</p>
+                                  <p className="text-xs font-black text-emerald-700">₹{metrics.totalRevenue.toLocaleString()}</p>
+                                </div>
+
+                                <div className="text-right border-l border-slate-200 pl-3">
+                                  <p className="text-[8px] uppercase font-bold text-slate-400">Tieups (Today / Yest / Total)</p>
+                                  <p className="text-[10px] font-black text-[#1b1c1c]">
+                                    <span className="text-emerald-700">{metrics.tieupsToday}</span> / <span className="text-blue-700">{metrics.tieupsYesterday}</span> / <span className="text-[#864f19]">{metrics.totalTieups}</span>
+                                  </p>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); setSelectedAgent(pin); }}
+                                  className="px-3 py-1 bg-[#fbf9f8] hover:bg-[#eae8e7] text-[#864f19] font-bold text-xs rounded-lg border border-[#d7c3b5] transition cursor-pointer flex items-center gap-1"
+                                >
+                                  <Eye className="w-3.5 h-3.5" /> Profile
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+          </div>
+        )}
+
+        {/* ------------------------------------------------------------- */}
+        {/* ROLE VIEW 2: DISTRICT AGENT                                  */}
+        {/* ------------------------------------------------------------- */}
+        {activeRole === 'district' && (
+          <div className="space-y-6">
+            
+            {/* DISTRICT LEVEL VIEW 1: Scope is Pincode Only */}
+            {scopeFilter === 'pincode' ? (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center bg-slate-50 p-4 rounded-xl border border-slate-200">
+                  <div>
+                    <h3 className="text-base font-black text-[#1b1c1c] flex items-center gap-2">
+                      <MapPin className="w-5 h-5 text-slate-700" />
+                      Pincode Agents in District: {userDistrict}
+                    </h3>
+                    <p className="text-xs font-semibold text-[#52443a] mt-0.5">
+                      Showing eligible Pincode Agents registered under {userDistrict}.
+                    </p>
+                  </div>
+                  <span className="px-3 py-1 bg-slate-200 text-slate-800 font-extrabold text-xs rounded-lg border border-slate-300">
+                    {filterList(districtPincodeAgents).length} Pincode Agents Total
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3">
+                  {filterList(districtPincodeAgents).length === 0 ? (
+                    <p className="text-center text-xs font-semibold text-slate-400 py-8 bg-slate-50 rounded-xl border border-slate-200">
+                      No pincode agents registered under {userDistrict}.
+                    </p>
+                  ) : (
+                    filterList(districtPincodeAgents).map((pin) => {
                       const metrics = getNodeTierCounts(pin);
                       return (
                         <div
@@ -945,19 +1445,7 @@ export const AgentManagement: React.FC = () => {
                   )}
                 </div>
               </div>
-            )}
-
-          </div>
-        )}
-
-        {/* ------------------------------------------------------------- */}
-        {/* ROLE VIEW 2: DISTRICT AGENT                                  */}
-        {/* ------------------------------------------------------------- */}
-        {activeRole === 'district' && (
-          <div className="space-y-6">
-            
-            {/* DISTRICT LEVEL VIEW 1: List of Divisions under assigned District */}
-            {!selectedDivisionId && (
+            ) : !selectedDivisionId ? (
               <div className="space-y-5">
                 {/* List of Divisions under this District */}
                 <div className="space-y-3">
@@ -1025,7 +1513,7 @@ export const AgentManagement: React.FC = () => {
                   )}
                 </div>
               </div>
-            )}
+            ) : null}
 
             {/* DISTRICT LEVEL VIEW 2: Division Selected -> Show Pincodes in Selected Division */}
             {selectedDivisionId && activeDivisionNode && (
