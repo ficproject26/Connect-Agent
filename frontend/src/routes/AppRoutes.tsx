@@ -77,10 +77,8 @@ export const AppRoutes: React.FC = () => {
         <Route path="/verify-otp" element={<OTPVerification />} />
         <Route path="/register" element={<RegisterWizard />} />
 
-        {/* REGISTRATION PENDING REDIRECT */}
-        <Route element={<ProtectedRoute />}>
-          <Route path="/pending" element={<PendingApproval />} />
-        </Route>
+        {/* REGISTRATION PENDING STATUS */}
+        <Route path="/pending" element={<PendingApproval />} />
 
         {/* PROTECTED AGENT ROUTES */}
         <Route element={<ProtectedRoute />}>

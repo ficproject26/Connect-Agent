@@ -155,6 +155,9 @@ const approveRegistration = async (req, res) => {
     try {
         const { id } = req.params;
         const { remarks } = req.body;
+        const requesterId = req.agent?.agentId;
+        const requesterRole = String(req.agent?.role || '').toLowerCase();
+        const requesterEmail = req.agent?.email?.toLowerCase();
         let agent = await Agent_1.default.findById(id);
         let agentEmail = agent?.email;
         // Determine role and territory of the applicant
@@ -175,6 +178,38 @@ const approveRegistration = async (req, res) => {
                 }
             }
         }
+        // 1. Enforce Self-Approval Prevention
+        if (String(id) === String(requesterId) || (agentEmail && requesterEmail && agentEmail.toLowerCase() === requesterEmail)) {
+            return res.status(403).json({ message: 'Self-approval is strictly forbidden.' });
+        }
+        // 2. Enforce Role Hierarchy Authority
+        const HIERARCHY_RANKS = {
+            superadmin: 10,
+            admin: 9,
+            state: 4,
+            district: 3,
+            division: 2,
+            pincode: 1,
+            delivery_partner: 0,
+            technician: 0
+        };
+        const requesterRank = HIERARCHY_RANKS[requesterRole] || 0;
+        const applicantRank = HIERARCHY_RANKS[appRole] || 0;
+        if (requesterRank < 9 && requesterRank <= applicantRank) {
+            return res.status(403).json({
+                message: `Access denied: You cannot approve an agent with equal or higher role level (${appRole}).`
+            });
+        }
+        // 3. Enforce Territory Jurisdiction
+        const scope = await (0, territoryScope_1.getAgentTerritoryScope)(requesterId);
+        if (scope && requesterRank < 9) {
+            if (scope.role === 'state' && scope.state && appState && scope.state.toLowerCase() !== appState.toLowerCase()) {
+                return res.status(403).json({ message: `Access denied: Target agent is outside your State territory (${scope.state}).` });
+            }
+            if (scope.role === 'district' && scope.district && appDist && scope.district.toLowerCase() !== appDist.toLowerCase()) {
+                return res.status(403).json({ message: `Access denied: Target agent is outside your District territory (${scope.district}).` });
+            }
+        }
         // Enforce strictly 1 active District Agent per district rule
         if (appRole.includes('dist') && appDist) {
             const assignmentCheck = await (0, districtAssignment_1.checkExistingDistrictAssignment)(appState, appDist, appDistId, id);
@@ -187,10 +222,11 @@ const approveRegistration = async (req, res) => {
         if (agent) {
             const oldStatus = agent.kycStatus;
             agent.kycStatus = 'approved';
+            agent.status = 'approved';
             agent.remarks = remarks || 'Approved by Admin';
             agent.updatedAt = new Date();
             await agent.save();
-            const adminId = req.agent?.agentId || agent._id;
+            const adminId = requesterId || agent._id;
             await AuditLog_1.default.create({
                 entityId: agent._id,
                 entityType: 'Agent',
@@ -260,19 +296,71 @@ const rejectRegistration = async (req, res) => {
     try {
         const { id } = req.params;
         const { remarks, rejectionReason } = req.body;
+        const requesterId = req.agent?.agentId;
+        const requesterRole = String(req.agent?.role || '').toLowerCase();
+        const requesterEmail = req.agent?.email?.toLowerCase();
         if (!rejectionReason) {
             return res.status(400).json({ message: 'Rejection reason is required' });
         }
         let agent = await Agent_1.default.findById(id);
         let agentEmail = agent?.email;
+        // Determine role and territory of applicant
+        let appRole = String(agent?.role || '').toLowerCase();
+        let appDist = (agent?.assignedTerritory?.district || agent?.territory?.district || agent?.district || '').trim();
+        let appState = (agent?.assignedTerritory?.state || agent?.territory?.state || agent?.state || '').trim();
+        if (!agent) {
+            const db = mongoose_1.default.connection.db;
+            if (db) {
+                const uDoc = await db.collection('users').findOne({ _id: id });
+                if (uDoc) {
+                    agentEmail = uDoc.email;
+                    appRole = String(uDoc.role || uDoc.level || '').toLowerCase();
+                    appDist = (uDoc.assignedTerritory?.district || uDoc.territory?.district || uDoc.district || uDoc.assignedDistrict || '').trim();
+                    appState = (uDoc.assignedTerritory?.state || uDoc.territory?.state || uDoc.state || uDoc.assignedState || '').trim();
+                }
+            }
+        }
+        // 1. Enforce Self-Rejection Prevention
+        if (String(id) === String(requesterId) || (agentEmail && requesterEmail && agentEmail.toLowerCase() === requesterEmail)) {
+            return res.status(403).json({ message: 'Self-review or rejection is strictly forbidden.' });
+        }
+        // 2. Enforce Role Hierarchy Authority
+        const HIERARCHY_RANKS = {
+            superadmin: 10,
+            admin: 9,
+            state: 4,
+            district: 3,
+            division: 2,
+            pincode: 1,
+            delivery_partner: 0,
+            technician: 0
+        };
+        const requesterRank = HIERARCHY_RANKS[requesterRole] || 0;
+        const applicantRank = HIERARCHY_RANKS[appRole] || 0;
+        if (requesterRank < 9 && requesterRank <= applicantRank) {
+            return res.status(403).json({
+                message: `Access denied: You cannot reject an agent with equal or higher role level (${appRole}).`
+            });
+        }
+        // 3. Enforce Territory Jurisdiction
+        const scope = await (0, territoryScope_1.getAgentTerritoryScope)(requesterId);
+        if (scope && requesterRank < 9) {
+            if (scope.role === 'state' && scope.state && appState && scope.state.toLowerCase() !== appState.toLowerCase()) {
+                return res.status(403).json({ message: `Access denied: Target agent is outside your State territory (${scope.state}).` });
+            }
+            if (scope.role === 'district' && scope.district && appDist && scope.district.toLowerCase() !== appDist.toLowerCase()) {
+                return res.status(403).json({ message: `Access denied: Target agent is outside your District territory (${scope.district}).` });
+            }
+        }
         if (agent) {
             const oldStatus = agent.kycStatus;
             agent.kycStatus = 'rejected';
+            agent.status = 'rejected';
             agent.rejectionReason = rejectionReason;
             agent.remarks = remarks || 'Rejected by Admin';
             agent.updatedAt = new Date();
             await agent.save();
-            const adminId = req.agent?.agentId || agent._id;
+            const adminId = requesterId || agent._id;
             await AuditLog_1.default.create({
                 entityId: agent._id,
                 entityType: 'Agent',

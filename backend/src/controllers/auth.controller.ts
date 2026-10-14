@@ -1,10 +1,12 @@
 import { Request, Response } from 'express';
 import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
 import Agent from '../models/Agent';
 import { generateToken } from '../utils/jwt';
 import { invalidateAgentTerritoryScope } from '../utils/territoryScope';
 import { checkExistingDistrictAssignment } from '../utils/districtAssignment';
 import { publishEntityEvent } from '../realtime/eventBus';
+import { AUTHORIZED_AGENT_ROLES } from '../middleware/auth.middleware';
 import { z } from 'zod';
 
 const registerSchema = z.object({
@@ -86,7 +88,7 @@ export const register = async (req: Request, res: Response) => {
       }
     }
 
-    // Check if agent already exists by email
+    // Check if agent already exists by email in Agent collection
     const existingAgentEmail = await Agent.findOne({ email: validatedData.email.toLowerCase() });
     if (existingAgentEmail) {
       return res.status(400).json({ message: 'Email address is already registered. Please use another email or log in.' });
@@ -96,6 +98,24 @@ export const register = async (req: Request, res: Response) => {
     const existingAgentPhone = await Agent.findOne({ phone: validatedData.phone });
     if (existingAgentPhone) {
       return res.status(400).json({ message: 'Phone number is already registered. Please use another phone number.' });
+    }
+
+    // Enforce Shared Email & Cross-Role Isolation: Prevent overwriting or auto-converting existing accounts in users collection
+    const db = mongoose.connection.db;
+    if (db) {
+      const existingUser = await db.collection('users').findOne({ email: validatedData.email.toLowerCase() });
+      if (existingUser) {
+        const existingRole = String(existingUser.role || existingUser.level || '').toLowerCase();
+        if (existingRole && !['agent', validatedData.role].includes(existingRole)) {
+          return res.status(400).json({
+            message: `An account with this email address already exists with the role of '${existingUser.role || existingRole}'. Cross-role account conversion is not permitted.`
+          });
+        } else {
+          return res.status(400).json({
+            message: 'An agent registration for this email address already exists.'
+          });
+        }
+      }
     }
 
     const agentRole = validatedData.role;
@@ -130,7 +150,6 @@ export const register = async (req: Request, res: Response) => {
     }
 
     // Server-side Territory Hierarchy Verification against Admin Territory Database
-    const db = mongoose.connection.db;
     if (db) {
       // 1. Verify State exists and is active
       const stateQueries: any[] = [
@@ -515,8 +534,8 @@ export const register = async (req: Request, res: Response) => {
 export const login = async (req: Request, res: Response) => {
   try {
     const validatedData = loginSchema.parse(req.body);
+    const cleanEmail = validatedData.email.toLowerCase().trim();
     
-    const cleanEmail = validatedData.email.toLowerCase();
     let agent = await Agent.findOne({ email: cleanEmail });
 
     if (!agent) {
@@ -526,9 +545,54 @@ export const login = async (req: Request, res: Response) => {
         if (db) {
           const userDoc = await db.collection('users').findOne({ email: cleanEmail });
           if (userDoc) {
-            const userRole = (userDoc.level || userDoc.role || 'pincode').toLowerCase();
-            const role = ['state', 'district', 'division', 'pincode'].includes(userRole) ? userRole : 'pincode';
+            const rawUserRole = String(userDoc.level || userDoc.role || '').toLowerCase();
+            const isAgentRole = AUTHORIZED_AGENT_ROLES.includes(rawUserRole as any);
 
+            // Strict Role Isolation: Block non-agent accounts (customers, vendors, managers) from logging into Agent Portal
+            if (!isAgentRole) {
+              return res.status(403).json({
+                message: `Access denied: Account registered as '${userDoc.role || userDoc.level || 'different role'}' is not authorized to access the Agent Portal. Please use the application intended for your role.`,
+                role: userDoc.role || userDoc.level
+              });
+            }
+
+            // Verify password for synced user from users collection
+            if (!userDoc.password) {
+              return res.status(401).json({ message: 'Invalid email or password' });
+            }
+            const isPasswordMatch = await bcrypt.compare(validatedData.password, userDoc.password);
+            if (!isPasswordMatch) {
+              return res.status(401).json({ message: 'Invalid email or password' });
+            }
+
+            // Enforce account status check before creating or logging in
+            const rawStatus = String(userDoc.status || userDoc.kycStatus || 'pending').toLowerCase();
+            if (rawStatus === 'suspended' || rawStatus === 'inactive') {
+              return res.status(403).json({
+                message: 'Your account has been suspended or deactivated. Please contact the Administrator.',
+                status: 'suspended',
+                role: rawUserRole
+              });
+            }
+            if (rawStatus === 'rejected') {
+              return res.status(403).json({
+                message: `Your registration request was rejected by Admin. Reason: ${userDoc.rejectionReason || 'No reason provided.'}.`,
+                status: 'rejected',
+                rejectionReason: userDoc.rejectionReason,
+                role: rawUserRole
+              });
+            }
+            if (rawStatus !== 'approved' && rawStatus !== 'active') {
+              return res.status(403).json({
+                message: 'Your registration request is currently pending Admin verification. Please contact the Administrator for further assistance.',
+                status: 'pending',
+                registrationId: userDoc.registrationId || 'N/A',
+                role: rawUserRole
+              });
+            }
+
+            // Sync verified approved agent to Agent collection
+            const role = rawUserRole;
             const rawAssigned = userDoc.assignedTerritory || userDoc.territory || {};
             const cleanAssigned = {
               state: (rawAssigned.state || userDoc.state || userDoc.assignedState || '').trim(),
@@ -557,7 +621,7 @@ export const login = async (req: Request, res: Response) => {
             agent = new Agent({
               name: userDoc.name || 'Agent User',
               email: cleanEmail,
-              password: userDoc.password || validatedData.password,
+              password: userDoc.password,
               phone: userDoc.phone || userDoc.mobile || '',
               role: role,
               assignedTerritory: cleanAssigned,
@@ -569,11 +633,9 @@ export const login = async (req: Request, res: Response) => {
               },
               address: cleanAddressDoc,
               fullAddress: userDoc.fullAddress || (typeof userDoc.address === 'string' ? userDoc.address : ''),
-              kycStatus: userDoc.kycStatus || userDoc.status || 'approved',
-              registrationId: userDoc.registrationId || `REG-${Date.now()}`,
-              ...(userDoc.createdAt || userDoc.registeredAt || userDoc.registrationDate ? {
-                createdAt: userDoc.createdAt || userDoc.registeredAt || userDoc.registrationDate
-              } : {})
+              kycStatus: 'approved',
+              status: 'approved',
+              registrationId: userDoc.registrationId || `REG-${Date.now()}`
             });
             await agent.save();
           }
@@ -587,10 +649,50 @@ export const login = async (req: Request, res: Response) => {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
-    // Workflow validation: Status check against MongoDB
+    // 1. Authoritative Password Verification
+    const isPasswordValid = await agent.comparePassword(validatedData.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    // 2. Strict Role Isolation Verification
+    const agentRole = String(agent.role || '').toLowerCase();
+    if (!AUTHORIZED_AGENT_ROLES.includes(agentRole as any)) {
+      return res.status(403).json({
+        message: `Access denied: Role '${agent.role}' is not authorized to access the Agent application.`,
+        role: agent.role
+      });
+    }
+
+    // 3. Realtime Status Check against database
+    // Also sync latest status from admin users collection if updated by Admin
+    try {
+      const db = mongoose.connection.db;
+      if (db) {
+        const userDoc = await db.collection('users').findOne({ email: cleanEmail });
+        if (userDoc) {
+          const rawDocStatus = String(userDoc.status || userDoc.kycStatus || '').toLowerCase();
+          if (rawDocStatus === 'rejected') {
+            agent.kycStatus = 'rejected';
+            agent.status = 'rejected';
+            agent.rejectionReason = userDoc.rejectionReason || agent.rejectionReason;
+            await agent.save();
+          } else if (rawDocStatus === 'suspended' || rawDocStatus === 'inactive') {
+            agent.status = 'suspended';
+            await agent.save();
+          } else if (rawDocStatus === 'approved' || rawDocStatus === 'active') {
+            if (agent.kycStatus !== 'approved' || agent.status !== 'approved') {
+              agent.kycStatus = 'approved';
+              agent.status = 'approved';
+              await agent.save();
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
     const currentKycStatus = (agent.kycStatus || '').toLowerCase();
     const currentStatus = (agent.status || '').toLowerCase();
-
     const isApproved = currentKycStatus === 'approved' || currentStatus === 'approved' || currentStatus === 'active';
 
     if (!isApproved) {
@@ -613,6 +715,7 @@ export const login = async (req: Request, res: Response) => {
         });
       }
 
+      // Pending account: deny access and DO NOT issue token
       return res.status(403).json({
         message: 'Your registration request is currently pending Admin verification. Please contact the Administrator for further assistance.',
         status: 'pending',
@@ -676,7 +779,7 @@ export const getMe = async (req: Request, res: Response) => {
       agent = await Agent.findOne({ email: email.toLowerCase() }).select('-password');
     }
 
-    // Fallback: If agent is not in Agent collection, find in 'users' collection and sync
+    // Authoritative check in 'users' collection if not in Agent collection, strictly requiring an agent role
     if (!agent) {
       const db = mongoose.connection.db;
       if (db) {
@@ -694,8 +797,16 @@ export const getMe = async (req: Request, res: Response) => {
 
         const userDoc = await db.collection('users').findOne({ $or: userOrClauses });
         if (userDoc) {
-          const userRole = (userDoc.level || userDoc.role || agentPayload?.role || 'pincode').toLowerCase();
-          const role = ['state', 'district', 'division', 'pincode'].includes(userRole) ? userRole : 'pincode';
+          const rawRole = String(userDoc.level || userDoc.role || '').toLowerCase();
+          const isAgent = AUTHORIZED_AGENT_ROLES.includes(rawRole as any);
+
+          if (!isAgent) {
+            return res.status(403).json({
+              message: `Access denied: Account registered as '${userDoc.role || userDoc.level || 'different role'}' is not authorized for the Agent Portal.`,
+              role: userDoc.role || userDoc.level
+            });
+          }
+
           const rawAssigned = userDoc.assignedTerritory || userDoc.territory || {};
 
           agent = new Agent({
@@ -704,7 +815,7 @@ export const getMe = async (req: Request, res: Response) => {
             email: (userDoc.email || email).toLowerCase(),
             password: userDoc.password || 'synced_user',
             phone: userDoc.phone || userDoc.mobile || '',
-            role: role,
+            role: rawRole,
             assignedTerritory: {
               state: (rawAssigned.state || userDoc.state || userDoc.assignedState || '').trim(),
               district: (rawAssigned.district || userDoc.district || userDoc.assignedDistrict || '').trim(),
@@ -717,8 +828,8 @@ export const getMe = async (req: Request, res: Response) => {
               division: (rawAssigned.division || userDoc.division || userDoc.assignedDivision || '').trim(),
               pincode: (rawAssigned.pincode || userDoc.pincode || userDoc.assignedPincode || '').trim()
             },
-            kycStatus: userDoc.kycStatus || userDoc.status || 'approved',
-            status: userDoc.status || 'approved',
+            kycStatus: userDoc.kycStatus || userDoc.status || 'pending',
+            status: userDoc.status || 'pending',
             registrationId: userDoc.registrationId || `REG-${Date.now()}`
           });
           try {
@@ -732,6 +843,15 @@ export const getMe = async (req: Request, res: Response) => {
 
     if (!agent) {
       return res.status(404).json({ message: 'Agent not found' });
+    }
+
+    // Role check: Enforce Agent Role authorization
+    const agentRole = String(agent.role || '').toLowerCase();
+    if (!AUTHORIZED_AGENT_ROLES.includes(agentRole as any)) {
+      return res.status(403).json({
+        message: `Access denied: Role '${agent.role}' is not authorized for the Agent application.`,
+        role: agent.role
+      });
     }
 
     // Sync latest status from admin users collection if updated by Admin
@@ -1020,12 +1140,45 @@ export const sendOtp = async (req: Request, res: Response) => {
     }
 
     // Check if agent is registered with this phone number
-    const agent = await Agent.findOne({ phone }).select('_id role status kycStatus rejectionReason');
+    let agent = await Agent.findOne({ phone }).select('_id role status kycStatus rejectionReason');
+
+    if (!agent) {
+      const db = mongoose.connection.db;
+      if (db) {
+        const uDoc = await db.collection('users').findOne({ phone });
+        if (uDoc) {
+          const uRole = String(uDoc.level || uDoc.role || '').toLowerCase();
+          const isAgent = AUTHORIZED_AGENT_ROLES.includes(uRole as any);
+          if (!isAgent) {
+            return res.status(403).json({
+              message: `This mobile number is registered with role '${uDoc.role || uDoc.level}' and is not authorized to log into the Agent Portal.`,
+              role: uDoc.role || uDoc.level
+            });
+          }
+          agent = {
+            _id: uDoc._id,
+            role: uRole,
+            status: uDoc.status || 'pending',
+            kycStatus: uDoc.kycStatus || uDoc.status || 'pending',
+            rejectionReason: uDoc.rejectionReason
+          } as any;
+        }
+      }
+    }
 
     if (!agent) {
       return res.status(404).json({
         message: 'This mobile number is not registered as an agent. Please apply for agent onboarding first.',
         notRegistered: true
+      });
+    }
+
+    // Role check
+    const agentRole = String(agent.role || '').toLowerCase();
+    if (!AUTHORIZED_AGENT_ROLES.includes(agentRole as any)) {
+      return res.status(403).json({
+        message: `Account with role '${agent.role}' is not authorized for the Agent Portal.`,
+        role: agent.role
       });
     }
 
@@ -1052,9 +1205,6 @@ export const sendOtp = async (req: Request, res: Response) => {
     mobileOtpStore.set(phone, { otp, expiresAt: Date.now() + OTP_EXPIRY_MS });
 
     console.log(`[OTP] Generated for +91${phone}: ${otp} (expires in 5 minutes)`);
-
-    // In production: send otp via SMS gateway here
-    // await smsService.send(`+91${phone}`, `Your Connect Portal OTP is ${otp}. Valid for 5 minutes.`);
 
     return res.status(200).json({
       message: `OTP sent to +91 ${phone}. It is valid for 5 minutes.`,
@@ -1118,13 +1268,48 @@ export const verifyMobileOtp = async (req: Request, res: Response) => {
     mobileOtpStore.delete(phone);
 
     // Fetch full agent record
-    const agent = await Agent.findOne({ phone }).select('-password');
+    let agent = await Agent.findOne({ phone }).select('-password');
 
     if (!agent) {
       return res.status(404).json({ message: 'Agent account not found. Please contact Administrator.' });
     }
 
-    // Status checks (same as email login)
+    // Sync status if updated by Admin in users collection
+    try {
+      const db = mongoose.connection.db;
+      if (db) {
+        const userDoc = await db.collection('users').findOne({ phone });
+        if (userDoc) {
+          const rawDocStatus = String(userDoc.status || userDoc.kycStatus || '').toLowerCase();
+          if (rawDocStatus === 'rejected') {
+            agent.kycStatus = 'rejected';
+            agent.status = 'rejected';
+            agent.rejectionReason = userDoc.rejectionReason || agent.rejectionReason;
+            await agent.save();
+          } else if (rawDocStatus === 'suspended' || rawDocStatus === 'inactive') {
+            agent.status = 'suspended';
+            await agent.save();
+          } else if (rawDocStatus === 'approved' || rawDocStatus === 'active') {
+            if (agent.kycStatus !== 'approved' || agent.status !== 'approved') {
+              agent.kycStatus = 'approved';
+              agent.status = 'approved';
+              await agent.save();
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    // Strict Role Isolation Check
+    const agentRole = String(agent.role || '').toLowerCase();
+    if (!AUTHORIZED_AGENT_ROLES.includes(agentRole as any)) {
+      return res.status(403).json({
+        message: `Access denied: Role '${agent.role}' is not authorized for the Agent Portal.`,
+        role: agent.role
+      });
+    }
+
+    // Status checks
     const currentKycStatus = (agent.kycStatus || '').toLowerCase();
     const currentStatus = (agent.status || '').toLowerCase();
     const isApproved = currentKycStatus === 'approved' || currentStatus === 'approved' || currentStatus === 'active';
@@ -1142,16 +1327,16 @@ export const verifyMobileOtp = async (req: Request, res: Response) => {
           status: 'suspended'
         });
       }
-      // Pending approval – allow frontend to redirect to /pending
+      // Pending approval – fail closed (NO TOKEN ISSUED)
       return res.status(403).json({
-        message: 'Your account is pending Admin verification.',
+        message: 'Your account is pending Admin verification. Access to dashboard is denied until approved.',
         status: 'pending',
         registrationId: agent.registrationId || 'N/A',
         role: agent.role
       });
     }
 
-    // Generate JWT (same structure as email login)
+    // Generate JWT (only for approved, active, authorized agents)
     const token = generateToken({
       agentId: agent._id.toString(),
       role: agent.role,

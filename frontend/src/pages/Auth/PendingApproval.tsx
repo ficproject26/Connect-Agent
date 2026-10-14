@@ -9,6 +9,14 @@ export const PendingApproval: React.FC = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
 
+  const isApproved = !!user && (user.kycStatus === 'approved' || (user as any).status === 'approved' || (user as any).status === 'active') && user.kycStatus !== 'pending' && (user as any).status !== 'pending' && (user as any).status !== 'pending_approval';
+
+  React.useEffect(() => {
+    if (isApproved) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [isApproved, navigate]);
+
   const handleLogout = () => {
     logout();
     navigate('/');

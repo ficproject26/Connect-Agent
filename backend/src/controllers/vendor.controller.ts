@@ -575,6 +575,11 @@ export const updateVendor = async (req: Request, res: Response) => {
       : { registrationId: rawId };
 
     const updateFields: any = { ...data, updatedAt: new Date() };
+    // Prevent privilege escalation or unauthorized status bypass via updateVendor
+    delete updateFields.status;
+    delete updateFields.kycStatus;
+    delete updateFields.role;
+
     if (data.businessName && !data.name) {
       updateFields.name = data.businessName;
     }

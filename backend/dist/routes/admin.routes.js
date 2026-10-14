@@ -10,8 +10,8 @@ router.get('/registrations', auth_middleware_1.authMiddleware, admin_controller_
 router.get('/registrations/:id', auth_middleware_1.authMiddleware, admin_controller_1.getRegistrationById);
 router.get('/hierarchy', auth_middleware_1.authMiddleware, admin_controller_1.getHierarchyTree);
 router.get('/leaderboard', auth_middleware_1.authMiddleware, admin_controller_1.getWeeklyLeaderboard);
-// Review registration status
-router.patch('/registrations/:id/approve', auth_middleware_1.authMiddleware, admin_controller_1.approveRegistration);
-router.patch('/registrations/:id/reject', auth_middleware_1.authMiddleware, admin_controller_1.rejectRegistration);
+// Review registration status (Restricted to authorized management roles)
+router.patch('/registrations/:id/approve', auth_middleware_1.authMiddleware, auth_middleware_1.requireAdminApprover, admin_controller_1.approveRegistration);
+router.patch('/registrations/:id/reject', auth_middleware_1.authMiddleware, auth_middleware_1.requireAdminApprover, admin_controller_1.rejectRegistration);
 exports.default = router;
 //# sourceMappingURL=admin.routes.js.map

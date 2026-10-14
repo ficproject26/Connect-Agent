@@ -547,6 +547,10 @@ const updateVendor = async (req, res) => {
             ? { $or: [{ _id: rawId }, { registrationId: rawId }] }
             : { registrationId: rawId };
         const updateFields = { ...data, updatedAt: new Date() };
+        // Prevent privilege escalation or unauthorized status bypass via updateVendor
+        delete updateFields.status;
+        delete updateFields.kycStatus;
+        delete updateFields.role;
         if (data.businessName && !data.name) {
             updateFields.name = data.businessName;
         }

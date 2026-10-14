@@ -91,9 +91,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
   const [token, setToken] = useState<string | null>(localStorage.getItem('agent_token'));
   const [loading, setLoading] = useState<boolean>(() => {
-    // If valid token and user are already present in localStorage, render immediately
     try {
-      return !(localStorage.getItem('agent_token') && localStorage.getItem('agent_user'));
+      return !!localStorage.getItem('agent_token');
     } catch (e) {
       return false;
     }
@@ -177,10 +176,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const initializeAuth = async () => {
       const savedToken = localStorage.getItem('agent_token');
       if (savedToken) {
-        // Silently verify session in background, app shell is already interactive
-        refetchUser().catch((err) => {
+        try {
+          await refetchUser();
+        } catch (err) {
           console.error('Session restoration failed:', err);
-        });
+        }
       } else {
         setUser(null);
         setToken(null);

@@ -8,7 +8,7 @@ import {
   getWeeklyLeaderboard,
   getCategories
 } from '../controllers/admin.controller';
-import { authMiddleware } from '../middleware/auth.middleware';
+import { authMiddleware, requireAdminApprover } from '../middleware/auth.middleware';
 
 const router = Router();
 
@@ -19,9 +19,9 @@ router.get('/registrations/:id', authMiddleware, getRegistrationById);
 router.get('/hierarchy', authMiddleware, getHierarchyTree);
 router.get('/leaderboard', authMiddleware, getWeeklyLeaderboard);
 
-// Review registration status
-router.patch('/registrations/:id/approve', authMiddleware, approveRegistration);
-router.patch('/registrations/:id/reject', authMiddleware, rejectRegistration);
+// Review registration status (Restricted to authorized management roles)
+router.patch('/registrations/:id/approve', authMiddleware, requireAdminApprover, approveRegistration);
+router.patch('/registrations/:id/reject', authMiddleware, requireAdminApprover, rejectRegistration);
 
 export default router;
 
