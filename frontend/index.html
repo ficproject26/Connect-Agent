@@ -6,6 +6,43 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Connect App — Unified workforce and delivery management platform for delivery partners, technicians, and executives." />
     <title>Connect App — Workforce & Delivery Management</title>
+    <script>
+      (function() {
+        var isExt = function(msg, src) {
+          var m = String(msg || '');
+          var s = String(src || '');
+          return s.indexOf('chrome-extension://') !== -1 ||
+                 s.indexOf('content.js') !== -1 ||
+                 m.indexOf('A listener indicated an asynchronous response') !== -1 ||
+                 m.indexOf('message channel closed') !== -1 ||
+                 m.indexOf('runtime.lastError') !== -1 ||
+                 m.indexOf('unsafe-eval') !== -1 ||
+                 m.indexOf('Content Security Policy') !== -1 ||
+                 m.indexOf('Evaluating a string as JavaScript violates') !== -1;
+        };
+        window.addEventListener('securitypolicyviolation', function(e) {
+          if ((e.sourceFile && e.sourceFile.indexOf('chrome-extension://') !== -1) ||
+              (e.blockedURI && e.blockedURI.indexOf('chrome-extension://') !== -1) ||
+              isExt(e.violatedDirective, e.sourceFile)) {
+            e.stopPropagation();
+          }
+        }, true);
+        window.addEventListener('error', function(e) {
+          if (isExt(e.message, e.filename)) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            return true;
+          }
+        }, true);
+        window.addEventListener('unhandledrejection', function(e) {
+          var reason = e.reason ? (e.reason.message || String(e.reason)) : '';
+          if (isExt(reason, '')) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+          }
+        }, true);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
