@@ -4,54 +4,175 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.lookupPincode = exports.getPincodes = exports.getDivisions = exports.getDistricts = exports.getStates = exports.getAllTerritoryHierarchy = exports.getTerritoryHierarchy = void 0;
+exports.clearTerritoryCache = clearTerritoryCache;
+exports.warmupTerritoryCache = warmupTerritoryCache;
 const mongoose_1 = __importDefault(require("mongoose"));
 const territoryScope_1 = require("../utils/territoryScope");
 const isActive = (item) => !item.status || item.status.toLowerCase() === 'active';
+let cachedFullHierarchy = null;
+let cachedFullHierarchyTime = 0;
+const HIERARCHY_CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache
+function clearTerritoryCache() {
+    cachedFullHierarchy = null;
+    cachedFullHierarchyTime = 0;
+}
+async function warmupTerritoryCache() {
+    try {
+        await buildHierarchyTree(null, true);
+        console.log('✅ Centralized territory hierarchy cache pre-warmed successfully.');
+    }
+    catch (err) {
+        console.warn('⚠️ Territory hierarchy cache warmup deferred:', err.message);
+    }
+}
+function filterHierarchyTree(tree, scope = null, forceAll = false) {
+    if (forceAll || !scope || !scope.role)
+        return tree;
+    let filtered = tree;
+    if (scope.state) {
+        const scState = scope.state.trim().toLowerCase();
+        const stMatch = filtered.filter(s => {
+            const sName = s.name.trim().toLowerCase();
+            return sName === scState || sName.includes(scState) || scState.includes(sName);
+        });
+        if (stMatch.length > 0)
+            filtered = stMatch;
+    }
+    if (scope.district && (scope.role === 'district' || scope.role === 'division' || scope.role === 'pincode')) {
+        const scDist = scope.district.trim().toLowerCase();
+        filtered = filtered.map(st => ({
+            ...st,
+            districts: st.districts.filter((d) => {
+                const dName = d.name.trim().toLowerCase();
+                return dName === scDist || dName.includes(scDist) || scDist.includes(dName);
+            })
+        }));
+    }
+    if (scope.division && (scope.role === 'division' || scope.role === 'pincode')) {
+        const scDiv = scope.division.trim().toLowerCase();
+        filtered = filtered.map(st => ({
+            ...st,
+            districts: st.districts.map((dt) => ({
+                ...dt,
+                divisions: dt.divisions.filter((v) => {
+                    const vName = v.name.trim().toLowerCase();
+                    return vName === scDiv || vName.includes(scDiv) || scDiv.includes(vName);
+                })
+            }))
+        }));
+    }
+    if (scope.pincode && scope.role === 'pincode') {
+        const scPin = scope.pincode.trim();
+        filtered = filtered.map(st => ({
+            ...st,
+            districts: st.districts.map((dt) => ({
+                ...dt,
+                divisions: dt.divisions.map((v) => ({
+                    ...v,
+                    pincodes: v.pincodes.filter((p) => p.code === scPin)
+                }))
+            }))
+        }));
+    }
+    return filtered;
+}
 /**
  * Builds the centralized territory hierarchy from MongoDB collections:
  * states -> districts -> divisions -> pincodes
+ * High-speed O(N) indexing with in-memory 5-minute caching.
  */
 async function buildHierarchyTree(scope = null, forceAll = false) {
+    const now = Date.now();
+    if (cachedFullHierarchy && (now - cachedFullHierarchyTime < HIERARCHY_CACHE_TTL)) {
+        return filterHierarchyTree(cachedFullHierarchy, scope, forceAll);
+    }
     const db = mongoose_1.default.connection.db;
     if (!db)
         throw new Error('Database connection unavailable');
     const [states, districts, divisions, pincodes] = await Promise.all([
-        db.collection('states').find({}).toArray(),
-        db.collection('districts').find({}).toArray(),
-        db.collection('divisions').find({}).toArray(),
-        db.collection('pincodes').find({}).toArray()
+        db.collection('states').find({}, { projection: { name: 1, code: 1, status: 1, stateId: 1 } }).toArray(),
+        db.collection('districts').find({}, { projection: { name: 1, code: 1, status: 1, stateId: 1, state: 1, districtId: 1 } }).toArray(),
+        db.collection('divisions').find({}, { projection: { name: 1, code: 1, status: 1, districtId: 1, district: 1, talukInfo: 1, taluk: 1, divisionId: 1 } }).toArray(),
+        db.collection('pincodes').find({}, { projection: { code: 1, name: 1, postOffice: 1, taluk: 1, area: 1, status: 1, divisionId: 1, division: 1, districtId: 1, district: 1, stateId: 1, state: 1, activeAgentId: 1, pincodeId: 1 } }).toArray()
     ]);
     const activeStates = states.filter(isActive);
     const activeDistricts = districts.filter(isActive);
     const activeDivisions = divisions.filter(isActive);
     const activePincodes = pincodes.filter(isActive);
-    let filteredStates = activeStates;
-    if (!forceAll && scope?.role && scope.state) {
-        const scState = scope.state.trim().toLowerCase();
-        filteredStates = filteredStates.filter(s => {
-            const stName = s.name.trim().toLowerCase();
-            return stName === scState || stName.includes(scState) || scState.includes(stName);
-        });
-        if (filteredStates.length === 0 && activeStates.length === 1) {
-            filteredStates = activeStates;
+    // Pre-index pincodes into Map by division and district for fast O(1) lookups
+    const pinsByDivKey = new Map();
+    const pinsByDistKey = new Map();
+    for (const pc of activePincodes) {
+        const pcDivId = pc.divisionId ? String(pc.divisionId) : '';
+        const pcDivName = pc.division ? pc.division.trim().toLowerCase() : '';
+        const pcDistId = pc.districtId ? String(pc.districtId) : '';
+        const pcDistName = pc.district ? pc.district.trim().toLowerCase() : '';
+        if (pcDivId) {
+            if (!pinsByDivKey.has(pcDivId))
+                pinsByDivKey.set(pcDivId, []);
+            pinsByDivKey.get(pcDivId).push(pc);
+        }
+        if (pcDivName) {
+            if (!pinsByDivKey.has(pcDivName))
+                pinsByDivKey.set(pcDivName, []);
+            pinsByDivKey.get(pcDivName).push(pc);
+        }
+        if (pcDistId && !pcDivId) {
+            if (!pinsByDistKey.has(pcDistId))
+                pinsByDistKey.set(pcDistId, []);
+            pinsByDistKey.get(pcDistId).push(pc);
+        }
+        if (pcDistName && !pcDivName) {
+            if (!pinsByDistKey.has(pcDistName))
+                pinsByDistKey.set(pcDistName, []);
+            pinsByDistKey.get(pcDistName).push(pc);
         }
     }
-    const hierarchy = filteredStates.map(st => {
-        const stIdStr = st._id.toString();
+    // Pre-index divisions by district
+    const divsByDistKey = new Map();
+    for (const dv of activeDivisions) {
+        const dvDistId = dv.districtId ? String(dv.districtId) : '';
+        const dvDistName = dv.district ? dv.district.trim().toLowerCase() : '';
+        if (dvDistId) {
+            if (!divsByDistKey.has(dvDistId))
+                divsByDistKey.set(dvDistId, []);
+            divsByDistKey.get(dvDistId).push(dv);
+        }
+        if (dvDistName) {
+            if (!divsByDistKey.has(dvDistName))
+                divsByDistKey.set(dvDistName, []);
+            divsByDistKey.get(dvDistName).push(dv);
+        }
+    }
+    // Pre-index districts by state
+    const distsByStateKey = new Map();
+    for (const dt of activeDistricts) {
+        const dtStateId = dt.stateId ? String(dt.stateId) : '';
+        const dtStateName = dt.state ? dt.state.trim().toLowerCase() : '';
+        if (dtStateId) {
+            if (!distsByStateKey.has(dtStateId))
+                distsByStateKey.set(dtStateId, []);
+            distsByStateKey.get(dtStateId).push(dt);
+        }
+        if (dtStateName) {
+            if (!distsByStateKey.has(dtStateName))
+                distsByStateKey.set(dtStateName, []);
+            distsByStateKey.get(dtStateName).push(dt);
+        }
+    }
+    const fullTree = activeStates.map(st => {
+        const stIdStr = String(st._id);
         const stCustomId = st.stateId || stIdStr;
         const stNameLower = st.name.trim().toLowerCase();
-        let stDistricts = activeDistricts.filter(dt => {
-            const dtStateIdStr = dt.stateId ? dt.stateId.toString() : '';
-            return (dtStateIdStr === stIdStr ||
-                dtStateIdStr === stCustomId ||
-                (dt.state && dt.state.trim().toLowerCase() === stNameLower));
-        });
-        if (!forceAll && scope?.district && (scope.role === 'district' || scope.role === 'division' || scope.role === 'pincode')) {
-            const scDist = scope.district.trim().toLowerCase();
-            stDistricts = stDistricts.filter(d => {
-                const dName = d.name.trim().toLowerCase();
-                return dName === scDist || dName.includes(scDist) || scDist.includes(dName);
-            });
+        const distList = distsByStateKey.get(stIdStr) || distsByStateKey.get(stCustomId) || distsByStateKey.get(stNameLower) || [];
+        const seenDist = new Set();
+        const stDistricts = [];
+        for (const d of distList) {
+            const dId = String(d._id);
+            if (!seenDist.has(dId)) {
+                seenDist.add(dId);
+                stDistricts.push(d);
+            }
         }
         return {
             id: stIdStr,
@@ -60,21 +181,18 @@ async function buildHierarchyTree(scope = null, forceAll = false) {
             code: st.code || st.name.slice(0, 3).toUpperCase(),
             status: st.status || 'Active',
             districts: stDistricts.map(dt => {
-                const dtIdStr = dt._id.toString();
+                const dtIdStr = String(dt._id);
                 const dtCustomId = dt.districtId || dtIdStr;
                 const dtNameLower = dt.name.trim().toLowerCase();
-                let dtDivisions = activeDivisions.filter(dv => {
-                    const dvDistIdStr = dv.districtId ? dv.districtId.toString() : '';
-                    return (dvDistIdStr === dtIdStr ||
-                        dvDistIdStr === dtCustomId ||
-                        (dv.district && dv.district.trim().toLowerCase() === dtNameLower));
-                });
-                if (!forceAll && scope?.division && (scope.role === 'division' || scope.role === 'pincode')) {
-                    const scDiv = scope.division.trim().toLowerCase();
-                    dtDivisions = dtDivisions.filter(v => {
-                        const vName = v.name.trim().toLowerCase();
-                        return vName === scDiv || vName.includes(scDiv) || scDiv.includes(vName);
-                    });
+                const divList = divsByDistKey.get(dtIdStr) || divsByDistKey.get(dtCustomId) || divsByDistKey.get(dtNameLower) || [];
+                const seenDiv = new Set();
+                const dtDivisions = [];
+                for (const dv of divList) {
+                    const dvId = String(dv._id);
+                    if (!seenDiv.has(dvId)) {
+                        seenDiv.add(dvId);
+                        dtDivisions.push(dv);
+                    }
                 }
                 return {
                     id: dtIdStr,
@@ -84,20 +202,19 @@ async function buildHierarchyTree(scope = null, forceAll = false) {
                     code: dt.code || dt.name.slice(0, 3).toUpperCase(),
                     status: dt.status || 'Active',
                     divisions: dtDivisions.map(dv => {
-                        const dvIdStr = dv._id.toString();
+                        const dvIdStr = String(dv._id);
                         const dvCustomId = dv.divisionId || dvIdStr;
                         const dvNameLower = dv.name.trim().toLowerCase();
-                        let dvPincodes = activePincodes.filter(pc => {
-                            const pcDivIdStr = pc.divisionId ? pc.divisionId.toString() : '';
-                            const pcDistIdStr = pc.districtId ? pc.districtId.toString() : '';
-                            return (pcDivIdStr === dvIdStr ||
-                                pcDivIdStr === dvCustomId ||
-                                (pc.division && pc.division.trim().toLowerCase() === dvNameLower) ||
-                                (pcDistIdStr === dtIdStr && !pc.divisionId) ||
-                                (pc.district && pc.district.trim().toLowerCase() === dtNameLower && !pc.divisionId));
-                        });
-                        if (!forceAll && scope?.pincode && scope.role === 'pincode') {
-                            dvPincodes = dvPincodes.filter(p => p.code.trim() === scope.pincode.trim());
+                        const pinList = pinsByDivKey.get(dvIdStr) || pinsByDivKey.get(dvCustomId) || pinsByDivKey.get(dvNameLower) || [];
+                        const fallbackPins = pinsByDistKey.get(dtIdStr) || pinsByDistKey.get(dtNameLower) || [];
+                        const seenPin = new Set();
+                        const dvPincodes = [];
+                        for (const pc of [...pinList, ...fallbackPins]) {
+                            const pcId = String(pc._id);
+                            if (!seenPin.has(pcId)) {
+                                seenPin.add(pcId);
+                                dvPincodes.push(pc);
+                            }
                         }
                         const talukName = dv.talukInfo || dv.taluk || '';
                         return {
@@ -111,8 +228,8 @@ async function buildHierarchyTree(scope = null, forceAll = false) {
                             talukInfo: talukName,
                             status: dv.status || 'Active',
                             pincodes: dvPincodes.map(pc => ({
-                                id: pc._id.toString(),
-                                pincodeId: pc.pincodeId || pc._id.toString(),
+                                id: String(pc._id),
+                                pincodeId: pc.pincodeId || String(pc._id),
                                 divisionId: dvCustomId,
                                 districtId: dtCustomId,
                                 stateId: stCustomId,
@@ -130,7 +247,9 @@ async function buildHierarchyTree(scope = null, forceAll = false) {
             })
         };
     });
-    return hierarchy;
+    cachedFullHierarchy = fullTree;
+    cachedFullHierarchyTime = now;
+    return filterHierarchyTree(fullTree, scope, forceAll);
 }
 /**
  * GET /api/territory/hierarchy

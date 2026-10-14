@@ -3,8 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.FieldVisit = void 0;
 const mongoose_1 = require("mongoose");
 const fieldVisitSchema = new mongoose_1.Schema({
-    agent: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Agent', required: true },
-    vendor: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Vendor', required: true },
+    agent: { type: mongoose_1.Schema.Types.Mixed, ref: 'Agent', required: true },
+    vendor: { type: mongoose_1.Schema.Types.Mixed, ref: 'Vendor', required: true },
     checkInLocation: {
         latitude: { type: Number, required: true },
         longitude: { type: Number, required: true },

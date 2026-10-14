@@ -2,10 +2,10 @@ import { Schema, model, Document, Types } from 'mongoose';
 
 export interface ITicket extends Document {
   ticketId: string;
-  creator: Types.ObjectId; // References Agent/User
+  creator: any; // References Agent/User (ObjectId or String UUID)
   creatorRole?: string;
   creatorName?: string;
-  assignedTo?: Types.ObjectId; // References Agent/User
+  assignedTo?: any; // References Agent/User (ObjectId or String UUID)
   assignedAgent?: string;
   assignedAgentIdStr?: string;
   assignedAgentRole?: string;
@@ -43,10 +43,10 @@ export interface ITicket extends Document {
 
 const ticketSchema = new Schema<ITicket>({
   ticketId: { type: String, required: true, unique: true },
-  creator: { type: Schema.Types.ObjectId, ref: 'Agent', required: true },
+  creator: { type: Schema.Types.Mixed, ref: 'Agent', required: true },
   creatorRole: { type: String },
   creatorName: { type: String },
-  assignedTo: { type: Schema.Types.ObjectId, ref: 'Agent' },
+  assignedTo: { type: Schema.Types.Mixed, ref: 'Agent' },
   assignedAgent: { type: String },
   assignedAgentIdStr: { type: String },
   assignedAgentRole: { type: String },

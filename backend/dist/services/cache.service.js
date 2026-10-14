@@ -26,9 +26,15 @@ class CacheService {
             else if (redisUrl.startsWith('redis-cli -u')) {
                 redisUrl = redisUrl.substring('redis-cli -u'.length).trim();
             }
+            if (redisUrl.includes('<host>') || redisUrl.includes('<password>') || redisUrl.includes('<port>')) {
+                redisUrl = '';
+            }
         }
-        const redisHost = process.env.REDIS_HOST;
-        if (redisUrl || redisHost) {
+        let redisHost = process.env.REDIS_HOST?.trim();
+        if (redisHost && (redisHost.includes('<host>') || redisHost === 'localhost_disabled')) {
+            redisHost = '';
+        }
+        if (redisUrl || (redisHost && redisHost !== '127.0.0.1')) {
             try {
                 const client = redisUrl
                     ? new ioredis_1.default(redisUrl, {

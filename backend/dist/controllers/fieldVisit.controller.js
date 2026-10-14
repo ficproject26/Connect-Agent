@@ -126,6 +126,7 @@ const completeFieldVisit = async (req, res) => {
             return res.status(400).json({ message: 'Validation failed', errors: error.errors });
         }
         console.error('Complete field visit error:', error);
+        return res.status(500).json({ message: 'Internal server error' });
     }
 };
 exports.completeFieldVisit = completeFieldVisit;
@@ -147,7 +148,11 @@ const getFieldVisits = async (req, res) => {
             return res.status(403).json({ message: 'Forbidden: Missing territory scope' });
         // Base authorization scoping
         if (scope.role === 'pincode' || agentRole === 'pincode' || agentRole === 'delivery_partner' || agentRole === 'technician') {
-            filter.agent = agentId;
+            const pinAgentValues = [agentId];
+            if (mongoose_1.default.Types.ObjectId.isValid(agentId)) {
+                pinAgentValues.push(new mongoose_1.default.Types.ObjectId(agentId));
+            }
+            filter.agent = { $in: pinAgentValues };
         }
         else {
             const territoryFilter = (0, territoryScope_1.buildTerritoryFilter)(scope);
@@ -174,10 +179,21 @@ const getFieldVisits = async (req, res) => {
                         return res.status(403).json({ message: 'Forbidden: Agent outside authorized territory' });
                     }
                 }
-                filter.agent = specificAgent;
+                const specValues = [specificAgent];
+                if (mongoose_1.default.Types.ObjectId.isValid(String(specificAgent))) {
+                    specValues.push(new mongoose_1.default.Types.ObjectId(String(specificAgent)));
+                }
+                filter.agent = { $in: specValues };
             }
             else {
-                filter.agent = { $in: Array.from(allowedAgentIds) };
+                const queryIds = [];
+                for (const id of allowedAgentIds) {
+                    queryIds.push(id);
+                    if (mongoose_1.default.Types.ObjectId.isValid(id)) {
+                        queryIds.push(new mongoose_1.default.Types.ObjectId(id));
+                    }
+                }
+                filter.agent = { $in: queryIds };
             }
         }
         if (status && status !== 'all') {

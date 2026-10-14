@@ -385,15 +385,30 @@ const getHierarchyTree = async (req, res) => {
         try {
             const db = mongoose_1.default.connection.db;
             if (db) {
-                const approvedUserDocs = await db.collection('users').find({
-                    role: { $in: ['state', 'district', 'division', 'pincode', 'agent', 'district_manager', 'division_manager', 'pincode_agent', 'District Admin', 'Division Admin'] },
-                    $or: [
-                        { kycStatus: { $regex: /^(approved|verified)$/i } },
-                        { status: { $regex: /^(approved|active)$/i } }
-                    ],
-                    kycStatus: { $nin: ['rejected', 'pending', 'pending_verification', 'under_review', 'Rejected', 'Pending'] },
-                    status: { $nin: ['rejected', 'pending', 'pending_approval', 'suspended', 'inactive', 'under_review', 'Rejected', 'Pending'] }
-                }).maxTimeMS(4000).toArray();
+                const candidateRoles = new Set(['state', 'district', 'division', 'pincode', 'agent', 'district_manager', 'division_manager', 'pincode_agent', 'District Admin', 'Division Admin']);
+                const allUserDocs = await db.collection('users').find({}, {
+                    projection: {
+                        role: 1, level: 1, email: 1, phone: 1, mobile: 1, name: 1,
+                        assignedTerritory: 1, territory: 1, state: 1, district: 1, division: 1, pincode: 1,
+                        assignedState: 1, assignedDistrict: 1, assignedDivision: 1, assignedPincode: 1,
+                        kycStatus: 1, status: 1, registrationId: 1, createdAt: 1, updatedAt: 1
+                    }
+                }).hint({ _id: 1 }).maxTimeMS(4000).toArray();
+                const approvedUserDocs = allUserDocs.filter(uDoc => {
+                    const r = uDoc.role || uDoc.level || '';
+                    if (!candidateRoles.has(r))
+                        return false;
+                    const kyc = String(uDoc.kycStatus || '').toLowerCase();
+                    const st = String(uDoc.status || '').toLowerCase();
+                    const isApproved = kyc === 'approved' || kyc === 'verified' || st === 'approved' || st === 'active';
+                    if (!isApproved)
+                        return false;
+                    if (['rejected', 'pending', 'pending_verification', 'under_review'].includes(kyc))
+                        return false;
+                    if (['rejected', 'pending', 'pending_approval', 'suspended', 'inactive', 'under_review'].includes(st))
+                        return false;
+                    return true;
+                });
                 const existingEmails = new Set(agents.map(a => (a.email || '').toLowerCase().trim()));
                 const existingIds = new Set(agents.map(a => String(a._id)));
                 for (const uDoc of approvedUserDocs) {
@@ -816,8 +831,8 @@ const getHierarchyTree = async (req, res) => {
                 totalEarnings: (tree.length > 0 ? tree : enrichedDistricts).reduce((acc, d) => acc + (d.teamEarnings || d.earnings || 0), 0)
             }
         };
-        // Cache computed hierarchy for 60 seconds
-        await cache_service_1.cacheService.set(cacheKey, responseData, 60);
+        // Cache computed hierarchy for 300 seconds (5 minutes)
+        await cache_service_1.cacheService.set(cacheKey, responseData, 300);
         return res.status(200).json(responseData);
     }
     catch (error) {

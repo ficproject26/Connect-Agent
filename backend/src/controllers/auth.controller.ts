@@ -663,13 +663,14 @@ export const getMe = async (req: Request, res: Response) => {
       agent = await Agent.findById(agentId).select('-password');
     }
     if (!agent && agentId) {
-      agent = await Agent.findOne({
-        $or: [
-          { _id: agentId },
-          { agentId: agentId },
-          { registrationId: agentId }
-        ]
-      }).select('-password');
+      const orClauses: any[] = [
+        { agentId: agentId },
+        { registrationId: agentId }
+      ];
+      if (mongoose.Types.ObjectId.isValid(agentId)) {
+        orClauses.push({ _id: new mongoose.Types.ObjectId(agentId) });
+      }
+      agent = await Agent.findOne({ $or: orClauses }).select('-password');
     }
     if (!agent && email) {
       agent = await Agent.findOne({ email: email.toLowerCase() }).select('-password');
@@ -737,26 +738,27 @@ export const getMe = async (req: Request, res: Response) => {
     try {
       const db = mongoose.connection.db;
       if (db) {
+        let hasChanges = false;
         const userDoc = await db.collection('users').findOne({ email: agent.email.toLowerCase() });
         if (userDoc) {
           const rawDocStatus = String(userDoc.status || userDoc.kycStatus || '').toLowerCase();
-          if (rawDocStatus === 'approved' || rawDocStatus === 'active') {
+          if ((rawDocStatus === 'approved' || rawDocStatus === 'active') && (agent.kycStatus !== 'approved' || agent.status !== 'approved')) {
             agent.kycStatus = 'approved';
             agent.status = 'approved';
-            await agent.save();
-          } else if (rawDocStatus === 'rejected') {
+            hasChanges = true;
+          } else if (rawDocStatus === 'rejected' && agent.status !== 'rejected') {
             agent.kycStatus = 'rejected';
             agent.status = 'rejected';
             agent.rejectionReason = userDoc.rejectionReason || 'Rejected by Admin';
-            await agent.save();
-          } else if (rawDocStatus === 'suspended' || rawDocStatus === 'inactive') {
+            hasChanges = true;
+          } else if ((rawDocStatus === 'suspended' || rawDocStatus === 'inactive') && agent.status !== 'suspended') {
             agent.status = 'suspended';
-            await agent.save();
+            hasChanges = true;
           }
 
-          if (userDoc.role && ['state', 'district', 'division', 'pincode'].includes(String(userDoc.role).toLowerCase())) {
+          if (userDoc.role && ['state', 'district', 'division', 'pincode'].includes(String(userDoc.role).toLowerCase()) && agent.role !== String(userDoc.role).toLowerCase()) {
             agent.role = String(userDoc.role).toLowerCase() as any;
-            await agent.save();
+            hasChanges = true;
           }
 
           // Sync territory if present in admin user record
@@ -783,22 +785,26 @@ export const getMe = async (req: Request, res: Response) => {
               rawAgent.territory.pincode = rawAgent.territory.pincode || docPincode;
               rawAgent.assignedTerritory.pincode = rawAgent.assignedTerritory.pincode || docPincode;
             }
-            await agent.save();
+            hasChanges = true;
           }
+        }
+
+        // Ensure territory object state is fallback-populated from address if still blank
+        if (!agent.territory?.state && agent.address?.state) {
+          const rawAgent = agent as any;
+          if (!rawAgent.territory) rawAgent.territory = {};
+          if (!rawAgent.assignedTerritory) rawAgent.assignedTerritory = {};
+          rawAgent.territory.state = agent.address.state;
+          rawAgent.assignedTerritory.state = agent.address.state;
+          hasChanges = true;
+        }
+
+        if (hasChanges) {
+          await agent.save();
         }
       }
     } catch (statusSyncErr) {
       console.error('Error syncing status from admin collection in getMe:', statusSyncErr);
-    }
-
-    // Ensure territory object state is fallback-populated from address if still blank
-    if (!agent.territory?.state && agent.address?.state) {
-      const rawAgent = agent as any;
-      if (!rawAgent.territory) rawAgent.territory = {};
-      if (!rawAgent.assignedTerritory) rawAgent.assignedTerritory = {};
-      rawAgent.territory.state = agent.address.state;
-      rawAgent.assignedTerritory.state = agent.address.state;
-      await agent.save();
     }
 
     const currentKycStatus = (agent.kycStatus || '').toLowerCase();

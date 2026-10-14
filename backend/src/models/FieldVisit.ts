@@ -26,8 +26,8 @@ export interface IFieldVisit extends Document {
 }
 
 const fieldVisitSchema = new Schema<IFieldVisit>({
-  agent: { type: Schema.Types.ObjectId, ref: 'Agent', required: true },
-  vendor: { type: Schema.Types.ObjectId, ref: 'Vendor', required: true },
+  agent: { type: Schema.Types.Mixed, ref: 'Agent', required: true },
+  vendor: { type: Schema.Types.Mixed, ref: 'Vendor', required: true },
   checkInLocation: {
     latitude: { type: Number, required: true },
     longitude: { type: Number, required: true },

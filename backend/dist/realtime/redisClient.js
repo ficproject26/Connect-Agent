@@ -28,8 +28,21 @@ class RedisBroker {
             else if (redisUrl.startsWith('redis-cli -u')) {
                 redisUrl = redisUrl.substring('redis-cli -u'.length).trim();
             }
+            if (redisUrl.includes('<host>') || redisUrl.includes('<password>') || redisUrl.includes('<port>')) {
+                redisUrl = '';
+            }
         }
-        const redisHost = process.env.REDIS_HOST || '127.0.0.1';
+        const redisHost = process.env.REDIS_HOST?.trim();
+        if (redisHost && (redisHost.includes('<host>') || redisHost === 'localhost_disabled')) {
+            // Unconfigured host
+            this.isRedisConnected = false;
+            return;
+        }
+        if (!redisUrl && (!redisHost || redisHost === '127.0.0.1')) {
+            // No external Redis configured, operate seamlessly with in-memory event bus
+            this.isRedisConnected = false;
+            return;
+        }
         const redisPort = parseInt(process.env.REDIS_PORT || '6379', 10);
         const redisPassword = process.env.REDIS_PASSWORD || undefined;
         const redisOptions = {

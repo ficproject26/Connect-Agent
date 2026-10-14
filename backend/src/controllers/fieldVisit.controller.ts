@@ -129,6 +129,7 @@ export const completeFieldVisit = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Validation failed', errors: error.errors });
     }
     console.error('Complete field visit error:', error);
+    return res.status(500).json({ message: 'Internal server error' });
   }
 };
 
@@ -152,7 +153,11 @@ export const getFieldVisits = async (req: Request, res: Response) => {
 
     // Base authorization scoping
     if (scope.role === 'pincode' || agentRole === 'pincode' || agentRole === 'delivery_partner' || agentRole === 'technician') {
-      filter.agent = agentId;
+      const pinAgentValues: any[] = [agentId];
+      if (mongoose.Types.ObjectId.isValid(agentId)) {
+        pinAgentValues.push(new mongoose.Types.ObjectId(agentId));
+      }
+      filter.agent = { $in: pinAgentValues };
     } else {
       const territoryFilter = buildTerritoryFilter(scope);
       const subordinates = await Agent.find(territoryFilter).select('_id email').lean();
@@ -179,9 +184,20 @@ export const getFieldVisits = async (req: Request, res: Response) => {
             return res.status(403).json({ message: 'Forbidden: Agent outside authorized territory' });
           }
         }
-        filter.agent = specificAgent;
+        const specValues: any[] = [specificAgent];
+        if (mongoose.Types.ObjectId.isValid(String(specificAgent))) {
+          specValues.push(new mongoose.Types.ObjectId(String(specificAgent)));
+        }
+        filter.agent = { $in: specValues };
       } else {
-        filter.agent = { $in: Array.from(allowedAgentIds) };
+        const queryIds: any[] = [];
+        for (const id of allowedAgentIds) {
+          queryIds.push(id);
+          if (mongoose.Types.ObjectId.isValid(id)) {
+            queryIds.push(new mongoose.Types.ObjectId(id));
+          }
+        }
+        filter.agent = { $in: queryIds };
       }
     }
 

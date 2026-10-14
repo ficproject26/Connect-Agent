@@ -1,4 +1,6 @@
 import { Request, Response } from 'express';
+export declare function clearTerritoryCache(): void;
+export declare function warmupTerritoryCache(): Promise<void>;
 /**
  * GET /api/territory/hierarchy
  * Returns centralized territory database hierarchy from Admin Pincode Management:

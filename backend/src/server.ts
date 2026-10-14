@@ -20,6 +20,9 @@ async function startServer() {
       retryWrites: true
     });
     console.log('Successfully connected to MongoDB.');
+    // Pre-warm territory hierarchy cache in background so users experience instant <1ms responses
+    const { warmupTerritoryCache } = await import('./controllers/territory.controller');
+    warmupTerritoryCache().catch(() => {});
   } catch (error) {
     console.error('Warning: Failed to connect to MongoDB. Starting server without DB:', error);
   }

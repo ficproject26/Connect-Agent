@@ -40,15 +40,16 @@ export async function getAgentTerritoryScope(agentId: string, email?: string): P
         .lean();
     }
     if (!agent && agentId) {
-      agent = await Agent.findOne({
-        $or: [
-          { _id: agentId },
-          { agentId: agentId },
-          { registrationId: agentId }
-        ]
-      })
-      .select('role level assignedTerritory territory state district division pincode assignedState assignedDistrict assignedDivision assignedPincode email')
-      .lean();
+      const orConditions: any[] = [
+        { agentId: agentId },
+        { registrationId: agentId }
+      ];
+      if (mongoose.Types.ObjectId.isValid(agentId)) {
+        orConditions.push({ _id: new mongoose.Types.ObjectId(agentId) });
+      }
+      agent = await Agent.findOne({ $or: orConditions })
+        .select('role level assignedTerritory territory state district division pincode assignedState assignedDistrict assignedDivision assignedPincode email')
+        .lean();
     }
 
     if (!agent && email) {

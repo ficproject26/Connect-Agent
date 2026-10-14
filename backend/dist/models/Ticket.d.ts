@@ -1,10 +1,10 @@
 import { Document, Types } from 'mongoose';
 export interface ITicket extends Document {
     ticketId: string;
-    creator: Types.ObjectId;
+    creator: any;
     creatorRole?: string;
     creatorName?: string;
-    assignedTo?: Types.ObjectId;
+    assignedTo?: any;
     assignedAgent?: string;
     assignedAgentIdStr?: string;
     assignedAgentRole?: string;

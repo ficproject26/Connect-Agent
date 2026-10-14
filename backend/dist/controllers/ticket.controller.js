@@ -144,12 +144,20 @@ const getTickets = async (req, res) => {
         const limitNum = parseInt(limit, 10);
         const filter = {};
         const isAdminOrExecutive = agentRole === 'admin' || agentRole === 'executive';
+        // Support both string UUID and ObjectId matches
+        const agentQueryValues = [agentId];
+        if (mongoose_1.default.Types.ObjectId.isValid(agentId)) {
+            agentQueryValues.push(new mongoose_1.default.Types.ObjectId(agentId));
+        }
         if (mine === 'true') {
-            filter.creator = agentId;
+            filter.creator = { $in: agentQueryValues };
         }
         else if (!isAdminOrExecutive) {
             const scope = await (0, territoryScope_1.getAgentTerritoryScope)(agentId);
-            const conditions = [{ creator: agentId }, { assignedTo: agentId }];
+            const conditions = [
+                { creator: { $in: agentQueryValues } },
+                { assignedTo: { $in: agentQueryValues } }
+            ];
             if (scope) {
                 if (scope.role === 'state' && scope.state) {
                     conditions.push({ state: exactRegex(scope.state) }, { territory: containsRegex(scope.state) });
@@ -179,34 +187,40 @@ const getTickets = async (req, res) => {
             .skip((pageNum - 1) * limitNum)
             .limit(limitNum)
             .lean();
-        // Enrich tickets with assigned agent details if missing
+        // Enrich tickets with assigned agent details if missing with safe error handling
         const enrichedTickets = await Promise.all(tickets.map(async (t) => {
-            if (t.assignedTo && typeof t.assignedTo === 'object' && t.assignedTo.name) {
-                t.assignedAgent = t.assignedAgent || t.assignedTo.name;
-                t.assignedAgentRole = t.assignedAgentRole || t.assignedTo.role || t.assignedTo.level;
-                t.assignedAgentPhone = t.assignedAgentPhone || t.assignedTo.phone || t.assignedTo.mobile;
-                t.assignmentStatus = t.assignmentStatus || 'assigned';
-            }
-            else if (!t.assignedAgent && t.pincode) {
-                const agent = await resolveResponsibleAgent(t.pincode, t.division, t.district, t.state);
-                if (agent) {
-                    t.assignedAgent = agent.name;
-                    t.assignedAgentIdStr = agent.registrationId || agent.agentId || String(agent._id);
-                    const rawR = (agent.role || agent.level || 'pincode').toLowerCase();
-                    t.assignedAgentRole = rawR === 'agent' ? (agent.level || 'Pincode Agent') : rawR;
-                    t.assignedAgentPhone = agent.phone || agent.mobile || '';
-                    t.assignedAgentPincode = agent.pincode || agent.assignedTerritory?.pincode || t.pincode;
-                    t.assignedAgentDistrict = agent.district || agent.assignedTerritory?.district || t.district;
-                    t.assignedAgentDivision = agent.division || agent.assignedTerritory?.division || t.division;
-                    t.assignedAgentState = agent.state || agent.assignedTerritory?.state || t.state;
-                    t.assignmentStatus = 'assigned';
+            try {
+                if (t.assignedTo && typeof t.assignedTo === 'object' && t.assignedTo.name) {
+                    t.assignedAgent = t.assignedAgent || t.assignedTo.name;
+                    t.assignedAgentRole = t.assignedAgentRole || t.assignedTo.role || t.assignedTo.level;
+                    t.assignedAgentPhone = t.assignedAgentPhone || t.assignedTo.phone || t.assignedTo.mobile;
+                    t.assignmentStatus = t.assignmentStatus || 'assigned';
                 }
-                else {
+                else if (!t.assignedAgent && t.pincode) {
+                    const agent = await resolveResponsibleAgent(t.pincode, t.division, t.district, t.state);
+                    if (agent) {
+                        t.assignedAgent = agent.name;
+                        t.assignedAgentIdStr = agent.registrationId || agent.agentId || String(agent._id);
+                        const rawR = (agent.role || agent.level || 'pincode').toLowerCase();
+                        t.assignedAgentRole = rawR === 'agent' ? (agent.level || 'Pincode Agent') : rawR;
+                        t.assignedAgentPhone = agent.phone || agent.mobile || '';
+                        t.assignedAgentPincode = agent.pincode || agent.assignedTerritory?.pincode || t.pincode;
+                        t.assignedAgentDistrict = agent.district || agent.assignedTerritory?.district || t.district;
+                        t.assignedAgentDivision = agent.division || agent.assignedTerritory?.division || t.division;
+                        t.assignedAgentState = agent.state || agent.assignedTerritory?.state || t.state;
+                        t.assignmentStatus = 'assigned';
+                    }
+                    else {
+                        t.assignmentStatus = 'unassigned';
+                    }
+                }
+                else if (!t.assignmentStatus) {
+                    t.assignmentStatus = (t.assignedAgent && t.assignedAgent !== 'Unassigned') ? 'assigned' : 'unassigned';
+                }
+            }
+            catch (enrichErr) {
+                if (!t.assignmentStatus)
                     t.assignmentStatus = 'unassigned';
-                }
-            }
-            else if (!t.assignmentStatus) {
-                t.assignmentStatus = (t.assignedAgent && t.assignedAgent !== 'Unassigned') ? 'assigned' : 'unassigned';
             }
             return t;
         }));
@@ -231,7 +245,11 @@ const getTicketById = async (req, res) => {
         const isAdminOrExecutive = agentRole === 'admin' || agentRole === 'executive';
         const filter = { _id: req.params.id };
         if (!isAdminOrExecutive) {
-            filter.$or = [{ creator: agentId }, { assignedTo: agentId }];
+            const agentQueryValues = [agentId];
+            if (mongoose_1.default.Types.ObjectId.isValid(agentId)) {
+                agentQueryValues.push(new mongoose_1.default.Types.ObjectId(agentId));
+            }
+            filter.$or = [{ creator: { $in: agentQueryValues } }, { assignedTo: { $in: agentQueryValues } }];
         }
         const ticket = await Ticket_1.default.findOne(filter)
             .populate('creator', 'name email role phone')

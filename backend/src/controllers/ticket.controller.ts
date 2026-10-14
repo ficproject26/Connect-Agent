@@ -149,11 +149,20 @@ export const getTickets = async (req: Request, res: Response) => {
     const filter: Record<string, any> = {};
     const isAdminOrExecutive = agentRole === 'admin' || agentRole === 'executive';
 
+    // Support both string UUID and ObjectId matches
+    const agentQueryValues: any[] = [agentId];
+    if (mongoose.Types.ObjectId.isValid(agentId)) {
+      agentQueryValues.push(new mongoose.Types.ObjectId(agentId));
+    }
+
     if (mine === 'true') {
-      filter.creator = agentId;
+      filter.creator = { $in: agentQueryValues };
     } else if (!isAdminOrExecutive) {
       const scope = await getAgentTerritoryScope(agentId);
-      const conditions: any[] = [{ creator: agentId }, { assignedTo: agentId }];
+      const conditions: any[] = [
+        { creator: { $in: agentQueryValues } },
+        { assignedTo: { $in: agentQueryValues } }
+      ];
 
       if (scope) {
         if (scope.role === 'state' && scope.state) {
@@ -195,31 +204,35 @@ export const getTickets = async (req: Request, res: Response) => {
       .limit(limitNum)
       .lean();
 
-    // Enrich tickets with assigned agent details if missing
+    // Enrich tickets with assigned agent details if missing with safe error handling
     const enrichedTickets = await Promise.all(tickets.map(async (t: any) => {
-      if (t.assignedTo && typeof t.assignedTo === 'object' && t.assignedTo.name) {
-        t.assignedAgent = t.assignedAgent || t.assignedTo.name;
-        t.assignedAgentRole = t.assignedAgentRole || t.assignedTo.role || t.assignedTo.level;
-        t.assignedAgentPhone = t.assignedAgentPhone || t.assignedTo.phone || t.assignedTo.mobile;
-        t.assignmentStatus = t.assignmentStatus || 'assigned';
-      } else if (!t.assignedAgent && t.pincode) {
-        const agent: any = await resolveResponsibleAgent(t.pincode, t.division, t.district, t.state);
-        if (agent) {
-          t.assignedAgent = agent.name;
-          t.assignedAgentIdStr = agent.registrationId || agent.agentId || String(agent._id);
-          const rawR = (agent.role || agent.level || 'pincode').toLowerCase();
-          t.assignedAgentRole = rawR === 'agent' ? (agent.level || 'Pincode Agent') : rawR;
-          t.assignedAgentPhone = agent.phone || agent.mobile || '';
-          t.assignedAgentPincode = agent.pincode || agent.assignedTerritory?.pincode || t.pincode;
-          t.assignedAgentDistrict = agent.district || agent.assignedTerritory?.district || t.district;
-          t.assignedAgentDivision = agent.division || agent.assignedTerritory?.division || t.division;
-          t.assignedAgentState = agent.state || agent.assignedTerritory?.state || t.state;
-          t.assignmentStatus = 'assigned';
-        } else {
-          t.assignmentStatus = 'unassigned';
+      try {
+        if (t.assignedTo && typeof t.assignedTo === 'object' && t.assignedTo.name) {
+          t.assignedAgent = t.assignedAgent || t.assignedTo.name;
+          t.assignedAgentRole = t.assignedAgentRole || t.assignedTo.role || t.assignedTo.level;
+          t.assignedAgentPhone = t.assignedAgentPhone || t.assignedTo.phone || t.assignedTo.mobile;
+          t.assignmentStatus = t.assignmentStatus || 'assigned';
+        } else if (!t.assignedAgent && t.pincode) {
+          const agent: any = await resolveResponsibleAgent(t.pincode, t.division, t.district, t.state);
+          if (agent) {
+            t.assignedAgent = agent.name;
+            t.assignedAgentIdStr = agent.registrationId || agent.agentId || String(agent._id);
+            const rawR = (agent.role || agent.level || 'pincode').toLowerCase();
+            t.assignedAgentRole = rawR === 'agent' ? (agent.level || 'Pincode Agent') : rawR;
+            t.assignedAgentPhone = agent.phone || agent.mobile || '';
+            t.assignedAgentPincode = agent.pincode || agent.assignedTerritory?.pincode || t.pincode;
+            t.assignedAgentDistrict = agent.district || agent.assignedTerritory?.district || t.district;
+            t.assignedAgentDivision = agent.division || agent.assignedTerritory?.division || t.division;
+            t.assignedAgentState = agent.state || agent.assignedTerritory?.state || t.state;
+            t.assignmentStatus = 'assigned';
+          } else {
+            t.assignmentStatus = 'unassigned';
+          }
+        } else if (!t.assignmentStatus) {
+          t.assignmentStatus = (t.assignedAgent && t.assignedAgent !== 'Unassigned') ? 'assigned' : 'unassigned';
         }
-      } else if (!t.assignmentStatus) {
-        t.assignmentStatus = (t.assignedAgent && t.assignedAgent !== 'Unassigned') ? 'assigned' : 'unassigned';
+      } catch (enrichErr) {
+        if (!t.assignmentStatus) t.assignmentStatus = 'unassigned';
       }
       return t;
     }));
@@ -244,7 +257,11 @@ export const getTicketById = async (req: Request, res: Response) => {
     const isAdminOrExecutive = agentRole === 'admin' || agentRole === 'executive';
     const filter: any = { _id: req.params.id };
     if (!isAdminOrExecutive) {
-      filter.$or = [{ creator: agentId }, { assignedTo: agentId }];
+      const agentQueryValues: any[] = [agentId];
+      if (mongoose.Types.ObjectId.isValid(agentId)) {
+        agentQueryValues.push(new mongoose.Types.ObjectId(agentId));
+      }
+      filter.$or = [{ creator: { $in: agentQueryValues } }, { assignedTo: { $in: agentQueryValues } }];
     }
 
     const ticket = await Ticket.findOne(filter)
