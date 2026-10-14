@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import {
   Menu, Bell, LogOut, Settings, HelpCircle, Search, X, Laptop, Clock,
-  User, Award, Shield, Users, Target, Ticket, FileText, ChevronDown, Wallet, Calendar, MapPin, GitFork, Trophy
+  User, Award, Shield, Users, Target, Ticket, FileText, ChevronDown, Wallet, Calendar, MapPin, GitFork, Trophy, CheckSquare
 } from 'lucide-react';
 import { LiveChatAssistant } from '../common/LiveChatAssistant';
 
@@ -53,7 +53,8 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
     { label: 'Dashboard', path: '/dashboard', icon: <Laptop className="w-5 h-5" /> },
     { label: 'Agent Management', path: '/agents', icon: <GitFork className="w-5 h-5" /> },
     { label: 'Vendors', path: '/vendors', icon: <Users className="w-5 h-5" /> },
-    { label: 'Targets & Tasks', path: '/targets', icon: <Target className="w-5 h-5" /> },
+    { label: 'Tasks & Approvals', path: '/tasks', icon: <CheckSquare className="w-5 h-5 text-amber-500" /> },
+    { label: 'Targets Quota', path: '/targets', icon: <Target className="w-5 h-5" /> },
     { label: 'Field Visits', path: '/field-visits', icon: <MapPin className="w-5 h-5" /> },
     { label: 'Support Tickets', path: '/tickets', icon: <Ticket className="w-5 h-5" /> },
     { label: 'Wallet', path: '/wallet', icon: <Wallet className="w-5 h-5" /> },

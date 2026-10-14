@@ -48,6 +48,7 @@ const DashboardOverview = lazyWithRetry(() => import('../pages/Dashboard/Dashboa
 // Custom page components
 const VendorsList = lazyWithRetry(() => import('../pages/Vendors/VendorsList'));
 const TargetsList = lazyWithRetry(() => import('../pages/Tasks/TargetsList'));
+const TaskWorkflowModule = lazyWithRetry(() => import('../pages/Tasks/TaskWorkflowModule'));
 const TicketsList = lazyWithRetry(() => import('../pages/Tickets/TicketsList'));
 const KycVerification = lazyWithRetry(() => import('../pages/Kyc/KycVerification'));
 const WalletDashboard = lazyWithRetry(() => import('../pages/Wallet/WalletDashboard'));
@@ -105,6 +106,7 @@ export const AppRoutes: React.FC = () => {
                     <Route path="kyc" element={<KycVerification />} />
                     <Route path="vendors" element={<VendorsList />} />
                     <Route path="targets" element={<TargetsList />} />
+                    <Route path="tasks" element={<TaskWorkflowModule />} />
                     <Route path="tickets" element={<TicketsList />} />
                     <Route path="wallet" element={<WalletDashboard />} />
                     <Route path="reports" element={<ReportsModule />} />

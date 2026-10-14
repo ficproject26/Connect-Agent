@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardBody, Button, Modal } from '../../components/ui';
-import { Target, CheckCircle2, Calendar, Check, MapPin, Loader2, Plus, Users, Award, Eye, Building2, RotateCcw, AlertCircle } from 'lucide-react';
+import { Target, CheckCircle2, Calendar, Check, MapPin, Loader2, Plus, Users, Award, Eye, Building2, RotateCcw, AlertCircle, CheckSquare } from 'lucide-react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -398,6 +399,14 @@ export const TargetsList: React.FC = () => {
               <span className="absolute text-[10px] font-black text-slate-800">{progressPercent}</span>
             </div>
           </div>
+
+          <Link
+            to="/tasks"
+            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-black text-white bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 rounded-xl shadow-sm transition no-underline"
+          >
+            <CheckSquare className="w-4 h-4" />
+            <span>Tasks & Approvals Workflow ›</span>
+          </Link>
 
           {/* Refresh Button */}
           <button

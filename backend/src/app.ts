@@ -18,6 +18,7 @@ import walletRoutes from './routes/wallet.routes';
 import attendanceRoutes from './routes/attendance.routes';
 import fieldVisitRoutes from './routes/fieldVisit.routes';
 import territoryRoutes from './routes/territory.routes';
+import taskRoutes from './routes/task.routes';
 import { getCategories } from './controllers/admin.controller';
 
 const app = express();
@@ -70,6 +71,9 @@ app.use('/field-visits', fieldVisitRoutes);
 
 app.use('/api/territory', territoryRoutes);
 app.use('/territory', territoryRoutes);
+
+app.use('/api/tasks', taskRoutes);
+app.use('/tasks', taskRoutes);
 
 // Detailed health check route with DB connectivity verification
 const healthHandler = (req: Request, res: Response) => {
