@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.updateTicketStatus = exports.createTicket = exports.getTicketById = exports.getTickets = void 0;
 const zod_1 = require("zod");
+const mongoose_1 = __importDefault(require("mongoose"));
 const Ticket_1 = __importDefault(require("../models/Ticket"));
 const Agent_1 = __importDefault(require("../models/Agent"));
 const territoryScope_1 = require("../utils/territoryScope");
@@ -15,6 +16,107 @@ const generateTicketId = () => `TKT-${Math.random().toString(36).slice(2, 10).to
 const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const exactRegex = (str) => new RegExp(`^\\s*${escapeRegex(str.trim())}\\s*$`, 'i');
 const containsRegex = (str) => new RegExp(escapeRegex(str.trim()), 'i');
+/**
+ * Resolve the authorized responsible agent for a given territory (Pincode -> Division -> District)
+ */
+async function resolveResponsibleAgent(pincode, division, district, state) {
+    const db = mongoose_1.default.connection.db;
+    // 1. Try to find approved Pincode Agent matching pincode
+    if (pincode && pincode.trim()) {
+        const cleanPin = pincode.trim();
+        // Check Agent collection
+        const pinAgent = await Agent_1.default.findOne({
+            role: 'pincode',
+            $or: [
+                { 'assignedTerritory.pincode': cleanPin },
+                { 'territory.pincode': cleanPin },
+                { pincode: cleanPin },
+                { assignedPincode: cleanPin }
+            ],
+            kycStatus: { $regex: /^(approved|verified)$/i }
+        }).select('_id name email role phone registrationId assignedTerritory territory').lean();
+        if (pinAgent)
+            return pinAgent;
+        // Check users collection
+        if (db) {
+            const pinUser = await db.collection('users').findOne({
+                $and: [
+                    { $or: [{ role: /pincode/i }, { level: /pincode/i }, { role: 'agent', level: 'pincode' }] },
+                    {
+                        $or: [
+                            { 'assignedTerritory.pincode': cleanPin },
+                            { 'territory.pincode': cleanPin },
+                            { pincode: cleanPin },
+                            { assignedPincode: cleanPin }
+                        ]
+                    },
+                    {
+                        $or: [
+                            { kycStatus: { $regex: /^(approved|verified)$/i } },
+                            { status: { $regex: /^(approved|active)$/i } },
+                            { isApproved: true }
+                        ]
+                    }
+                ]
+            });
+            if (pinUser)
+                return pinUser;
+        }
+    }
+    // 2. Try to find Division Agent matching division
+    if (division && division.trim() && db) {
+        const cleanDiv = division.toLowerCase().replace(/division|manager/g, '').trim();
+        const divUser = await db.collection('users').findOne({
+            $and: [
+                { $or: [{ role: /division/i }, { level: /division/i }, { role: 'agent', level: 'division' }] },
+                {
+                    $or: [
+                        { 'assignedTerritory.division': new RegExp(cleanDiv, 'i') },
+                        { 'territory.division': new RegExp(cleanDiv, 'i') },
+                        { division: new RegExp(cleanDiv, 'i') },
+                        { assignedDivision: new RegExp(cleanDiv, 'i') }
+                    ]
+                },
+                {
+                    $or: [
+                        { kycStatus: { $regex: /^(approved|verified)$/i } },
+                        { status: { $regex: /^(approved|active)$/i } },
+                        { isApproved: true }
+                    ]
+                }
+            ]
+        });
+        if (divUser)
+            return divUser;
+    }
+    // 3. Try to find District Agent matching district
+    if (district && district.trim() && db) {
+        const cleanDist = district.toLowerCase().trim();
+        const distUser = await db.collection('users').findOne({
+            $and: [
+                { $or: [{ role: /district/i }, { level: /district/i }, { role: 'agent', level: 'district' }] },
+                {
+                    $or: [
+                        { 'assignedTerritory.district': new RegExp(cleanDist, 'i') },
+                        { 'territory.district': new RegExp(cleanDist, 'i') },
+                        { district: new RegExp(cleanDist, 'i') },
+                        { assignedDistrict: new RegExp(cleanDist, 'i') }
+                    ]
+                },
+                {
+                    $or: [
+                        { kycStatus: { $regex: /^(approved|verified)$/i } },
+                        { status: { $regex: /^(approved|active)$/i } },
+                        { isApproved: true }
+                    ]
+                }
+            ]
+        });
+        if (distUser)
+            return distUser;
+    }
+    return null;
+}
 const createTicketSchema = zod_1.z.object({
     category: zod_1.z.string().min(1, 'Category is required'),
     description: zod_1.z.string().min(1, 'Issue details are required'),
@@ -70,15 +172,46 @@ const getTickets = async (req, res) => {
             filter.priority = priority;
         const total = await Ticket_1.default.countDocuments(filter);
         const tickets = await Ticket_1.default.find(filter)
-            .select('ticketId creator creatorRole creatorName assignedTo assignedAgent vendorName storeName state district division pincode territory category description priority status attachmentName attachmentUrl resolutionDetails createdAt updatedAt')
+            .select('ticketId creator creatorRole creatorName assignedTo assignedAgent assignedAgentIdStr assignedAgentRole assignedAgentPhone assignedAgentPincode assignedAgentDistrict assignedAgentDivision assignedAgentState assignmentStatus assignmentHistory vendorName storeName state district division pincode territory category description priority status attachmentName attachmentUrl resolutionDetails createdAt updatedAt')
             .populate('creator', 'name email role phone')
             .populate('assignedTo', 'name email role phone')
             .sort({ createdAt: -1 })
             .skip((pageNum - 1) * limitNum)
             .limit(limitNum)
             .lean();
+        // Enrich tickets with assigned agent details if missing
+        const enrichedTickets = await Promise.all(tickets.map(async (t) => {
+            if (t.assignedTo && typeof t.assignedTo === 'object' && t.assignedTo.name) {
+                t.assignedAgent = t.assignedAgent || t.assignedTo.name;
+                t.assignedAgentRole = t.assignedAgentRole || t.assignedTo.role || t.assignedTo.level;
+                t.assignedAgentPhone = t.assignedAgentPhone || t.assignedTo.phone || t.assignedTo.mobile;
+                t.assignmentStatus = t.assignmentStatus || 'assigned';
+            }
+            else if (!t.assignedAgent && t.pincode) {
+                const agent = await resolveResponsibleAgent(t.pincode, t.division, t.district, t.state);
+                if (agent) {
+                    t.assignedAgent = agent.name;
+                    t.assignedAgentIdStr = agent.registrationId || agent.agentId || String(agent._id);
+                    const rawR = (agent.role || agent.level || 'pincode').toLowerCase();
+                    t.assignedAgentRole = rawR === 'agent' ? (agent.level || 'Pincode Agent') : rawR;
+                    t.assignedAgentPhone = agent.phone || agent.mobile || '';
+                    t.assignedAgentPincode = agent.pincode || agent.assignedTerritory?.pincode || t.pincode;
+                    t.assignedAgentDistrict = agent.district || agent.assignedTerritory?.district || t.district;
+                    t.assignedAgentDivision = agent.division || agent.assignedTerritory?.division || t.division;
+                    t.assignedAgentState = agent.state || agent.assignedTerritory?.state || t.state;
+                    t.assignmentStatus = 'assigned';
+                }
+                else {
+                    t.assignmentStatus = 'unassigned';
+                }
+            }
+            else if (!t.assignmentStatus) {
+                t.assignmentStatus = (t.assignedAgent && t.assignedAgent !== 'Unassigned') ? 'assigned' : 'unassigned';
+            }
+            return t;
+        }));
         return res.status(200).json({
-            tickets,
+            tickets: enrichedTickets,
             pagination: { page: pageNum, limit: limitNum, total, pages: Math.ceil(total / limitNum) }
         });
     }
@@ -148,11 +281,61 @@ const createTicket = async (req, res) => {
         const territory = data.territory || [district, division, pincode].filter(Boolean).join(' → ') || (state ? `${state} Scope` : '');
         const vendorName = data.vendorName || data.storeName || '';
         const storeName = data.storeName || data.vendorName || '';
+        // Automatically resolve the responsible agent based on territory hierarchy
+        const responsibleAgent = await resolveResponsibleAgent(pincode, division, district, state);
+        let assignedTo = undefined;
+        let assignedAgent = data.assignedAgent || (responsibleAgent ? responsibleAgent.name : 'Unassigned');
+        let assignedAgentIdStr = undefined;
+        let assignedAgentRole = undefined;
+        let assignedAgentPhone = undefined;
+        let assignedAgentPincode = undefined;
+        let assignedAgentDistrict = undefined;
+        let assignedAgentDivision = undefined;
+        let assignedAgentState = undefined;
+        let assignmentStatus = 'unassigned';
+        if (responsibleAgent) {
+            assignedTo = responsibleAgent._id;
+            assignedAgent = responsibleAgent.name;
+            assignedAgentIdStr = responsibleAgent.registrationId || responsibleAgent.agentId || String(responsibleAgent._id);
+            const rawR = (responsibleAgent.role || responsibleAgent.level || 'pincode').toLowerCase();
+            assignedAgentRole = rawR === 'agent' ? (responsibleAgent.level || 'Pincode Agent') : rawR;
+            assignedAgentPhone = responsibleAgent.phone || responsibleAgent.mobile || '';
+            assignedAgentPincode = responsibleAgent.pincode || responsibleAgent.assignedTerritory?.pincode || pincode;
+            assignedAgentDistrict = responsibleAgent.district || responsibleAgent.assignedTerritory?.district || district;
+            assignedAgentDivision = responsibleAgent.division || responsibleAgent.assignedTerritory?.division || division;
+            assignedAgentState = responsibleAgent.state || responsibleAgent.assignedTerritory?.state || state;
+            assignmentStatus = 'assigned';
+        }
+        else if (data.assignedAgent && data.assignedAgent !== 'Unassigned') {
+            assignmentStatus = 'assigned';
+            assignedAgent = data.assignedAgent;
+            assignedAgentRole = data.assignedAgent.includes('District') ? 'District Lead' :
+                data.assignedAgent.includes('Division') ? 'Division Lead' :
+                    data.assignedAgent.includes('Pincode') ? 'Pincode Agent' : 'Assigned Agent';
+        }
         const ticket = new Ticket_1.default({
             ticketId: generateTicketId(),
             creator: agentId,
             creatorRole: agentRole,
             creatorName: agentName,
+            assignedTo,
+            assignedAgent,
+            assignedAgentIdStr,
+            assignedAgentRole,
+            assignedAgentPhone,
+            assignedAgentPincode,
+            assignedAgentDistrict,
+            assignedAgentDivision,
+            assignedAgentState,
+            assignmentStatus,
+            assignmentHistory: assignmentStatus === 'assigned' ? [{
+                    agentId: assignedAgentIdStr,
+                    agentName: assignedAgent,
+                    role: assignedAgentRole,
+                    assignedBy: agentRole,
+                    assignedAt: new Date(),
+                    reason: 'Auto-assigned by territory hierarchy upon ticket creation'
+                }] : [],
             category: data.category,
             description: data.description,
             priority: data.priority ?? 'medium',
@@ -165,8 +348,7 @@ const createTicket = async (req, res) => {
             vendorName,
             storeName,
             attachmentName: data.attachmentName,
-            attachmentUrl: data.attachmentUrl,
-            assignedAgent: data.assignedAgent
+            attachmentUrl: data.attachmentUrl
         });
         await ticket.save();
         await ticket.populate('creator', 'name email role phone');
@@ -222,16 +404,68 @@ const updateTicketStatus = async (req, res) => {
             filter.$or = [{ creator: agentId }, { assignedTo: agentId }];
         }
         const ticket = await Ticket_1.default.findOne(filter);
-        if (!ticket)
-            return res.status(404).json({ message: 'Ticket not found or access denied' });
+        if (!ticket) {
+            return res.status(404).json({ message: 'Ticket not found' });
+        }
         if (status)
             ticket.status = status;
-        if (resolutionDetails)
+        if (resolutionDetails) {
             ticket.resolutionDetails = resolutionDetails;
-        if (remarks)
-            ticket.resolutionDetails = ticket.resolutionDetails ? `${ticket.resolutionDetails} | ${remarks}` : remarks;
-        if (assignedAgent)
+        }
+        else if (remarks) {
+            const trimmedRemark = String(remarks).trim();
+            const existingLogs = (ticket.resolutionDetails || '')
+                .split('|')
+                .map((s) => s.trim())
+                .filter(Boolean);
+            const lastLog = existingLogs.length > 0 ? existingLogs[existingLogs.length - 1] : '';
+            if (lastLog !== trimmedRemark) {
+                existingLogs.push(trimmedRemark);
+                ticket.resolutionDetails = existingLogs.join(' | ');
+            }
+        }
+        if (assignedAgent) {
             ticket.assignedAgent = assignedAgent;
+            ticket.assignmentStatus = assignedAgent === 'Unassigned' ? 'unassigned' : 'assigned';
+            // Look up target agent in users/agents
+            const cleanTarget = String(assignedAgent).toLowerCase().trim();
+            let matchedAgent = null;
+            const db = mongoose_1.default.connection.db;
+            if (db) {
+                matchedAgent = await db.collection('users').findOne({
+                    $or: [
+                        { name: exactRegex(assignedAgent) },
+                        { email: cleanTarget }
+                    ]
+                });
+            }
+            if (matchedAgent) {
+                ticket.assignedTo = matchedAgent._id;
+                ticket.assignedAgent = matchedAgent.name;
+                ticket.assignedAgentIdStr = matchedAgent.registrationId || matchedAgent.agentId || String(matchedAgent._id);
+                const rawR = (matchedAgent.role || matchedAgent.level || 'pincode').toLowerCase();
+                ticket.assignedAgentRole = rawR === 'agent' ? (matchedAgent.level || 'Pincode Agent') : rawR;
+                ticket.assignedAgentPhone = matchedAgent.phone || matchedAgent.mobile || '';
+                ticket.assignedAgentPincode = matchedAgent.pincode || matchedAgent.assignedTerritory?.pincode || ticket.pincode;
+                ticket.assignedAgentDistrict = matchedAgent.district || matchedAgent.assignedTerritory?.district || ticket.district;
+                ticket.assignedAgentDivision = matchedAgent.division || matchedAgent.assignedTerritory?.division || ticket.division;
+                ticket.assignedAgentState = matchedAgent.state || matchedAgent.assignedTerritory?.state || ticket.state;
+            }
+            else {
+                ticket.assignedAgentRole = assignedAgent.includes('District') ? 'District Lead' :
+                    assignedAgent.includes('Division') ? 'Division Lead' :
+                        assignedAgent.includes('Pincode') ? 'Pincode Agent' : 'Support Desk';
+            }
+            ticket.assignmentHistory = ticket.assignmentHistory || [];
+            ticket.assignmentHistory.push({
+                agentId: ticket.assignedAgentIdStr,
+                agentName: ticket.assignedAgent,
+                role: ticket.assignedAgentRole,
+                assignedBy: agentRole || 'admin',
+                assignedAt: new Date(),
+                reason: remarks || `Assigned to ${ticket.assignedAgent}`
+            });
+        }
         ticket.updatedAt = new Date();
         await ticket.save();
         await ticket.populate([

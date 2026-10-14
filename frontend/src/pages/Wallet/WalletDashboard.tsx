@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardBody, Button, Input, Modal } from '../../components/ui';
-import { Wallet, ArrowUpRight, ArrowDownLeft, Clock, CheckCircle2, XCircle, Send, Loader2, Download, Building, CreditCard, User, Landmark, Search, Filter, AlertCircle } from 'lucide-react';
+import { Wallet, ArrowUpRight, ArrowDownLeft, Clock, CheckCircle2, XCircle, Send, Loader2, Download, Building, CreditCard, User, Landmark, Search, Filter, AlertCircle, Plus } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../utils/api';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -428,37 +428,62 @@ export const WalletDashboard: React.FC = () => {
               <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex items-center gap-1">
                 <Landmark className="w-3.5 h-3.5 text-[#864f19]" /> Linked Settlement Bank
               </span>
-              <button 
-                onClick={() => {
-                  setEditBankForm({ ...bankDetails });
-                  setIsEditBankOpen(true);
-                }} 
-                className="text-[10px] font-black text-[#864f19] hover:underline cursor-pointer bg-transparent border-none"
-              >
-                Change
-              </button>
+              {bankDetails.accountNumber && (
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setEditBankForm({ ...bankDetails });
+                    setIsEditBankOpen(true);
+                  }} 
+                  className="text-[10px] font-black text-[#864f19] hover:underline cursor-pointer bg-transparent border-none"
+                >
+                  Change
+                </button>
+              )}
             </div>
             
-            <div className="space-y-2 text-xs">
-              <div className="flex justify-between">
-                <span className="text-slate-400 font-medium">Bank Name</span>
-                <span className="font-bold text-slate-800">{bankDetails.bankName || 'Not Linked'}</span>
+            {bankDetails.accountNumber ? (
+              <div className="space-y-2 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-slate-400 font-medium">Bank Name</span>
+                  <span className="font-bold text-slate-800">{bankDetails.bankName || 'Not Linked'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400 font-medium">Account No.</span>
+                  <span className="font-bold text-slate-800 font-mono">
+                    ••••••{bankDetails.accountNumber.slice(-4)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400 font-medium">IFSC Code</span>
+                  <span className="font-bold text-slate-800 font-mono">{bankDetails.ifscCode || 'Not Linked'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400 font-medium">Account Holder</span>
+                  <span className="font-bold text-slate-800 truncate max-w-[120px]">{bankDetails.holderName || user?.name || 'Not Linked'}</span>
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400 font-medium">Account No.</span>
-                <span className="font-bold text-slate-800">
-                  {bankDetails.accountNumber ? `••••••${bankDetails.accountNumber.slice(-4)}` : 'Not Linked'}
-                </span>
+            ) : (
+              <div className="py-2 flex flex-col items-center justify-center text-center space-y-2.5">
+                <div className="p-2 bg-amber-50 rounded-full text-amber-700">
+                  <AlertCircle className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-800">Bank Account Not Linked</p>
+                  <p className="text-[10px] text-slate-500">Configure your settlement account for payouts</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditBankForm({ ...bankDetails, holderName: bankDetails.holderName || user?.name || '' });
+                    setIsEditBankOpen(true);
+                  }}
+                  className="px-3.5 py-1.5 bg-[#864f19] hover:bg-[#a3672f] text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer border-none"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Link Bank Account
+                </button>
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400 font-medium">IFSC Code</span>
-                <span className="font-bold text-slate-800">{bankDetails.ifscCode || 'Not Linked'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400 font-medium">Account Holder</span>
-                <span className="font-bold text-slate-800 truncate max-w-[120px]">{bankDetails.holderName || user?.name || 'Not Linked'}</span>
-              </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
@@ -687,12 +712,30 @@ export const WalletDashboard: React.FC = () => {
             <h3 className="text-sm font-extrabold text-slate-900">Payout Submitted Successfully!</h3>
             <p className="text-xs text-slate-500 font-semibold">The request has been queued to: {bankDetails.bankName} ({bankDetails.accountNumber.slice(-4)})</p>
           </div>
+        ) : !bankDetails.accountNumber ? (
+          <div className="py-6 text-center space-y-3 font-sans text-xs">
+            <div className="p-3 bg-amber-50 rounded-full text-amber-600 inline-block">
+              <AlertCircle className="w-8 h-8" />
+            </div>
+            <h3 className="font-extrabold text-slate-800 text-sm">Settlement Bank Account Required</h3>
+            <p className="text-slate-500 font-medium">You must link a verified bank account before you can request cashouts.</p>
+            <button
+              type="button"
+              onClick={() => {
+                setIsCashoutOpen(false);
+                setIsEditBankOpen(true);
+              }}
+              className="px-4 py-2.5 bg-[#864f19] hover:bg-[#a3672f] text-white font-bold rounded-xl text-xs cursor-pointer border-none shadow-xs mt-2"
+            >
+              Link Bank Account Now
+            </button>
+          </div>
         ) : (
           <form onSubmit={handleCashoutSubmit} className="space-y-4 font-sans text-xs">
             <div className="p-3.5 bg-[#fbf9f8] rounded-xl border border-[#eae8e7] space-y-2 mb-3">
               <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Target Account Details</span>
               <div className="font-extrabold text-slate-700">{bankDetails.bankName}</div>
-              <div className="text-slate-500 font-semibold">No: {bankDetails.accountNumber} • IFSC: {bankDetails.ifscCode}</div>
+              <div className="text-slate-500 font-semibold font-mono">No: ••••••{bankDetails.accountNumber.slice(-4)} • IFSC: {bankDetails.ifscCode}</div>
             </div>
 
             <div className="space-y-2">

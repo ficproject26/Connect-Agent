@@ -12,7 +12,7 @@ const exactRegex = (str) => new RegExp(`^\\s*${escapeRegex(str.trim())}\\s*$`, '
  * Validates whether an active approved District Agent is already assigned to a given district.
  * Enforces strictly maximum 1 active District Agent assignment per district.
  */
-async function checkExistingDistrictAssignment(state, district, districtId, excludeAgentId) {
+async function checkExistingDistrictAssignment(state, district, districtId, excludeAgentId, excludeEmail) {
     if (!district || !district.trim())
         return { exists: false };
     const normDist = district.trim();
@@ -51,11 +51,28 @@ async function checkExistingDistrictAssignment(state, district, districtId, excl
             ]
         });
     }
+    let agentEmailToExclude = (excludeEmail || '').toLowerCase().trim();
+    const excludeIds = [];
     if (excludeAgentId) {
-        const excludeObjId = mongoose_1.default.Types.ObjectId.isValid(excludeAgentId)
-            ? new mongoose_1.default.Types.ObjectId(excludeAgentId)
-            : excludeAgentId;
-        query._id = { $ne: excludeObjId };
+        excludeIds.push(String(excludeAgentId));
+        if (mongoose_1.default.Types.ObjectId.isValid(excludeAgentId)) {
+            excludeIds.push(new mongoose_1.default.Types.ObjectId(excludeAgentId));
+        }
+        if (!agentEmailToExclude) {
+            try {
+                const found = await Agent_1.default.findById(excludeAgentId).select('email').lean();
+                if (found?.email) {
+                    agentEmailToExclude = found.email.toLowerCase().trim();
+                }
+            }
+            catch (_) { }
+        }
+    }
+    if (excludeIds.length > 0) {
+        query._id = { $nin: excludeIds };
+        if (agentEmailToExclude) {
+            query.email = { $ne: agentEmailToExclude };
+        }
     }
     // Check Agent collection
     const existingAgent = await Agent_1.default.findOne(query).lean();
@@ -90,8 +107,11 @@ async function checkExistingDistrictAssignment(state, district, districtId, excl
                     ]
                 });
             }
-            if (excludeAgentId) {
-                userQuery._id = { $ne: excludeAgentId };
+            if (excludeIds.length > 0) {
+                userQuery._id = { $nin: excludeIds };
+            }
+            if (agentEmailToExclude) {
+                userQuery.email = { $ne: agentEmailToExclude };
             }
             const existingUser = await db.collection('users').findOne(userQuery);
             if (existingUser) {

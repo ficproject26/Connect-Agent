@@ -5,16 +5,21 @@ export interface IFieldVisit extends Document {
     checkInLocation: {
         latitude: number;
         longitude: number;
+        accuracy?: number;
+        timestamp?: Date;
     };
     checkOutLocation?: {
         latitude: number;
         longitude: number;
+        accuracy?: number;
+        timestamp?: Date;
     };
     visitDate: Date;
     photoBeforeVisit?: string;
     photoAfterVisit?: string;
     remarks?: string;
     status: 'started' | 'completed';
+    completedAt?: Date;
     createdAt: Date;
     updatedAt: Date;
 }

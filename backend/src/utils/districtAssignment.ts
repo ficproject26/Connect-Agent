@@ -12,7 +12,8 @@ export async function checkExistingDistrictAssignment(
   state: string,
   district: string,
   districtId?: string,
-  excludeAgentId?: string
+  excludeAgentId?: string,
+  excludeEmail?: string
 ): Promise<{ exists: boolean; agent?: any }> {
   if (!district || !district.trim()) return { exists: false };
 
@@ -57,11 +58,28 @@ export async function checkExistingDistrictAssignment(
     });
   }
 
+  let agentEmailToExclude = (excludeEmail || '').toLowerCase().trim();
+  const excludeIds: any[] = [];
   if (excludeAgentId) {
-    const excludeObjId = mongoose.Types.ObjectId.isValid(excludeAgentId)
-      ? new mongoose.Types.ObjectId(excludeAgentId)
-      : excludeAgentId;
-    query._id = { $ne: excludeObjId };
+    excludeIds.push(String(excludeAgentId));
+    if (mongoose.Types.ObjectId.isValid(excludeAgentId)) {
+      excludeIds.push(new mongoose.Types.ObjectId(excludeAgentId));
+    }
+    if (!agentEmailToExclude) {
+      try {
+        const found = await Agent.findById(excludeAgentId).select('email').lean();
+        if (found?.email) {
+          agentEmailToExclude = found.email.toLowerCase().trim();
+        }
+      } catch (_) {}
+    }
+  }
+
+  if (excludeIds.length > 0) {
+    query._id = { $nin: excludeIds };
+    if (agentEmailToExclude) {
+      query.email = { $ne: agentEmailToExclude };
+    }
   }
 
   // Check Agent collection
@@ -98,8 +116,11 @@ export async function checkExistingDistrictAssignment(
           ]
         });
       }
-      if (excludeAgentId) {
-        userQuery._id = { $ne: excludeAgentId };
+      if (excludeIds.length > 0) {
+        userQuery._id = { $nin: excludeIds };
+      }
+      if (agentEmailToExclude) {
+        userQuery.email = { $ne: agentEmailToExclude };
       }
       const existingUser = await db.collection('users').findOne(userQuery);
       if (existingUser) {

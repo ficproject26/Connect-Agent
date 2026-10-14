@@ -20,6 +20,15 @@ interface SupportTicket {
   remarks?: string;
   attachmentName?: string;
   assignedAgent?: string;
+  assignedAgentName?: string;
+  assignedAgentId?: string;
+  assignedAgentRole?: string;
+  assignedAgentPhone?: string;
+  assignedAgentPincode?: string;
+  assignedAgentDistrict?: string;
+  assignedAgentDivision?: string;
+  assignedAgentState?: string;
+  assignmentStatus?: string;
 }
 
 export const TicketsList: React.FC = () => {
@@ -75,10 +84,8 @@ export const TicketsList: React.FC = () => {
     }
   }, [userState]);
 
-  const [tickets, setTickets] = useState<SupportTicket[]>([]);
-  const [assignedVendors, setAssignedVendors] = useState<any[]>([]);
-  const [selectedVendorId, setSelectedVendorId] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
+  const [merchantPincode, setMerchantPincode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [formError, setFormError] = useState('');
@@ -177,68 +184,64 @@ export const TicketsList: React.FC = () => {
 
   // State Agent Ticket Inspection / Management State
   const [ticketRaised, setTicketRaised] = useState(false);
-  const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
   const [stateResponseText, setStateResponseText] = useState('');
   const [assignedAgentTarget, setAssignedAgentTarget] = useState('');
+  const [isActionProcessing, setIsActionProcessing] = useState(false);
 
-  const loadTicketData = async (isInitial = false) => {
-    if (isInitial && tickets.length === 0) {
-      setIsLoading(true);
-    }
-    setErrorMsg('');
-    try {
-      const [vRes, tRes] = await Promise.all([
-        api.get('/vendors').catch(() => ({ data: { vendors: [] } })),
-        api.get('/tickets').catch(() => ({ data: { tickets: [] } }))
-      ]);
-
-      if (vRes?.data?.vendors) {
-        setAssignedVendors(vRes.data.vendors);
-      }
-
-      const backendTickets = tRes?.data?.tickets || [];
-      const mapped: SupportTicket[] = backendTickets.map((t: any) => ({
-        _id: t._id || `TK-${Math.floor(1000 + Math.random() * 9000)}`,
-        ticketId: t.ticketId || `TKT-${Math.floor(10000 + Math.random() * 90000)}`,
-        territory: t.territory || [t.district, t.division, t.pincode].filter(Boolean).join(' → ') || (t.state ? `${t.state} Scope` : `${userState} Scope`),
-        vendorName: t.storeName || t.vendorName || t.vendor?.name || 'Assigned Merchant',
-        raisedBy: t.creatorName
-          ? `${t.creatorName} (${(t.creatorRole || 'Agent').toUpperCase()})`
-          : (t.creator?.name ? `${t.creator.name} (${(t.creator.role || 'Agent').toUpperCase()})` : (t.raisedBy || 'Downstream Agent')),
-        category: t.category || 'Vendor',
-        description: t.description || 'Query details',
-        priority: t.priority || 'medium',
-        status: t.status === 'assigned' ? 'in_progress' : (t.status || 'open'),
-        createdAt: t.createdAt ? new Date(t.createdAt).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB'),
-        remarks: t.resolutionDetails || t.remarks,
-        attachmentName: t.attachmentName,
-        assignedAgent: t.assignedAgent
-      }));
-
-      setTickets(mapped);
-      if (selectedTicket) {
-        const fresh = mapped.find(t => t._id === selectedTicket._id || t.ticketId === selectedTicket.ticketId);
-        if (fresh) setSelectedTicket(prev => prev ? { ...prev, ...fresh } : fresh);
-      }
-    } catch (err: any) {
-      console.warn('Background ticket refresh fallback:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Coordinated useQuery for tickets fetching and caching, eliminating duplicate mount requests
-  const { refetch: refetchTickets } = useQuery({
-    queryKey: ['ticketsListLive', activeRole],
+  // Fast, cached useQuery for ticket data with timeout safeguard
+  const {
+    data: rawTickets = [],
+    isLoading,
+    isFetching,
+    isError,
+    refetch: refetchTickets
+  } = useQuery({
+    queryKey: ['ticketsListLive', activeRole, userState, userDistrict, userDivision, userPincode],
     queryFn: async () => {
-      await loadTicketData(tickets.length === 0);
-      return true;
+      const res = await api.get('/tickets', { timeout: 8000 });
+      return res.data?.tickets || [];
     },
-    staleTime: 60000,
-    refetchInterval: false,
-    refetchIntervalInBackground: false,
+    staleTime: 5000,
+    retry: 1,
     refetchOnWindowFocus: false
   });
+
+  const tickets: SupportTicket[] = React.useMemo(() => {
+    return (rawTickets || []).map((t: any) => ({
+      _id: t._id || `TK-${Math.floor(1000 + Math.random() * 9000)}`,
+      ticketId: t.ticketId || `TKT-${Math.floor(10000 + Math.random() * 90000)}`,
+      territory: t.territory || [t.district, t.division, t.pincode].filter(Boolean).join(' → ') || (t.state ? `${t.state} Scope` : `${userState} Scope`),
+      vendorName: t.storeName || t.vendorName || t.vendor?.name || 'Assigned Merchant',
+      raisedBy: t.creatorName
+        ? `${t.creatorName} (${(t.creatorRole || 'Agent').toUpperCase()})`
+        : (t.creator?.name ? `${t.creator.name} (${(t.creator.role || 'Agent').toUpperCase()})` : (t.raisedBy || 'Downstream Agent')),
+      category: t.category || 'Vendor',
+      description: t.description || 'Query details',
+      priority: t.priority || 'medium',
+      status: t.status === 'assigned' ? 'in_progress' : (t.status || 'open'),
+      createdAt: t.createdAt ? new Date(t.createdAt).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB'),
+      remarks: t.resolutionDetails || t.remarks,
+      attachmentName: t.attachmentName,
+      assignedAgent: t.assignedAgent,
+      assignedAgentName: t.assignedAgentName || t.assignedAgent || (t.assignedAgentId?.name),
+      assignedAgentId: t.assignedAgentIdStr || (t.assignedAgentId?._id) || t.assignedAgentId,
+      assignedAgentRole: t.assignedAgentRole || (t.assignedAgentId?.role) || (t.assignedAgentId?.level),
+      assignedAgentPhone: t.assignedAgentPhone || (t.assignedAgentId?.phone),
+      assignedAgentPincode: t.assignedAgentPincode || (t.assignedAgentId?.pincode) || t.pincode,
+      assignedAgentDistrict: t.assignedAgentDistrict || (t.assignedAgentId?.district) || t.district,
+      assignedAgentDivision: t.assignedAgentDivision || (t.assignedAgentId?.division) || t.division,
+      assignedAgentState: t.assignedAgentState || (t.assignedAgentId?.state) || t.state,
+      assignmentStatus: t.assignmentStatus || (t.assignedAgent || t.assignedAgentName || t.assignedAgentId ? 'Assigned' : 'Unassigned')
+    }));
+  }, [rawTickets, userState]);
+
+  // Keep inspected ticket updated when query refetches
+  useEffect(() => {
+    if (selectedTicket) {
+      const fresh = tickets.find(t => t._id === selectedTicket._id || t.ticketId === selectedTicket.ticketId);
+      if (fresh) setSelectedTicket(fresh);
+    }
+  }, [tickets]);
 
   const handleAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -305,7 +308,7 @@ export const TicketsList: React.FC = () => {
         payload.state = userState;
         payload.district = userDistrict;
         payload.division = userDivision;
-        payload.pincode = userPincode;
+        payload.pincode = merchantPincode.trim() || userPincode;
         payload.territory = [payload.district, payload.division, payload.pincode].filter(Boolean).join(' → ');
       }
 
@@ -316,14 +319,14 @@ export const TicketsList: React.FC = () => {
 
       // Reset form fields
       setDescription('');
-      setSelectedVendorId('');
       setVendorShopName('');
       setVendorAddress('');
       setVendorPhone('');
+      setMerchantPincode('');
       setAttachment(null);
 
       // Immediately refresh the tickets list from backend API
-      await loadTicketData(false);
+      await refetchTickets();
 
       setTimeout(() => {
         setTicketRaised(false);
@@ -342,73 +345,72 @@ export const TicketsList: React.FC = () => {
     }
   };
 
-  // State Agent Ticket Actions (Respond, Assign, Escalate, Resolve, Reopen)
+  // State Agent Ticket Actions (Respond, Assign, Resolve, Reopen)
   const handleStateRespond = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedTicket || !stateResponseText.trim()) return;
+    if (!selectedTicket || !stateResponseText.trim() || isActionProcessing) return;
 
+    setIsActionProcessing(true);
     try {
-      const updatedRemarks = `${selectedTicket.remarks ? `${selectedTicket.remarks} | ` : ''}[State Response ${new Date().toLocaleDateString('en-GB')}]: ${stateResponseText.trim()}`;
+      const responseNote = `[State Response ${new Date().toLocaleDateString('en-GB')}]: ${stateResponseText.trim()}`;
       await api.patch(`/tickets/${selectedTicket._id}/status`, {
-        remarks: updatedRemarks
+        remarks: responseNote
       });
-      await loadTicketData(false);
+      await refetchTickets();
       setStateResponseText('');
     } catch (err: any) {
       console.error('State respond error:', err);
+    } finally {
+      setIsActionProcessing(false);
     }
   };
 
   const handleStateAssign = async (agentName: string) => {
-    if (!selectedTicket || !agentName) return;
+    if (!selectedTicket || !agentName || isActionProcessing) return;
+    setIsActionProcessing(true);
     try {
       await api.patch(`/tickets/${selectedTicket._id}/status`, {
         status: 'in_progress',
         assignedAgent: agentName,
         remarks: `Assigned to ${agentName} by State Desk`
       });
-      await loadTicketData(false);
+      await refetchTickets();
     } catch (err: any) {
       console.error('State assign error:', err);
-    }
-  };
-
-  const handleStateEscalateAdmin = async () => {
-    if (!selectedTicket) return;
-    try {
-      await api.patch(`/tickets/${selectedTicket._id}/status`, {
-        status: 'escalated_to_admin',
-        remarks: 'Escalated to System SuperAdmin by State Desk'
-      });
-      await loadTicketData(false);
-    } catch (err: any) {
-      console.error('State escalate error:', err);
+    } finally {
+      setIsActionProcessing(false);
     }
   };
 
   const handleStateResolve = async () => {
-    if (!selectedTicket) return;
+    if (!selectedTicket || isActionProcessing) return;
+    setIsActionProcessing(true);
     try {
       await api.patch(`/tickets/${selectedTicket._id}/status`, {
         status: 'resolved',
         remarks: 'Resolved by State Agent Desk'
       });
-      await loadTicketData(false);
+      await refetchTickets();
     } catch (err: any) {
       console.error('State resolve error:', err);
+    } finally {
+      setIsActionProcessing(false);
     }
   };
 
   const handleStateReopen = async () => {
-    if (!selectedTicket) return;
+    if (!selectedTicket || isActionProcessing) return;
+    setIsActionProcessing(true);
     try {
       await api.patch(`/tickets/${selectedTicket._id}/status`, {
         status: 'open',
         remarks: 'Reopened for re-investigation by State Desk'
       });
-      await loadTicketData(false);
+      await refetchTickets();
     } catch (err: any) {
       console.error('State reopen error:', err);
+    } finally {
+      setIsActionProcessing(false);
     }
   };
 
@@ -459,6 +461,16 @@ export const TicketsList: React.FC = () => {
                 <div className="flex justify-center items-center py-12">
                   <Loader2 className="w-8 h-8 text-[#864f19] animate-spin" />
                 </div>
+              ) : isError ? (
+                <div className="py-12 text-center space-y-3">
+                  <p className="text-xs font-bold text-rose-700">Failed to load support tickets from server.</p>
+                  <button
+                    onClick={() => refetchTickets()}
+                    className="px-4 py-2 bg-[#864f19] hover:bg-[#a3672f] text-white text-xs font-bold rounded-xl cursor-pointer border-none shadow-sm inline-flex items-center gap-1.5 mx-auto"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" /> Retry Loading Tickets
+                  </button>
+                </div>
               ) : tickets.length === 0 ? (
                 <div className="py-12 text-center text-slate-500 font-bold text-xs">
                   No tickets logged. Submit a support ticket on the right panel.
@@ -471,6 +483,7 @@ export const TicketsList: React.FC = () => {
                       {activeRole === 'state' && <th className="py-3 px-4">Territory (District → Division → Pincode)</th>}
                       <th className="py-3 px-4">Vendor</th>
                       {activeRole === 'state' && <th className="py-3 px-4">Raised By</th>}
+                      <th className="py-3 px-4">Assigned Agent</th>
                       <th className="py-3 px-4">Category</th>
                       <th className="py-3 px-4">Priority</th>
                       <th className="py-3 px-4 text-center">Status</th>
@@ -493,6 +506,33 @@ export const TicketsList: React.FC = () => {
                             {ticket.raisedBy || 'Downstream Agent'}
                           </td>
                         )}
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          {ticket.assignedAgentName || ticket.assignedAgent ? (
+                            <div className="space-y-0.5">
+                              <p className="font-extrabold text-[#1b1c1c] text-xs flex items-center gap-1">
+                                <UserCheck className="w-3.5 h-3.5 text-[#864f19]" />
+                                {ticket.assignedAgentName || ticket.assignedAgent}
+                              </p>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-[9px] font-black uppercase px-1.5 py-0.5 bg-[#ffdcc2] text-[#864f19] rounded">
+                                  {ticket.assignedAgentRole || 'Agent'}
+                                </span>
+                                {ticket.assignedAgentPincode && (
+                                  <span className="text-[10px] text-slate-500 font-semibold">
+                                    PIN: {ticket.assignedAgentPincode}
+                                  </span>
+                                )}
+                              </div>
+                              {ticket.assignedAgentPhone && (
+                                <p className="text-[10px] text-slate-400 font-medium">📞 {ticket.assignedAgentPhone}</p>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="inline-block px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-slate-100 text-slate-500 border border-slate-200">
+                              Unassigned
+                            </span>
+                          )}
+                        </td>
                         <td className="py-3.5 px-4 font-bold text-slate-700">{ticket.category}</td>
                         <td className="py-3.5 px-4 uppercase text-[10px] font-black">
                           <span className={ticket.priority === 'critical' || ticket.priority === 'high' ? 'text-rose-600' : 'text-slate-600'}>
@@ -560,6 +600,51 @@ export const TicketsList: React.FC = () => {
                 )}
               </CardHeader>
               <CardBody className="py-4 space-y-4 text-xs">
+                {/* Dedicated Responsible Agent Information Card */}
+                <div className="p-3.5 bg-[#fbf9f8] rounded-xl border border-[#eae8e7] space-y-2">
+                  <span className="text-[10px] font-black text-[#864f19] uppercase tracking-wider block">
+                    Responsible Agent Details
+                  </span>
+                  {selectedTicket.assignedAgentName || selectedTicket.assignedAgent ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                      <div>
+                        <span className="text-[9px] text-slate-400 uppercase font-bold block">Agent Name</span>
+                        <p className="font-extrabold text-slate-800 text-xs">{selectedTicket.assignedAgentName || selectedTicket.assignedAgent}</p>
+                        {selectedTicket.assignedAgentId && (
+                          <p className="text-[10px] text-slate-400 font-mono">ID: {selectedTicket.assignedAgentId}</p>
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-slate-400 uppercase font-bold block">Role & Tier</span>
+                        <p className="font-bold text-[#864f19] uppercase">{selectedTicket.assignedAgentRole || 'Pincode Agent'}</p>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-slate-400 uppercase font-bold block">Registered Mobile</span>
+                        <p className="font-semibold text-slate-700">{selectedTicket.assignedAgentPhone || 'Not Available'}</p>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-slate-400 uppercase font-bold block">Territory Scope</span>
+                        <p className="font-semibold text-slate-700">
+                          PIN: {selectedTicket.assignedAgentPincode || '—'}
+                          {selectedTicket.assignedAgentDivision && ` • ${selectedTicket.assignedAgentDivision}`}
+                          {selectedTicket.assignedAgentDistrict && ` • ${selectedTicket.assignedAgentDistrict}`}
+                        </p>
+                      </div>
+                      <div className="sm:col-span-2 pt-1 border-t border-slate-200/60 flex items-center justify-between">
+                        <span className="text-[9px] text-slate-400 uppercase font-bold">Assignment Status:</span>
+                        <span className="inline-block px-2 py-0.5 rounded text-[9px] font-black uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          {selectedTicket.assignmentStatus || 'Assigned'}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-2.5 bg-slate-100 rounded-lg text-slate-600 font-bold text-xs flex items-center justify-between">
+                      <span>No agent currently assigned to this ticket.</span>
+                      <span className="text-[9px] uppercase px-2 py-0.5 bg-slate-200 rounded text-slate-600 font-black">Unassigned</span>
+                    </div>
+                  )}
+                </div>
+
                 <div className="space-y-1">
                   <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Issue Details</span>
                   <p className="text-slate-700 font-semibold leading-relaxed bg-[#fbf9f8] p-3 rounded-xl border border-slate-100">
@@ -607,16 +692,17 @@ export const TicketsList: React.FC = () => {
                       </div>
                     </form>
 
-                    {/* Action Buttons Bar: Assign to Agent, Escalate to Admin, Resolve, Reopen */}
+                    {/* Action Buttons Bar: Assign to Agent, Resolve, Reopen */}
                     <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
                       <div className="flex items-center gap-2 flex-grow sm:flex-grow-0">
                         <select
+                          disabled={isActionProcessing}
                           value={assignedAgentTarget}
                           onChange={(e) => {
                             setAssignedAgentTarget(e.target.value);
                             handleStateAssign(e.target.value);
                           }}
-                          className="bg-white border border-[#d7c3b5]/60 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                          className="bg-white border border-[#d7c3b5]/60 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#864f19] disabled:opacity-50"
                         >
                           <option value="">Assign to Responsible Agent...</option>
                           <option value="District Lead">District Lead ({selectedDistrict || userState})</option>
@@ -627,29 +713,23 @@ export const TicketsList: React.FC = () => {
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={handleStateEscalateAdmin}
-                          className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 cursor-pointer shadow-sm border-none"
-                        >
-                          <ShieldAlert className="w-3.5 h-3.5" /> Escalate to Admin
-                        </button>
-
                         {selectedTicket.status !== 'resolved' ? (
                           <button
                             type="button"
+                            disabled={isActionProcessing}
                             onClick={handleStateResolve}
-                            className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 cursor-pointer shadow-sm border-none"
+                            className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 cursor-pointer shadow-sm border-none disabled:opacity-50"
                           >
-                            <CheckCircle2 className="w-3.5 h-3.5" /> Mark Resolved
+                            <CheckCircle2 className="w-3.5 h-3.5" /> {isActionProcessing ? 'Updating...' : 'Mark Resolved'}
                           </button>
                         ) : (
                           <button
                             type="button"
+                            disabled={isActionProcessing}
                             onClick={handleStateReopen}
-                            className="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 cursor-pointer shadow-sm border-none"
+                            className="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 cursor-pointer shadow-sm border-none disabled:opacity-50"
                           >
-                            <RotateCcw className="w-3.5 h-3.5" /> Reopen Ticket
+                            <RotateCcw className="w-3.5 h-3.5" /> {isActionProcessing ? 'Updating...' : 'Reopen Ticket'}
                           </button>
                         )}
                       </div>
@@ -812,17 +892,27 @@ export const TicketsList: React.FC = () => {
                       />
                     </div>
 
-                    <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 space-y-1.5 text-[11px]">
-                      <p className="text-[9px] font-black text-[#864f19] uppercase tracking-wider">Territory Location Details (Division Scope)</p>
-                      <p className="text-slate-800">State: <strong>{userState || '—'}</strong></p>
-                      <p className="text-slate-800">District: <strong>{userDistrict || '—'}</strong></p>
-                      <p className="text-slate-800">Assigned Division: <strong className="text-[#864f19]">{userDivision || '—'}</strong></p>
-                    </div>
+                    {activeRole === 'district' ? (
+                      <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 space-y-1.5 text-[11px]">
+                        <p className="text-[9px] font-black text-[#864f19] uppercase tracking-wider">Territory Location Details (District Scope)</p>
+                        <p className="text-slate-800">State: <strong>{userState || '—'}</strong></p>
+                        <p className="text-slate-800">District: <strong className="text-[#864f19]">{userDistrict || '—'}</strong></p>
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 space-y-1.5 text-[11px]">
+                        <p className="text-[9px] font-black text-[#864f19] uppercase tracking-wider">Territory Location Details (Division Scope)</p>
+                        <p className="text-slate-800">State: <strong>{userState || '—'}</strong></p>
+                        <p className="text-slate-800">District: <strong>{userDistrict || '—'}</strong></p>
+                        <p className="text-slate-800">Assigned Division: <strong className="text-[#864f19]">{userDivision || '—'}</strong></p>
+                      </div>
+                    )}
 
                     <div className="space-y-1">
                       <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Select Merchant Pincode *</label>
                       <input
                         type="text"
+                        value={merchantPincode}
+                        onChange={(e) => setMerchantPincode(e.target.value)}
                         placeholder={`Enter pincode (your territory: ${userPincode || '—'})`}
                         className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
                       />

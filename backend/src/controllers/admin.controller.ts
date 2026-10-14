@@ -5,7 +5,7 @@ import AuditLog from '../models/AuditLog';
 import Vendor from '../models/Vendor';
 import TargetAssignment from '../models/TargetAssignment';
 import Wallet from '../models/Wallet';
-import { getAgentTerritoryScope, buildTerritoryFilter, buildVendorScopeFilter, invalidateAgentTerritoryScope } from '../utils/territoryScope';
+import { getAgentTerritoryScope, buildTerritoryFilter, buildVendorScopeFilter, invalidateAgentTerritoryScope, getDivisionPincodes } from '../utils/territoryScope';
 import { checkExistingDistrictAssignment } from '../utils/districtAssignment';
 import { cacheService } from '../services/cache.service';
 import { publishEntityEvent } from '../realtime/eventBus';
@@ -366,8 +366,12 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
     }
 
     const scope = await getAgentTerritoryScope(requesterId);
-    const scopeFilter = buildTerritoryFilter(scope);
-    const vendorScopeFilter = buildVendorScopeFilter(scope);
+    let divisionPincodes: string[] = [];
+    if (scope?.role === 'division' && scope.division) {
+      divisionPincodes = await getDivisionPincodes(scope.division);
+    }
+    const scopeFilter = buildTerritoryFilter(scope, divisionPincodes);
+    const vendorScopeFilter = buildVendorScopeFilter(scope, divisionPincodes);
 
     // Strictly enforce Approved and Active agents only for directory/hierarchy
     const filter: any = { ...scopeFilter };
@@ -427,15 +431,17 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
           if (scope?.role === 'state' && scope.state) {
             const scState = scope.state.toLowerCase();
             const candState = uState.toLowerCase();
-            if (!candState.includes(scState) && !scState.includes(candState)) continue;
+            if (!candState || (!candState.includes(scState) && !scState.includes(candState))) continue;
           } else if (scope?.role === 'district' && scope.district) {
             const scDist = scope.district.toLowerCase();
             const candDist = uDist.toLowerCase();
-            if (!candDist.includes(scDist) && !scDist.includes(candDist)) continue;
+            if (!candDist || (!candDist.includes(scDist) && !scDist.includes(candDist))) continue;
           } else if (scope?.role === 'division' && scope.division) {
             const scDiv = scope.division.toLowerCase();
             const candDiv = uDiv.toLowerCase();
-            if (!candDiv.includes(scDiv) && !scDiv.includes(candDiv)) continue;
+            const pinMatches = Boolean(uPin && divisionPincodes.includes(uPin));
+            const divMatches = Boolean(candDiv && (candDiv.includes(scDiv) || scDiv.includes(candDiv)));
+            if (!pinMatches && !divMatches) continue;
           } else if (scope?.role === 'pincode' && scope.pincode) {
             if (uPin !== scope.pincode) continue;
           }
@@ -641,21 +647,56 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
       };
     };
 
+    // Pre-index pincodes by division name for fast O(1) division hierarchy mapping
+    const pincodesByDivision = new Map<string, Set<string>>();
+    try {
+      const db = mongoose.connection.db;
+      if (db) {
+        const allDbPincodes = await db.collection('pincodes').find({}, { projection: { code: 1, pincode: 1, division: 1 } }).toArray();
+        for (const p of allDbPincodes) {
+          const code = String(p.code || p.pincode || '').trim();
+          const div = cleanWord(String(p.division || ''));
+          if (code && div) {
+            if (!pincodesByDivision.has(div)) pincodesByDivision.set(div, new Set());
+            pincodesByDivision.get(div)!.add(code);
+          }
+        }
+      }
+    } catch (_) {}
+
     // 1. Pre-enrich division agents with their pincodes
     const enrichedDivisions = divisionAgents.map(div => {
       const divTerritory = getAgentDivision(div);
       const divDist = getAgentDistrict(div);
       const enrichedDiv = enrichAgentData(div);
+      const dNorm = cleanWord(divTerritory);
+      const knownDivPincodes = pincodesByDivision.get(dNorm);
 
       const matchingPincodes = pincodeAgents
         .filter(pin => {
           const pinDiv = getAgentDivision(pin);
           const pinDist = getAgentDistrict(pin);
+          const pinCode = getAgentPincode(pin);
+
           if (divDist && pinDist && cleanWord(divDist) !== cleanWord(pinDist)) return false;
-          if (!pinDiv || !divTerritory) return false;
-          const pNorm = cleanWord(pinDiv);
-          const dNorm = cleanWord(divTerritory);
-          return pNorm === dNorm || pNorm.includes(dNorm) || dNorm.includes(pNorm);
+
+          // Check if pincode belongs to this division in the database
+          if (pinCode && knownDivPincodes && knownDivPincodes.has(pinCode)) {
+            return true;
+          }
+
+          // Check division text match
+          if (pinDiv && divTerritory) {
+            const pNorm = cleanWord(pinDiv);
+            if (pNorm === dNorm || pNorm.includes(dNorm) || dNorm.includes(pNorm)) return true;
+          }
+
+          // Check divisionId match
+          if (div.assignedTerritory?.divisionId && pin.assignedTerritory?.divisionId) {
+            if (String(div.assignedTerritory.divisionId) === String(pin.assignedTerritory.divisionId)) return true;
+          }
+
+          return false;
         })
         .map(pin => enrichAgentData(pin));
 

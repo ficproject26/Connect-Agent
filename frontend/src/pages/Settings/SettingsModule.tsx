@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardBody } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
+import { Modal } from '../../components/ui/Modal';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { 
   Settings, Volume2, Globe, Shield, HelpCircle, 
   ChevronRight, Phone, Mail, Award, BookOpen,
-  Bell, User, AlertTriangle, RefreshCw, Info, Check, Clock, Lock, LogOut, FileText
+  Bell, User, AlertTriangle, RefreshCw, Info, Check, Clock, Lock, LogOut, FileText, Printer, Download, CheckCircle2, X
 } from 'lucide-react';
 
 export const SettingsModule: React.FC = () => {
@@ -31,6 +32,48 @@ export const SettingsModule: React.FC = () => {
     pincode: (user as any)?.assignedPincode
   };
   const userState = (userTerritory?.state || (user as any)?.assignedState || '').trim();
+
+  // Platform Legalities Document Viewer Modal State
+  const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
+  const [activeLegalTab, setActiveLegalTab] = useState<'privacy' | 'terms'>('privacy');
+
+  // Sync with URL Hash (#privacy, #terms) for direct navigation and refresh support
+  useEffect(() => {
+    const handleHashSync = () => {
+      const hash = (window.location.hash || '').toLowerCase();
+      if (hash.includes('privacy')) {
+        setActiveLegalTab('privacy');
+        setIsLegalModalOpen(true);
+      } else if (hash.includes('terms') || hash.includes('guidelines')) {
+        setActiveLegalTab('terms');
+        setIsLegalModalOpen(true);
+      }
+    };
+    handleHashSync();
+    window.addEventListener('hashchange', handleHashSync);
+    return () => window.removeEventListener('hashchange', handleHashSync);
+  }, []);
+
+  const openPrivacyModal = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setActiveLegalTab('privacy');
+    setIsLegalModalOpen(true);
+    window.history.pushState(null, '', '#privacy');
+  };
+
+  const openTermsModal = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setActiveLegalTab('terms');
+    setIsLegalModalOpen(true);
+    window.history.pushState(null, '', '#terms');
+  };
+
+  const closeLegalModal = () => {
+    setIsLegalModalOpen(false);
+    if (window.location.hash) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+  };
 
   // Pincode Agent Alert Toggles State
   const [fieldVisitAlerts, setFieldVisitAlerts] = useState(true);
@@ -242,18 +285,26 @@ export const SettingsModule: React.FC = () => {
                 </div>
               </CardHeader>
               <CardBody className="space-y-3 text-xs font-semibold">
-                <a href="#privacy" className="flex items-center justify-between p-3 hover:bg-[#fbf9f8] rounded-xl text-slate-700 border border-slate-100">
+                <button
+                  type="button"
+                  onClick={openPrivacyModal}
+                  className="w-full flex items-center justify-between p-3 hover:bg-[#fbf9f8] rounded-xl text-slate-700 border border-slate-100 bg-transparent text-left cursor-pointer transition"
+                >
                   <span className="flex items-center gap-2">
                     <Lock className="w-4 h-4 text-[#864f19]" /> Privacy & Telemetry Policies
                   </span>
                   <ChevronRight className="w-4 h-4 text-slate-400" />
-                </a>
-                <a href="#terms" className="flex items-center justify-between p-3 hover:bg-[#fbf9f8] rounded-xl text-slate-700 border border-slate-100">
+                </button>
+                <button
+                  type="button"
+                  onClick={openTermsModal}
+                  className="w-full flex items-center justify-between p-3 hover:bg-[#fbf9f8] rounded-xl text-slate-700 border border-slate-100 bg-transparent text-left cursor-pointer transition"
+                >
                   <span className="flex items-center gap-2">
                     <Shield className="w-4 h-4 text-[#864f19]" /> State Agent Terms & Compliance Guidelines
                   </span>
                   <ChevronRight className="w-4 h-4 text-slate-400" />
-                </a>
+                </button>
               </CardBody>
             </Card>
 
@@ -476,14 +527,26 @@ export const SettingsModule: React.FC = () => {
                 </div>
               </CardHeader>
               <CardBody className="space-y-3 text-xs font-semibold">
-                <a href="#privacy" className="flex items-center justify-between p-3 hover:bg-[#fbf9f8] rounded-xl text-slate-700 border border-slate-100">
-                  <span>Privacy Policy</span>
+                <button
+                  type="button"
+                  onClick={openPrivacyModal}
+                  className="w-full flex items-center justify-between p-3 hover:bg-[#fbf9f8] rounded-xl text-slate-700 border border-slate-100 bg-transparent text-left cursor-pointer transition"
+                >
+                  <span className="flex items-center gap-2">
+                    <Lock className="w-4 h-4 text-[#864f19]" /> Privacy & Telemetry Policies
+                  </span>
                   <ChevronRight className="w-4 h-4 text-slate-400" />
-                </a>
-                <a href="#terms" className="flex items-center justify-between p-3 hover:bg-[#fbf9f8] rounded-xl text-slate-700 border border-slate-100">
-                  <span>Pincode Agent Terms & Guidelines</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={openTermsModal}
+                  className="w-full flex items-center justify-between p-3 hover:bg-[#fbf9f8] rounded-xl text-slate-700 border border-slate-100 bg-transparent text-left cursor-pointer transition"
+                >
+                  <span className="flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-[#864f19]" /> Pincode Agent Terms & Guidelines
+                  </span>
                   <ChevronRight className="w-4 h-4 text-slate-400" />
-                </a>
+                </button>
               </CardBody>
             </Card>
 
@@ -633,14 +696,26 @@ export const SettingsModule: React.FC = () => {
                 </div>
               </CardHeader>
               <CardBody className="space-y-3 text-xs font-semibold">
-                <a href="#privacy" className="flex items-center justify-between p-2.5 hover:bg-forgeGray-50 rounded-xl text-forgeGray-650">
-                  <span>Privacy & Telemetry Policies</span>
+                <button
+                  type="button"
+                  onClick={openPrivacyModal}
+                  className="w-full flex items-center justify-between p-2.5 hover:bg-forgeGray-50 rounded-xl text-forgeGray-650 bg-transparent text-left cursor-pointer transition border border-transparent"
+                >
+                  <span className="flex items-center gap-2">
+                    <Lock className="w-4 h-4 text-secondary" /> Privacy & Telemetry Policies
+                  </span>
                   <ChevronRight className="w-4 h-4 text-forgeGray-400" />
-                </a>
-                <a href="#terms" className="flex items-center justify-between p-2.5 hover:bg-forgeGray-50 rounded-xl text-forgeGray-650">
-                  <span>Agent Terms & Guidelines</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={openTermsModal}
+                  className="w-full flex items-center justify-between p-2.5 hover:bg-forgeGray-50 rounded-xl text-forgeGray-650 bg-transparent text-left cursor-pointer transition border border-transparent"
+                >
+                  <span className="flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-secondary" /> Agent Terms & Guidelines
+                  </span>
                   <ChevronRight className="w-4 h-4 text-forgeGray-400" />
-                </a>
+                </button>
               </CardBody>
             </Card>
           </div>
@@ -684,6 +759,134 @@ export const SettingsModule: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Platform Legalities & Compliance Viewer Modal */}
+      <Modal
+        isOpen={isLegalModalOpen}
+        onClose={closeLegalModal}
+        title="Platform Legalities & Compliance Documents"
+      >
+        <div className="space-y-4 font-sans text-xs">
+          {/* Tab Navigation */}
+          <div className="flex border-b border-slate-200 gap-2 pb-2">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveLegalTab('privacy');
+                window.history.replaceState(null, '', '#privacy');
+              }}
+              className={`px-3 py-2 text-xs font-bold rounded-xl transition cursor-pointer border-none flex items-center gap-1.5 ${
+                activeLegalTab === 'privacy'
+                  ? 'bg-[#864f19] text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              <Lock className="w-3.5 h-3.5" /> Privacy & Telemetry Policies
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveLegalTab('terms');
+                window.history.replaceState(null, '', '#terms');
+              }}
+              className={`px-3 py-2 text-xs font-bold rounded-xl transition cursor-pointer border-none flex items-center gap-1.5 ${
+                activeLegalTab === 'terms'
+                  ? 'bg-[#864f19] text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              <Shield className="w-3.5 h-3.5" /> Agent Terms & Guidelines
+            </button>
+          </div>
+
+          {/* Document Content Viewer */}
+          <div className="max-h-[60vh] overflow-y-auto pr-2 space-y-4 text-slate-700 leading-relaxed font-normal bg-[#fbf9f8] p-4 rounded-xl border border-slate-200">
+            {activeLegalTab === 'privacy' ? (
+              <div className="space-y-3.5">
+                <div className="border-b border-slate-200 pb-2">
+                  <h3 className="text-sm font-extrabold text-[#1b1c1c]">Forge India Connect Platform — Privacy & Telemetry Policies</h3>
+                  <p className="text-[10px] text-slate-500 font-semibold mt-0.5">Version 2.4.0 • Updated October 2026 • Applicable to all State, District, Division, and Pincode Field Agents</p>
+                </div>
+
+                <div>
+                  <h4 className="font-bold text-slate-900 text-xs mb-1">1. Scope of Privacy & Telemetry Collection</h4>
+                  <p>This policy outlines the processing of personal data, device telemetry, and location metadata collected through the Connect Agent web portal and field operations suite. By accessing or operating under your assigned agent profile, you consent to telemetry collection necessary for field verification, store audits, and merchant onboarding operations.</p>
+                </div>
+
+                <div>
+                  <h4 className="font-bold text-slate-900 text-xs mb-1">2. GPS Location & Telemetry Geotagging</h4>
+                  <p>Accurate field operations require the acquisition of device GPS coordinates during store visits, merchant KYC document verification, and check-in / check-out events. Location telemetry is captured exclusively during active field operational actions and includes latitude, longitude, reading timestamp, and accuracy in meters. Coordinates are strictly used to authenticate physical visits and prevent unauthorized cross-territory data falsification.</p>
+                </div>
+
+                <div>
+                  <h4 className="font-bold text-slate-900 text-xs mb-1">3. KYC Document Privacy & Confidentiality</h4>
+                  <p>Field agents collect sensitive merchant documents including PAN cards, Aadhaar IDs, GST registration records, and settlement bank passbooks. All merchant documentation uploaded through this portal is encrypted in transit via TLS 1.3 and stored in compliant secure object storage. Agents are strictly prohibited from storing, duplicating, or transmitting merchant PII outside the Connect platform.</p>
+                </div>
+
+                <div>
+                  <h4 className="font-bold text-slate-900 text-xs mb-1">4. Role-Based Access & Territory Isolation</h4>
+                  <p>To uphold data privacy, the Connect Platform implements granular Role-Based Access Control (RBAC). State, District, Division, and Pincode Agents can only access merchant and agent data within their authorized geographical jurisdiction. Inter-district or inter-division data leakage is actively prevented through backend query assertions.</p>
+                </div>
+
+                <div>
+                  <h4 className="font-bold text-slate-900 text-xs mb-1">5. Data Retention, Audit Trails & Incident Reporting</h4>
+                  <p>All support resolution logs, agent attendance records, wallet cashouts, and territory task assignments generate immutable audit trails. Inquiries regarding telemetry privacy or incident reports can be directed to privacy@connectagent.in or our Data Protection Officer.</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3.5">
+                <div className="border-b border-slate-200 pb-2">
+                  <h3 className="text-sm font-extrabold text-[#1b1c1c]">Forge India Connect Platform — Agent Terms of Engagement & Guidelines</h3>
+                  <p className="text-[10px] text-slate-500 font-semibold mt-0.5">Version 2.4.0 • Updated October 2026 • Operational Guidelines for Workforce & Agents</p>
+                </div>
+
+                <div>
+                  <h4 className="font-bold text-slate-900 text-xs mb-1">1. Professional Code of Conduct & Representation</h4>
+                  <p>All registered State Agents, District Leads, Division Managers, and Pincode Field Agents represent Forge India Connect Pvt Ltd when interacting with merchants and commercial retail partners. Agents must conduct all merchant onboarding, document audits, and store visits with utmost integrity, punctuality, and professional decorum.</p>
+                </div>
+
+                <div>
+                  <h4 className="font-bold text-slate-900 text-xs mb-1">2. Territory Jurisdiction & Non-Compete Compliance</h4>
+                  <p>Agents are strictly bound to their assigned territorial sector as governed by the Admin Territory Database (State, District, Division, Taluk, and PIN Code). Onboarding merchants, executing store visits, or logging tickets outside your authorized territory boundaries is considered a breach of service and may result in immediate suspension.</p>
+                </div>
+
+                <div>
+                  <h4 className="font-bold text-slate-900 text-xs mb-1">3. Field Visit Check-In & Check-Out Mandate</h4>
+                  <p>Store audits require mandatory check-in with high-accuracy GPS capture, geotagged store front photography, and explicit checkout recording the merchant's outcome (Interested or Not Interested with reason). Fabricated visits, ghost check-ins, or simulated GPS readings are subject to zero-tolerance disciplinary action.</p>
+                </div>
+
+                <div>
+                  <h4 className="font-bold text-slate-900 text-xs mb-1">4. Wallet Earnings, Commissions & Payout Settlement</h4>
+                  <p>Agent compensation, onboarding commissions, and target incentives accrue directly in the Agent Wallet. To initiate cashout transfers, agents must link a valid settlement bank account in their own legal name with verified IFSC code. Cashout requests undergo automated fraud screening and are disbursed per scheduled payout cycles.</p>
+                </div>
+
+                <div>
+                  <h4 className="font-bold text-slate-900 text-xs mb-1">5. Support Escalation & Ticket Resolution SLA</h4>
+                  <p>Support queries submitted through the portal must adhere to designated SLA timeframes. Pincode and Division Agents must address merchant concerns promptly; unresolved disputes may be escalated through designated division and state support desks.</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Action Bar */}
+          <div className="flex justify-between items-center pt-2 border-t border-slate-200">
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer border-none"
+            >
+              <Printer className="w-3.5 h-3.5" /> Print / Save as PDF
+            </button>
+            <button
+              type="button"
+              onClick={closeLegalModal}
+              className="px-5 py-2 bg-[#864f19] hover:bg-[#a3672f] text-white font-bold rounded-xl text-xs cursor-pointer border-none shadow-xs"
+            >
+              Close Document
+            </button>
+          </div>
+        </div>
+      </Modal>
 
     </div>
   );

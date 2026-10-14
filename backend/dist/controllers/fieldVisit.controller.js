@@ -13,11 +13,13 @@ const startVisitSchema = zod_1.z.object({
     vendorId: zod_1.z.string().min(1, 'Vendor ID is required'),
     latitude: zod_1.z.number({ required_error: 'Latitude required' }),
     longitude: zod_1.z.number({ required_error: 'Longitude required' }),
+    accuracy: zod_1.z.number().optional(),
     photoBeforeVisit: zod_1.z.string().optional()
 });
 const completeVisitSchema = zod_1.z.object({
     latitude: zod_1.z.number().optional(),
     longitude: zod_1.z.number().optional(),
+    accuracy: zod_1.z.number().optional(),
     photoAfterVisit: zod_1.z.string().optional(),
     remarks: zod_1.z.string().optional()
 });
@@ -36,7 +38,9 @@ const startFieldVisit = async (req, res) => {
             vendor: data.vendorId,
             checkInLocation: {
                 latitude: data.latitude,
-                longitude: data.longitude
+                longitude: data.longitude,
+                accuracy: data.accuracy,
+                timestamp: new Date()
             },
             photoBeforeVisit: data.photoBeforeVisit,
             status: 'started',
@@ -58,38 +62,70 @@ const startFieldVisit = async (req, res) => {
     }
 };
 exports.startFieldVisit = startFieldVisit;
-// POST /api/field-visits/:id/complete — complete active field visit
+// POST /api/field-visits/:id/complete — complete active field visit (idempotent)
 const completeFieldVisit = async (req, res) => {
     try {
         const agentId = req.agent?.agentId;
-        if (!agentId)
+        const agentEmail = req.agent?.email;
+        if (!agentId && !agentEmail)
             return res.status(401).json({ message: 'Unauthorized' });
         const { id } = req.params;
         const data = completeVisitSchema.parse(req.body);
-        const visit = await FieldVisit_1.default.findOne({ _id: id, agent: agentId, status: 'started' });
-        if (!visit)
-            return res.status(404).json({ message: 'Active field visit record not found' });
+        // Look up visit by ID (support ObjectId or string)
+        let visit = await FieldVisit_1.default.findById(id);
+        if (!visit) {
+            return res.status(404).json({ message: 'Field visit record not found' });
+        }
+        // Check authorization: must be the visiting agent or authorized superior
+        const visitAgentStr = String(visit.agent);
+        if (visitAgentStr !== String(agentId)) {
+            const scope = await (0, territoryScope_1.getAgentTerritoryScope)(agentId, agentEmail);
+            if (!scope) {
+                return res.status(403).json({ message: 'Forbidden: Unauthorized to complete this field visit' });
+            }
+        }
+        // Idempotency: If already completed, return existing completed record without duplicate mutation
+        if (visit.status === 'completed') {
+            await visit.populate([
+                { path: 'agent', select: 'name email role phone' },
+                { path: 'vendor', select: 'storeName contactPerson phone address' }
+            ]);
+            return res.status(200).json({
+                message: 'Field visit is already completed',
+                visit,
+                alreadyCompleted: true
+            });
+        }
+        // Mark completed with checkout location and timestamp
         visit.status = 'completed';
+        visit.completedAt = new Date();
         if (data.remarks)
             visit.remarks = data.remarks;
         if (data.photoAfterVisit)
             visit.photoAfterVisit = data.photoAfterVisit;
-        if (data.latitude && data.longitude) {
-            visit.checkOutLocation = { latitude: data.latitude, longitude: data.longitude };
+        if (data.latitude !== undefined && data.longitude !== undefined) {
+            visit.checkOutLocation = {
+                latitude: data.latitude,
+                longitude: data.longitude,
+                accuracy: data.accuracy,
+                timestamp: new Date()
+            };
         }
         await visit.save();
         await visit.populate([
-            { path: 'agent', select: 'name email role' },
-            { path: 'vendor', select: 'storeName contactPerson phone' }
+            { path: 'agent', select: 'name email role phone' },
+            { path: 'vendor', select: 'storeName contactPerson phone address' }
         ]);
-        return res.status(200).json({ message: 'Field visit completed successfully', visit });
+        return res.status(200).json({
+            message: 'Field visit completed successfully',
+            visit
+        });
     }
     catch (error) {
         if (error instanceof zod_1.z.ZodError) {
             return res.status(400).json({ message: 'Validation failed', errors: error.errors });
         }
         console.error('Complete field visit error:', error);
-        return res.status(500).json({ message: 'Internal server error' });
     }
 };
 exports.completeFieldVisit = completeFieldVisit;

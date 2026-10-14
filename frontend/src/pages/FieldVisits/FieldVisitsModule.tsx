@@ -4,12 +4,13 @@ import { Card, CardHeader, CardTitle, CardBody, Button, Modal } from '../../comp
 import {
   MapPin, Navigation, Camera, CheckCircle2, Clock, Plus, Search, Store,
   AlertCircle, ArrowRight, Download, FileText, Printer, User, Filter, RotateCcw,
-  Building, Calendar, ShieldCheck, X, Eye, LogOut, Check, ThumbsUp, ThumbsDown
+  Building, Calendar, ShieldCheck, X, Eye, LogOut, Check, ThumbsUp, ThumbsDown,
+  Loader2, ShieldAlert, AlertTriangle
 } from 'lucide-react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getActiveDistricts, getActiveDivisions, getActivePincodes } from '../../utils/territoryService';
+import { getActiveDistricts, getActiveDivisions, getActivePincodes, type TerritoryPincode } from '../../utils/territoryService';
 
 interface FieldVisitRecord {
   _id: string;
@@ -21,6 +22,7 @@ interface FieldVisitRecord {
   status: 'started' | 'completed' | 'in_progress' | 'overdue';
   latitude: number;
   longitude: number;
+  accuracy?: number;
   remarks?: string;
   agentId?: string;
   visitedBy: string;
@@ -163,6 +165,10 @@ export const FieldVisitsModule: React.FC = () => {
   const [storeAddress, setStoreAddress] = useState('');
   const [latitude, setLatitude] = useState<number | ''>('');
   const [longitude, setLongitude] = useState<number | ''>('');
+  const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
+  const [gpsTimestamp, setGpsTimestamp] = useState<number | null>(null);
+  const [gpsStatus, setGpsStatus] = useState<'idle' | 'requesting' | 'obtained' | 'permission_denied' | 'unavailable' | 'timeout' | 'low_accuracy'>('idle');
+  const [gpsErrorMsg, setGpsErrorMsg] = useState<string>('');
   const [remarks, setRemarks] = useState('');
   const [isLocating, setIsLocating] = useState(false);
   const [gpsPhoto, setGpsPhoto] = useState<string>('');
@@ -170,6 +176,31 @@ export const FieldVisitsModule: React.FC = () => {
   // Complete Form State
   const [completeRemarks, setCompleteRemarks] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Division Agent Assigned Pincodes for New Store Visit
+  const [assignedDivisionPincodes, setAssignedDivisionPincodes] = useState<TerritoryPincode[]>([]);
+  const [isLoadingAssignedPincodes, setIsLoadingAssignedPincodes] = useState(false);
+
+  useEffect(() => {
+    if (activeRole === 'division' && userDivision) {
+      setIsLoadingAssignedPincodes(true);
+      getActivePincodes(userState, userDistrict, userDivision)
+        .then(pins => {
+          if (Array.isArray(pins)) {
+            setAssignedDivisionPincodes(pins);
+            if (pins.length > 0 && !visitPincode) {
+              setVisitPincode(pins[0].code);
+            }
+          }
+        })
+        .catch(err => {
+          console.error('Failed to load division pincodes for field visit:', err);
+        })
+        .finally(() => {
+          setIsLoadingAssignedPincodes(false);
+        });
+    }
+  }, [activeRole, userState, userDistrict, userDivision]);
 
   // Fetch real visits from API or sync
   const fetchVisits = async (overrideParams?: Record<string, string>) => {
@@ -254,28 +285,86 @@ export const FieldVisitsModule: React.FC = () => {
     refetchOnWindowFocus: true
   });
 
-  // Fetch live browser geolocation
+  // Fetch live browser geolocation with high accuracy, timeout fallback and transparent error states
   const handleFetchLocation = () => {
     setIsLocating(true);
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setLatitude(parseFloat(pos.coords.latitude.toFixed(6)));
-          setLongitude(parseFloat(pos.coords.longitude.toFixed(6)));
-          setIsLocating(false);
-        },
-        () => {
-          setLatitude('');
-          setLongitude('');
-          setIsLocating(false);
-        },
-        { timeout: 8000 }
-      );
-    } else {
+    setGpsStatus('requesting');
+    setGpsErrorMsg('');
+
+    if (!('geolocation' in navigator)) {
       setLatitude('');
       setLongitude('');
+      setGpsAccuracy(null);
+      setGpsStatus('unavailable');
+      setGpsErrorMsg('GPS Geolocation is not supported by your browser.');
       setIsLocating(false);
+      return;
     }
+
+    const options: PositionOptions = {
+      enableHighAccuracy: true,
+      timeout: 12000,
+      maximumAge: 0 // Do not use stale cached coordinates
+    };
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        const acc = Math.round(pos.coords.accuracy);
+
+        // Validate coordinates: must be valid numeric values within physical ranges
+        if (typeof lat !== 'number' || typeof lon !== 'number' || isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+          setLatitude('');
+          setLongitude('');
+          setGpsAccuracy(null);
+          setGpsStatus('unavailable');
+          setGpsErrorMsg('Invalid GPS coordinates returned by device.');
+          setIsLocating(false);
+          return;
+        }
+
+        setLatitude(parseFloat(lat.toFixed(6)));
+        setLongitude(parseFloat(lon.toFixed(6)));
+        setGpsAccuracy(acc);
+        setGpsTimestamp(pos.timestamp || Date.now());
+
+        if (acc > 150) {
+          setGpsStatus('low_accuracy');
+          setGpsErrorMsg(`GPS signal accuracy is low (±${acc}m). Please move closer to an open area and retry.`);
+        } else {
+          setGpsStatus('obtained');
+          setGpsErrorMsg('');
+        }
+        setIsLocating(false);
+      },
+      (err) => {
+        setLatitude('');
+        setLongitude('');
+        setGpsAccuracy(null);
+        setIsLocating(false);
+
+        switch (err.code) {
+          case err.PERMISSION_DENIED:
+            setGpsStatus('permission_denied');
+            setGpsErrorMsg('Location permission denied. Please allow location access in your browser address bar.');
+            break;
+          case err.POSITION_UNAVAILABLE:
+            setGpsStatus('unavailable');
+            setGpsErrorMsg('GPS location is unavailable on your device.');
+            break;
+          case err.TIMEOUT:
+            setGpsStatus('timeout');
+            setGpsErrorMsg('GPS location request timed out. Please retry.');
+            break;
+          default:
+            setGpsStatus('unavailable');
+            setGpsErrorMsg(err.message || 'GPS location error.');
+            break;
+        }
+      },
+      options
+    );
   };
 
   // State territory scope fallback-safe resolution
@@ -709,6 +798,10 @@ export const FieldVisitsModule: React.FC = () => {
 
   const handleStartVisitSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const effectivePincode = (activeRole === 'pincode' ? userPincode : visitPincode).trim();
+    if (!effectivePincode) {
+      return;
+    }
     if (!vendorName.trim() || !storeAddress.trim() || !remarks) return;
 
     setIsSubmitting(true);
@@ -727,7 +820,7 @@ export const FieldVisitsModule: React.FC = () => {
       visitedByRole: `${activeRole.charAt(0).toUpperCase() + activeRole.slice(1)} Agent`,
       state: userState,
       territoryDistrict: userDistrict,
-      territoryPincode: userPincode,
+      territoryPincode: effectivePincode,
       photoBeforeVisit: gpsPhoto,
       visitPurpose: remarks
     };
@@ -752,20 +845,36 @@ export const FieldVisitsModule: React.FC = () => {
     setSelectedVisitToComplete(newVisit);
   };
 
-  const handleCompleteVisitSubmit = (e: React.FormEvent) => {
+  const handleCompleteVisitSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedVisitToComplete) return;
 
     setIsSubmitting(true);
     const checkoutTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const visitId = selectedVisitToComplete._id;
+    const finalRemarks = completeRemarks.trim() || selectedVisitToComplete.remarks || 'Field Visit Completed';
+
+    // Synchronize completion with backend API if valid MongoDB ID
+    try {
+      if (visitId && !visitId.startsWith('VIS-')) {
+        await api.post(`/field-visits/${visitId}/complete`, {
+          remarks: finalRemarks,
+          latitude: Number(latitude) || undefined,
+          longitude: Number(longitude) || undefined,
+          accuracy: gpsAccuracy || undefined
+        });
+      }
+    } catch (err) {
+      console.warn('Backend field visit checkout sync fallback:', err);
+    }
 
     setVisits(prev => {
       const updated = prev.map(v =>
-        v._id === selectedVisitToComplete._id
+        v._id === visitId
           ? {
               ...v,
               status: 'completed' as const,
-              remarks: completeRemarks.trim() || v.remarks,
+              remarks: finalRemarks,
               visitTime: `${v.visitTime || 'Checked-In'} → Checked-Out at ${checkoutTime}`
             }
           : v
@@ -775,6 +884,15 @@ export const FieldVisitsModule: React.FC = () => {
       } catch (e) {}
       return updated;
     });
+
+    if (selectedVisitDetails && selectedVisitDetails._id === visitId) {
+      setSelectedVisitDetails(prev => prev ? {
+        ...prev,
+        status: 'completed' as const,
+        remarks: finalRemarks,
+        visitTime: `${prev.visitTime || 'Checked-In'} → Checked-Out at ${checkoutTime}`
+      } : null);
+    }
 
     setSelectedVisitToComplete(null);
     setCompleteRemarks('');
@@ -790,17 +908,33 @@ export const FieldVisitsModule: React.FC = () => {
     setIsCheckoutModalOpen(true);
   };
 
-  const handleInterestedSubmit = () => {
+  const handleInterestedSubmit = async () => {
     if (!checkoutVisit) return;
     const checkoutTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const visitId = checkoutVisit._id;
+    const finalRemarks = 'Interested - Proceeding to Vendor Onboarding';
+
+    // Sync checkout completion with backend API
+    try {
+      if (visitId && !visitId.startsWith('VIS-')) {
+        await api.post(`/field-visits/${visitId}/complete`, {
+          remarks: finalRemarks,
+          latitude: Number(latitude) || undefined,
+          longitude: Number(longitude) || undefined,
+          accuracy: gpsAccuracy || undefined
+        });
+      }
+    } catch (err) {
+      console.warn('Backend field visit complete sync fallback:', err);
+    }
 
     setVisits(prev => {
       const updated = prev.map(v =>
-        v._id === checkoutVisit._id
+        v._id === visitId
           ? {
               ...v,
               status: 'completed' as const,
-              remarks: 'Interested - Proceeding to Vendor Onboarding',
+              remarks: finalRemarks,
               visitTime: `${v.visitTime || 'Checked-In'} → Checked-Out (Interested) at ${checkoutTime}`
             }
           : v
@@ -811,12 +945,21 @@ export const FieldVisitsModule: React.FC = () => {
       return updated;
     });
 
+    if (selectedVisitDetails && selectedVisitDetails._id === visitId) {
+      setSelectedVisitDetails(prev => prev ? {
+        ...prev,
+        status: 'completed' as const,
+        remarks: finalRemarks,
+        visitTime: `${prev.visitTime || 'Checked-In'} → Checked-Out (Interested) at ${checkoutTime}`
+      } : null);
+    }
+
     setIsCheckoutModalOpen(false);
     setSelectedVisitDetails(null);
     navigate('/vendors');
   };
 
-  const handleNotInterestedSubmit = (e: React.FormEvent) => {
+  const handleNotInterestedSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!checkoutVisit) return;
 
@@ -825,14 +968,30 @@ export const FieldVisitsModule: React.FC = () => {
       : (notInterestedReason || 'Merchant not interested');
 
     const checkoutTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const visitId = checkoutVisit._id;
+    const finalRemarks = `Not Interested: ${finalReason}`;
+
+    // Sync checkout completion with backend API
+    try {
+      if (visitId && !visitId.startsWith('VIS-')) {
+        await api.post(`/field-visits/${visitId}/complete`, {
+          remarks: finalRemarks,
+          latitude: Number(latitude) || undefined,
+          longitude: Number(longitude) || undefined,
+          accuracy: gpsAccuracy || undefined
+        });
+      }
+    } catch (err) {
+      console.warn('Backend field visit complete sync fallback:', err);
+    }
 
     setVisits(prev => {
       const updated = prev.map(v =>
-        v._id === checkoutVisit._id
+        v._id === visitId
           ? {
               ...v,
               status: 'completed' as const,
-              remarks: `Not Interested: ${finalReason}`,
+              remarks: finalRemarks,
               visitTime: `${v.visitTime || 'Checked-In'} → Checked-Out (Not Interested) at ${checkoutTime}`
             }
           : v
@@ -842,6 +1001,15 @@ export const FieldVisitsModule: React.FC = () => {
       } catch (e) {}
       return updated;
     });
+
+    if (selectedVisitDetails && selectedVisitDetails._id === visitId) {
+      setSelectedVisitDetails(prev => prev ? {
+        ...prev,
+        status: 'completed' as const,
+        remarks: finalRemarks,
+        visitTime: `${prev.visitTime || 'Checked-In'} → Checked-Out (Not Interested) at ${checkoutTime}`
+      } : null);
+    }
 
     setIsCheckoutModalOpen(false);
     setSelectedVisitDetails(null);
@@ -1422,12 +1590,24 @@ export const FieldVisitsModule: React.FC = () => {
             </div>
 
             <div className="pt-3 space-y-2 border-t border-slate-100">
-              <button
-                onClick={() => handleOpenCheckoutModal(selectedVisitDetails)}
-                className="w-full py-2.5 bg-[#864f19] hover:bg-[#a3672f] text-white font-extrabold rounded-xl text-xs cursor-pointer border-none shadow flex items-center justify-center gap-2 uppercase tracking-wider transition"
-              >
-                <LogOut className="w-4 h-4" /> Check Out Field Visit
-              </button>
+              {selectedVisitDetails.status === 'completed' ? (
+                <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-center space-y-1">
+                  <div className="flex items-center justify-center gap-1.5 text-emerald-800 font-extrabold text-xs">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    Visit Completed & Checked Out
+                  </div>
+                  <p className="text-[10px] text-emerald-700 font-semibold">
+                    {selectedVisitDetails.visitTime || 'Audit and checkout finalized'}
+                  </p>
+                </div>
+              ) : (
+                <button
+                  onClick={() => handleOpenCheckoutModal(selectedVisitDetails)}
+                  className="w-full py-2.5 bg-[#864f19] hover:bg-[#a3672f] text-white font-extrabold rounded-xl text-xs cursor-pointer border-none shadow flex items-center justify-center gap-2 uppercase tracking-wider transition"
+                >
+                  <LogOut className="w-4 h-4" /> Check Out Field Visit
+                </button>
+              )}
               <button
                 onClick={() => setSelectedVisitDetails(null)}
                 className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer border-none"
@@ -1469,6 +1649,7 @@ export const FieldVisitsModule: React.FC = () => {
           <div className="space-y-1">
             <label className="block text-[#52443a] uppercase text-[10px] font-bold">Select Pincode *</label>
             <select
+              required
               value={activeRole === 'pincode' ? userPincode : visitPincode}
               onChange={(e) => setVisitPincode(e.target.value)}
               disabled={activeRole === 'pincode'}
@@ -1479,7 +1660,17 @@ export const FieldVisitsModule: React.FC = () => {
               ) : (
                 <>
                   <option value="">-- Select Pincode --</option>
-                  {userPincode && <option value={userPincode}>{userPincode} (Your Territory PIN)</option>}
+                  {isLoadingAssignedPincodes ? (
+                    <option value="" disabled>Loading assigned pincodes...</option>
+                  ) : assignedDivisionPincodes.length === 0 ? (
+                    <option value="" disabled>No pincodes currently assigned to this division</option>
+                  ) : (
+                    assignedDivisionPincodes.map(p => (
+                      <option key={p.code} value={p.code}>
+                        {p.code} {p.name || p.area ? `(${p.name || p.area})` : ''}
+                      </option>
+                    ))
+                  )}
                 </>
               )}
             </select>
@@ -1539,12 +1730,39 @@ export const FieldVisitsModule: React.FC = () => {
                 </div>
               )}
 
-              {/* Single GPS Status Badge */}
+              {/* Dynamic GPS Status Badge */}
               <div className="absolute top-2 left-2 z-10">
-                {latitude && longitude ? (
-                  <span className="bg-emerald-600/90 backdrop-blur-sm text-white px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow">
-                    <CheckCircle2 className="w-3 h-3 text-white" />
-                    GPS Captured ({latitude.toString().slice(0, 7)}, {longitude.toString().slice(0, 7)} • Acc: ±10m)
+                {isLocating || gpsStatus === 'requesting' ? (
+                  <span className="bg-blue-600/90 backdrop-blur-sm text-white px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow">
+                    <Loader2 className="w-3 h-3 animate-spin text-white" />
+                    Acquiring High-Accuracy GPS...
+                  </span>
+                ) : latitude && longitude ? (
+                  gpsStatus === 'low_accuracy' ? (
+                    <span className="bg-amber-600/90 backdrop-blur-sm text-white px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow">
+                      <AlertTriangle className="w-3 h-3 text-white" />
+                      Low GPS Signal ({latitude}, {longitude} • Acc: ±{gpsAccuracy}m)
+                    </span>
+                  ) : (
+                    <span className="bg-emerald-600/90 backdrop-blur-sm text-white px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow">
+                      <CheckCircle2 className="w-3 h-3 text-white" />
+                      GPS Captured ({latitude}, {longitude} • Acc: ±{gpsAccuracy || 10}m)
+                    </span>
+                  )
+                ) : gpsStatus === 'permission_denied' ? (
+                  <span className="bg-rose-700/90 backdrop-blur-sm text-white px-2.5 py-1 rounded-lg text-[10px] font-extrabold flex items-center gap-1 border border-white/10 shadow">
+                    <ShieldAlert className="w-3 h-3 text-white" />
+                    Location Permission Denied
+                  </span>
+                ) : gpsStatus === 'timeout' ? (
+                  <span className="bg-rose-700/90 backdrop-blur-sm text-white px-2.5 py-1 rounded-lg text-[10px] font-extrabold flex items-center gap-1 border border-white/10 shadow">
+                    <Clock className="w-3 h-3 text-white" />
+                    GPS Request Timed Out
+                  </span>
+                ) : gpsStatus === 'unavailable' ? (
+                  <span className="bg-slate-800/80 backdrop-blur-sm text-amber-300 px-2.5 py-1 rounded-lg text-[10px] font-extrabold flex items-center gap-1 border border-white/10 shadow">
+                    <MapPin className="w-3 h-3 text-amber-400" />
+                    GPS Unavailable
                   </span>
                 ) : (
                   <span className="bg-slate-800/80 backdrop-blur-sm text-amber-300 px-2.5 py-1 rounded-lg text-[10px] font-extrabold flex items-center gap-1 border border-white/10">
@@ -1574,6 +1792,19 @@ export const FieldVisitsModule: React.FC = () => {
                 />
               </label>
             </div>
+
+            {gpsErrorMsg && (
+              <div className="p-2.5 bg-rose-50 rounded-xl border border-rose-200 flex items-center justify-between text-[11px] font-bold text-rose-800 animate-fade-in">
+                <span>⚠️ {gpsErrorMsg}</span>
+                <button
+                  type="button"
+                  onClick={handleFetchLocation}
+                  className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-extrabold cursor-pointer border-none shadow-sm flex items-center gap-1 shrink-0 ml-2"
+                >
+                  <RotateCcw className="w-3 h-3" /> Retry GPS
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="space-y-1">

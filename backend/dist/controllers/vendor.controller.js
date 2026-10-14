@@ -65,7 +65,11 @@ const getVendors = async (req, res) => {
         if (!agentId)
             return res.status(401).json({ message: 'Unauthorized' });
         const scope = await (0, territoryScope_1.getAgentTerritoryScope)(agentId);
-        const scopeFilter = (0, territoryScope_1.buildVendorScopeFilter)(scope);
+        let divisionPincodes = [];
+        if (scope?.role === 'division' && scope.division) {
+            divisionPincodes = await (0, territoryScope_1.getDivisionPincodes)(scope.division);
+        }
+        const scopeFilter = (0, territoryScope_1.buildVendorScopeFilter)(scope, divisionPincodes);
         const { page = '1', limit = '50', status, category, search, startDate, endDate, dateFilter } = req.query;
         const pageNum = parseInt(page, 10);
         const limitNum = parseInt(limit, 10);

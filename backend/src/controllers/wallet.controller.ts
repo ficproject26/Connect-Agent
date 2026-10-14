@@ -79,49 +79,68 @@ export const getTransactions = async (req: Request, res: Response) => {
 export const getBankDetails = async (req: Request, res: Response) => {
   try {
     const agentId = (req as any).agent?.agentId;
-    if (!agentId) return res.status(401).json({ message: 'Unauthorized' });
+    const agentEmail = (req as any).agent?.email;
+    if (!agentId && !agentEmail) return res.status(401).json({ message: 'Unauthorized' });
 
-    const agent = await Agent.findById(agentId);
-    if (!agent) return res.status(404).json({ message: 'Agent not found' });
+    let agent = agentId && mongoose.isValidObjectId(agentId) ? await Agent.findById(agentId) : null;
+    const db = mongoose.connection.db;
 
-    // Check if agent already has bankDetails populated
-    let bankDetails = (agent.bankDetails && (agent.bankDetails.bankName || agent.bankDetails.accountNumber)) ? {
+    // Check if agent already has bankDetails populated in Agent model
+    let bankDetails = (agent?.bankDetails && (agent.bankDetails.bankName || agent.bankDetails.accountNumber)) ? {
       bankName: agent.bankDetails.bankName,
       accountNumber: agent.bankDetails.accountNumber,
       ifscCode: agent.bankDetails.ifscCode,
       accountHolder: agent.bankDetails.accountHolder || agent.name
     } : null;
 
-    // If not found directly, auto-map from registered/approved user onboarding record
-    if (!bankDetails) {
-      const UserCol = Agent.db.collection('users');
-      const registeredUser = await UserCol.findOne({
-        $or: [
-          { email: agent.email },
-          { phone: agent.phone },
-          { mobileNumber: agent.phone },
-          { name: agent.name }
-        ]
-      });
+    // If not found directly, look up user onboarding record in MongoDB 'users' collection
+    let userDoc: any = null;
+    if (db) {
+      const orClauses: any[] = [];
+      if (agentId && mongoose.isValidObjectId(agentId)) orClauses.push({ _id: new mongoose.Types.ObjectId(agentId) });
+      else if (agentId) orClauses.push({ _id: agentId });
+      if (agentEmail) orClauses.push({ email: agentEmail.toLowerCase() });
+      if (agent?.email) orClauses.push({ email: agent.email.toLowerCase() });
+      if (agent?.phone) orClauses.push({ phone: agent.phone }, { mobileNumber: agent.phone });
 
-      if (registeredUser && (registeredUser.bankName || registeredUser.accountNo || registeredUser.accountNumber || registeredUser.ifscCode)) {
-        bankDetails = {
-          bankName: registeredUser.bankName || 'State Bank of India',
-          accountNumber: registeredUser.accountNo || registeredUser.accountNumber || '',
-          ifscCode: registeredUser.ifscCode || registeredUser.ifsc || '',
-          accountHolder: registeredUser.accountHolderName || registeredUser.name || agent.name
-        };
-        // Persist to agent record so future lookups are instant
-        await Agent.findByIdAndUpdate(agentId, { bankDetails });
+      if (orClauses.length > 0) {
+        userDoc = await db.collection('users').findOne({ $or: orClauses });
+      }
+
+      if (!bankDetails && userDoc) {
+        const uBank = userDoc.bankDetails;
+        if (uBank && (uBank.bankName || uBank.accountNumber)) {
+          bankDetails = {
+            bankName: uBank.bankName || 'State Bank of India',
+            accountNumber: uBank.accountNumber || '',
+            ifscCode: uBank.ifscCode || '',
+            accountHolder: uBank.accountHolder || userDoc.name || agent?.name || ''
+          };
+        } else if (userDoc.bankName || userDoc.accountNo || userDoc.accountNumber || userDoc.ifscCode) {
+          bankDetails = {
+            bankName: userDoc.bankName || 'State Bank of India',
+            accountNumber: userDoc.accountNo || userDoc.accountNumber || '',
+            ifscCode: userDoc.ifscCode || userDoc.ifsc || '',
+            accountHolder: userDoc.accountHolderName || userDoc.name || agent?.name || ''
+          };
+        }
+
+        // Persist to agent record if agent exists so future lookups are instant
+        if (bankDetails && agent?._id) {
+          await Agent.findByIdAndUpdate(agent._id, { bankDetails });
+        }
       }
     }
 
+    const isLinked = Boolean(bankDetails && (bankDetails.accountNumber || bankDetails.bankName));
+
     return res.status(200).json({
+      isLinked,
       bankDetails: bankDetails || {
         bankName: '',
         accountNumber: '',
         ifscCode: '',
-        accountHolder: agent.name
+        accountHolder: agent?.name || userDoc?.name || ''
       }
     });
   } catch (error) {
@@ -134,7 +153,8 @@ export const getBankDetails = async (req: Request, res: Response) => {
 export const updateBankDetails = async (req: Request, res: Response) => {
   try {
     const agentId = (req as any).agent?.agentId;
-    if (!agentId) return res.status(401).json({ message: 'Unauthorized' });
+    const agentEmail = (req as any).agent?.email;
+    if (!agentId && !agentEmail) return res.status(401).json({ message: 'Unauthorized' });
 
     const { bankName, accountNumber, ifscCode, holderName, accountHolder } = req.body;
     if (!accountNumber || !ifscCode) {
@@ -161,41 +181,57 @@ export const updateBankDetails = async (req: Request, res: Response) => {
       accountHolder: (holderName || accountHolder || '').trim()
     };
 
-    const updatedAgent = await Agent.findByIdAndUpdate(
-      agentId,
-      { bankDetails: updatedBank },
-      { new: true }
-    );
-
-    if (!updatedAgent) {
-      return res.status(404).json({ message: 'Agent not found' });
+    let updatedAgent: any = null;
+    if (agentId && mongoose.isValidObjectId(agentId)) {
+      updatedAgent = await Agent.findByIdAndUpdate(
+        agentId,
+        { bankDetails: updatedBank },
+        { new: true }
+      );
     }
 
     // Sync bank details to users collection in MongoDB
-    try {
-      const db = mongoose.connection.db;
-      if (db) {
-        await db.collection('users').updateOne(
-          { $or: [{ email: updatedAgent.email.toLowerCase() }, { phone: updatedAgent.phone }] },
-          {
-            $set: {
-              bankDetails: updatedBank,
-              bankName: updatedBank.bankName,
-              accountNo: updatedBank.accountNumber,
-              accountNumber: updatedBank.accountNumber,
-              ifscCode: updatedBank.ifscCode,
-              accountHolderName: updatedBank.accountHolder
+    const db = mongoose.connection.db;
+    let userSynced = false;
+    if (db) {
+      try {
+        const userOrClauses: any[] = [];
+        if (agentId && mongoose.isValidObjectId(agentId)) userOrClauses.push({ _id: new mongoose.Types.ObjectId(agentId) });
+        else if (agentId) userOrClauses.push({ _id: agentId });
+        if (agentEmail) userOrClauses.push({ email: agentEmail.toLowerCase() });
+        if (updatedAgent?.email) userOrClauses.push({ email: updatedAgent.email.toLowerCase() });
+        if (updatedAgent?.phone) userOrClauses.push({ phone: updatedAgent.phone });
+
+        if (userOrClauses.length > 0) {
+          const syncRes = await db.collection('users').updateOne(
+            { $or: userOrClauses },
+            {
+              $set: {
+                bankDetails: updatedBank,
+                bankName: updatedBank.bankName,
+                accountNo: updatedBank.accountNumber,
+                accountNumber: updatedBank.accountNumber,
+                ifscCode: updatedBank.ifscCode,
+                accountHolderName: updatedBank.accountHolder,
+                updatedAt: new Date()
+              }
             }
-          }
-        );
+          );
+          userSynced = syncRes.matchedCount > 0;
+        }
+      } catch (syncErr) {
+        console.error('Error syncing bank details to users collection:', syncErr);
       }
-    } catch (syncErr) {
-      console.error('Error syncing bank details to users collection:', syncErr);
+    }
+
+    if (!updatedAgent && !userSynced) {
+      return res.status(404).json({ message: 'Agent account not found' });
     }
 
     return res.status(200).json({
       success: true,
       message: 'Bank details saved successfully',
+      isLinked: true,
       bankDetails: updatedBank,
       data: { bankDetails: updatedBank }
     });

@@ -9,6 +9,22 @@ const ticketSchema = new mongoose_1.Schema({
     creatorName: { type: String },
     assignedTo: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Agent' },
     assignedAgent: { type: String },
+    assignedAgentIdStr: { type: String },
+    assignedAgentRole: { type: String },
+    assignedAgentPhone: { type: String },
+    assignedAgentPincode: { type: String },
+    assignedAgentDistrict: { type: String },
+    assignedAgentDivision: { type: String },
+    assignedAgentState: { type: String },
+    assignmentStatus: { type: String, enum: ['assigned', 'unassigned'], default: 'unassigned' },
+    assignmentHistory: [{
+            agentId: { type: String },
+            agentName: { type: String },
+            role: { type: String },
+            assignedBy: { type: String },
+            assignedAt: { type: Date, default: Date.now },
+            reason: { type: String }
+        }],
     vendorName: { type: String },
     storeName: { type: String },
     state: { type: String },
@@ -35,6 +51,8 @@ ticketSchema.index({ assignedTo: 1, status: 1, createdAt: -1 });
 ticketSchema.index({ status: 1, createdAt: -1 });
 ticketSchema.index({ state: 1, status: 1, createdAt: -1 });
 ticketSchema.index({ district: 1, status: 1, createdAt: -1 });
+ticketSchema.index({ division: 1, status: 1, createdAt: -1 });
+ticketSchema.index({ pincode: 1, status: 1, createdAt: -1 });
 ticketSchema.index({ priority: 1 });
 ticketSchema.index({ state: 1, district: 1, pincode: 1 });
 ticketSchema.index({ createdAt: -1 });

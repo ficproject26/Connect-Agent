@@ -37,13 +37,6 @@ export const PincodeDashboard: React.FC = () => {
   const recentVendors = dashboardData?.recentVendors || [];
   const recentAssignments = dashboardData?.recentAssignments || [];
 
-  // Ticket submission state
-  const [ticketRaised, setTicketRaised] = useState(false);
-  const [ticketDesc, setTicketDesc] = useState('');
-  const [selectedVendorId, setSelectedVendorId] = useState('');
-  const [vendorNameInput, setVendorNameInput] = useState('');
-  const [storeNameInput, setStoreNameInput] = useState('');
-  const [category, setCategory] = useState('Vendor Query');
   const [activeTab, setActiveTab] = useState<'vendors' | 'schedule' | 'support' | 'chat'>('vendors');
 
   // Live Help Desk Chat State
@@ -74,42 +67,6 @@ export const PincodeDashboard: React.FC = () => {
     staleTime: 30000,
     refetchInterval: 45000
   });
-
-  const handleRaiseTicket = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!ticketDesc.trim()) return;
-    
-    try {
-      await api.post('/tickets', {
-        category,
-        description: ticketDesc,
-        vendorName: vendorNameInput || undefined,
-        storeName: storeNameInput || undefined,
-        vendorId: selectedVendorId || undefined,
-        priority: 'medium'
-      });
-      setTicketRaised(true);
-      setTicketDesc('');
-      setVendorNameInput('');
-      setStoreNameInput('');
-      setSelectedVendorId('');
-      addNotification(
-        'Support Ticket Raised',
-        `Support ticket for ${category} successfully logged in the system.`,
-        'medium',
-        'system'
-      );
-      showToast(`Support ticket for ${category} successfully raised!`, 'success');
-      queryClient.invalidateQueries({ queryKey: ['pincodeDashboardStats'] });
-      queryClient.invalidateQueries({ queryKey: ['pincodeUserTickets'] });
-      setTimeout(() => {
-        setTicketRaised(false);
-      }, 3000);
-    } catch (err) {
-      console.error('Failed to submit ticket:', err);
-      showToast("Failed to raise support ticket. Please try again.", "error");
-    }
-  };
 
   const handleSendChatMessage = (e: React.FormEvent) => {
     e.preventDefault();
@@ -215,217 +172,118 @@ export const PincodeDashboard: React.FC = () => {
         ))}
       </div>
 
-      {/* Lists tabs & support forms */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Vendor directory, Schedule timelines, Support logs */}
-        <div className="lg:col-span-2 bg-white rounded-[16px] border border-[#eae8e7] shadow-sm overflow-hidden flex flex-col justify-between">
-          <div className="px-6 py-4 border-b border-[#eae8e7] flex justify-between items-center bg-white">
-            <div className="flex gap-4">
-              <button onClick={() => setActiveTab('vendors')} className={`text-xs font-extrabold uppercase pb-1 border-b-2 transition-all ${activeTab === 'vendors' ? 'border-[#864f19] text-[#1b1c1c]' : 'border-transparent text-[#52443a]'}`}>Assigned Vendors</button>
-              <button onClick={() => setActiveTab('schedule')} className={`text-xs font-extrabold uppercase pb-1 border-b-2 transition-all ${activeTab === 'schedule' ? 'border-[#864f19] text-[#1b1c1c]' : 'border-transparent text-[#52443a]'}`}>Today's Schedule</button>
-              <button onClick={() => setActiveTab('support')} className={`text-xs font-extrabold uppercase pb-1 border-b-2 transition-all ${activeTab === 'support' ? 'border-[#864f19] text-[#1b1c1c]' : 'border-transparent text-[#52443a]'}`}>My Support Tickets</button>
-              <button onClick={() => setActiveTab('chat')} className={`text-xs font-extrabold uppercase pb-1 border-b-2 transition-all ${activeTab === 'chat' ? 'border-[#864f19] text-[#1b1c1c]' : 'border-transparent text-[#52443a]'} flex items-center gap-1`}><MessageSquare className="w-3 h-3" /> Live Help Desk</button>
-            </div>
-          </div>
-          
-          <div className="p-6 divide-y divide-[#eae8e7]">
-            {activeTab === 'vendors' && (
-              <>
-                <div className="py-2.5 flex justify-between text-xs font-bold text-[#52443a]">
-                  <span>Shop Name</span>
-                  <span>KYC Status</span>
-                </div>
-                {recentVendors.length === 0 ? (
-                  <p className="py-3 text-center text-xs text-slate-400">No active assigned merchants in registry.</p>
-                ) : (
-                  recentVendors.map((item, i) => (
-                    <div key={i} className="py-3 flex justify-between text-xs font-semibold">
-                      <span className="text-[#1b1c1c]">{item.name}</span>
-                      <span className={`font-bold ${item.kycStatus === 'approved' ? 'text-green-600' : 'text-[#864f19]'}`}>
-                        {item.kycStatus === 'approved' ? 'Approved & Synced' : `KYC ${item.kycStatus}`}
-                      </span>
-                    </div>
-                  ))
-                )}
-              </>
-            )}
-
-            {activeTab === 'schedule' && (
-              <>
-                <div className="py-2.5 flex justify-between text-xs font-bold text-[#52443a]">
-                  <span>Visit Shop Name</span>
-                  <span>Target Value / Action</span>
-                </div>
-                {recentAssignments.length === 0 ? (
-                  <p className="py-3 text-center text-xs text-slate-400">No task schedules assigned for today.</p>
-                ) : (
-                  recentAssignments.map((item, i) => (
-                    <div key={i} className="py-3 flex justify-between text-xs font-semibold">
-                      <span className="text-[#1b1c1c]">{item.target?.title || 'Territory Audit Visit'}</span>
-                      <span className="text-[#34647b]">{item.status === 'completed' ? 'Completed' : 'Upcoming'} • Value: {item.target?.targetValue || 0}</span>
-                    </div>
-                  ))
-                )}
-              </>
-            )}
-
-            {activeTab === 'support' && (
-              <>
-                <div className="py-2.5 flex justify-between text-xs font-bold text-[#52443a]">
-                  <span>Support Ticket ID</span>
-                  <span>Resolution State</span>
-                </div>
-                {!userTicketsData || userTicketsData.length === 0 ? (
-                  <p className="py-3 text-center text-xs text-slate-400">No support tickets logged yet.</p>
-                ) : (
-                  userTicketsData.map((item: any, i: number) => (
-                    <div key={i} className="py-3 flex justify-between text-xs font-semibold">
-                      <span className="text-[#1b1c1c]">{item.ticketId || item._id ? `#${item.ticketId || String(item._id).slice(-6)}: ${item.category || item.subject || 'Ticket'}` : item.category}</span>
-                      <span className={`font-extrabold ${item.status === 'resolved' ? 'text-emerald-700' : 'text-amber-600'}`}>
-                        {item.status === 'resolved' ? 'Resolved' : 'Pending Review'}
-                      </span>
-                    </div>
-                  ))
-                )}
-              </>
-            )}
-
-            {activeTab === 'chat' && (
-              <div className="space-y-4 pt-1 animate-fade-in">
-                <div className="h-[200px] overflow-y-auto space-y-2.5 pr-2">
-                  {chatMessages.map((msg, i) => (
-                    <div key={i} className={`flex ${msg.sender === 'agent' ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`p-2.5 rounded-2xl max-w-[80%] space-y-1 ${
-                        msg.sender === 'agent' 
-                          ? 'bg-[#864f19] text-white rounded-tr-none' 
-                          : 'bg-[#fbf9f8] text-slate-700 border border-slate-100 rounded-tl-none'
-                      }`}>
-                        <p className="font-semibold text-xs leading-normal">{msg.text}</p>
-                        <span className="block text-[8px] text-right opacity-60 font-bold">{msg.time}</span>
-                      </div>
-                    </div>
-                  ))}
-                  {isTyping && (
-                    <div className="flex justify-start">
-                      <div className="bg-[#fbf9f8] text-slate-400 p-2.5 rounded-2xl rounded-tl-none border border-slate-100 flex items-center gap-1">
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[#864f19]" />
-                        <span className="text-[10px] font-bold">Support Assistant is typing...</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <form onSubmit={handleSendChatMessage} className="flex gap-2 border-t border-slate-100 pt-3">
-                  <input
-                    type="text"
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    placeholder="Ask about KYC verification, payouts, or pincodes..."
-                    className="flex-grow bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                  />
-                  <button type="submit" className="p-2.5 bg-[#864f19] text-white rounded-xl hover:bg-[#a3672f] border-none cursor-pointer flex items-center justify-center shadow-sm transition">
-                    <Send className="w-3.5 h-3.5" />
-                  </button>
-                </form>
-              </div>
-            )}
+      {/* Vendor directory, Schedule timelines, Support logs */}
+      <div className="w-full bg-white rounded-[16px] border border-[#eae8e7] shadow-sm overflow-hidden flex flex-col justify-between">
+        <div className="px-6 py-4 border-b border-[#eae8e7] flex justify-between items-center bg-white">
+          <div className="flex gap-4">
+            <button onClick={() => setActiveTab('vendors')} className={`text-xs font-extrabold uppercase pb-1 border-b-2 transition-all ${activeTab === 'vendors' ? 'border-[#864f19] text-[#1b1c1c]' : 'border-transparent text-[#52443a]'}`}>Assigned Vendors</button>
+            <button onClick={() => setActiveTab('schedule')} className={`text-xs font-extrabold uppercase pb-1 border-b-2 transition-all ${activeTab === 'schedule' ? 'border-[#864f19] text-[#1b1c1c]' : 'border-transparent text-[#52443a]'}`}>Today's Schedule</button>
+            <button onClick={() => setActiveTab('support')} className={`text-xs font-extrabold uppercase pb-1 border-b-2 transition-all ${activeTab === 'support' ? 'border-[#864f19] text-[#1b1c1c]' : 'border-transparent text-[#52443a]'}`}>My Support Tickets</button>
+            <button onClick={() => setActiveTab('chat')} className={`text-xs font-extrabold uppercase pb-1 border-b-2 transition-all ${activeTab === 'chat' ? 'border-[#864f19] text-[#1b1c1c]' : 'border-transparent text-[#52443a]'} flex items-center gap-1`}><MessageSquare className="w-3 h-3" /> Live Help Desk</button>
           </div>
         </div>
-
-        {/* Raise Ticket Quick Widget Form */}
-        <div className="bg-white rounded-[16px] border border-[#eae8e7] shadow-sm p-6 flex flex-col justify-between space-y-4">
-          <div className="border-b border-[#eae8e7] pb-3">
-            <h3 className="font-extrabold text-sm text-[#1b1c1c]">Field Support Desk</h3>
-            <p className="text-[10px] text-[#52443a] mt-0.5">Submit merchant disputes or verification issues.</p>
-          </div>
-          
-          <form onSubmit={handleRaiseTicket} className="space-y-3 flex-grow flex flex-col justify-between">
-            {recentVendors && recentVendors.length > 0 && (
-              <div className="space-y-1">
-                <label className="block text-[9px] font-bold text-[#52443a] uppercase tracking-wider">Select Assigned Vendor</label>
-                <select
-                  value={selectedVendorId}
-                  onChange={(e) => {
-                    const vId = e.target.value;
-                    setSelectedVendorId(vId);
-                    const found = recentVendors.find((v: any) => v._id === vId);
-                    if (found) {
-                      setVendorNameInput(found.ownerName || found.name || '');
-                      setStoreNameInput(found.storeName || found.businessName || found.name || '');
-                    } else {
-                      setVendorNameInput('');
-                      setStoreNameInput('');
-                    }
-                  }}
-                  className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                >
-                  <option value="">-- Choose Vendor or Enter Manually --</option>
-                  {recentVendors.map((v: any) => (
-                    <option key={v._id} value={v._id}>
-                      {v.storeName || v.name} ({v.ownerName || v.name})
-                    </option>
-                  ))}
-                </select>
+        
+        <div className="p-6 divide-y divide-[#eae8e7]">
+          {activeTab === 'vendors' && (
+            <>
+              <div className="py-2.5 flex justify-between text-xs font-bold text-[#52443a]">
+                <span>Shop Name</span>
+                <span>KYC Status</span>
               </div>
-            )}
+              {recentVendors.length === 0 ? (
+                <p className="py-3 text-center text-xs text-slate-400">No active assigned merchants in registry.</p>
+              ) : (
+                recentVendors.map((item, i) => (
+                  <div key={i} className="py-3 flex justify-between text-xs font-semibold">
+                    <span className="text-[#1b1c1c]">{item.name}</span>
+                    <span className={`font-bold ${item.kycStatus === 'approved' ? 'text-green-600' : 'text-[#864f19]'}`}>
+                      {item.kycStatus === 'approved' ? 'Approved & Synced' : `KYC ${item.kycStatus}`}
+                    </span>
+                  </div>
+                ))
+              )}
+            </>
+          )}
 
-            <div className="space-y-1">
-              <label className="block text-[9px] font-bold text-[#52443a] uppercase tracking-wider">Vendor Name</label>
-              <input
-                type="text"
-                placeholder="Enter vendor name..."
-                value={vendorNameInput}
-                onChange={(e) => setVendorNameInput(e.target.value)}
-                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs font-bold text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-              />
+          {activeTab === 'schedule' && (
+            <>
+              <div className="py-2.5 flex justify-between text-xs font-bold text-[#52443a]">
+                <span>Visit Shop Name</span>
+                <span>Target Value / Action</span>
+              </div>
+              {recentAssignments.length === 0 ? (
+                <p className="py-3 text-center text-xs text-slate-400">No task schedules assigned for today.</p>
+              ) : (
+                recentAssignments.map((item, i) => (
+                  <div key={i} className="py-3 flex justify-between text-xs font-semibold">
+                    <span className="text-[#1b1c1c]">{item.target?.title || 'Territory Audit Visit'}</span>
+                    <span className="text-[#34647b]">{item.status === 'completed' ? 'Completed' : 'Upcoming'} • Value: {item.target?.targetValue || 0}</span>
+                  </div>
+                ))
+              )}
+            </>
+          )}
+
+          {activeTab === 'support' && (
+            <>
+              <div className="py-2.5 flex justify-between text-xs font-bold text-[#52443a]">
+                <span>Support Ticket ID</span>
+                <span>Resolution State</span>
+              </div>
+              {!userTicketsData || userTicketsData.length === 0 ? (
+                <p className="py-3 text-center text-xs text-slate-400">No support tickets logged yet.</p>
+              ) : (
+                userTicketsData.map((item: any, i: number) => (
+                  <div key={i} className="py-3 flex justify-between text-xs font-semibold">
+                    <span className="text-[#1b1c1c]">{item.ticketId || item._id ? `#${item.ticketId || String(item._id).slice(-6)}: ${item.category || item.subject || 'Ticket'}` : item.category}</span>
+                    <span className={`font-extrabold ${item.status === 'resolved' ? 'text-emerald-700' : 'text-amber-600'}`}>
+                      {item.status === 'resolved' ? 'Resolved' : 'Pending Review'}
+                    </span>
+                  </div>
+                ))
+              )}
+            </>
+          )}
+
+          {activeTab === 'chat' && (
+            <div className="space-y-4 pt-1 animate-fade-in">
+              <div className="h-[200px] overflow-y-auto space-y-2.5 pr-2">
+                {chatMessages.map((msg, i) => (
+                  <div key={i} className={`flex ${msg.sender === 'agent' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`p-2.5 rounded-2xl max-w-[80%] space-y-1 ${
+                      msg.sender === 'agent' 
+                        ? 'bg-[#864f19] text-white rounded-tr-none' 
+                        : 'bg-[#fbf9f8] text-slate-700 border border-slate-100 rounded-tl-none'
+                    }`}>
+                      <p className="font-semibold text-xs leading-normal">{msg.text}</p>
+                      <span className="block text-[8px] text-right opacity-60 font-bold">{msg.time}</span>
+                    </div>
+                  </div>
+                ))}
+                {isTyping && (
+                  <div className="flex justify-start">
+                    <div className="bg-[#fbf9f8] text-slate-400 p-2.5 rounded-2xl rounded-tl-none border border-slate-100 flex items-center gap-1">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-[#864f19]" />
+                      <span className="text-[10px] font-bold">Support Assistant is typing...</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <form onSubmit={handleSendChatMessage} className="flex gap-2 border-t border-slate-100 pt-3">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder="Ask about KYC verification, payouts, or pincodes..."
+                  className="flex-grow bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                />
+                <button type="submit" className="p-2.5 bg-[#864f19] text-white rounded-xl hover:bg-[#a3672f] border-none cursor-pointer flex items-center justify-center shadow-sm transition">
+                  <Send className="w-3.5 h-3.5" />
+                </button>
+              </form>
             </div>
-
-            <div className="space-y-1">
-              <label className="block text-[9px] font-bold text-[#52443a] uppercase tracking-wider">Store Name</label>
-              <input
-                type="text"
-                placeholder="Enter store name..."
-                value={storeNameInput}
-                onChange={(e) => setStoreNameInput(e.target.value)}
-                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs font-bold text-[#864f19] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="block text-[9px] font-bold text-[#52443a] uppercase tracking-wider">Ticket Category *</label>
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-              >
-                <option value="Vendor Query">Vendor Query</option>
-                <option value="KYC Document Issue">KYC Document Issue</option>
-                <option value="Portal Account Block">Portal Account Block</option>
-                <option value="Hardware / QR Standee Request">Hardware / QR Standee Request</option>
-              </select>
-            </div>
-
-            <div className="space-y-1">
-              <label className="block text-[9px] font-bold text-[#52443a] uppercase tracking-wider">Ticket Details *</label>
-              <textarea
-                required
-                value={ticketDesc}
-                onChange={(e) => setTicketDesc(e.target.value)}
-                placeholder="Details of the issue..."
-                rows={3}
-                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19] resize-none"
-              />
-            </div>
-
-            {ticketRaised && (
-              <p className="text-[10px] text-green-600 font-bold text-center">Ticket Submitted to Supervisor!</p>
-            )}
-
-            <button type="submit" className="w-full py-3 bg-[#864f19] hover:bg-[#a3672f] text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-sm transition-all border-none cursor-pointer flex items-center justify-center gap-2">
-              <Send className="w-3.5 h-3.5" /> Raise Ticket
-            </button>
-          </form>
+          )}
         </div>
       </div>
 

@@ -125,15 +125,52 @@ const exactRegex = (str: string) => new RegExp(`^\\s*${escapeRegex(str.trim())}\
 const containsRegex = (str: string) => new RegExp(escapeRegex(str.trim()), 'i');
 
 /**
+ * Fetch authoritative pincodes assigned to a division from Admin Pincode Management DB
+ */
+export async function getDivisionPincodes(divisionName: string): Promise<string[]> {
+  if (!divisionName || !divisionName.trim()) return [];
+  const cleanDiv = divisionName.toLowerCase().replace(/division|manager/g, '').trim();
+  const cacheKey = `divPins:${cleanDiv}`;
+  
+  try {
+    const cached = await cacheService.get<string[]>(cacheKey);
+    if (cached && Array.isArray(cached) && cached.length > 0) return cached;
+  } catch (_) {}
+
+  const db = mongoose.connection.db;
+  if (!db) return [];
+
+  try {
+    const docs = await db.collection('pincodes').find({
+      $or: [
+        { division: new RegExp(cleanDiv, 'i') },
+        { name: new RegExp(cleanDiv, 'i') }
+      ]
+    }, { projection: { code: 1, pincode: 1 } }).toArray();
+
+    const codes = docs.map((d: any) => String(d.code || d.pincode).trim()).filter(Boolean);
+    if (codes.length > 0) {
+      try {
+        await cacheService.set(cacheKey, codes, 300);
+      } catch (_) {}
+    }
+    return codes;
+  } catch (err) {
+    console.error('Error fetching division pincodes:', err);
+    return [];
+  }
+}
+
+/**
  * Build territory filter for Agent model and agent directory queries.
  * Strictly enforces State -> District -> Division -> Pincode visibility hierarchy.
  * Returns { _id: null } when required territory information is missing.
  */
-export function buildTerritoryFilter(scope: TerritoryScope | null): Record<string, any> {
+export function buildTerritoryFilter(scope: TerritoryScope | null, divisionPincodes?: string[]): Record<string, any> {
   // Empty or missing scope must NEVER fall back to showing all agents
   if (!scope) return { _id: null };
 
-  const validRoles = ['state', 'district', 'division', 'pincode', 'agent', 'district_agent', 'district_lead', 'division_agent', 'division_manager', 'pincode_agent'];
+  const validRoles = ['state', 'district', 'division', 'pincode', 'agent', 'state_manager', 'district_agent', 'district_manager', 'division_agent', 'division_manager', 'pincode_agent'];
 
   if (scope.role === 'state') {
     if (!scope.state) return { _id: null };
@@ -145,7 +182,14 @@ export function buildTerritoryFilter(scope: TerritoryScope | null): Record<strin
         { state: exactRegex(scope.state) },
         { assignedState: exactRegex(scope.state) }
       ],
-      role: { $in: validRoles }
+      $and: [
+        {
+          $or: [
+            { role: { $in: validRoles } },
+            { level: { $in: validRoles } }
+          ]
+        }
+      ]
     };
   }
 
@@ -163,8 +207,14 @@ export function buildTerritoryFilter(scope: TerritoryScope | null): Record<strin
       }
     ] : [];
 
+    const distRoles = ['district', 'division', 'pincode', 'district_agent', 'district_manager', 'division_agent', 'division_manager', 'pincode_agent'];
+
     return {
-      role: { $in: ['district', 'division', 'pincode'] },
+      $or: [
+        { role: { $in: distRoles } },
+        { level: { $in: distRoles } },
+        { role: 'agent', level: { $in: distRoles } }
+      ],
       $and: [
         {
           $or: [
@@ -204,17 +254,32 @@ export function buildTerritoryFilter(scope: TerritoryScope | null): Record<strin
       }
     ] : [];
 
+    const divOrClauses: any[] = [
+      { 'assignedTerritory.division': containsRegex(scope.division) },
+      { 'territory.division': containsRegex(scope.division) },
+      { division: containsRegex(scope.division) },
+      { assignedDivision: containsRegex(scope.division) }
+    ];
+
+    if (Array.isArray(divisionPincodes) && divisionPincodes.length > 0) {
+      divOrClauses.push(
+        { 'assignedTerritory.pincode': { $in: divisionPincodes } },
+        { 'territory.pincode': { $in: divisionPincodes } },
+        { pincode: { $in: divisionPincodes } },
+        { assignedPincode: { $in: divisionPincodes } }
+      );
+    }
+
+    const divRoles = ['division', 'pincode', 'division_agent', 'division_manager', 'pincode_agent'];
+
     return {
-      role: { $in: ['division', 'pincode'] },
+      $or: [
+        { role: { $in: divRoles } },
+        { level: { $in: divRoles } },
+        { role: 'agent', level: { $in: divRoles } }
+      ],
       $and: [
-        {
-          $or: [
-            { 'assignedTerritory.division': containsRegex(scope.division) },
-            { 'territory.division': containsRegex(scope.division) },
-            { division: containsRegex(scope.division) },
-            { assignedDivision: containsRegex(scope.division) }
-          ]
-        },
+        { $or: divOrClauses },
         ...districtConditions,
         ...stateConditions
       ]
@@ -224,14 +289,24 @@ export function buildTerritoryFilter(scope: TerritoryScope | null): Record<strin
   if (scope.role === 'pincode') {
     if (!scope.pincode) return { _id: null };
 
+    const pinRoles = ['pincode', 'pincode_agent'];
+
     return {
-      role: 'pincode',
       $or: [
-        { _id: scope.agentId },
-        { 'assignedTerritory.pincode': scope.pincode },
-        { 'territory.pincode': scope.pincode },
-        { pincode: scope.pincode },
-        { assignedPincode: scope.pincode }
+        { role: { $in: pinRoles } },
+        { level: { $in: pinRoles } },
+        { role: 'agent', level: { $in: pinRoles } }
+      ],
+      $and: [
+        {
+          $or: [
+            { _id: scope.agentId },
+            { 'assignedTerritory.pincode': scope.pincode },
+            { 'territory.pincode': scope.pincode },
+            { pincode: scope.pincode },
+            { assignedPincode: scope.pincode }
+          ]
+        }
       ]
     };
   }
@@ -243,7 +318,7 @@ export function buildTerritoryFilter(scope: TerritoryScope | null): Record<strin
  * Build territory filter for Vendor queries.
  * Strictly enforces State -> District -> Division -> Pincode vendor isolation.
  */
-export function buildVendorScopeFilter(scope: TerritoryScope | null): Record<string, any> {
+export function buildVendorScopeFilter(scope: TerritoryScope | null, divisionPincodes?: string[]): Record<string, any> {
   if (!scope) return { _id: null };
 
   if (scope.role === 'state') {
@@ -292,22 +367,38 @@ export function buildVendorScopeFilter(scope: TerritoryScope | null): Record<str
       {
         $or: [
           { district: exactRegex(scope.district) },
-          { assignedDistrict: exactRegex(scope.district) },
-          { 'location.address': containsRegex(scope.district) }
+          { assignedDistrict: exactRegex(scope.district) }
         ]
       }
     ] : [];
 
+    const stateConditions = scope.state ? [
+      {
+        $or: [
+          { state: exactRegex(scope.state) },
+          { assignedState: exactRegex(scope.state) }
+        ]
+      }
+    ] : [];
+
+    const divOrClauses: any[] = [
+      { division: containsRegex(scope.division) },
+      { assignedDivision: containsRegex(scope.division) }
+    ];
+
+    if (Array.isArray(divisionPincodes) && divisionPincodes.length > 0) {
+      divOrClauses.push(
+        { pincode: { $in: divisionPincodes } },
+        { assignedPincode: { $in: divisionPincodes } },
+        { 'location.pincode': { $in: divisionPincodes } }
+      );
+    }
+
     return {
       $and: [
-        {
-          $or: [
-            { division: containsRegex(scope.division) },
-            { assignedDivision: containsRegex(scope.division) },
-            { 'location.address': containsRegex(scope.division) }
-          ]
-        },
-        ...districtConditions
+        { $or: divOrClauses },
+        ...districtConditions,
+        ...stateConditions
       ]
     };
   }

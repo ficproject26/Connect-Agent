@@ -288,16 +288,63 @@ export const AgentManagement: React.FC = () => {
   // 3. DIVISION AGENT SCOPING: Strictly isolate assigned Division
   const assignedDivisionNode = useMemo(() => {
     const targetDiv = userDivision.toLowerCase();
+    const cleanUserDiv = userDivision.toLowerCase().replace(/division|manager/g, '').trim();
     const allDivisions = assignedDistrictNode.divisions || hierarchyData?.divisions || [];
     const found = allDivisions.find(div => {
       const divName = (div.territory?.division || div.name || '').toLowerCase();
-      return targetDiv && (divName.includes(targetDiv) || targetDiv.includes(divName));
+      const cleanDivName = divName.replace(/division|manager/g, '').trim();
+      return targetDiv && (divName.includes(targetDiv) || targetDiv.includes(divName) || (cleanDivName && cleanUserDiv && cleanDivName === cleanUserDiv));
     });
+
+    // Collect all pincode agents belonging to this division
+    const divisionPincodeAgentsFromRaw = (hierarchyData?.agents || [])
+      .filter((a: any) => {
+        if (normalizeRoleName(a.role) !== 'pincode') return false;
+        const aDiv = (a.territory?.division || a.assignedTerritory?.division || a.division || '').toLowerCase().replace(/division/g, '').trim();
+        const aPin = (a.territory?.pincode || a.assignedTerritory?.pincode || a.pincode || '').trim();
+        const isDivMatch = Boolean(cleanUserDiv && aDiv && (aDiv === cleanUserDiv || aDiv.includes(cleanUserDiv) || cleanUserDiv.includes(aDiv)));
+        const isPinMatch = Boolean(aPin && divisionPincodes.includes(aPin));
+        return isDivMatch || isPinMatch;
+      })
+      .map((a: any) => ({
+        ...a,
+        role: 'pincode' as const,
+        territory: {
+          ...a.territory,
+          state: a.assignedTerritory?.state || a.territory?.state || userState,
+          district: a.assignedTerritory?.district || a.territory?.district || userDistrict,
+          division: a.assignedTerritory?.division || a.territory?.division || userDivision,
+          pincode: a.assignedTerritory?.pincode || a.territory?.pincode || a.pincode
+        }
+      }));
+
+    const combinedPincodes = [
+      ...(found?.pincodes || []),
+      ...(hierarchyData?.pincodes || []).filter((p: any) => {
+        const pDiv = (p.territory?.division || p.assignedTerritory?.division || p.division || '').toLowerCase().replace(/division/g, '').trim();
+        const pPin = (p.territory?.pincode || p.assignedTerritory?.pincode || p.pincode || '').trim();
+        const isDivMatch = Boolean(cleanUserDiv && pDiv && (pDiv === cleanUserDiv || pDiv.includes(cleanUserDiv) || cleanUserDiv.includes(pDiv)));
+        const isPinMatch = Boolean(pPin && divisionPincodes.includes(pPin));
+        return isDivMatch || isPinMatch;
+      }),
+      ...divisionPincodeAgentsFromRaw
+    ].filter(isApprovedAgent);
+
+    // Deduplicate by ID
+    const seen = new Set<string>();
+    const uniquePincodes: AgentNode[] = [];
+    for (const p of combinedPincodes) {
+      const id = String(p._id || (p as any).id);
+      if (!seen.has(id)) {
+        seen.add(id);
+        uniquePincodes.push(p);
+      }
+    }
 
     if (found) {
       return {
         ...found,
-        pincodes: (found.pincodes && found.pincodes.length > 0) ? found.pincodes : (hierarchyData?.pincodes || [])
+        pincodes: uniquePincodes
       };
     }
 
@@ -318,9 +365,9 @@ export const AgentManagement: React.FC = () => {
       territory: { state: userState, district: userDistrict, division: userDivision },
       plusPoints: ['KYC Verified', 'Assigned Division Manager'],
       minusPoints: [],
-      pincodes: hierarchyData?.pincodes || []
+      pincodes: uniquePincodes
     };
-  }, [assignedDistrictNode, hierarchyData, userDivision, userDistrict, userState, user]);
+  }, [assignedDistrictNode, hierarchyData, userDivision, userDistrict, userState, user, divisionPincodes]);
 
   // 4. PINCODE AGENT SCOPING: Strictly isolate assigned Pincode
   const assignedPincodeNode = useMemo(() => {
@@ -1624,7 +1671,7 @@ export const AgentManagement: React.FC = () => {
               <div className="flex flex-wrap items-center gap-4 border-t border-amber-200/60 pt-3">
                 <div className="text-left">
                   <p className="text-[9px] uppercase font-extrabold text-amber-800">Pincodes</p>
-                  <p className="text-base font-black text-amber-950">{assignedDivisionNode.pincodes?.length || 0} Pincodes</p>
+                  <p className="text-base font-black text-amber-950">{divisionPincodes.length > 0 ? divisionPincodes.length : (assignedDivisionNode.pincodes?.length || 0)} Pincodes</p>
                 </div>
                 <div className="text-left border-l border-amber-200 pl-4">
                   <p className="text-[9px] uppercase font-extrabold text-amber-800">Pincode Agents</p>
@@ -1632,7 +1679,7 @@ export const AgentManagement: React.FC = () => {
                 </div>
                 <div className="text-left border-l border-amber-200 pl-4">
                   <p className="text-[9px] uppercase font-extrabold text-amber-800">Active Agents</p>
-                  <p className="text-base font-black text-amber-950">{assignedDivisionNode.pincodes?.length || 0} Active</p>
+                  <p className="text-base font-black text-amber-950">{assignedDivisionNode.pincodes?.filter(isApprovedAgent).length || 0} Active</p>
                 </div>
               </div>
             </div>

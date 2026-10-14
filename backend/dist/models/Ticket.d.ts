@@ -6,6 +6,22 @@ export interface ITicket extends Document {
     creatorName?: string;
     assignedTo?: Types.ObjectId;
     assignedAgent?: string;
+    assignedAgentIdStr?: string;
+    assignedAgentRole?: string;
+    assignedAgentPhone?: string;
+    assignedAgentPincode?: string;
+    assignedAgentDistrict?: string;
+    assignedAgentDivision?: string;
+    assignedAgentState?: string;
+    assignmentStatus?: 'assigned' | 'unassigned';
+    assignmentHistory?: Array<{
+        agentId?: string;
+        agentName?: string;
+        role?: string;
+        assignedBy?: string;
+        assignedAt: Date;
+        reason?: string;
+    }>;
     vendorName?: string;
     storeName?: string;
     state?: string;

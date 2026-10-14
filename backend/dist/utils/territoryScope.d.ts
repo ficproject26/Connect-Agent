@@ -16,14 +16,18 @@ export declare function invalidateAgentTerritoryScope(agentId: string): Promise<
  */
 export declare function getAgentTerritoryScope(agentId: string, email?: string): Promise<TerritoryScope | null>;
 /**
+ * Fetch authoritative pincodes assigned to a division from Admin Pincode Management DB
+ */
+export declare function getDivisionPincodes(divisionName: string): Promise<string[]>;
+/**
  * Build territory filter for Agent model and agent directory queries.
  * Strictly enforces State -> District -> Division -> Pincode visibility hierarchy.
  * Returns { _id: null } when required territory information is missing.
  */
-export declare function buildTerritoryFilter(scope: TerritoryScope | null): Record<string, any>;
+export declare function buildTerritoryFilter(scope: TerritoryScope | null, divisionPincodes?: string[]): Record<string, any>;
 /**
  * Build territory filter for Vendor queries.
  * Strictly enforces State -> District -> Division -> Pincode vendor isolation.
  */
-export declare function buildVendorScopeFilter(scope: TerritoryScope | null): Record<string, any>;
+export declare function buildVendorScopeFilter(scope: TerritoryScope | null, divisionPincodes?: string[]): Record<string, any>;
 //# sourceMappingURL=territoryScope.d.ts.map

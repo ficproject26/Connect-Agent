@@ -7,13 +7,18 @@ const fieldVisitSchema = new mongoose_1.Schema({
     vendor: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Vendor', required: true },
     checkInLocation: {
         latitude: { type: Number, required: true },
-        longitude: { type: Number, required: true }
+        longitude: { type: Number, required: true },
+        accuracy: { type: Number },
+        timestamp: { type: Date, default: Date.now }
     },
     checkOutLocation: {
         latitude: { type: Number },
-        longitude: { type: Number }
+        longitude: { type: Number },
+        accuracy: { type: Number },
+        timestamp: { type: Date }
     },
     visitDate: { type: Date, default: Date.now },
+    completedAt: { type: Date },
     photoBeforeVisit: { type: String },
     photoAfterVisit: { type: String },
     remarks: { type: String },

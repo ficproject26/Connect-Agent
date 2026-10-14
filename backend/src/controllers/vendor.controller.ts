@@ -4,7 +4,7 @@ import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import Vendor from '../models/Vendor';
 import Agent from '../models/Agent';
-import { getAgentTerritoryScope, buildVendorScopeFilter } from '../utils/territoryScope';
+import { getAgentTerritoryScope, buildVendorScopeFilter, getDivisionPincodes } from '../utils/territoryScope';
 import { cacheService } from '../services/cache.service';
 import {
   validateAgentJurisdiction,
@@ -67,7 +67,11 @@ export const getVendors = async (req: Request, res: Response) => {
     if (!agentId) return res.status(401).json({ message: 'Unauthorized' });
 
     const scope = await getAgentTerritoryScope(agentId);
-    const scopeFilter = buildVendorScopeFilter(scope);
+    let divisionPincodes: string[] = [];
+    if (scope?.role === 'division' && scope.division) {
+      divisionPincodes = await getDivisionPincodes(scope.division);
+    }
+    const scopeFilter = buildVendorScopeFilter(scope, divisionPincodes);
 
     const { page = '1', limit = '50', status, category, search, startDate, endDate, dateFilter } = req.query;
     const pageNum = parseInt(page as string, 10);

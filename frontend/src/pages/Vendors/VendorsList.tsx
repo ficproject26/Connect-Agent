@@ -11,7 +11,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { OnboardVendorWizardModal } from './OnboardVendorWizardModal';
 import { AgentOnboardedVendorsModal } from './AgentOnboardedVendorsModal';
-import { getDistrictsForState, getDivisionsForDistrict, getLocationFromPincode } from '../../utils/locationData';
+import { getDistrictsForState, getDivisionsForDistrict, getPincodesForDivision, getLocationFromPincode } from '../../utils/locationData';
 import { CANONICAL_MAIN_CATEGORIES } from '../../services/categoryService';
 
 interface Vendor {
@@ -245,6 +245,12 @@ export const VendorsList: React.FC = () => {
   const userDivision = (userTerritory?.division || (user as any)?.assignedDivision || '').trim();
   const userPincode = (userTerritory?.pincode || (user as any)?.assignedPincode || '').trim();
 
+  // Division Agent's active assigned pincodes from Admin Pincode Management DB
+  const divisionPincodes = useMemo(() => {
+    if (!userDivision) return [];
+    return getPincodesForDivision(userDivision);
+  }, [userDivision]);
+
   // Sync API backend vendors into state with strict canonical deduplication
   useEffect(() => {
     if (apiVendorsData && apiVendorsData.length > 0) {
@@ -340,11 +346,17 @@ export const VendorsList: React.FC = () => {
       }
 
       if (activeRole === 'division') {
-        return vendor.division === userDivision;
+        const normUserDiv = userDivision.toLowerCase().replace(/division/g, '').trim();
+        const normVendorDiv = (vendor.division || '').toLowerCase().replace(/division/g, '').trim();
+        const isDivMatch = Boolean(normUserDiv && normVendorDiv && (normVendorDiv === normUserDiv || normVendorDiv.includes(normUserDiv) || normUserDiv.includes(normVendorDiv)));
+        const isPinMatch = Boolean(vendor.pincode && divisionPincodes.includes(String(vendor.pincode).trim()));
+        return isDivMatch || isPinMatch;
       }
 
       if (activeRole === 'district') {
-        return vendor.district === userDistrict;
+        const normUserDist = userDistrict.toLowerCase().replace(/district/g, '').trim();
+        const normVendorDist = (vendor.district || '').toLowerCase().replace(/district/g, '').trim();
+        return Boolean(normUserDist && normVendorDist && (normVendorDist === normUserDist || normVendorDist.includes(normUserDist) || normUserDist.includes(normVendorDist)));
       }
 
       return true; // State Lead sees all vendors within their assigned state
@@ -352,7 +364,7 @@ export const VendorsList: React.FC = () => {
 
     // Safely deduplicate by immutable ID so no vendor record can ever appear twice
     return Array.from(new Map(filtered.map(item => [item.id, item])).values());
-  }, [vendors, activeRole, userState, userDistrict, userDivision, userPincode]);
+  }, [vendors, activeRole, userState, userDistrict, userDivision, userPincode, divisionPincodes]);
 
   // Extract unique filter dropdown values strictly scoped to assigned State
   const categories = useMemo(() => Array.from(new Set([...CANONICAL_MAIN_CATEGORIES, ...scopedVendors.map(v => v.storeType).filter(Boolean)])), [scopedVendors]);
