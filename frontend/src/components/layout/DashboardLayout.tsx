@@ -49,6 +49,13 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
     };
   }, []);
 
+  useEffect(() => {
+    setMobileMenuOpen(false);
+    setIsProfileOpen(false);
+    setNotifDropdownOpen(false);
+    setIsHelpOpen(false);
+  }, [location.pathname]);
+
   const sidebarItems: SidebarItem[] = [
     { label: 'Dashboard', path: '/dashboard', icon: <Laptop className="w-5 h-5" /> },
     { label: 'Agent Management', path: '/agents', icon: <GitFork className="w-5 h-5" /> },
@@ -194,7 +201,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                 key={idx}
                 to={item.path}
                 title={!isSidebarExpanded ? item.label : undefined}
-                className={`flex items-center transition-all duration-250 rounded-xl w-full ${isSidebarExpanded ? 'px-4 py-3.5 gap-4' : 'p-3 justify-center'} ${
+                className={`flex items-center transition-all duration-250 rounded-xl w-full cursor-pointer ${isSidebarExpanded ? 'px-4 py-3.5 gap-4' : 'p-3 justify-center'} ${
                   isActive
                     ? 'bg-[#864f19] text-white font-bold shadow-md scale-[1.02]'
                     : 'text-[#52443a] hover:bg-[#f6f3f2] hover:text-[#1b1c1c] hover:translate-x-1'
@@ -237,6 +244,28 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
       {/* Main Container */}
       <div className="flex-grow flex flex-col min-w-0">
         
+        {/* Mobile Header Bar (Visible on mobile across all non-dashboard routes) */}
+        {location.pathname !== '/dashboard' && (
+          <header className="md:hidden flex justify-between items-center w-full px-4 h-14 sticky top-0 z-40 bg-white border-b border-[#d7c3b5]/40">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setMobileMenuOpen(true)}
+                aria-label="Open mobile menu"
+                className="p-1.5 text-[#1b1c1c] hover:bg-[#eae8e7] rounded-xl transition cursor-pointer border-none bg-transparent flex items-center"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+              <Link to="/dashboard" className="flex items-center gap-2">
+                <img src="/logo.jpg" alt="Logo" className="h-7 w-7 rounded-lg object-contain" />
+                <span className="font-bold text-xs text-[#864f19]">Connect Portal</span>
+              </Link>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-slate-500 capitalize">{effectiveRole} Agent</span>
+            </div>
+          </header>
+        )}
+
         {/* Top Header */}
         {location.pathname === '/dashboard' && (
           <header className="flex justify-between items-center w-full px-8 h-16 sticky top-0 z-40 bg-[#f6f3f2] border-b border-[#d7c3b5]/30">

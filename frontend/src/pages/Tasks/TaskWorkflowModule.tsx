@@ -177,12 +177,12 @@ export const TaskWorkflowModule: React.FC = () => {
   else if (userRole.includes('division') || userRole.includes('divisional')) userLevel = 'division';
   else if (userRole.includes('pincode')) userLevel = 'pincode';
 
-  const userTerritory = {
+  const userTerritory = useMemo(() => ({
     state: user?.territory?.state || (user as any)?.assignedState || (user as any)?.state || '',
     district: user?.territory?.district || (user as any)?.assignedDistrict || (user as any)?.district || '',
     division: user?.territory?.division || (user as any)?.assignedDivision || (user as any)?.division || '',
     pincode: user?.territory?.pincode || (user as any)?.assignedPincode || (user as any)?.pincode || ''
-  };
+  }), [user]);
 
   // Next level for Agent request
   const nextLowerLevel = useMemo(() => {
@@ -237,23 +237,26 @@ export const TaskWorkflowModule: React.FC = () => {
   const [divisionsList, setDivisionsList] = useState<string[]>([]);
   const [pincodesList, setPincodesList] = useState<string[]>([]);
 
-  // Load States
+  // Load States — only when Create Task modal is opened
   React.useEffect(() => {
+    if (!isCreateModalOpen) return;
     getActiveStates().then(list => setStatesList(list)).catch(() => {});
-  }, []);
+  }, [isCreateModalOpen]);
 
-  // Cascading Districts
+  // Cascading Districts — only when Create Task modal is opened
   React.useEffect(() => {
+    if (!isCreateModalOpen) return;
     const s = createForm.state || userTerritory.state;
     if (s) {
       getActiveDistricts(s).then(list => setDistrictsList(list)).catch(() => {});
     } else {
       setDistrictsList([]);
     }
-  }, [createForm.state, userTerritory.state]);
+  }, [isCreateModalOpen, createForm.state, userTerritory.state]);
 
-  // Cascading Divisions
+  // Cascading Divisions — only when Create Task modal is opened
   React.useEffect(() => {
+    if (!isCreateModalOpen) return;
     const s = createForm.state || userTerritory.state;
     const d = createForm.district || userTerritory.district;
     if (s && d) {
@@ -261,10 +264,11 @@ export const TaskWorkflowModule: React.FC = () => {
     } else {
       setDivisionsList([]);
     }
-  }, [createForm.state, createForm.district, userTerritory]);
+  }, [isCreateModalOpen, createForm.state, createForm.district, userTerritory.state, userTerritory.district]);
 
-  // Cascading Pincodes
+  // Cascading Pincodes — only when Create Task modal is opened
   React.useEffect(() => {
+    if (!isCreateModalOpen) return;
     const s = createForm.state || userTerritory.state;
     const d = createForm.district || userTerritory.district;
     const v = createForm.division || userTerritory.division;
@@ -273,7 +277,7 @@ export const TaskWorkflowModule: React.FC = () => {
     } else {
       setPincodesList([]);
     }
-  }, [createForm.state, createForm.district, createForm.division, userTerritory]);
+  }, [isCreateModalOpen, createForm.state, createForm.district, createForm.division, userTerritory.state, userTerritory.district, userTerritory.division]);
 
   // Query eligible agents for Admin direct assignment or request approval
   const targetLevelForAgents = isAdmin ? userLevel : (nextLowerLevel || 'district');

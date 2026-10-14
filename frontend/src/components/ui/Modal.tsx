@@ -39,7 +39,7 @@ export const Modal: React.FC<ModalProps> = ({
 
   const isFullPage = size === 'full';
 
-  if (typeof document === 'undefined') return null;
+  if (typeof document === 'undefined' || !isOpen) return null;
 
   return ReactDOM.createPortal(
     <AnimatePresence>
