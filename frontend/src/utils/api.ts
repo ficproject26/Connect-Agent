@@ -1,7 +1,22 @@
 import axios from 'axios';
 
 const getAgentBackendUrl = () => {
-  let url = import.meta.env.VITE_API_URL || '/api';
+  let url = import.meta.env.VITE_API_URL;
+  if (!url) {
+    if (typeof window !== 'undefined') {
+      const host = window.location.hostname;
+      if (host.includes('vercel.app') || host.includes('ficapp.in') || host.includes('connect')) {
+        url = 'https://agent.ficapp.in/api';
+      } else if (host === 'localhost' || host === '127.0.0.1') {
+        url = '/api';
+      } else {
+        url = 'https://agent.ficapp.in/api';
+      }
+    } else {
+      url = 'https://agent.ficapp.in/api';
+    }
+  }
+
   // Guard against insecure HTTP when page is loaded over HTTPS (Mixed Content prevention)
   if (url.includes('3.110.88.42:8083')) {
     url = 'https://agent.ficapp.in/api';
@@ -17,7 +32,7 @@ const getAgentBackendUrl = () => {
 
 const api = axios.create({
   baseURL: getAgentBackendUrl(),
-  timeout: 15000, // 15s timeout for fast failover and responsive UI
+  timeout: 30000, // 30s timeout for field agent networks
   headers: {
     'Content-Type': 'application/json'
   }

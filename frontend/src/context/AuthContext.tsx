@@ -103,7 +103,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchNotifications = async () => {
     try {
-      const response = await api.get('/notifications');
+      const response = await api.get('/notifications', { timeout: 8000 });
       const notifs = response.data?.notifications || [];
       const mapped = notifs.map((n: any) => ({
         id: n._id,
@@ -116,7 +116,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }));
       setNotifications(mapped);
     } catch (err: any) {
-      if (err?.response?.status !== 401) {
+      if (err?.response?.status !== 401 && err?.code !== 'ECONNABORTED' && !err?.message?.includes('timeout')) {
         console.warn('Failed to fetch backend notifications:', err);
       }
     }
