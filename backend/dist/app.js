@@ -60,6 +60,8 @@ app.use('/api/attendance', attendance_routes_1.default);
 app.use('/attendance', attendance_routes_1.default);
 app.use('/api/field-visits', fieldVisit_routes_1.default);
 app.use('/field-visits', fieldVisit_routes_1.default);
+app.use('/api/shop-visits', fieldVisit_routes_1.default);
+app.use('/shop-visits', fieldVisit_routes_1.default);
 app.use('/api/territory', territory_routes_1.default);
 app.use('/territory', territory_routes_1.default);
 app.use('/api/tasks', task_routes_1.default);

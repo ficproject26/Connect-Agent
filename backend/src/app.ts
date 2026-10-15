@@ -73,6 +73,8 @@ app.use('/attendance', attendanceRoutes);
 
 app.use('/api/field-visits', fieldVisitRoutes);
 app.use('/field-visits', fieldVisitRoutes);
+app.use('/api/shop-visits', fieldVisitRoutes);
+app.use('/shop-visits', fieldVisitRoutes);
 
 app.use('/api/territory', territoryRoutes);
 app.use('/territory', territoryRoutes);

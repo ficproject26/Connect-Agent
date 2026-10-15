@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { OnboardVendorWizardModal } from './OnboardVendorWizardModal';
+import { FieldShopVisitModal } from './FieldShopVisitModal';
 import { AgentOnboardedVendorsModal } from './AgentOnboardedVendorsModal';
 import { getDistrictsForState, getDivisionsForDistrict, getPincodesForDivision, getLocationFromPincode } from '../../utils/locationData';
 import { CANONICAL_MAIN_CATEGORIES } from '../../services/categoryService';
@@ -617,6 +618,13 @@ export const VendorsList: React.FC = () => {
 
   // Add Vendor Onboarding Form State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isFieldVisitModalOpen, setIsFieldVisitModalOpen] = useState(false);
+  const [fieldVisitPrefill, setFieldVisitPrefill] = useState<{
+    shopName: string;
+    category: string;
+    storefrontPhoto: string;
+    fieldVisitId: string;
+  } | null>(null);
   const [onboardError, setOnboardError] = useState('');
   const [newVendor, setNewVendor] = useState({
     name: '',
@@ -892,7 +900,7 @@ export const VendorsList: React.FC = () => {
         <div className="flex flex-wrap items-center gap-3 shrink-0 self-start md:self-auto">
           <Button
             variant="primary"
-            onClick={() => setIsAddModalOpen(true)}
+            onClick={() => setIsFieldVisitModalOpen(true)}
             leftIcon={<span className="material-symbols-outlined text-sm">person_add</span>}
             className="py-2.5 px-4 font-bold rounded-xl cursor-pointer border-none text-xs uppercase tracking-wider shadow-sm transition-all"
           >
@@ -1505,16 +1513,40 @@ export const VendorsList: React.FC = () => {
         </Modal>
       )}
 
+      {/* STEP 1: FIELD SHOP VISIT MODAL (TRIGGERED BEFORE VENDOR ONBOARDING) */}
+      <FieldShopVisitModal
+        isOpen={isFieldVisitModalOpen}
+        onClose={() => setIsFieldVisitModalOpen(false)}
+        onProceedToOnboarding={(visitId, prefill) => {
+          setIsFieldVisitModalOpen(false);
+          setFieldVisitPrefill(prefill);
+          setIsAddModalOpen(true);
+        }}
+        onSuccessNoVisit={() => {
+          addNotification(
+            'Shop Visit Saved',
+            'Field shop visit record logged successfully. No vendor onboarding was initiated.',
+            'medium',
+            'system'
+          );
+        }}
+      />
+
       {/* 5-STEP ONBOARD NEW MERCHANT VENDOR WIZARD MODAL */}
       <OnboardVendorWizardModal
         isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
+        initialData={fieldVisitPrefill}
+        onClose={() => {
+          setIsAddModalOpen(false);
+          setFieldVisitPrefill(null);
+        }}
         onSuccess={(wizardData) => {
           // Use verified territory from wizardData or fallback to agent's territory
           const targetState = wizardData.state || userState || '';
           const targetDistrict = wizardData.district || userDistrict;
           const targetDivision = wizardData.division || userDivision;
           const targetPincode = wizardData.pincode || userPincode;
+          const associatedVisitId = fieldVisitPrefill?.fieldVisitId || wizardData.fieldVisitId;
 
           // Post to backend API so Admin backend receives pending request
           const vendorPayload = {
@@ -1547,6 +1579,7 @@ export const VendorsList: React.FC = () => {
             joiningType: 'agent',
             createdVia: 'agent',
             registrationSource: 'agent',
+            fieldVisitId: associatedVisitId,
             agentId: user?._id || user?.id,
             onboardedBy: user?._id || user?.id,
             agentName: user?.name || 'Field Agent',
@@ -1563,6 +1596,15 @@ export const VendorsList: React.FC = () => {
             const serverVendor = res.data?.vendor;
             const officialId = serverVendor?.registrationId || serverVendor?._id || `REG-${Date.now()}`;
             const officialRegDate = serverVendor?.createdAt ? formatLocalDate(new Date(serverVendor.createdAt)) : formatLocalDate(new Date());
+
+            // Link field visit to vendor if field visit exists
+            if (associatedVisitId) {
+              api.patch(`/field-visits/shop-visit/${associatedVisitId}`, {
+                vendorId: serverVendor?._id || officialId,
+                onboardingStatus: 'COMPLETED'
+              }).catch(err => console.warn('Field visit link warning:', err));
+            }
+            setFieldVisitPrefill(null);
 
             const officialVendor: Vendor = {
               id: officialId,
@@ -1608,6 +1650,7 @@ export const VendorsList: React.FC = () => {
             window.dispatchEvent(new CustomEvent('vendorOnboarded', { detail: officialVendor }));
           }).catch(err => {
             console.warn('Backend API /vendors POST sync warning:', err);
+            setFieldVisitPrefill(null);
             refetchVendors();
           });
 

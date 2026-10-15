@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getFieldVisitAgents = exports.getFieldVisits = exports.completeFieldVisit = exports.startFieldVisit = void 0;
+exports.updateShopVisit = exports.getShopVisitById = exports.recordShopVisit = exports.getFieldVisitAgents = exports.getFieldVisits = exports.completeFieldVisit = exports.startFieldVisit = void 0;
 const zod_1 = require("zod");
 const FieldVisit_1 = __importDefault(require("../models/FieldVisit"));
 const Vendor_1 = __importDefault(require("../models/Vendor"));
@@ -571,4 +571,153 @@ const getFieldVisitAgents = async (req, res) => {
     }
 };
 exports.getFieldVisitAgents = getFieldVisitAgents;
+// POST /api/field-visits/shop-visit or /api/shop-visits — Record field shop visit before vendor onboarding
+const recordShopVisit = async (req, res) => {
+    try {
+        const authAgent = req.agentRecord || req.agent;
+        const agentId = req.agent?.agentId || authAgent?._id;
+        if (!agentId) {
+            return res.status(401).json({ success: false, message: 'Unauthorized. Agent identity required.' });
+        }
+        const { shopName, category, businessCategory, shopPhoto, storefrontPhoto, voiceNote, audioVoiceNote, interestedStatus, interestStatus, notInterestedReason, otherReason, customReason, vendorId } = req.body;
+        if (!shopName || !shopName.trim()) {
+            return res.status(400).json({ success: false, message: 'Shop name / business title is required' });
+        }
+        const resolvedStatus = (interestedStatus || interestStatus || 'YES').toUpperCase() === 'NO' ? 'NO' : 'YES';
+        const resolvedCategory = category || businessCategory || 'Products';
+        const resolvedPhoto = shopPhoto || storefrontPhoto || null;
+        if (!resolvedPhoto) {
+            return res.status(400).json({ success: false, message: 'Storefront photo is required' });
+        }
+        const resolvedVoice = voiceNote || audioVoiceNote || null;
+        const resolvedReason = notInterestedReason || (resolvedStatus === 'YES' ? 'Interested in Onboarding' : 'Not specified');
+        const resolvedOther = otherReason || customReason || null;
+        if (resolvedStatus === 'NO') {
+            if (!notInterestedReason || !notInterestedReason.trim() || notInterestedReason === 'Not specified') {
+                return res.status(400).json({ success: false, message: 'Reason for not interested is required.' });
+            }
+            const isOther = resolvedReason.toLowerCase().startsWith('other');
+            if (isOther && (!resolvedOther || !resolvedOther.trim())) {
+                return res.status(400).json({ success: false, message: 'Please specify the reason in the text field when "Other" is selected.' });
+            }
+        }
+        // Idempotency: prevent duplicate submissions within 15 seconds by this agent
+        const fifteenSecsAgo = new Date(Date.now() - 15000);
+        const existing = await FieldVisit_1.default.findOne({
+            $or: [
+                { agent: agentId },
+                { recordedById: String(agentId) },
+                { managerId: String(agentId) }
+            ],
+            shopName: { $regex: new RegExp(`^${shopName.trim()}$`, 'i') },
+            createdAt: { $gte: fifteenSecsAgo }
+        }).lean();
+        if (existing) {
+            return res.status(200).json({
+                success: true,
+                message: 'Shop visit already recorded',
+                data: existing,
+                visit: existing
+            });
+        }
+        // Agent territory mapping
+        const territory = authAgent?.assignedTerritory || authAgent?.territory || {};
+        const agentName = authAgent?.name || req.agent?.name || 'Field Agent';
+        const agentRole = authAgent?.role || req.agent?.role || 'agent';
+        const visitDoc = new FieldVisit_1.default({
+            agent: agentId,
+            vendor: vendorId || null,
+            vendorId: vendorId || null,
+            shopName: shopName.trim(),
+            category: resolvedCategory,
+            businessCategory: resolvedCategory,
+            shopPhoto: resolvedPhoto,
+            storefrontPhoto: resolvedPhoto,
+            photoBeforeVisit: resolvedPhoto,
+            voiceNote: resolvedVoice,
+            audioVoiceNote: resolvedVoice,
+            interestedStatus: resolvedStatus,
+            interestStatus: resolvedStatus,
+            notInterestedReason: resolvedReason,
+            otherReason: resolvedOther,
+            state: territory.state || '',
+            district: territory.district || '',
+            division: territory.division || '',
+            pincode: territory.pincode || '',
+            pincodeCode: territory.pincode || '',
+            stateId: territory.stateId || '',
+            districtId: territory.districtId || '',
+            divisionId: territory.divisionId || '',
+            pincodeId: territory.pincodeId || '',
+            recordedById: String(agentId),
+            recordedByName: agentName,
+            recordedByRole: agentRole,
+            managerId: String(agentId),
+            managerName: agentName,
+            managerRole: agentRole,
+            status: 'completed',
+            onboardingStatus: resolvedStatus === 'YES' ? 'PENDING' : 'NOT_INTERESTED',
+            visitDate: new Date(),
+            completedAt: new Date()
+        });
+        await visitDoc.save();
+        return res.status(201).json({
+            success: true,
+            message: resolvedStatus === 'YES'
+                ? 'Shop visit recorded successfully. Continuing to Vendor Onboarding.'
+                : 'Shop visit recorded successfully. No vendor account will be created.',
+            data: visitDoc,
+            visit: visitDoc
+        });
+    }
+    catch (error) {
+        console.error('Record shop visit error:', error);
+        return res.status(500).json({
+            success: false,
+            message: error?.message || 'Failed to record shop visit'
+        });
+    }
+};
+exports.recordShopVisit = recordShopVisit;
+// GET /api/field-visits/shop-visit/:id — Retrieve single shop visit record
+const getShopVisitById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const visit = await FieldVisit_1.default.findById(id).lean();
+        if (!visit) {
+            return res.status(404).json({ success: false, message: 'Shop visit not found' });
+        }
+        return res.status(200).json({ success: true, data: visit, visit });
+    }
+    catch (error) {
+        console.error('Get shop visit error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to retrieve shop visit' });
+    }
+};
+exports.getShopVisitById = getShopVisitById;
+// PATCH /api/field-visits/shop-visit/:id — Update shop visit (e.g. link vendorId)
+const updateShopVisit = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updateData = {};
+        if (req.body.vendorId) {
+            updateData.vendorId = req.body.vendorId;
+            updateData.vendor = req.body.vendorId;
+            updateData.onboardingStatus = 'COMPLETED';
+        }
+        if (req.body.onboardingStatus) {
+            updateData.onboardingStatus = req.body.onboardingStatus;
+        }
+        const updated = await FieldVisit_1.default.findByIdAndUpdate(id, { $set: updateData }, { new: true }).lean();
+        if (!updated) {
+            return res.status(404).json({ success: false, message: 'Shop visit not found' });
+        }
+        return res.status(200).json({ success: true, data: updated, visit: updated });
+    }
+    catch (error) {
+        console.error('Update shop visit error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to update shop visit' });
+    }
+};
+exports.updateShopVisit = updateShopVisit;
 //# sourceMappingURL=fieldVisit.controller.js.map

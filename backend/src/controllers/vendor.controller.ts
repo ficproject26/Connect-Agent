@@ -530,6 +530,23 @@ export const createVendor = async (req: Request, res: Response) => {
       cacheService.delByPrefix('hierarchy:')
     ]);
 
+    // Link Field Shop Visit if fieldVisitId was provided
+    const fvId = (req.body as any)?.fieldVisitId || (data as any)?.fieldVisitId;
+    if (fvId && mongoose.Types.ObjectId.isValid(fvId)) {
+      try {
+        const FieldVisit = mongoose.model('FieldVisit');
+        await FieldVisit.findByIdAndUpdate(fvId, {
+          $set: {
+            vendorId: vendor._id,
+            vendor: vendor._id,
+            onboardingStatus: 'COMPLETED'
+          }
+        });
+      } catch (fvErr) {
+        console.warn('Could not link field visit to newly created vendor:', fvErr);
+      }
+    }
+
     // Publish Realtime Entity Event
     publishEntityEvent({
       event: 'ENTITY_CREATED',

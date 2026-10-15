@@ -19,12 +19,21 @@ interface OnboardVendorWizardModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (vendorData: any) => void;
+  initialData?: {
+    shopName?: string;
+    businessTitle?: string;
+    category?: string;
+    storefrontPhoto?: string;
+    fieldVisitId?: string;
+    [key: string]: any;
+  } | null;
 }
 
 export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> = ({
   isOpen,
   onClose,
-  onSuccess
+  onSuccess,
+  initialData
 }) => {
   const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4 | 5>(1);
@@ -227,6 +236,25 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
       }));
     }
   }, [isOpen, user, activeRole, agentState, agentDistrict, agentDivision, agentPincode, agentPostOffice, agentTaluk]);
+
+  // Synchronize initialData from Field Shop Visit modal when opened
+  useEffect(() => {
+    if (isOpen) {
+      setCurrentStep(1);
+      if (initialData) {
+        setFormData(prev => ({
+          ...prev,
+          businessName: initialData.shopName || initialData.businessTitle || prev.businessName,
+          category: initialData.category || prev.category,
+          logoUrl: initialData.storefrontPhoto || prev.logoUrl,
+          logoFileName: initialData.storefrontPhoto ? 'Storefront Photo (Field Visit)' : prev.logoFileName,
+          businessImages: initialData.storefrontPhoto && prev.businessImages.length === 0
+            ? [{ id: `storefront_${Date.now()}`, url: initialData.storefrontPhoto, name: 'Storefront Entrance Photo' }]
+            : prev.businessImages
+        }));
+      }
+    }
+  }, [isOpen, initialData]);
 
   // Handle District selection (State Agent only)
   const handleDistrictSelect = (newDistrict: string) => {
@@ -622,7 +650,8 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
         bankCity: formData.bankCity.trim(),
         accountNumber: formData.accountNumber.trim(),
         ifscCode: formData.ifscCode.toUpperCase().trim()
-      }
+      },
+      fieldVisitId: initialData?.fieldVisitId || null
     };
 
     onSuccess(vendorObject);

@@ -1,8 +1,22 @@
 import { Document, Types } from 'mongoose';
 export interface IFieldVisit extends Document {
-    agent: Types.ObjectId;
-    vendor: Types.ObjectId;
-    checkInLocation: {
+    agent?: Types.ObjectId | any;
+    vendor?: Types.ObjectId | any;
+    vendorId?: string;
+    shopName?: string;
+    category?: string;
+    businessCategory?: string;
+    shopPhoto?: string;
+    storefrontPhoto?: string;
+    photoBeforeVisit?: string;
+    photoAfterVisit?: string;
+    interestedStatus?: 'YES' | 'NO' | string;
+    interestStatus?: 'YES' | 'NO' | string;
+    notInterestedReason?: string;
+    otherReason?: string;
+    voiceNote?: string;
+    audioVoiceNote?: string;
+    checkInLocation?: {
         latitude: number;
         longitude: number;
         accuracy?: number;
@@ -15,10 +29,24 @@ export interface IFieldVisit extends Document {
         timestamp?: Date;
     };
     visitDate: Date;
-    photoBeforeVisit?: string;
-    photoAfterVisit?: string;
     remarks?: string;
-    status: 'started' | 'completed';
+    status: 'started' | 'completed' | string;
+    onboardingStatus?: string;
+    managerId?: string;
+    managerName?: string;
+    managerRole?: string;
+    recordedById?: string;
+    recordedByName?: string;
+    recordedByRole?: string;
+    state?: string;
+    district?: string;
+    division?: string;
+    pincode?: string;
+    stateId?: string;
+    districtId?: string;
+    divisionId?: string;
+    pincodeId?: string;
+    pincodeCode?: string;
     completedAt?: Date;
     createdAt: Date;
     updatedAt: Date;
