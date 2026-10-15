@@ -5,6 +5,7 @@ export interface AuthenticatedRequest extends Request {
     agentRecord?: any;
 }
 export declare const AUTHORIZED_AGENT_ROLES: readonly ["state", "district", "division", "pincode", "delivery_partner", "technician", "admin", "superadmin"];
+export declare const normalizeToAgentRole: (rawRole: any, rawLevel?: any) => string | null;
 /**
  * Authoritative Authentication and Access Control Middleware:
  * 1. Validates JWT signature and expiration.

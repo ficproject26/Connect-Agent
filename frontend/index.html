@@ -13,12 +13,28 @@
           var s = String(src || '');
           return s.indexOf('chrome-extension://') !== -1 ||
                  s.indexOf('content.js') !== -1 ||
+                 m.indexOf('chrome-extension://') !== -1 ||
+                 m.indexOf('content.js') !== -1 ||
                  m.indexOf('A listener indicated an asynchronous response') !== -1 ||
                  m.indexOf('message channel closed') !== -1 ||
                  m.indexOf('runtime.lastError') !== -1 ||
                  m.indexOf('unsafe-eval') !== -1 ||
                  m.indexOf('Content Security Policy') !== -1 ||
                  m.indexOf('Evaluating a string as JavaScript violates') !== -1;
+        };
+        var origError = console.error;
+        console.error = function() {
+          var args = Array.prototype.slice.call(arguments);
+          var str = args.map(function(a) { return String(a && a.message ? a.message : (typeof a === 'object' ? JSON.stringify(a) : a)); }).join(' ');
+          if (isExt(str, '')) return;
+          origError.apply(console, arguments);
+        };
+        var origWarn = console.warn;
+        console.warn = function() {
+          var args = Array.prototype.slice.call(arguments);
+          var str = args.map(function(a) { return String(a && a.message ? a.message : (typeof a === 'object' ? JSON.stringify(a) : a)); }).join(' ');
+          if (isExt(str, '')) return;
+          origWarn.apply(console, arguments);
         };
         window.addEventListener('securitypolicyviolation', function(e) {
           if ((e.sourceFile && e.sourceFile.indexOf('chrome-extension://') !== -1) ||

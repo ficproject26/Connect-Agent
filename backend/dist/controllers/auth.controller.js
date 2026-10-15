@@ -500,10 +500,9 @@ const login = async (req, res) => {
                 if (db) {
                     const userDoc = await db.collection('users').findOne({ email: cleanEmail });
                     if (userDoc) {
-                        const rawUserRole = String(userDoc.level || userDoc.role || '').toLowerCase();
-                        const isAgentRole = auth_middleware_1.AUTHORIZED_AGENT_ROLES.includes(rawUserRole);
-                        // Strict Role Isolation: Block non-agent accounts (customers, vendors, managers) from logging into Agent Portal
-                        if (!isAgentRole) {
+                        const canonicalUserRole = (0, auth_middleware_1.normalizeToAgentRole)(userDoc.role, userDoc.level);
+                        // Strict Role Isolation: Block non-agent accounts (customers, vendors) from logging into Agent Portal
+                        if (!canonicalUserRole) {
                             return res.status(403).json({
                                 message: `Access denied: Account registered as '${userDoc.role || userDoc.level || 'different role'}' is not authorized to access the Agent Portal. Please use the application intended for your role.`,
                                 role: userDoc.role || userDoc.level
@@ -523,7 +522,7 @@ const login = async (req, res) => {
                             return res.status(403).json({
                                 message: 'Your account has been suspended or deactivated. Please contact the Administrator.',
                                 status: 'suspended',
-                                role: rawUserRole
+                                role: canonicalUserRole
                             });
                         }
                         if (rawStatus === 'rejected') {
@@ -531,7 +530,7 @@ const login = async (req, res) => {
                                 message: `Your registration request was rejected by Admin. Reason: ${userDoc.rejectionReason || 'No reason provided.'}.`,
                                 status: 'rejected',
                                 rejectionReason: userDoc.rejectionReason,
-                                role: rawUserRole
+                                role: canonicalUserRole
                             });
                         }
                         if (rawStatus !== 'approved' && rawStatus !== 'active') {
@@ -539,11 +538,11 @@ const login = async (req, res) => {
                                 message: 'Your registration request is currently pending Admin verification. Please contact the Administrator for further assistance.',
                                 status: 'pending',
                                 registrationId: userDoc.registrationId || 'N/A',
-                                role: rawUserRole
+                                role: canonicalUserRole
                             });
                         }
                         // Sync verified approved agent to Agent collection
-                        const role = rawUserRole;
+                        const role = canonicalUserRole;
                         const rawAssigned = userDoc.assignedTerritory || userDoc.territory || {};
                         const cleanAssigned = {
                             state: (rawAssigned.state || userDoc.state || userDoc.assignedState || '').trim(),
@@ -603,12 +602,16 @@ const login = async (req, res) => {
             return res.status(401).json({ message: 'Invalid email or password' });
         }
         // 2. Strict Role Isolation Verification
-        const agentRole = String(agent.role || '').toLowerCase();
-        if (!auth_middleware_1.AUTHORIZED_AGENT_ROLES.includes(agentRole)) {
+        const canonicalAgentRole = (0, auth_middleware_1.normalizeToAgentRole)(agent.role);
+        if (!canonicalAgentRole) {
             return res.status(403).json({
                 message: `Access denied: Role '${agent.role}' is not authorized to access the Agent application.`,
                 role: agent.role
             });
+        }
+        if (agent.role !== canonicalAgentRole) {
+            agent.role = canonicalAgentRole;
+            await agent.save();
         }
         // 3. Realtime Status Check against database
         // Also sync latest status from admin users collection if updated by Admin

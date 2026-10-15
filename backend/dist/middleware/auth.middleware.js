@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.requireAdminApprover = exports.requireHigherOrEqualRole = exports.ROLE_HIERARCHY = exports.requireRole = exports.optionalAuthMiddleware = exports.authMiddleware = exports.AUTHORIZED_AGENT_ROLES = void 0;
+exports.requireAdminApprover = exports.requireHigherOrEqualRole = exports.ROLE_HIERARCHY = exports.requireRole = exports.optionalAuthMiddleware = exports.authMiddleware = exports.normalizeToAgentRole = exports.AUTHORIZED_AGENT_ROLES = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const jwt_1 = require("../utils/jwt");
 const Agent_1 = __importDefault(require("../models/Agent"));
@@ -17,6 +17,40 @@ exports.AUTHORIZED_AGENT_ROLES = [
     'admin',
     'superadmin'
 ];
+const normalizeToAgentRole = (rawRole, rawLevel) => {
+    const r = String(rawRole || '').toLowerCase().trim();
+    const l = String(rawLevel || '').toLowerCase().trim();
+    // Explicit non-agent roles (fail closed)
+    if (r === 'customer' || r === 'vendor')
+        return null;
+    if (r === 'state' || r === 'state_manager' || r === 'state admin' || r.includes('state') || l === '1' || l === 'state')
+        return 'state';
+    if (r === 'district' || r === 'district_manager' || r === 'district admin' || r.includes('district') || l === '2' || l === 'district')
+        return 'district';
+    if (r === 'division' || r === 'division_manager' || r === 'division admin' || r === 'divisional admin' || r.includes('division') || l === '3' || l === 'division')
+        return 'division';
+    if (r === 'pincode' || r === 'pincode_manager' || r === 'pincode admin' || r.includes('pincode') || l === '4' || l === 'pincode')
+        return 'pincode';
+    if (r === 'delivery_partner' || r.includes('delivery'))
+        return 'delivery_partner';
+    if (r === 'technician' || r.includes('tech'))
+        return 'technician';
+    if (r === 'admin' || r === 'superadmin')
+        return r;
+    if (r === 'agent') {
+        if (l === '1' || l === 'state')
+            return 'state';
+        if (l === '2' || l === 'district')
+            return 'district';
+        if (l === '3' || l === 'division')
+            return 'division';
+        if (l === '4' || l === 'pincode')
+            return 'pincode';
+        return 'pincode'; // default agent tier
+    }
+    return null;
+};
+exports.normalizeToAgentRole = normalizeToAgentRole;
 /**
  * Authoritative Authentication and Access Control Middleware:
  * 1. Validates JWT signature and expiration.
@@ -67,9 +101,8 @@ const authMiddleware = async (req, res, next) => {
             if (db) {
                 const userDoc = await db.collection('users').findOne({ email: decoded.email.toLowerCase() });
                 if (userDoc) {
-                    const userRole = String(userDoc.level || userDoc.role || '').toLowerCase();
-                    const isAgentRole = exports.AUTHORIZED_AGENT_ROLES.includes(userRole);
-                    if (!isAgentRole) {
+                    const canonicalUserRole = (0, exports.normalizeToAgentRole)(userDoc.role, userDoc.level);
+                    if (!canonicalUserRole) {
                         return res.status(403).json({
                             message: `Access denied: Account registered as '${userDoc.role || userDoc.level || 'different role'}' is not authorized for the Agent Portal.`,
                             role: userDoc.role || userDoc.level
@@ -80,7 +113,7 @@ const authMiddleware = async (req, res, next) => {
                         name: userDoc.name,
                         email: userDoc.email,
                         phone: userDoc.phone,
-                        role: userRole,
+                        role: canonicalUserRole,
                         status: userDoc.status || 'pending',
                         kycStatus: userDoc.kycStatus || userDoc.status || 'pending',
                         rejectionReason: userDoc.rejectionReason,
@@ -94,13 +127,14 @@ const authMiddleware = async (req, res, next) => {
             return res.status(401).json({ message: 'Account not found or access has been revoked.' });
         }
         // 1. Role Authorization Check: Fail closed if role is not an authorized agent role
-        const agentRole = String(agent.role || '').toLowerCase();
-        if (!exports.AUTHORIZED_AGENT_ROLES.includes(agentRole)) {
+        const canonicalAgentRole = (0, exports.normalizeToAgentRole)(agent.role);
+        if (!canonicalAgentRole) {
             return res.status(403).json({
                 message: `Access denied: Role '${agent.role}' is not authorized to access the Agent application.`,
                 role: agent.role
             });
         }
+        agent.role = canonicalAgentRole;
         // 2. Account Status Check: Enforce Suspended / Deactivated
         const agentStatus = String(agent.status || '').toLowerCase();
         if (agentStatus === 'suspended' || agentStatus === 'inactive') {

@@ -6,7 +6,7 @@ import { generateToken } from '../utils/jwt';
 import { invalidateAgentTerritoryScope } from '../utils/territoryScope';
 import { checkExistingDistrictAssignment } from '../utils/districtAssignment';
 import { publishEntityEvent } from '../realtime/eventBus';
-import { AUTHORIZED_AGENT_ROLES } from '../middleware/auth.middleware';
+import { AUTHORIZED_AGENT_ROLES, normalizeToAgentRole } from '../middleware/auth.middleware';
 import { z } from 'zod';
 
 const registerSchema = z.object({
@@ -545,11 +545,10 @@ export const login = async (req: Request, res: Response) => {
         if (db) {
           const userDoc = await db.collection('users').findOne({ email: cleanEmail });
           if (userDoc) {
-            const rawUserRole = String(userDoc.level || userDoc.role || '').toLowerCase();
-            const isAgentRole = AUTHORIZED_AGENT_ROLES.includes(rawUserRole as any);
+            const canonicalUserRole = normalizeToAgentRole(userDoc.role, userDoc.level);
 
-            // Strict Role Isolation: Block non-agent accounts (customers, vendors, managers) from logging into Agent Portal
-            if (!isAgentRole) {
+            // Strict Role Isolation: Block non-agent accounts (customers, vendors) from logging into Agent Portal
+            if (!canonicalUserRole) {
               return res.status(403).json({
                 message: `Access denied: Account registered as '${userDoc.role || userDoc.level || 'different role'}' is not authorized to access the Agent Portal. Please use the application intended for your role.`,
                 role: userDoc.role || userDoc.level
@@ -571,7 +570,7 @@ export const login = async (req: Request, res: Response) => {
               return res.status(403).json({
                 message: 'Your account has been suspended or deactivated. Please contact the Administrator.',
                 status: 'suspended',
-                role: rawUserRole
+                role: canonicalUserRole
               });
             }
             if (rawStatus === 'rejected') {
@@ -579,7 +578,7 @@ export const login = async (req: Request, res: Response) => {
                 message: `Your registration request was rejected by Admin. Reason: ${userDoc.rejectionReason || 'No reason provided.'}.`,
                 status: 'rejected',
                 rejectionReason: userDoc.rejectionReason,
-                role: rawUserRole
+                role: canonicalUserRole
               });
             }
             if (rawStatus !== 'approved' && rawStatus !== 'active') {
@@ -587,12 +586,12 @@ export const login = async (req: Request, res: Response) => {
                 message: 'Your registration request is currently pending Admin verification. Please contact the Administrator for further assistance.',
                 status: 'pending',
                 registrationId: userDoc.registrationId || 'N/A',
-                role: rawUserRole
+                role: canonicalUserRole
               });
             }
 
             // Sync verified approved agent to Agent collection
-            const role = rawUserRole;
+            const role = canonicalUserRole;
             const rawAssigned = userDoc.assignedTerritory || userDoc.territory || {};
             const cleanAssigned = {
               state: (rawAssigned.state || userDoc.state || userDoc.assignedState || '').trim(),
@@ -656,12 +655,16 @@ export const login = async (req: Request, res: Response) => {
     }
 
     // 2. Strict Role Isolation Verification
-    const agentRole = String(agent.role || '').toLowerCase();
-    if (!AUTHORIZED_AGENT_ROLES.includes(agentRole as any)) {
+    const canonicalAgentRole = normalizeToAgentRole(agent.role);
+    if (!canonicalAgentRole) {
       return res.status(403).json({
         message: `Access denied: Role '${agent.role}' is not authorized to access the Agent application.`,
         role: agent.role
       });
+    }
+    if (agent.role !== canonicalAgentRole) {
+      agent.role = canonicalAgentRole as any;
+      await agent.save();
     }
 
     // 3. Realtime Status Check against database
