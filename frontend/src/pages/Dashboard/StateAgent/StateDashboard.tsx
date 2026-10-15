@@ -146,6 +146,18 @@ export const StateDashboard: React.FC = () => {
     return name;
   };
 
+  // Helper to safely format performance score without defaulting zero/empty activity to 100%
+  const getPerformanceDisplay = (item: any) => {
+    if (typeof item?.performanceScore === 'number') {
+      return `${Math.round(item.performanceScore)}%`;
+    }
+    const hasWork = (item?.completedTargets || 0) > 0 || (item?.totalTieups || 0) > 0;
+    if (!hasWork && (!item?.agentCount || item.agentCount === 0)) {
+      return 'N/A';
+    }
+    return '0%';
+  };
+
   const districtsList = React.useMemo(() => {
     return stateDistricts.map((d: any) => {
       const territoryStr = d.territory?.district || d.district || 'District Area';
@@ -153,12 +165,13 @@ export const StateDashboard: React.FC = () => {
       const displayName = d.name && d.name !== 'old' && d.name !== 'ap' 
         ? `${territoryStr} (${d.name})`
         : `${territoryStr} Lead`;
+      const perfVal = getPerformanceDisplay(d);
       return {
         id: d._id || d.id,
         name: displayName,
         districtName: territoryStr,
         agentName: agentName,
-        val: `${d.performanceScore || 100}% Score`,
+        val: perfVal === 'N/A' ? 'N/A' : `${perfVal} Score`,
         divsCount: d.divisions?.length || 0,
         divs: `${d.divisions?.length || 0} Divisions active`,
         divisions: d.divisions || []
@@ -169,16 +182,16 @@ export const StateDashboard: React.FC = () => {
   const divisionsList = React.useMemo(() => {
     return stateDivisions.map((div: any) => {
       const territoryStr = div.territory?.division || div.division || 'Division Sector';
-      const agentName = formatCleanAgentName(div.name, 'Division Manager', territoryStr);
+      const agentName = formatCleanAgentName(div.name, 'Division Management', territoryStr);
       const displayName = div.name && div.name !== 'old'
         ? `${territoryStr} (${div.name})`
-        : `${territoryStr} Manager`;
+        : `${territoryStr} Management`;
       return {
         id: div._id || div.id,
         name: displayName,
         divisionName: territoryStr,
         agentName: agentName,
-        score: `${div.performanceScore || 100}%`,
+        score: getPerformanceDisplay(div),
         pins: `${div.pincodes?.length || 0} Pincodes assigned`,
         pincodes: div.pincodes || []
       };
@@ -196,7 +209,7 @@ export const StateDashboard: React.FC = () => {
         name: formatCleanAgentName(d.name, 'District Agent', territoryStr),
         role: 'District Agent',
         territory: `${territoryStr} (${userState})`,
-        score: d.performanceScore || 100
+        score: typeof d.performanceScore === 'number' ? d.performanceScore : 0
       });
     });
 
@@ -204,10 +217,10 @@ export const StateDashboard: React.FC = () => {
       const territoryStr = div.territory?.division || div.division || 'Division';
       all.push({
         id: div._id || `div-${div.name}`,
-        name: formatCleanAgentName(div.name, 'Division Manager', territoryStr),
-        role: 'Division Manager',
+        name: formatCleanAgentName(div.name, 'Division Management', territoryStr),
+        role: 'Division Management',
         territory: `${territoryStr}`,
-        score: div.performanceScore || 100
+        score: typeof div.performanceScore === 'number' ? div.performanceScore : 0
       });
     });
 
@@ -218,7 +231,7 @@ export const StateDashboard: React.FC = () => {
         name: formatCleanAgentName(pin.name, 'Pincode Agent', `PIN ${pinCodeStr}`),
         role: 'Pincode Agent',
         territory: `PIN ${pinCodeStr}`,
-        score: pin.performanceScore || 95
+        score: typeof pin.performanceScore === 'number' ? pin.performanceScore : 0
       });
     });
 
@@ -335,7 +348,7 @@ export const StateDashboard: React.FC = () => {
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
         {[
           { label: 'Total District Agents', val: metrics.totalDistricts.toString(), icon: <Landmark className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
-          { label: 'Total Division Managers', val: metrics.totalDivisions.toString(), icon: <Users className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
+          { label: 'Total Division Management', val: metrics.totalDivisions.toString(), icon: <Users className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
           { label: 'Total Pincode Agents', val: metrics.totalPincodes.toString(), icon: <Users className="w-4 h-4 text-[#4f4635]" />, bg: 'bg-[#efe1ca]' },
           { label: 'Total Registered Vendors', val: metrics.totalVendors.toString(), icon: <Users className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
           { label: 'Active Vendors', val: metrics.activeVendors.toString(), icon: <CheckCircle2 className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
@@ -488,7 +501,7 @@ export const StateDashboard: React.FC = () => {
               ) : (
                 (activeDrilledDistrict.divisions || []).map((div: any) => {
                   const divTerritory = div.territory?.division || div.division || 'Division Sector';
-                  const agentName = formatCleanAgentName(div.name, 'Division Manager', divTerritory);
+                  const agentName = formatCleanAgentName(div.name, 'Division Management', divTerritory);
                   const pinCount = div.pincodes?.length || 0;
                   return (
                     <div
@@ -510,7 +523,7 @@ export const StateDashboard: React.FC = () => {
                       </div>
                       <div className="pt-2 border-t border-amber-200/60 flex justify-between text-[10px] font-extrabold text-slate-600">
                         <span>{pinCount} Pincodes</span>
-                        <span className="text-amber-800">{div.performanceScore || 100}% Score</span>
+                        <span className="text-amber-800">{getPerformanceDisplay(div)} Score</span>
                       </div>
                     </div>
                   );
@@ -702,11 +715,11 @@ export const StateDashboard: React.FC = () => {
             {activeTab === 'divisions' && (
               <>
                 <div className="py-2.5 flex justify-between text-xs font-bold text-[#52443a]">
-                  <span>Division Sector & Manager</span>
+                  <span>Division Sector & Management</span>
                   <span>Pincodes Assigned</span>
                 </div>
                 {divisionsList.length === 0 ? (
-                  <p className="py-6 text-center text-xs text-slate-400 font-semibold">No division managers registered under {userState}.</p>
+                  <p className="py-6 text-center text-xs text-slate-400 font-semibold">No division management registered under {userState}.</p>
                 ) : (
                   divisionsList.map((item, i) => (
                     <div key={i} className="py-3 flex justify-between items-center text-xs font-semibold">

@@ -32,7 +32,7 @@ export interface ITicket extends Document {
   territory?: string;
   category: string;
   description: string;
-  priority: 'low' | 'medium' | 'high' | 'critical';
+  priority: 'low' | 'medium' | 'high';
   status: 'open' | 'assigned' | 'in_progress' | 'resolved' | 'closed' | 'escalated_to_admin';
   attachmentName?: string;
   attachmentUrl?: string;
@@ -73,7 +73,7 @@ const ticketSchema = new Schema<ITicket>({
   territory: { type: String },
   category: { type: String, required: true },
   description: { type: String, required: true },
-  priority: { type: String, enum: ['low', 'medium', 'high', 'critical'], default: 'medium' },
+  priority: { type: String, enum: ['low', 'medium', 'high'], default: 'medium' },
   status: { type: String, enum: ['open', 'assigned', 'in_progress', 'resolved', 'closed', 'escalated_to_admin'], default: 'open' },
   attachmentName: { type: String },
   attachmentUrl: { type: String },

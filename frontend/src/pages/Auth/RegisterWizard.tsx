@@ -380,6 +380,14 @@ export const RegisterWizard: React.FC = () => {
     setDeclaration({ infoCorrect: false, acceptTerms: false, understandApproval: false });
     setFormErrors('');
     setSuccessData(null);
+
+    // Explicitly reset all document and profile photo file input elements in the DOM
+    ['aadhaarCard', 'panCard', 'passportPhoto', 'signature', 'educationalCertificate', 'bankProof'].forEach(key => {
+      const el = document.getElementById(`file-${key}`) as HTMLInputElement;
+      if (el) el.value = '';
+    });
+    const profileInput = document.getElementById('profile-photo-step2') as HTMLInputElement;
+    if (profileInput) profileInput.value = '';
   };
 
   // Clear draft or populate if editing an existing agent
@@ -549,6 +557,10 @@ export const RegisterWizard: React.FC = () => {
     }));
     const inputEl = document.getElementById(`file-${docType}`) as HTMLInputElement;
     if (inputEl) inputEl.value = '';
+    if (docType === 'passportPhoto') {
+      const step2Input = document.getElementById('profile-photo-step2') as HTMLInputElement;
+      if (step2Input) step2Input.value = '';
+    }
   };
 
   const nextStep = () => {
@@ -1062,12 +1074,23 @@ export const RegisterWizard: React.FC = () => {
                         onChange={(e) => handleFileUpload(e, 'passportPhoto')}
                         className="hidden"
                       />
-                      <label
-                        htmlFor="profile-photo-step2"
-                        className="inline-flex items-center gap-1.5 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold px-3 py-2 rounded-xl border border-slate-300 cursor-pointer transition-colors shadow-2xs"
-                      >
-                        {documents.passportPhoto.dataUrl ? '✓ Photo Uploaded (Click to Change)' : 'Upload Profile Photo'}
-                      </label>
+                      <div className="flex items-center gap-2">
+                        <label
+                          htmlFor="profile-photo-step2"
+                          className="inline-flex items-center gap-1.5 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold px-3 py-2 rounded-xl border border-slate-300 cursor-pointer transition-colors shadow-2xs"
+                        >
+                          {documents.passportPhoto.dataUrl ? '✓ Photo Uploaded (Click to Change)' : 'Upload Profile Photo'}
+                        </label>
+                        {documents.passportPhoto.dataUrl && (
+                          <button
+                            type="button"
+                            onClick={() => removeDocument('passportPhoto')}
+                            className="text-[11px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2.5 py-2 rounded-xl border border-rose-200 transition-colors cursor-pointer"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
                       <p className="text-[11px] text-slate-400">Clear passport size photo. Allowed: JPG, PNG (Max 5MB)</p>
                     </div>
                   </div>

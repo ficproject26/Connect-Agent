@@ -34,7 +34,7 @@ const ticketSchema = new mongoose_1.Schema({
     territory: { type: String },
     category: { type: String, required: true },
     description: { type: String, required: true },
-    priority: { type: String, enum: ['low', 'medium', 'high', 'critical'], default: 'medium' },
+    priority: { type: String, enum: ['low', 'medium', 'high'], default: 'medium' },
     status: { type: String, enum: ['open', 'assigned', 'in_progress', 'resolved', 'closed', 'escalated_to_admin'], default: 'open' },
     attachmentName: { type: String },
     attachmentUrl: { type: String },

@@ -2,6 +2,7 @@ import React, { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from './ProtectedRoute';
 import { DashboardLayout } from '../components/layout/DashboardLayout';
+import { useAuth } from '../context/AuthContext';
 
 // Loading Fallback Component
 const PageLoader = () => (
@@ -57,6 +58,7 @@ const WalletDashboard = lazyWithRetry(() => import('../pages/Wallet/WalletDashbo
 const UnderConstruction = lazyWithRetry(() => import('../pages/UnderConstruction'));
 const ProfileModule = lazyWithRetry(() => import('../pages/Profile/ProfileModule'));
 const SettingsModule = lazyWithRetry(() => import('../pages/Settings/SettingsModule'));
+const SecuritySettings = lazyWithRetry(() => import('../pages/Settings/SecuritySettings'));
 const ReportsModule = lazyWithRetry(() => import('../pages/Reports/ReportsModule'));
 const NotificationCenter = lazyWithRetry(() => import('../pages/Notifications/NotificationCenter'));
 const AttendanceLogs = lazyWithRetry(() => import('../pages/Attendance/AttendanceLogs'));
@@ -65,6 +67,11 @@ const AgentManagement = lazyWithRetry(() => import('../pages/Agents/AgentManagem
 const LeaderboardModule = lazyWithRetry(() => import('../pages/Leaderboard/LeaderboardModule'));
 
 export const AppRoutes: React.FC = () => {
+  const { user } = useAuth();
+  const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';
+  const effectiveRole = (rawRole === 'agent' ? ((user as any)?.level || 'pincode') : rawRole).toLowerCase();
+  const isPincode = effectiveRole === 'pincode';
+
   return (
     <Suspense fallback={<PageLoader />}>
       <Routes>
@@ -99,11 +106,14 @@ export const AppRoutes: React.FC = () => {
                     <Route path="dashboard" element={<DashboardOverview />} />
                     
                     {/* Common Agent pages */}
-                    <Route path="agents" element={<AgentManagement />} />
+                    <Route
+                      path="agents"
+                      element={isPincode ? <Navigate to="/dashboard" replace /> : <AgentManagement />}
+                    />
                     <Route path="leaderboard" element={<LeaderboardModule />} />
                     <Route path="kyc" element={<KycVerification />} />
                     <Route path="vendors" element={<VendorsList />} />
-                    <Route path="targets" element={<TargetsList />} />
+                    <Route path="targets" element={<Navigate to="/tasks" replace />} />
                     <Route path="tasks" element={<TaskWorkflowModule />} />
                     <Route path="tickets" element={<TicketsList />} />
                     <Route path="wallet" element={<WalletDashboard />} />
@@ -112,6 +122,7 @@ export const AppRoutes: React.FC = () => {
                     {/* Shared Profile & Settings */}
                     <Route path="shared/profile" element={<ProfileModule />} />
                     <Route path="shared/settings" element={<SettingsModule />} />
+                    <Route path="shared/security" element={<SecuritySettings />} />
                     <Route path="shared/notifications" element={<NotificationCenter />} />
                     <Route path="field-visits" element={<FieldVisitsModule />} />
 

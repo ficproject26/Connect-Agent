@@ -793,13 +793,13 @@ export const AgentManagement: React.FC = () => {
                     <>
                       <option value="hierarchy">🌐 State → District → Division → Pincode Hierarchy</option>
                       <option value="district">📍 District Agents Level</option>
-                      <option value="division">🟡 Division Managers Level</option>
+                      <option value="division">🟡 Division Management Level</option>
                       <option value="pincode">📌 Pincode Agents Level</option>
                     </>
                   )}
                   {activeRole === 'district' && (
                     <>
-                      <option value="division">🟡 Division Managers Level Only</option>
+                      <option value="division">🟡 Division Management Level Only</option>
                       <option value="pincode">📍 Pincode Agents Level Only</option>
                     </>
                   )}
@@ -954,28 +954,28 @@ export const AgentManagement: React.FC = () => {
               </div>
             )}
 
-            {/* 2. DIVISION MANAGERS LEVEL SCOPE */}
+            {/* 2. DIVISION MANAGEMENT LEVEL SCOPE */}
             {scopeFilter === 'division' && (
               <div className="space-y-4">
                 <div className="flex justify-between items-center bg-amber-50/60 p-4 rounded-xl border border-amber-200">
                   <div>
                     <h3 className="text-base font-black text-[#1b1c1c] flex items-center gap-2">
                       <Layers className="w-5 h-5 text-amber-600" />
-                      Division Managers Level: {assignedStateNode.territory?.state || userState}
+                      Division Management Level: {assignedStateNode.territory?.state || userState}
                     </h3>
                     <p className="text-xs font-semibold text-[#52443a] mt-0.5">
-                      Showing eligible Division Managers and their assigned districts and divisions.
+                      Showing eligible Division Management and their assigned districts and divisions.
                     </p>
                   </div>
                   <span className="px-3 py-1 bg-amber-100 text-amber-900 font-extrabold text-xs rounded-lg border border-amber-200">
-                    {filterList(stateDivisionAgents).length} Division Managers Total
+                    {filterList(stateDivisionAgents).length} Division Management Total
                   </span>
                 </div>
 
                 <div className="grid grid-cols-1 gap-4">
                   {filterList(stateDivisionAgents).length === 0 ? (
                     <p className="text-center text-xs font-semibold text-slate-400 py-8 bg-slate-50 rounded-xl border border-slate-200">
-                      No division managers found matching filters under {userState}.
+                      No division management found matching filters under {userState}.
                     </p>
                   ) : (
                     filterList(stateDivisionAgents).map((div) => {
@@ -2002,7 +2002,7 @@ export const AgentManagement: React.FC = () => {
                         )}
                         {(selectedAgent.role === 'state' || selectedAgent.role === 'district') && (
                           <div className="bg-amber-100/60 p-3 rounded-2xl border border-amber-300 text-amber-900">
-                            <p className="text-[9px] uppercase font-extrabold">Division Managers</p>
+                            <p className="text-[9px] uppercase font-extrabold">Division Management</p>
                             <p className="text-lg font-black mt-0.5">{selMetrics.divCount} Agents</p>
                           </div>
                         )}

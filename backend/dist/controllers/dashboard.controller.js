@@ -4,8 +4,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getDashboardStats = void 0;
+const mongoose_1 = __importDefault(require("mongoose"));
 const Vendor_1 = __importDefault(require("../models/Vendor"));
 const TargetAssignment_1 = __importDefault(require("../models/TargetAssignment"));
+const Task_1 = __importDefault(require("../models/Task"));
 const Ticket_1 = __importDefault(require("../models/Ticket"));
 const Notification_1 = __importDefault(require("../models/Notification"));
 const Report_1 = __importDefault(require("../models/Report"));
@@ -25,19 +27,34 @@ const getDashboardStats = async (req, res) => {
         const scope = await (0, territoryScope_1.getAgentTerritoryScope)(agentId);
         const vendorScopeFilter = (0, territoryScope_1.buildVendorScopeFilter)(scope);
         const vendorFilter = Object.keys(vendorScopeFilter).length > 0 ? vendorScopeFilter : { assignedAgent: agentId };
+        const isObjId = mongoose_1.default.Types.ObjectId.isValid(agentId);
+        const agentMatches = [agentId];
+        if (isObjId)
+            agentMatches.push(new mongoose_1.default.Types.ObjectId(agentId));
+        const taskMatches = [
+            { assignedAgentId: agentId },
+            { assignedAgentId: { $in: agentMatches } }
+        ];
         // Run all aggregations in parallel for performance with field projections
-        const [totalVendors, activeVendors, pendingVendors, totalAssignments, completedAssignments, overdueAssignments, openTickets, resolvedTickets, unreadNotifications, totalReports, recentAssignments, recentVendors] = await Promise.all([
+        const [totalVendors, activeVendors, pendingVendors, totalAssignments, completedAssignments, overdueAssignments, totalTasks, completedTasks, overdueTasks, openTickets, resolvedTickets, unreadNotifications, totalReports, recentAssignments, recentVendors] = await Promise.all([
             Vendor_1.default.countDocuments(vendorFilter),
             Vendor_1.default.countDocuments({ ...vendorFilter, status: 'active' }),
             Vendor_1.default.countDocuments({ ...vendorFilter, status: 'pending' }),
-            TargetAssignment_1.default.countDocuments({ assignedTo: agentId }),
-            TargetAssignment_1.default.countDocuments({ assignedTo: agentId, status: 'completed' }),
-            TargetAssignment_1.default.countDocuments({ assignedTo: agentId, status: 'overdue' }),
+            TargetAssignment_1.default.countDocuments({ assignedTo: { $in: agentMatches } }),
+            TargetAssignment_1.default.countDocuments({ assignedTo: { $in: agentMatches }, status: 'completed' }),
+            TargetAssignment_1.default.countDocuments({ assignedTo: { $in: agentMatches }, status: 'overdue' }),
+            Task_1.default.countDocuments({ $or: taskMatches }),
+            Task_1.default.countDocuments({ $or: taskMatches, status: { $in: ['Approved', 'Completed', 'Closed'] } }),
+            Task_1.default.countDocuments({
+                $or: taskMatches,
+                dueDate: { $lt: new Date() },
+                status: { $nin: ['Approved', 'Completed', 'Rejected', 'Closed'] }
+            }),
             Ticket_1.default.countDocuments({ creator: agentId, status: 'open' }),
             Ticket_1.default.countDocuments({ creator: agentId, status: 'resolved' }),
             Notification_1.default.countDocuments({ receiver: agentId, read: false }),
             Report_1.default.countDocuments({ agent: agentId }),
-            TargetAssignment_1.default.find({ assignedTo: agentId })
+            TargetAssignment_1.default.find({ assignedTo: { $in: agentMatches } })
                 .select('target assignedTo assignedBy status dueDate completedAt createdAt')
                 .populate('target', 'title type targetValue')
                 .sort({ createdAt: -1 })
@@ -50,6 +67,9 @@ const getDashboardStats = async (req, res) => {
                 .limit(5)
                 .lean()
         ]);
+        const totalTargetsAll = totalAssignments + totalTasks;
+        const completedTargetsAll = completedAssignments + completedTasks;
+        const overdueTargetsAll = overdueAssignments + overdueTasks;
         const resultPayload = {
             stats: {
                 vendors: {
@@ -58,11 +78,11 @@ const getDashboardStats = async (req, res) => {
                     pending: pendingVendors
                 },
                 targets: {
-                    total: totalAssignments,
-                    completed: completedAssignments,
-                    overdue: overdueAssignments,
-                    completionRate: totalAssignments > 0
-                        ? Math.round((completedAssignments / totalAssignments) * 100)
+                    total: totalTargetsAll,
+                    completed: completedTargetsAll,
+                    overdue: overdueTargetsAll,
+                    completionRate: totalTargetsAll > 0
+                        ? Math.round((completedTargetsAll / totalTargetsAll) * 100)
                         : 0
                 },
                 tickets: {

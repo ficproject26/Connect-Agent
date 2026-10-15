@@ -14,7 +14,7 @@ interface SupportTicket {
   raisedBy?: string;
   category: string;
   description: string;
-  priority: 'low' | 'medium' | 'high' | 'critical';
+  priority: 'low' | 'medium' | 'high';
   status: 'open' | 'in_progress' | 'resolved' | 'closed' | 'escalated_to_admin';
   createdAt: string;
   remarks?: string;
@@ -93,7 +93,7 @@ export const TicketsList: React.FC = () => {
   
   const [category, setCategory] = useState(activeRole === 'state' ? 'Vendor' : 'Vendor Query');
   const [description, setDescription] = useState('');
-  const [priority, setPriority] = useState<'low' | 'medium' | 'high' | 'critical'>('medium');
+  const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
   const [vendorName, setVendorName] = useState('');
   const [vendorShopName, setVendorShopName] = useState('');
   const [vendorAddress, setVendorAddress] = useState('');
@@ -112,6 +112,52 @@ export const TicketsList: React.FC = () => {
   const [isLoadingDivisions, setIsLoadingDivisions] = useState(false);
   const [isLoadingPincodes, setIsLoadingPincodes] = useState(false);
   const [districtError, setDistrictError] = useState('');
+
+  // District Agent Scope cascading Division -> Pincode state
+  const [districtSelectedDivision, setDistrictSelectedDivision] = useState('');
+  const [districtAvailableDivisions, setDistrictAvailableDivisions] = useState<string[]>([]);
+  const [districtAvailablePincodes, setDistrictAvailablePincodes] = useState<TerritoryPincode[]>([]);
+  const [isLoadingDistrictDivs, setIsLoadingDistrictDivs] = useState(false);
+  const [isLoadingDistrictPins, setIsLoadingDistrictPins] = useState(false);
+
+  // Load Active Divisions for District Agent
+  useEffect(() => {
+    if (activeRole === 'district' && (userState || effectiveState) && userDistrict) {
+      setIsLoadingDistrictDivs(true);
+      getActiveDivisions(effectiveState || userState, userDistrict)
+        .then(divs => {
+          setDistrictAvailableDivisions(divs);
+          if (districtSelectedDivision && !divs.includes(districtSelectedDivision)) {
+            setDistrictSelectedDivision('');
+          }
+        })
+        .catch(err => {
+          console.error('Failed to load divisions for district agent:', err);
+        })
+        .finally(() => {
+          setIsLoadingDistrictDivs(false);
+        });
+    }
+  }, [activeRole, effectiveState, userState, userDistrict]);
+
+  // Load Active Pincodes when District Agent selects a Division
+  useEffect(() => {
+    if (activeRole === 'district' && (userState || effectiveState) && userDistrict && districtSelectedDivision) {
+      setIsLoadingDistrictPins(true);
+      getActivePincodes(effectiveState || userState, userDistrict, districtSelectedDivision)
+        .then(pins => {
+          setDistrictAvailablePincodes(pins);
+        })
+        .catch(err => {
+          console.error('Failed to load pincodes for district division:', err);
+        })
+        .finally(() => {
+          setIsLoadingDistrictPins(false);
+        });
+    } else if (activeRole === 'district') {
+      setDistrictAvailablePincodes([]);
+    }
+  }, [activeRole, effectiveState, userState, userDistrict, districtSelectedDivision]);
 
   // Load Active Districts for userState or effectiveState
   useEffect(() => {
@@ -263,7 +309,6 @@ export const TicketsList: React.FC = () => {
     setFormError('');
     setFormSuccess('');
 
-    // Validation
     if (activeRole === 'state') {
       if (!selectedDistrict.trim()) {
         setFormError('Please select or enter the Target District.');
@@ -271,6 +316,19 @@ export const TicketsList: React.FC = () => {
       }
       if (!selectedDivision.trim()) {
         setFormError('Please enter the Target Division.');
+        return;
+      }
+    } else if (activeRole === 'district') {
+      if (!vendorShopName.trim()) {
+        setFormError('Please enter the Store Name.');
+        return;
+      }
+      if (!districtSelectedDivision.trim()) {
+        setFormError('Please select a Target Division.');
+        return;
+      }
+      if (!merchantPincode.trim()) {
+        setFormError('Please select a Target Pincode.');
         return;
       }
     } else {
@@ -307,7 +365,7 @@ export const TicketsList: React.FC = () => {
       } else {
         payload.state = userState;
         payload.district = userDistrict;
-        payload.division = userDivision;
+        payload.division = activeRole === 'district' ? (districtSelectedDivision.trim() || userDivision) : userDivision;
         payload.pincode = merchantPincode.trim() || userPincode;
         payload.territory = [payload.district, payload.division, payload.pincode].filter(Boolean).join(' → ');
       }
@@ -535,7 +593,7 @@ export const TicketsList: React.FC = () => {
                         </td>
                         <td className="py-3.5 px-4 font-bold text-slate-700">{ticket.category}</td>
                         <td className="py-3.5 px-4 uppercase text-[10px] font-black">
-                          <span className={ticket.priority === 'critical' || ticket.priority === 'high' ? 'text-rose-600' : 'text-slate-600'}>
+                          <span className={ticket.priority === 'high' ? 'text-rose-600' : 'text-slate-600'}>
                             {ticket.priority}
                           </span>
                         </td>
@@ -907,16 +965,67 @@ export const TicketsList: React.FC = () => {
                       </div>
                     )}
 
-                    <div className="space-y-1">
-                      <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Select Merchant Pincode *</label>
-                      <input
-                        type="text"
-                        value={merchantPincode}
-                        onChange={(e) => setMerchantPincode(e.target.value)}
-                        placeholder={`Enter pincode (your territory: ${userPincode || '—'})`}
-                        className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                      />
-                    </div>
+                    {activeRole === 'district' ? (
+                      <>
+                        <div className="space-y-1">
+                          <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Select Division *</label>
+                          <select
+                            value={districtSelectedDivision}
+                            onChange={(e) => {
+                              setDistrictSelectedDivision(e.target.value);
+                              setMerchantPincode('');
+                            }}
+                            disabled={isLoadingDistrictDivs}
+                            className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                          >
+                            <option value="">-- Select Division --</option>
+                            {isLoadingDistrictDivs ? (
+                              <option value="" disabled>Loading divisions...</option>
+                            ) : districtAvailableDivisions.length === 0 ? (
+                              <option value="" disabled>No divisions found for {userDistrict}</option>
+                            ) : (
+                              districtAvailableDivisions.map(v => (
+                                <option key={v} value={v}>{v}</option>
+                              ))
+                            )}
+                          </select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Select Pincode *</label>
+                          <select
+                            value={merchantPincode}
+                            onChange={(e) => setMerchantPincode(e.target.value)}
+                            disabled={!districtSelectedDivision || isLoadingDistrictPins}
+                            className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19] disabled:opacity-50"
+                          >
+                            <option value="">-- Select Pincode --</option>
+                            {isLoadingDistrictPins ? (
+                              <option value="" disabled>Loading pincodes...</option>
+                            ) : districtSelectedDivision && districtAvailablePincodes.length === 0 ? (
+                              <option value="" disabled>No pincodes found for {districtSelectedDivision}</option>
+                            ) : (
+                              districtAvailablePincodes.map(p => (
+                                <option key={p.code} value={p.code}>
+                                  {p.code}{p.area ? ` - ${p.area}` : ''}
+                                </option>
+                              ))
+                            )}
+                          </select>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="space-y-1">
+                        <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Select Merchant Pincode *</label>
+                        <input
+                          type="text"
+                          value={merchantPincode}
+                          onChange={(e) => setMerchantPincode(e.target.value)}
+                          placeholder={`Enter pincode (your territory: ${userPincode || '—'})`}
+                          className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                        />
+                      </div>
+                    )}
 
                     <div className="space-y-1">
                       <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Assigned Pincode Agent</label>
@@ -971,7 +1080,6 @@ export const TicketsList: React.FC = () => {
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
                 <option value="high">High</option>
-                <option value="critical">Critical</option>
               </select>
             </div>
 

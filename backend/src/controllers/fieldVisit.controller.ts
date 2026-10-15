@@ -147,58 +147,109 @@ export const getFieldVisits = async (req: Request, res: Response) => {
     const pageNum = parseInt(page as string, 10);
     const limitNum = parseInt(limit as string, 10);
 
-    const filter: Record<string, unknown> = {};
+    const filter: any = {};
     const scope = await getAgentTerritoryScope(agentId, agentEmail);
     if (!scope) return res.status(403).json({ message: 'Forbidden: Missing territory scope' });
 
-    // Base authorization scoping
-    if (scope.role === 'pincode' || agentRole === 'pincode' || agentRole === 'delivery_partner' || agentRole === 'technician') {
-      const pinAgentValues: any[] = [agentId];
-      if (mongoose.Types.ObjectId.isValid(agentId)) {
-        pinAgentValues.push(new mongoose.Types.ObjectId(agentId));
+    // Build list of allowed agent ids based on territory hierarchy
+    const territoryFilter = buildTerritoryFilter(scope);
+    const subordinates = await Agent.find(territoryFilter).select('_id email').lean();
+    const allowedAgentIds = new Set([agentId, ...subordinates.map(s => String(s._id))]);
+    const queryIds: any[] = [];
+    for (const id of allowedAgentIds) {
+      queryIds.push(id);
+      if (mongoose.Types.ObjectId.isValid(id)) {
+        queryIds.push(new mongoose.Types.ObjectId(id));
       }
-      filter.agent = { $in: pinAgentValues };
-    } else {
-      const territoryFilter = buildTerritoryFilter(scope);
-      const subordinates = await Agent.find(territoryFilter).select('_id email').lean();
-      const allowedAgentIds = new Set([agentId, ...subordinates.map(s => String(s._id))]);
+    }
 
-      // If specificAgent requested, verify it's within authorized territory
-      if (specificAgent) {
-        if (!allowedAgentIds.has(String(specificAgent))) {
-          // Check if specificAgent exists by email or id in users
+    // Role-based territory scoping
+    if (scope.role === 'pincode' || agentRole === 'pincode' || agentRole === 'delivery_partner' || agentRole === 'technician') {
+      const pinConds: any[] = [
+        { agent: { $in: queryIds } },
+        { recordedById: agentId },
+        { managerId: agentId }
+      ];
+      if (scope.pincode) {
+        pinConds.push({ pincode: scope.pincode }, { pincodeCode: scope.pincode });
+      }
+      filter.$and = filter.$and || [];
+      filter.$and.push({ $or: pinConds });
+    } else if (scope.role === 'division') {
+      const divConds: any[] = [
+        { agent: { $in: queryIds } },
+        { recordedById: { $in: queryIds } },
+        { managerId: { $in: queryIds } }
+      ];
+      if (scope.division) {
+        const cleanDiv = scope.division.replace(/\s+division$/i, '').trim();
+        divConds.push(
+          { division: new RegExp(cleanDiv, 'i') },
+          { 'assignedTerritory.division': new RegExp(cleanDiv, 'i') }
+        );
+      }
+      filter.$and = filter.$and || [];
+      filter.$and.push({ $or: divConds });
+    } else if (scope.role === 'district') {
+      const distConds: any[] = [
+        { agent: { $in: queryIds } },
+        { recordedById: { $in: queryIds } },
+        { managerId: { $in: queryIds } }
+      ];
+      if (scope.district) {
+        const cleanD = scope.district.replace(/\s+district$/i, '').trim();
+        distConds.push(
+          { district: new RegExp(cleanD, 'i') },
+          { 'assignedTerritory.district': new RegExp(cleanD, 'i') }
+        );
+        try {
           const db = mongoose.connection.db;
-          let allowedDirect = false;
           if (db) {
-            const u = await db.collection('users').findOne({
-              $or: [{ _id: specificAgent as any }, { agentId: specificAgent }, { email: specificAgent }]
-            });
-            if (u) {
-              const uState = (u.assignedTerritory?.state || u.territory?.state || u.state || '').toLowerCase();
-              if (!scope.state || uState.includes(scope.state.toLowerCase()) || scope.state.toLowerCase().includes(uState)) {
-                allowedDirect = true;
-              }
+            const dDoc = await db.collection('districts').findOne({ name: new RegExp(`^${cleanD}$`, 'i') });
+            if (dDoc) {
+              distConds.push({ districtId: String(dDoc._id) }, { districtId: dDoc._id });
             }
           }
-          if (!allowedDirect) {
-            return res.status(403).json({ message: 'Forbidden: Agent outside authorized territory' });
-          }
-        }
-        const specValues: any[] = [specificAgent];
-        if (mongoose.Types.ObjectId.isValid(String(specificAgent))) {
-          specValues.push(new mongoose.Types.ObjectId(String(specificAgent)));
-        }
-        filter.agent = { $in: specValues };
-      } else {
-        const queryIds: any[] = [];
-        for (const id of allowedAgentIds) {
-          queryIds.push(id);
-          if (mongoose.Types.ObjectId.isValid(id)) {
-            queryIds.push(new mongoose.Types.ObjectId(id));
-          }
-        }
-        filter.agent = { $in: queryIds };
+        } catch (_) {}
       }
+      filter.$and = filter.$and || [];
+      filter.$and.push({ $or: distConds });
+    } else if (scope.role === 'state') {
+      const stateConds: any[] = [
+        { agent: { $in: queryIds } },
+        { recordedById: { $in: queryIds } },
+        { managerId: { $in: queryIds } }
+      ];
+      if (scope.state) {
+        const cleanS = scope.state.replace(/\s+state$/i, '').trim();
+        stateConds.push(
+          { state: new RegExp(cleanS, 'i') },
+          { 'assignedTerritory.state': new RegExp(cleanS, 'i') }
+        );
+        try {
+          const db = mongoose.connection.db;
+          if (db) {
+            const sDoc = await db.collection('states').findOne({ name: new RegExp(`^${cleanS}$`, 'i') });
+            if (sDoc) {
+              stateConds.push({ stateId: String(sDoc._id) }, { stateId: sDoc._id });
+            }
+          }
+        } catch (_) {}
+      }
+      filter.$and = filter.$and || [];
+      filter.$and.push({ $or: stateConds });
+    }
+
+    if (specificAgent && specificAgent !== 'all') {
+      filter.$and = filter.$and || [];
+      filter.$and.push({
+        $or: [
+          { agent: specificAgent },
+          { recordedById: specificAgent },
+          { managerId: specificAgent },
+          { recordedByName: new RegExp(String(specificAgent), 'i') }
+        ]
+      });
     }
 
     if (status && status !== 'all') {
@@ -238,38 +289,79 @@ export const getFieldVisits = async (req: Request, res: Response) => {
       ];
     }
 
-    // Optional Vendor territory filtering
-    if (district || division || pincode) {
-      const vendorQuery: any = {};
-      if (district && district !== 'all') {
-        const baseDist = (district as string).replace(/\s+district$/i, '').trim();
-        vendorQuery.district = new RegExp(`^\\s*${baseDist}(\\s+district)?\\s*$`, 'i');
-      }
-      if (division && division !== 'all') {
-        const baseDiv = (division as string).replace(/\s+division$/i, '').trim();
-        vendorQuery.division = new RegExp(`^\\s*${baseDiv}(\\s+division)?\\s*$`, 'i');
-      }
-      if (pincode && pincode !== 'all') {
-        vendorQuery.pincode = (pincode as string).trim();
-      }
-
-      const matchingVendors = await Vendor.find(vendorQuery).select('_id').lean();
-      const vIds = matchingVendors.map(v => v._id);
-      if (filter.vendor) {
-        // Intersect
-      } else {
-        filter.vendor = { $in: vIds };
-      }
+    // Optional drill-down filters
+    if (district && district !== 'all') {
+      const baseDist = (district as string).replace(/\s+district$/i, '').trim();
+      filter.$and = filter.$and || [];
+      filter.$and.push({
+        $or: [
+          { district: new RegExp(baseDist, 'i') },
+          { 'vendor.district': new RegExp(baseDist, 'i') }
+        ]
+      });
+    }
+    if (division && division !== 'all') {
+      const baseDiv = (division as string).replace(/\s+division$/i, '').trim();
+      filter.$and = filter.$and || [];
+      filter.$and.push({
+        $or: [
+          { division: new RegExp(baseDiv, 'i') },
+          { 'vendor.division': new RegExp(baseDiv, 'i') }
+        ]
+      });
+    }
+    if (pincode && pincode !== 'all') {
+      const cleanP = (pincode as string).trim();
+      filter.$and = filter.$and || [];
+      filter.$and.push({
+        $or: [
+          { pincode: cleanP },
+          { pincodeCode: cleanP },
+          { 'vendor.pincode': cleanP }
+        ]
+      });
     }
 
     const total = await FieldVisit.countDocuments(filter);
-    const visits = await FieldVisit.find(filter)
+    const rawVisits = await FieldVisit.find(filter)
       .populate('agent', 'name email role phone territory assignedTerritory registrationId')
       .populate('vendor', 'storeName businessName contactPerson phone pincode address district division state')
       .sort({ createdAt: -1 })
       .skip((pageNum - 1) * limitNum)
       .limit(limitNum)
       .lean();
+
+    // Normalize visits to guarantee agent and vendor fields are populated even for legacy records
+    const visits = rawVisits.map((v: any) => {
+      const normalizedAgent = v.agent || {
+        _id: v.recordedById || v.managerId || 'AGENT-REF',
+        name: v.recordedByName || v.managerName || 'Field Agent',
+        role: v.recordedByRole || v.managerRole || 'pincode',
+        phone: ''
+      };
+
+      const normalizedVendor = v.vendor || {
+        _id: v.vendorId || v.id || v._id,
+        storeName: v.shopName || 'Store Location',
+        businessName: v.shopName || 'Store Location',
+        address: v.address || v.notes || '',
+        state: v.state || scope.state,
+        district: v.district || scope.district,
+        division: v.division || scope.division,
+        pincode: v.pincode || v.pincodeCode || scope.pincode
+      };
+
+      return {
+        ...v,
+        agent: normalizedAgent,
+        vendor: normalizedVendor,
+        state: v.state || normalizedVendor.state,
+        district: v.district || normalizedVendor.district,
+        division: v.division || normalizedVendor.division,
+        pincode: v.pincode || v.pincodeCode || normalizedVendor.pincode,
+        status: (v.status || '').toLowerCase() === 'started' ? 'in_progress' : v.status
+      };
+    });
 
     return res.status(200).json({
       visits,

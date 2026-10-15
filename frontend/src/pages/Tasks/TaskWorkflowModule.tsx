@@ -304,6 +304,15 @@ export const TaskWorkflowModule: React.FC = () => {
 
   const eligibleAgents = eligibleAgentsData || [];
 
+  const invalidateAllTaskRelatedQueries = () => {
+    queryClient.invalidateQueries({ queryKey: ['hierarchicalTasks'] });
+    queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
+    queryClient.invalidateQueries({ queryKey: ['pincodeDashboardStats'] });
+    queryClient.invalidateQueries({ queryKey: ['divisionSubordinates'] });
+    queryClient.invalidateQueries({ queryKey: ['targetAssignmentsMine'] });
+    queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+  };
+
   // MUTATIONS
   const createTaskMutation = useMutation({
     mutationFn: async (payload: any) => {
@@ -313,7 +322,7 @@ export const TaskWorkflowModule: React.FC = () => {
     onSuccess: (data) => {
       setActionSuccess(data.message || 'Task submitted successfully!');
       setIsCreateModalOpen(false);
-      queryClient.invalidateQueries({ queryKey: ['hierarchicalTasks'] });
+      invalidateAllTaskRelatedQueries();
       setTimeout(() => setActionSuccess(''), 4000);
     },
     onError: (err: any) => {
@@ -330,7 +339,7 @@ export const TaskWorkflowModule: React.FC = () => {
     onSuccess: (data) => {
       setActionSuccess(data.message || 'Request approved and task assigned!');
       setIsAssignModalOpen(false);
-      queryClient.invalidateQueries({ queryKey: ['hierarchicalTasks'] });
+      invalidateAllTaskRelatedQueries();
       setTimeout(() => setActionSuccess(''), 4000);
     },
     onError: (err: any) => {
@@ -348,7 +357,7 @@ export const TaskWorkflowModule: React.FC = () => {
       setActionSuccess(data.message || 'Request rejected.');
       setIsRejectRequestModalOpen(false);
       setActionReason('');
-      queryClient.invalidateQueries({ queryKey: ['hierarchicalTasks'] });
+      invalidateAllTaskRelatedQueries();
       setTimeout(() => setActionSuccess(''), 4000);
     },
     onError: (err: any) => {
@@ -364,7 +373,7 @@ export const TaskWorkflowModule: React.FC = () => {
     },
     onSuccess: (data) => {
       setActionSuccess(data.message || 'Task accepted! Moved to In Progress.');
-      queryClient.invalidateQueries({ queryKey: ['hierarchicalTasks'] });
+      invalidateAllTaskRelatedQueries();
       setTimeout(() => setActionSuccess(''), 4000);
     },
     onError: (err: any) => {
@@ -382,7 +391,7 @@ export const TaskWorkflowModule: React.FC = () => {
       setActionSuccess(data.message || 'Task rejected and closed.');
       setIsRejectTaskModalOpen(false);
       setActionReason('');
-      queryClient.invalidateQueries({ queryKey: ['hierarchicalTasks'] });
+      invalidateAllTaskRelatedQueries();
       setTimeout(() => setActionSuccess(''), 4000);
     },
     onError: (err: any) => {
@@ -402,7 +411,7 @@ export const TaskWorkflowModule: React.FC = () => {
       setEvidenceRemarks('');
       setEvidencePhotos([]);
       setEvidenceVoiceNote('');
-      queryClient.invalidateQueries({ queryKey: ['hierarchicalTasks'] });
+      invalidateAllTaskRelatedQueries();
       setTimeout(() => setActionSuccess(''), 4000);
     },
     onError: (err: any) => {
@@ -420,7 +429,7 @@ export const TaskWorkflowModule: React.FC = () => {
       setActionSuccess(data.message || 'Submission reviewed successfully.');
       setIsReviewEvidenceModalOpen(false);
       setActionNotes('');
-      queryClient.invalidateQueries({ queryKey: ['hierarchicalTasks'] });
+      invalidateAllTaskRelatedQueries();
       setTimeout(() => setActionSuccess(''), 4000);
     },
     onError: (err: any) => {

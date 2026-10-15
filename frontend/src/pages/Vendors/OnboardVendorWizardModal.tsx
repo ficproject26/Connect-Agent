@@ -12,6 +12,7 @@ import {
   getPincodesForDivision,
   validateTerritoryBelongsToAgent
 } from '../../utils/locationData';
+import { getActiveDivisions } from '../../utils/territoryService';
 import { fetchAdminCategories, getActiveMainCategories, CANONICAL_MAIN_CATEGORIES } from '../../services/categoryService';
 
 interface OnboardVendorWizardModalProps {
@@ -133,12 +134,35 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
     return (formData.district || agentDistrict) ? [formData.district || agentDistrict] : [];
   }, [activeRole, formData.state, agentState, formData.district, agentDistrict]);
 
+  const [asyncDivisions, setAsyncDivisions] = useState<string[]>([]);
+
+  // Asynchronously resolve divisions when district or state is selected
+  useEffect(() => {
+    const targetDist = formData.district || agentDistrict;
+    const targetState = formData.state || agentState;
+    if (targetDist && (activeRole === 'state' || activeRole === 'district')) {
+      getActiveDivisions(targetState, targetDist).then(divs => {
+        if (divs && divs.length > 0) {
+          setAsyncDivisions(divs);
+          setFormData(prev => {
+            if (!prev.division || !divs.includes(prev.division)) {
+              return { ...prev, division: divs[0] || '' };
+            }
+            return prev;
+          });
+        }
+      }).catch(() => {});
+    }
+  }, [formData.district, formData.state, agentDistrict, agentState, activeRole, isOpen]);
+
   const availableDivisions = useMemo(() => {
     if (activeRole === 'state' || activeRole === 'district') {
-      return getDivisionsForDistrict(formData.district || agentDistrict, formData.state || agentState);
+      const syncDivs = getDivisionsForDistrict(formData.district || agentDistrict, formData.state || agentState);
+      if (syncDivs && syncDivs.length > 0) return syncDivs;
+      return asyncDivisions;
     }
     return (formData.division || agentDivision) ? [formData.division || agentDivision] : [];
-  }, [activeRole, formData.district, agentDistrict, formData.state, agentState, formData.division, agentDivision]);
+  }, [activeRole, formData.district, agentDistrict, formData.state, agentState, formData.division, agentDivision, asyncDivisions]);
 
   const availablePincodes = useMemo(() => {
     if (activeRole === 'pincode') {
@@ -562,6 +586,7 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
       ownerName: formData.ownerName.trim(),
       contactPerson: formData.ownerName.trim(),
       phone: cleanPhone,
+      ownerPhone: cleanPhone,
       email: cleanEmail,
       storeType: formData.category,
       category: formData.category,
@@ -989,18 +1014,6 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                   required
                 />
                 <Input
-                  label="Owner Phone Number (10 Digits, 6-9 Start) *"
-                  placeholder="e.g. 9876543210"
-                  value={formData.phone}
-                  onChange={(e) => handlePhoneInput(e.target.value, 'phone')}
-                  maxLength={10}
-                  inputMode="numeric"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Input
                   label="Alternate Phone Number (Optional, 10 Digits)"
                   placeholder="10-digit secondary contact"
                   value={formData.alternatePhone}
@@ -1008,6 +1021,9 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                   maxLength={10}
                   inputMode="numeric"
                 />
+              </div>
+
+              <div className="grid grid-cols-1 gap-3">
                 <Input
                   label="Registered By Agent (Read-Only)"
                   value={formData.agentCode}

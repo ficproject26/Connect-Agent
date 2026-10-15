@@ -8,6 +8,7 @@ const zod_1 = require("zod");
 const mongoose_1 = __importDefault(require("mongoose"));
 const Target_1 = __importDefault(require("../models/Target"));
 const TargetAssignment_1 = __importDefault(require("../models/TargetAssignment"));
+const Task_1 = __importDefault(require("../models/Task"));
 const Agent_1 = __importDefault(require("../models/Agent"));
 const Notification_1 = __importDefault(require("../models/Notification"));
 const territoryScope_1 = require("../utils/territoryScope");
@@ -390,16 +391,30 @@ const getSubordinates = async (req, res) => {
         }
         const subIds = subordinates.map(s => s._id);
         let assignments = [];
+        let tasks = [];
         try {
-            assignments = await TargetAssignment_1.default.find({ assignedTo: { $in: subIds } }).populate('target').lean();
+            const subIdStrings = subIds.map(s => String(s));
+            const [asgnsResult, tasksResult] = await Promise.all([
+                TargetAssignment_1.default.find({ assignedTo: { $in: subIds } }).populate('target').lean(),
+                Task_1.default.find({
+                    $or: [
+                        { assignedAgentId: { $in: subIdStrings } },
+                        { assignedAgentId: { $in: subIds } }
+                    ]
+                }).lean()
+            ]);
+            assignments = asgnsResult || [];
+            tasks = tasksResult || [];
         }
         catch (asgnErr) {
             console.warn('TargetAssignment metrics query failed gracefully:', asgnErr);
         }
         const subsWithMetrics = subordinates.map(sub => {
             const subAsgns = assignments.filter((a) => String(a.assignedTo) === String(sub._id));
-            const assignedTargets = subAsgns.reduce((acc, a) => acc + (a.target?.targetValue || 1), 0);
-            const completedTargets = subAsgns.filter((a) => a.status === 'completed').reduce((acc, a) => acc + (a.target?.targetValue || 1), 0);
+            const subTasks = tasks.filter((t) => String(t.assignedAgentId) === String(sub._id));
+            const assignedTargets = subAsgns.reduce((acc, a) => acc + (a.target?.targetValue || 1), 0) + subTasks.length;
+            const completedTargets = subAsgns.filter((a) => a.status === 'completed').reduce((acc, a) => acc + (a.target?.targetValue || 1), 0)
+                + subTasks.filter((t) => ['Approved', 'Completed', 'Closed'].includes(t.status)).length;
             const rawRole = (sub.role || sub.level || 'pincode').toLowerCase();
             const normalizedRole = rawRole.includes('district')
                 ? 'district'

@@ -184,11 +184,21 @@ export const LeaderboardModule: React.FC = () => {
     }
   });
 
-  const userRole = (user?.role as string) || 'pincode';
-  const userState = (user?.territory?.state || '').toLowerCase();
-  const userDistrict = (user?.territory?.district || '').toLowerCase();
-  const userDivision = (user?.territory?.division || '').toLowerCase();
-  const userPincode = user?.territory?.pincode || '';
+  const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';
+  const effectiveRole = (rawRole === 'agent' ? ((user as any)?.level || 'pincode') : rawRole).toLowerCase();
+  const userRole = effectiveRole.includes('state')
+    ? 'state'
+    : effectiveRole.includes('district')
+    ? 'district'
+    : effectiveRole.includes('division')
+    ? 'division'
+    : 'pincode';
+
+  const userTerritory = user?.assignedTerritory || user?.territory || {};
+  const userState = (userTerritory?.state || (user as any)?.state || '').toLowerCase();
+  const userDistrict = (userTerritory?.district || (user as any)?.district || '').toLowerCase();
+  const userDivision = (userTerritory?.division || (user as any)?.division || '').toLowerCase();
+  const userPincode = userTerritory?.pincode || (user as any)?.pincode || '';
 
   // Filtered & Sorted Leaderboard List based on Active 4-Tier Tab and Territory Scope
   const leaderboardList: LeaderboardItem[] = useMemo(() => {
@@ -206,7 +216,7 @@ export const LeaderboardModule: React.FC = () => {
       }
       if (userRole === 'district') {
         if (item.role === 'state') return false;
-        return !userDistrict || itemDistrict.includes(userDistrict) || userDistrict.includes(itemDistrict);
+        return !userDistrict || !itemDistrict || itemDistrict.includes(userDistrict) || userDistrict.includes(itemDistrict);
       }
       if (userRole === 'division') {
         if (item.role === 'state' || item.role === 'district') return false;

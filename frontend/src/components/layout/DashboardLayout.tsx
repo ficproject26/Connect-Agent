@@ -61,7 +61,6 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
     { label: 'Agent Management', path: '/agents', icon: <GitFork className="w-5 h-5" /> },
     { label: 'Vendors', path: '/vendors', icon: <Users className="w-5 h-5" /> },
     { label: 'Tasks & Approvals', path: '/tasks', icon: <CheckSquare className="w-5 h-5 text-amber-500" /> },
-    { label: 'Targets Quota', path: '/targets', icon: <Target className="w-5 h-5" /> },
     { label: 'Field Visits', path: '/field-visits', icon: <MapPin className="w-5 h-5" /> },
     { label: 'Support Tickets', path: '/tickets', icon: <Ticket className="w-5 h-5" /> },
     { label: 'Wallet', path: '/wallet', icon: <Wallet className="w-5 h-5" /> },
@@ -152,7 +151,13 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
     );
   }
 
-  const visibleSidebarItems = sidebarItems;
+  const visibleSidebarItems = sidebarItems.filter(item => {
+    // Bug 15: Restrict Agent Management for Pincode Agents
+    if (item.path === '/agents' && effectiveRole === 'pincode') {
+      return false;
+    }
+    return true;
+  });
 
   const unreadNotifs = notifications?.filter(n => !n.read) || [];
 

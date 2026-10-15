@@ -31,7 +31,7 @@ export interface ITicket extends Document {
     territory?: string;
     category: string;
     description: string;
-    priority: 'low' | 'medium' | 'high' | 'critical';
+    priority: 'low' | 'medium' | 'high';
     status: 'open' | 'assigned' | 'in_progress' | 'resolved' | 'closed' | 'escalated_to_admin';
     attachmentName?: string;
     attachmentUrl?: string;

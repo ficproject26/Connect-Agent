@@ -4,6 +4,7 @@ import Task, { ITask } from '../models/Task';
 import Agent from '../models/Agent';
 import { getAgentTerritoryScope, buildTerritoryFilter } from '../utils/territoryScope';
 import { publishEntityEvent } from '../realtime/eventBus';
+import { cacheService } from '../services/cache.service';
 import { z } from 'zod';
 
 // Helper: Normalize role and extract user context (Admin vs Agent)
@@ -318,6 +319,7 @@ export const createTask = async (req: Request, res: Response) => {
       });
 
       await newTask.save();
+      await cacheService.delByPrefix('dashboard:').catch(() => {});
 
       publishEntityEvent({
         event: 'ENTITY_CREATED',
@@ -429,6 +431,7 @@ export const createTask = async (req: Request, res: Response) => {
       });
 
       await newTask.save();
+      await cacheService.delByPrefix('dashboard:').catch(() => {});
 
       publishEntityEvent({
         event: 'ENTITY_CREATED',
@@ -980,6 +983,7 @@ export const acceptTask = async (req: Request, res: Response) => {
     });
 
     await task.save();
+    await cacheService.delByPrefix('dashboard:').catch(() => {});
 
     publishEntityEvent({
       event: 'ENTITY_UPDATED',
@@ -1148,6 +1152,7 @@ export const submitEvidence = async (req: Request, res: Response) => {
     });
 
     await task.save();
+    await cacheService.delByPrefix('dashboard:').catch(() => {});
 
     publishEntityEvent({
       event: 'ENTITY_UPDATED',
@@ -1218,6 +1223,7 @@ export const reviewEvidence = async (req: Request, res: Response) => {
       });
 
       await task.save();
+      await cacheService.delByPrefix('dashboard:').catch(() => {});
 
       publishEntityEvent({
         event: 'ENTITY_UPDATED',

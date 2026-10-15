@@ -11,6 +11,7 @@ const mongoose_1 = __importDefault(require("mongoose"));
 const Task_1 = __importDefault(require("../models/Task"));
 const Agent_1 = __importDefault(require("../models/Agent"));
 const eventBus_1 = require("../realtime/eventBus");
+const cache_service_1 = require("../services/cache.service");
 const zod_1 = require("zod");
 const HIERARCHY_RANKS = {
     state: 4,
@@ -282,6 +283,7 @@ const createTask = async (req, res) => {
                 ]
             });
             await newTask.save();
+            await cache_service_1.cacheService.delByPrefix('dashboard:').catch(() => { });
             (0, eventBus_1.publishEntityEvent)({
                 event: 'ENTITY_CREATED',
                 entity: 'task',
@@ -387,6 +389,7 @@ const createTask = async (req, res) => {
                 ]
             });
             await newTask.save();
+            await cache_service_1.cacheService.delByPrefix('dashboard:').catch(() => { });
             (0, eventBus_1.publishEntityEvent)({
                 event: 'ENTITY_CREATED',
                 entity: 'task_request',
@@ -887,6 +890,7 @@ const acceptTask = async (req, res) => {
             timestamp: new Date()
         });
         await task.save();
+        await cache_service_1.cacheService.delByPrefix('dashboard:').catch(() => { });
         (0, eventBus_1.publishEntityEvent)({
             event: 'ENTITY_UPDATED',
             entity: 'task',
@@ -1030,6 +1034,7 @@ const submitEvidence = async (req, res) => {
             }
         });
         await task.save();
+        await cache_service_1.cacheService.delByPrefix('dashboard:').catch(() => { });
         (0, eventBus_1.publishEntityEvent)({
             event: 'ENTITY_UPDATED',
             entity: 'task',
@@ -1091,6 +1096,7 @@ const reviewEvidence = async (req, res) => {
                 details: { notes }
             });
             await task.save();
+            await cache_service_1.cacheService.delByPrefix('dashboard:').catch(() => { });
             (0, eventBus_1.publishEntityEvent)({
                 event: 'ENTITY_UPDATED',
                 entity: 'task',

@@ -263,7 +263,7 @@ export const VendorsList: React.FC = () => {
 
         return {
           id: v.registrationId || v.id || v._id || `REG-${Math.floor(1000 + Math.random() * 9000)}`,
-          name: v.businessName || v.name || 'Merchant Store',
+          name: v.businessName || v.name || v.storeName || 'Vendor',
           ownerName: v.ownerName || 'Merchant Owner',
           phone: v.phone || '',
           email: v.email || '',
@@ -369,8 +369,19 @@ export const VendorsList: React.FC = () => {
   // Extract unique filter dropdown values strictly scoped to assigned State
   const categories = useMemo(() => Array.from(new Set([...CANONICAL_MAIN_CATEGORIES, ...scopedVendors.map(v => v.storeType).filter(Boolean)])), [scopedVendors]);
   const districts = useMemo(() => getDistrictsForState(userState), [userState]);
-  const divisions = useMemo(() => getDivisionsForDistrict(districtFilter, userState), [districtFilter, userState]);
-  const pincodes = useMemo(() => Array.from(new Set(scopedVendors.map(v => v.pincode).filter(Boolean))), [scopedVendors]);
+  const effectiveDistrictForDivisions = activeRole === 'district' ? userDistrict : districtFilter;
+  const divisions = useMemo(() => {
+    if (!effectiveDistrictForDivisions || effectiveDistrictForDivisions === 'all') return [];
+    return getDivisionsForDistrict(effectiveDistrictForDivisions, userState);
+  }, [effectiveDistrictForDivisions, userState]);
+
+  const pincodes = useMemo(() => {
+    if (divisionFilter && divisionFilter !== 'all') {
+      const divPins = getPincodesForDivision(divisionFilter);
+      if (divPins.length > 0) return divPins;
+    }
+    return Array.from(new Set(scopedVendors.map(v => v.pincode).filter(Boolean)));
+  }, [scopedVendors, divisionFilter]);
   const agents = useMemo(() => Array.from(new Set(scopedVendors.map(v => v.assignedAgent).filter(Boolean))), [scopedVendors]);
 
   // Compute 6 KPI Card Metrics from SCOPED vendors list with dynamic calendar boundaries

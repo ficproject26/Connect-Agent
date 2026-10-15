@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
+import mongoose from 'mongoose';
 import Vendor from '../models/Vendor';
 import TargetAssignment from '../models/TargetAssignment';
+import Task from '../models/Task';
 import Ticket from '../models/Ticket';
 import Notification from '../models/Notification';
 import Report from '../models/Report';
@@ -24,6 +26,15 @@ export const getDashboardStats = async (req: Request, res: Response) => {
 
     const vendorFilter = Object.keys(vendorScopeFilter).length > 0 ? vendorScopeFilter : { assignedAgent: agentId };
 
+    const isObjId = mongoose.Types.ObjectId.isValid(agentId);
+    const agentMatches: any[] = [agentId];
+    if (isObjId) agentMatches.push(new mongoose.Types.ObjectId(agentId));
+
+    const taskMatches: any[] = [
+      { assignedAgentId: agentId },
+      { assignedAgentId: { $in: agentMatches } }
+    ];
+
     // Run all aggregations in parallel for performance with field projections
     const [
       totalVendors,
@@ -32,6 +43,9 @@ export const getDashboardStats = async (req: Request, res: Response) => {
       totalAssignments,
       completedAssignments,
       overdueAssignments,
+      totalTasks,
+      completedTasks,
+      overdueTasks,
       openTickets,
       resolvedTickets,
       unreadNotifications,
@@ -42,14 +56,21 @@ export const getDashboardStats = async (req: Request, res: Response) => {
       Vendor.countDocuments(vendorFilter),
       Vendor.countDocuments({ ...vendorFilter, status: 'active' }),
       Vendor.countDocuments({ ...vendorFilter, status: 'pending' }),
-      TargetAssignment.countDocuments({ assignedTo: agentId }),
-      TargetAssignment.countDocuments({ assignedTo: agentId, status: 'completed' }),
-      TargetAssignment.countDocuments({ assignedTo: agentId, status: 'overdue' }),
+      TargetAssignment.countDocuments({ assignedTo: { $in: agentMatches } }),
+      TargetAssignment.countDocuments({ assignedTo: { $in: agentMatches }, status: 'completed' }),
+      TargetAssignment.countDocuments({ assignedTo: { $in: agentMatches }, status: 'overdue' }),
+      Task.countDocuments({ $or: taskMatches }),
+      Task.countDocuments({ $or: taskMatches, status: { $in: ['Approved', 'Completed', 'Closed'] } }),
+      Task.countDocuments({
+        $or: taskMatches,
+        dueDate: { $lt: new Date() },
+        status: { $nin: ['Approved', 'Completed', 'Rejected', 'Closed'] }
+      }),
       Ticket.countDocuments({ creator: agentId, status: 'open' }),
       Ticket.countDocuments({ creator: agentId, status: 'resolved' }),
       Notification.countDocuments({ receiver: agentId, read: false }),
       Report.countDocuments({ agent: agentId }),
-      TargetAssignment.find({ assignedTo: agentId })
+      TargetAssignment.find({ assignedTo: { $in: agentMatches } })
         .select('target assignedTo assignedBy status dueDate completedAt createdAt')
         .populate('target', 'title type targetValue')
         .sort({ createdAt: -1 })
@@ -63,6 +84,10 @@ export const getDashboardStats = async (req: Request, res: Response) => {
         .lean()
     ]);
 
+    const totalTargetsAll = totalAssignments + totalTasks;
+    const completedTargetsAll = completedAssignments + completedTasks;
+    const overdueTargetsAll = overdueAssignments + overdueTasks;
+
     const resultPayload = {
       stats: {
         vendors: {
@@ -71,11 +96,11 @@ export const getDashboardStats = async (req: Request, res: Response) => {
           pending: pendingVendors
         },
         targets: {
-          total: totalAssignments,
-          completed: completedAssignments,
-          overdue: overdueAssignments,
-          completionRate: totalAssignments > 0
-            ? Math.round((completedAssignments / totalAssignments) * 100)
+          total: totalTargetsAll,
+          completed: completedTargetsAll,
+          overdue: overdueTargetsAll,
+          completionRate: totalTargetsAll > 0
+            ? Math.round((completedTargetsAll / totalTargetsAll) * 100)
             : 0
         },
         tickets: {

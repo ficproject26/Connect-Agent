@@ -464,6 +464,10 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
     }
 
     const scope = await getAgentTerritoryScope(requesterId);
+    if (scope?.role === 'pincode') {
+      return res.status(403).json({ message: 'Forbidden: Pincode agents do not have permission to access agent hierarchy and management.' });
+    }
+
     let divisionPincodes: string[] = [];
     if (scope?.role === 'division' && scope.division) {
       divisionPincodes = await getDivisionPincodes(scope.division);
@@ -759,10 +763,18 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
 
     // Pre-index pincodes by division name for fast O(1) division hierarchy mapping
     const pincodesByDivision = new Map<string, Set<string>>();
+    let canonicalDistricts: any[] = [];
+    let canonicalDivisions: any[] = [];
     try {
       const db = mongoose.connection.db;
       if (db) {
-        const allDbPincodes = await db.collection('pincodes').find({}, { projection: { code: 1, pincode: 1, division: 1 } }).toArray();
+        const [allDbPincodes, dbDists, dbDivs] = await Promise.all([
+          db.collection('pincodes').find({}, { projection: { code: 1, pincode: 1, division: 1 } }).toArray(),
+          db.collection('districts').find({ status: { $regex: /^active$/i } }).toArray(),
+          db.collection('divisions').find({ status: { $regex: /^active$/i } }).toArray()
+        ]);
+        canonicalDistricts = dbDists || [];
+        canonicalDivisions = dbDivs || [];
         for (const p of allDbPincodes) {
           const code = String(p.code || p.pincode || '').trim();
           const div = cleanWord(String(p.division || ''));
@@ -774,7 +786,7 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
       }
     } catch (_) {}
 
-    // 1. Pre-enrich division agents with their pincodes
+    // 1. Pre-enrich registered division agents with their pincodes
     const enrichedDivisions = divisionAgents.map(div => {
       const divTerritory = getAgentDivision(div);
       const divDist = getAgentDistrict(div);
@@ -820,6 +832,83 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
       };
     });
 
+    // 1b. Map active canonical divisions into the division list (ensuring Salem and all active divisions appear)
+    const allDivisions: any[] = [...enrichedDivisions];
+    const registeredDivNames = new Set(enrichedDivisions.map(d => cleanWord(getAgentDivision(d))));
+    const registeredDivIds = new Set(enrichedDivisions.map(d => String(d.assignedTerritory?.divisionId || d._id)));
+
+    for (const cDiv of canonicalDivisions) {
+      const cNameNorm = cleanWord(cDiv.name || '');
+      const cIdStr = String(cDiv._id);
+      if (registeredDivNames.has(cNameNorm) || registeredDivIds.has(cIdStr)) continue;
+
+      const parentDist = canonicalDistricts.find(cd => String(cd._id) === String(cDiv.districtId));
+      const distName = parentDist?.name || cDiv.district || '';
+      const stateName = scope?.state || 'Tamil Nadu';
+
+      const knownDivPincodes = pincodesByDivision.get(cNameNorm);
+      const matchingPincodes = pincodeAgents
+        .filter(pin => {
+          const pinDiv = getAgentDivision(pin);
+          const pinDist = getAgentDistrict(pin);
+          const pinCode = getAgentPincode(pin);
+
+          if (distName && pinDist && cleanWord(distName) !== cleanWord(pinDist)) return false;
+          if (pinCode && knownDivPincodes && knownDivPincodes.has(pinCode)) return true;
+          if (pinDiv && cDiv.name) {
+            const pNorm = cleanWord(pinDiv);
+            if (pNorm === cNameNorm || pNorm.includes(cNameNorm) || cNameNorm.includes(pNorm)) return true;
+          }
+          if (pin.assignedTerritory?.divisionId && String(pin.assignedTerritory.divisionId) === cIdStr) return true;
+          return false;
+        })
+        .map(pin => enrichAgentData(pin));
+
+      allDivisions.push({
+        _id: cDiv._id,
+        name: cDiv.name,
+        email: '',
+        phone: '',
+        registrationId: `DIV-${String(cDiv._id).substring(0, 6)}`,
+        role: 'division',
+        status: 'approved',
+        kycStatus: 'approved',
+        registrationFeePaid: true,
+        performanceScore: 0,
+        earnings: 0,
+        tieupsToday: 0,
+        tieupsYesterday: 0,
+        totalTieups: 0,
+        territory: {
+          state: stateName,
+          district: distName,
+          division: cDiv.name,
+          pincode: ''
+        },
+        assignedTerritory: {
+          state: stateName,
+          stateId: String(parentDist?.stateId || ''),
+          district: distName,
+          districtId: String(cDiv.districtId || parentDist?._id || ''),
+          division: cDiv.name,
+          divisionId: cIdStr,
+          taluk: '',
+          pincode: '',
+          pincodeId: ''
+        },
+        address: {},
+        fullAddress: '',
+        plusPoints: ['Active Division'],
+        minusPoints: [],
+        createdAt: cDiv.createdAt || new Date(),
+        pincodes: matchingPincodes,
+        teamSize: matchingPincodes.length,
+        teamEarnings: matchingPincodes.reduce((acc: number, p: any) => acc + (p.earnings || 0), 0),
+        teamPendingKyc: 0,
+        teamApprovedKyc: matchingPincodes.length
+      });
+    }
+
     const enrichedPincodes = pincodeAgents.map(pin => enrichAgentData(pin));
 
     // 2. Group district agents by canonical district to enforce strictly 1 active assignment per district
@@ -846,11 +935,15 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
       const canonicalName = getAgentDistrict(leadAgent) || distKey;
       const distState = getAgentState(leadAgent);
 
-      // Match child divisions strictly belonging to this district
-      const matchingDivisions = enrichedDivisions.filter(div => {
+      // Match child divisions strictly belonging to this district (from allDivisions)
+      const matchingDivisions = allDivisions.filter(div => {
         const divDist = getAgentDistrict(div).toLowerCase();
+        const divDistId = String(div.assignedTerritory?.districtId || '');
         const divState = getAgentState(div).toLowerCase();
         if (distState && divState && !distState.includes(divState) && !divState.includes(distState)) return false;
+        if (leadAgent.assignedTerritory?.districtId && divDistId && String(leadAgent.assignedTerritory.districtId) === divDistId) {
+          return true;
+        }
         const dNorm = cleanWord(divDist);
         const kNorm = cleanWord(distKey);
         return Boolean(divDist && (divDist === distKey || dNorm === kNorm || divDist.includes(distKey) || distKey.includes(divDist)));
@@ -882,6 +975,69 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
         teamApprovedKyc: 1 + matchingDivisions.length + totalPincodes
       });
     });
+
+    // Also include canonical districts that do not yet have a lead agent, attaching their active divisions
+    for (const cDist of canonicalDistricts) {
+      const cDistKey = (cDist.name || '').toLowerCase();
+      const existing = uniqueDistrictsList.find(d => cleanWord(d.district || d.name) === cleanWord(cDist.name));
+      if (!existing) {
+        const matchingDivisions = allDivisions.filter(div => {
+          const divDist = getAgentDistrict(div).toLowerCase();
+          const divDistId = String(div.assignedTerritory?.districtId || '');
+          if (divDistId && divDistId === String(cDist._id)) return true;
+          return cleanWord(divDist) === cleanWord(cDist.name);
+        });
+
+        const totalPincodes = matchingDivisions.reduce((acc, d) => acc + (d.pincodes?.length || d.teamSize || 0), 0);
+        const stateName = scope?.state || 'Tamil Nadu';
+
+        uniqueDistrictsList.push({
+          _id: cDist._id,
+          name: `${cDist.name} District`,
+          email: '',
+          phone: '',
+          registrationId: cDist.code || `DIST-${cDist._id}`,
+          role: 'district',
+          status: 'approved',
+          kycStatus: 'approved',
+          registrationFeePaid: true,
+          performanceScore: 0,
+          earnings: 0,
+          tieupsToday: 0,
+          tieupsYesterday: 0,
+          totalTieups: 0,
+          territory: {
+            state: stateName,
+            district: cDist.name,
+            division: '',
+            pincode: ''
+          },
+          assignedTerritory: {
+            state: stateName,
+            stateId: String(cDist.stateId || ''),
+            district: cDist.name,
+            districtId: String(cDist._id),
+            division: '',
+            divisionId: '',
+            taluk: '',
+            pincode: '',
+            pincodeId: ''
+          } as any,
+          district: cDist.name,
+          agents: [],
+          agentCount: 0,
+          divisions: matchingDivisions,
+          teamSize: matchingDivisions.length + totalPincodes,
+          teamEarnings: matchingDivisions.reduce((acc: number, d: any) => acc + (d.teamEarnings || d.earnings || 0), 0),
+          teamPendingKyc: 0,
+          teamApprovedKyc: matchingPincodesCount(matchingDivisions)
+        });
+      }
+    }
+
+    function matchingPincodesCount(divs: any[]) {
+      return divs.reduce((acc, d) => acc + (d.teamApprovedKyc || d.teamSize || 0), 0);
+    }
 
     // Sort districts alphabetically
     uniqueDistrictsList.sort((a, b) => (a.district || a.name || '').localeCompare(b.district || b.name || ''));
@@ -1020,11 +1176,34 @@ export const getWeeklyLeaderboard = async (req: Request, res: Response) => {
 
     const filter: any = { ...scopeFilter };
     if (roleFilter && roleFilter !== 'all') {
-      filter.role = roleFilter;
+      const rLower = roleFilter.toLowerCase();
+      if (rLower === 'district') {
+        filter.$or = [
+          { role: { $in: ['district', 'district_manager', 'District Admin'] } },
+          { level: { $in: ['district', 2, '2'] } }
+        ];
+      } else if (rLower === 'division') {
+        filter.$or = [
+          { role: { $in: ['division', 'division_manager', 'Division Admin', 'Divisional Admin'] } },
+          { level: { $in: ['division', 3, '3'] } }
+        ];
+      } else if (rLower === 'state') {
+        filter.$or = [
+          { role: { $in: ['state', 'state_manager', 'State Admin'] } },
+          { level: { $in: ['state', 1, '1'] } }
+        ];
+      } else if (rLower === 'pincode') {
+        filter.$or = [
+          { role: { $in: ['pincode', 'pincode_agent', 'pincode_manager', 'Pincode Admin'] } },
+          { level: { $in: ['pincode', 4, '4'] } }
+        ];
+      } else {
+        filter.role = roleFilter;
+      }
     }
 
     const agents = await Agent.find(filter)
-      .select('_id name email phone registrationId role kycStatus registrationFeePaid performanceScore territory assignedTerritory createdAt')
+      .select('_id name email phone registrationId role level kycStatus registrationFeePaid performanceScore territory assignedTerritory createdAt')
       .lean();
 
     // Also include approved agents from users collection
@@ -1033,12 +1212,34 @@ export const getWeeklyLeaderboard = async (req: Request, res: Response) => {
       if (db) {
         const userFilter: any = { status: { $nin: ['rejected', 'suspended'] } };
         if (roleFilter && roleFilter !== 'all') {
-          userFilter.$or = [
-            { role: new RegExp(`^${roleFilter}$`, 'i') },
-            { level: new RegExp(`^${roleFilter}$`, 'i') }
-          ];
+          const rLower = roleFilter.toLowerCase();
+          if (rLower === 'district') {
+            userFilter.$or = [
+              { role: /district/i },
+              { level: /district/i },
+              { level: 2 }
+            ];
+          } else if (rLower === 'division') {
+            userFilter.$or = [
+              { role: /division/i },
+              { level: /division/i },
+              { level: 3 }
+            ];
+          } else if (rLower === 'state') {
+            userFilter.$or = [
+              { role: /state/i },
+              { level: /state/i },
+              { level: 1 }
+            ];
+          } else if (rLower === 'pincode') {
+            userFilter.$or = [
+              { role: /pincode/i },
+              { level: /pincode/i },
+              { level: 4 }
+            ];
+          }
         }
-        const userDocs = await db.collection('users').find(userFilter).limit(50).maxTimeMS(4000).toArray();
+        const userDocs = await db.collection('users').find(userFilter).limit(100).maxTimeMS(4000).toArray();
         const existingEmails = new Set(agents.map(a => (a.email || '').toLowerCase()));
         const existingIds = new Set(agents.map(a => String(a._id)));
 
@@ -1062,11 +1263,16 @@ export const getWeeklyLeaderboard = async (req: Request, res: Response) => {
             continue;
           }
 
-          let uRole = (u.role || u.level || 'pincode').toLowerCase();
-          if (uRole.includes('district')) uRole = 'district';
-          else if (uRole.includes('division')) uRole = 'division';
-          else if (uRole.includes('state')) uRole = 'state';
-          else if (uRole.includes('pincode')) uRole = 'pincode';
+          let uRole = (u.role || u.level || 'pincode').toString().toLowerCase();
+          if (uRole.includes('district') || u.level === 2 || u.level === '2') uRole = 'district';
+          else if (uRole.includes('division') || u.level === 3 || u.level === '3') uRole = 'division';
+          else if (uRole.includes('state') || u.level === 1 || u.level === '1') uRole = 'state';
+          else if (uRole.includes('pincode') || u.level === 4 || u.level === '4') uRole = 'pincode';
+          else uRole = 'pincode';
+
+          if (roleFilter && roleFilter !== 'all' && uRole !== roleFilter.toLowerCase()) {
+            continue;
+          }
 
           agents.push({
             _id: u._id,

@@ -122,7 +122,7 @@ async function resolveResponsibleAgent(pincode?: string, division?: string, dist
 const createTicketSchema = z.object({
   category: z.string().min(1, 'Category is required'),
   description: z.string().min(1, 'Issue details are required'),
-  priority: z.enum(['low', 'medium', 'high', 'critical']).optional(),
+  priority: z.enum(['low', 'medium', 'high']).optional(),
   vendorName: z.string().optional(),
   storeName: z.string().optional(),
   state: z.string().optional(),

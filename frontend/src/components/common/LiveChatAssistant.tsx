@@ -103,7 +103,7 @@ export const LiveChatAssistant: React.FC<LiveChatAssistantProps> = ({ isOpen, on
     if (q.includes('target') || q.includes('task') || q.includes('quota') || q.includes('goal')) {
       return {
         text: 'Daily target allocations track active vendor verification visits. Be sure to check in at store locations to mark visits as completed.',
-        action: { label: 'View My Targets', link: '/targets' }
+        action: { label: 'View Tasks & Approvals', link: '/tasks' }
       };
     }
 

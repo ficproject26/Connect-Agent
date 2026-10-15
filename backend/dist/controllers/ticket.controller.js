@@ -120,7 +120,7 @@ async function resolveResponsibleAgent(pincode, division, district, state) {
 const createTicketSchema = zod_1.z.object({
     category: zod_1.z.string().min(1, 'Category is required'),
     description: zod_1.z.string().min(1, 'Issue details are required'),
-    priority: zod_1.z.enum(['low', 'medium', 'high', 'critical']).optional(),
+    priority: zod_1.z.enum(['low', 'medium', 'high']).optional(),
     vendorName: zod_1.z.string().optional(),
     storeName: zod_1.z.string().optional(),
     state: zod_1.z.string().optional(),

@@ -794,7 +794,7 @@ export const FieldVisitsModule: React.FC = () => {
   const overdueVisitsCount = scopedVisits.filter(v => v.status === 'overdue').length;
   const complianceRate = visitsTodayCount > 0
     ? Math.round((completedVisitsCount / visitsTodayCount) * 100)
-    : 100;
+    : 0;
 
   const handleStartVisitSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1490,13 +1490,16 @@ export const FieldVisitsModule: React.FC = () => {
                 </div>
               </div>
 
-              {/* Territory: State, District, Pincode */}
+              {/* Territory: State, District, Division, Pincode */}
               <div className="flex items-start gap-2.5 p-2.5 bg-[#fbf9f8] rounded-xl border border-slate-100">
                 <Building className="w-4 h-4 text-[#864f19] shrink-0 mt-0.5" />
                 <div className="space-y-0.5">
                   <span className="text-[10px] text-slate-400 font-bold uppercase block">TERRITORY</span>
                   <p className="text-slate-800">State: <strong className="text-[#1b1c1c]">{selectedVisitDetails.state || userState}</strong></p>
                   <p className="text-slate-800">District: <strong className="text-[#1b1c1c]">{selectedVisitDetails.territoryDistrict || userDistrict}</strong></p>
+                  {(selectedVisitDetails.territoryDivision || userDivision) && (
+                    <p className="text-slate-800">Division: <strong className="text-[#1b1c1c]">{selectedVisitDetails.territoryDivision || userDivision}</strong></p>
+                  )}
                   <p className="text-slate-800">Pincode: <strong className="text-[#1b1c1c]">{selectedVisitDetails.territoryPincode || userPincode}</strong></p>
                 </div>
               </div>
