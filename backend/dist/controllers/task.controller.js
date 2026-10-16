@@ -320,25 +320,37 @@ const createTask = async (req, res) => {
                     message: `Forbidden: As a ${userCtx.level.toUpperCase()} Agent, you can only initiate task requests for ${expectedNext.toUpperCase()} level tasks.`
                 });
             }
-            // Rule 3: Territory containment check
-            if (userCtx.territory.state && body.state.toLowerCase() !== userCtx.territory.state.toLowerCase()) {
+            // Default territory fields from userCtx if missing or blank
+            if (!body.state && userCtx.territory.state) {
+                body.state = userCtx.territory.state;
+            }
+            if (!body.district && userCtx.territory.district) {
+                body.district = userCtx.territory.district;
+            }
+            if (!body.division && userCtx.territory.division) {
+                body.division = userCtx.territory.division;
+            }
+            // Rule 3: Territory containment check (trimmed and case-insensitive)
+            const reqState = (body.state || '').trim().toLowerCase();
+            const userState = (userCtx.territory.state || '').trim().toLowerCase();
+            if (userState && reqState && reqState !== userState) {
                 return res.status(403).json({
                     message: `Forbidden: You cannot initiate requests outside your state "${userCtx.territory.state}".`
                 });
             }
-            if (userCtx.level === 'district' && userCtx.territory.district) {
-                if (body.district.toLowerCase() !== userCtx.territory.district.toLowerCase()) {
-                    return res.status(403).json({
-                        message: `Forbidden: You cannot initiate requests outside your district "${userCtx.territory.district}".`
-                    });
-                }
+            const reqDistrict = (body.district || '').trim().toLowerCase();
+            const userDistrict = (userCtx.territory.district || '').trim().toLowerCase();
+            if (userCtx.level === 'district' && userDistrict && reqDistrict && reqDistrict !== userDistrict) {
+                return res.status(403).json({
+                    message: `Forbidden: You cannot initiate requests outside your district "${userCtx.territory.district}".`
+                });
             }
-            if (userCtx.level === 'division' && userCtx.territory.division) {
-                if (body.division.toLowerCase() !== userCtx.territory.division.toLowerCase()) {
-                    return res.status(403).json({
-                        message: `Forbidden: You cannot initiate requests outside your division "${userCtx.territory.division}".`
-                    });
-                }
+            const reqDivision = (body.division || '').trim().toLowerCase();
+            const userDivision = (userCtx.territory.division || '').trim().toLowerCase();
+            if (userCtx.level === 'division' && userDivision && reqDivision && reqDivision !== userDivision) {
+                return res.status(403).json({
+                    message: `Forbidden: You cannot initiate requests outside your division "${userCtx.territory.division}".`
+                });
             }
             // Rule 4: Agents must NEVER directly assign executable tasks. Must route to Receiving Admin.
             const receivingAdmin = await resolveReceivingAdmin(body.targetLevel, {

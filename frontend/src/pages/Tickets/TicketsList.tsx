@@ -69,6 +69,7 @@ export const TicketsList: React.FC = () => {
   ).trim();
 
   const [effectiveState, setEffectiveState] = useState<string>(userState);
+  const [resolvedDivision, setResolvedDivision] = useState<string>(userDivision);
 
   useEffect(() => {
     if (userState) {
@@ -83,6 +84,26 @@ export const TicketsList: React.FC = () => {
       }).catch(() => {});
     }
   }, [userState]);
+
+  useEffect(() => {
+    if (userDivision) {
+      setResolvedDivision(userDivision);
+    } else if (userPincode) {
+      api.get(`/territory/lookup/${userPincode}`)
+        .then(res => {
+          if (res.data?.division) {
+            setResolvedDivision(res.data.division.trim());
+          } else {
+            setResolvedDivision('Unavailable');
+          }
+        })
+        .catch(() => {
+          setResolvedDivision('Unavailable');
+        });
+    } else {
+      setResolvedDivision('Unavailable');
+    }
+  }, [userDivision, userPincode]);
 
   const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
   const [merchantPincode, setMerchantPincode] = useState('');
@@ -933,6 +954,7 @@ export const TicketsList: React.FC = () => {
                       <p className="text-[9px] font-black text-[#864f19] uppercase tracking-wider">Territory Location Details (Pincode Scope)</p>
                       <p className="text-slate-800">State: <strong>{userState || '—'}</strong></p>
                       <p className="text-slate-800">District: <strong>{userDistrict || '—'}</strong></p>
+                      <p className="text-slate-800">Division: <strong>{resolvedDivision || userDivision || 'Unavailable'}</strong></p>
                       <p className="text-slate-800">Assigned Pincode: <strong className="text-[#864f19]">PIN {userPincode || '—'}</strong></p>
                     </div>
                   </>

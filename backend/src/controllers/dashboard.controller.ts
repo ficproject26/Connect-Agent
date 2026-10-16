@@ -76,13 +76,42 @@ export const getDashboardStats = async (req: Request, res: Response) => {
         .sort({ createdAt: -1 })
         .limit(5)
         .lean(),
-      Vendor.find(vendorFilter)
-        .select('businessName ownerName phone category status location state district pincode createdAt')
+      Vendor.find({
+        ...vendorFilter,
+        $or: [
+          { businessName: { $exists: true, $nin: ['', null] } },
+          { name: { $exists: true, $nin: ['', null] } }
+        ]
+      })
+        .select('businessName name ownerName phone category status kycStatus location state district division pincode createdAt')
         .populate('category', 'name')
         .sort({ createdAt: -1 })
-        .limit(5)
+        .limit(10)
         .lean()
     ]);
+
+    const sanitizedRecentVendors = (recentVendors || [])
+      .map((v: any) => {
+        const rawName = (v.businessName || v.name || '').trim();
+        let effectiveKyc = String(v.kycStatus || '').trim().toLowerCase();
+        if (!effectiveKyc) {
+          const s = String(v.status || '').trim().toLowerCase();
+          effectiveKyc = (s === 'approved' || s === 'active') ? 'approved' : 'pending';
+        } else if (effectiveKyc.includes('approved') || effectiveKyc === 'verified') {
+          effectiveKyc = 'approved';
+        } else if (effectiveKyc.includes('reject')) {
+          effectiveKyc = 'rejected';
+        } else {
+          effectiveKyc = 'pending';
+        }
+        return {
+          ...v,
+          name: rawName,
+          businessName: rawName,
+          kycStatus: effectiveKyc
+        };
+      })
+      .filter((v: any) => Boolean(v.name));
 
     const totalTargetsAll = totalAssignments + totalTasks;
     const completedTargetsAll = completedAssignments + completedTasks;
@@ -115,7 +144,7 @@ export const getDashboardStats = async (req: Request, res: Response) => {
         }
       },
       recentAssignments,
-      recentVendors
+      recentVendors: sanitizedRecentVendors
     };
 
     // Cache dashboard summary for 20 seconds

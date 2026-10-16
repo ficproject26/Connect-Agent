@@ -73,7 +73,15 @@ const getVendors = async (req, res) => {
         const { page = '1', limit = '50', status, category, search, startDate, endDate, dateFilter } = req.query;
         const pageNum = parseInt(page, 10);
         const limitNum = parseInt(limit, 10);
-        const filterConditions = [scopeFilter];
+        const filterConditions = [
+            scopeFilter,
+            {
+                $or: [
+                    { businessName: { $exists: true, $nin: ['', null] } },
+                    { name: { $exists: true, $nin: ['', null] } }
+                ]
+            }
+        ];
         if (status && status !== 'all') {
             filterConditions.push({ status: { $regex: new RegExp(`^${status}$`, 'i') } });
         }
@@ -155,7 +163,7 @@ const getVendors = async (req, res) => {
         }
         const finalFilter = filterConditions.length === 1 ? filterConditions[0] : { $and: filterConditions };
         const rawVendors = await Vendor_1.default.find(finalFilter)
-            .select('businessName ownerName phone email category storeType gst state district division pincode kycStatus location status documents assignedAgent joiningType createdVia registrationSource agentId onboardedBy agentName agentRegistrationId registrationId role createdAt updatedAt')
+            .select('businessName name ownerName phone email category storeType gst state district division pincode kycStatus location status documents assignedAgent joiningType createdVia registrationSource agentId onboardedBy agentName agentRegistrationId registrationId role createdAt updatedAt')
             .populate('assignedAgent', 'name email role')
             .sort({ createdAt: -1 })
             .lean();
@@ -196,7 +204,23 @@ const getVendors = async (req, res) => {
                 }
             }
         }
-        const deduplicated = Array.from(canonicalMap.values());
+        const deduplicated = Array.from(canonicalMap.values()).map((v) => {
+            const realName = (v.businessName || v.name || '').trim();
+            const rawKyc = (v.kycStatus || '').toString().toLowerCase().trim();
+            let normalizedKyc = 'pending';
+            if (rawKyc === 'approved' || rawKyc === 'verified')
+                normalizedKyc = 'approved';
+            else if (rawKyc === 'rejected')
+                normalizedKyc = 'rejected';
+            else if (String(v.status || '').toLowerCase() === 'approved' || String(v.status || '').toLowerCase() === 'active')
+                normalizedKyc = 'approved';
+            return {
+                ...v,
+                name: realName,
+                businessName: realName,
+                kycStatus: normalizedKyc
+            };
+        });
         const total = deduplicated.length;
         const paginatedVendors = deduplicated.slice((pageNum - 1) * limitNum, pageNum * limitNum);
         return res.status(200).json({

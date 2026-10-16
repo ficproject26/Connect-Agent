@@ -861,6 +861,27 @@ const getMe = async (req, res) => {
                     rawAgent.assignedTerritory.state = agent.address.state;
                     hasChanges = true;
                 }
+                // Ensure division is resolved from central territory database for Pincode agents if blank
+                const rawAgentAny = agent;
+                const effectivePin = (agent.territory?.pincode || rawAgentAny.assignedTerritory?.pincode || rawAgentAny.pincode || rawAgentAny.assignedPincode || '').trim();
+                const effectiveDiv = (agent.territory?.division || rawAgentAny.assignedTerritory?.division || rawAgentAny.division || rawAgentAny.assignedDivision || '').trim();
+                if (!effectiveDiv && effectivePin) {
+                    const pinDoc = await db.collection('pincodes').findOne({
+                        $or: [{ code: effectivePin }, { pincode: effectivePin }]
+                    });
+                    if (pinDoc && pinDoc.division) {
+                        const rawAgent = agent;
+                        if (!rawAgent.territory)
+                            rawAgent.territory = {};
+                        if (!rawAgent.assignedTerritory)
+                            rawAgent.assignedTerritory = {};
+                        rawAgent.territory.division = pinDoc.division.trim();
+                        rawAgent.assignedTerritory.division = pinDoc.division.trim();
+                        rawAgent.division = pinDoc.division.trim();
+                        rawAgent.assignedDivision = pinDoc.division.trim();
+                        hasChanges = true;
+                    }
+                }
                 if (hasChanges) {
                     await agent.save();
                 }

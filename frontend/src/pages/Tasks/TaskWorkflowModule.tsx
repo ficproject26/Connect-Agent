@@ -178,10 +178,10 @@ export const TaskWorkflowModule: React.FC = () => {
   else if (userRole.includes('pincode')) userLevel = 'pincode';
 
   const userTerritory = useMemo(() => ({
-    state: user?.territory?.state || (user as any)?.assignedState || (user as any)?.state || '',
-    district: user?.territory?.district || (user as any)?.assignedDistrict || (user as any)?.district || '',
-    division: user?.territory?.division || (user as any)?.assignedDivision || (user as any)?.division || '',
-    pincode: user?.territory?.pincode || (user as any)?.assignedPincode || (user as any)?.pincode || ''
+    state: user?.assignedTerritory?.state || user?.territory?.state || (user as any)?.assignedState || (user as any)?.state || '',
+    district: user?.assignedTerritory?.district || user?.territory?.district || (user as any)?.assignedDistrict || (user as any)?.district || '',
+    division: user?.assignedTerritory?.division || user?.territory?.division || (user as any)?.assignedDivision || (user as any)?.division || '',
+    pincode: user?.assignedTerritory?.pincode || user?.territory?.pincode || (user as any)?.assignedPincode || (user as any)?.pincode || ''
   }), [user]);
 
   // Next level for Agent request
@@ -236,6 +236,20 @@ export const TaskWorkflowModule: React.FC = () => {
   const [districtsList, setDistrictsList] = useState<string[]>([]);
   const [divisionsList, setDivisionsList] = useState<string[]>([]);
   const [pincodesList, setPincodesList] = useState<string[]>([]);
+
+  // Auto-fill createForm territory bounds when modal opens
+  React.useEffect(() => {
+    if (isCreateModalOpen) {
+      setCreateForm(prev => ({
+        ...prev,
+        state: prev.state || userTerritory.state,
+        district: prev.district || userTerritory.district,
+        division: prev.division || userTerritory.division,
+        pincode: prev.pincode || (userLevel === 'pincode' ? userTerritory.pincode : '')
+      }));
+      setActionError('');
+    }
+  }, [isCreateModalOpen, userTerritory, userLevel]);
 
   // Load States — only when Create Task modal is opened
   React.useEffect(() => {
@@ -320,14 +334,34 @@ export const TaskWorkflowModule: React.FC = () => {
       return res.data;
     },
     onSuccess: (data) => {
-      setActionSuccess(data.message || 'Task submitted successfully!');
+      setActionSuccess(data.message || 'Task request submitted successfully!');
       setIsCreateModalOpen(false);
+      setActionError('');
+      setCreateForm({
+        title: '',
+        description: '',
+        priority: 'Medium',
+        dueDate: '',
+        state: userTerritory.state,
+        district: userTerritory.district,
+        division: userTerritory.division,
+        pincode: '',
+        assignedAgentId: '',
+        category: 'Field Operations & Verification',
+        vendor: '',
+        location: ''
+      });
+      if (!isAdmin) {
+        setActiveTab('requests');
+      }
       invalidateAllTaskRelatedQueries();
+      refetch();
       setTimeout(() => setActionSuccess(''), 4000);
     },
     onError: (err: any) => {
-      setActionError(err.response?.data?.message || err.message || 'Failed to create task');
-      setTimeout(() => setActionError(''), 5000);
+      const msg = err.response?.data?.message || err.message || 'Failed to submit task request';
+      setActionError(msg);
+      setTimeout(() => setActionError(''), 6000);
     }
   });
 
@@ -480,35 +514,61 @@ export const TaskWorkflowModule: React.FC = () => {
     e.preventDefault();
     setActionError('');
 
-    if (!createForm.title.trim() || createForm.title.length < 3) {
-      setActionError('Title must be at least 3 characters.');
+    if (createTaskMutation.isPending) return;
+
+    const trimmedTitle = createForm.title.trim();
+    if (!trimmedTitle || trimmedTitle.length < 3) {
+      setActionError('Task title must be at least 3 characters.');
       return;
     }
-    if (!createForm.description.trim() || createForm.description.length < 5) {
-      setActionError('Description must be at least 5 characters.');
+    const trimmedDesc = createForm.description.trim();
+    if (!trimmedDesc || trimmedDesc.length < 5) {
+      setActionError('Task description must be at least 5 characters.');
       return;
     }
     if (!createForm.dueDate) {
-      setActionError('Please specify a task deadline.');
+      setActionError('Please specify a task deadline date and time.');
       return;
     }
-    if (new Date(createForm.dueDate).getTime() <= Date.now()) {
-      setActionError('Task deadline must be in the future.');
+    const dueTime = new Date(createForm.dueDate).getTime();
+    if (isNaN(dueTime) || dueTime <= Date.now()) {
+      setActionError('Task deadline must be a valid future date and time.');
       return;
     }
 
+    const targetState = (createForm.state || userTerritory.state || '').trim();
+    const targetDistrict = (createForm.district || userTerritory.district || '').trim();
+    const targetDivision = (createForm.division || userTerritory.division || '').trim();
+    const targetPincode = (createForm.pincode || (userLevel === 'pincode' ? userTerritory.pincode : '') || '').trim();
+
+    if (!targetState) {
+      setActionError('Please select a target State.');
+      return;
+    }
+
+    if (!isAdmin) {
+      if (!nextLowerLevel) {
+        setActionError('Pincode Agents cannot initiate task requests as no lower hierarchy level exists.');
+        return;
+      }
+      if (nextLowerLevel === 'pincode' && !targetPincode) {
+        setActionError('Please select a target PIN code within your division.');
+        return;
+      }
+    }
+
     const payload: any = {
-      title: createForm.title.trim(),
-      description: createForm.description.trim(),
+      title: trimmedTitle,
+      description: trimmedDesc,
       priority: createForm.priority,
-      dueDate: createForm.dueDate,
-      state: createForm.state || userTerritory.state,
-      district: createForm.district || userTerritory.district,
-      division: createForm.division || userTerritory.division,
-      pincode: createForm.pincode || userTerritory.pincode,
-      category: createForm.category,
-      vendor: createForm.vendor,
-      location: createForm.location || [createForm.pincode, createForm.division, createForm.district, createForm.state].filter(Boolean).join(', ')
+      dueDate: new Date(createForm.dueDate).toISOString(),
+      state: targetState,
+      district: targetDistrict,
+      division: targetDivision,
+      pincode: targetPincode,
+      category: createForm.category || 'Field Operations & Verification',
+      vendor: createForm.vendor || '',
+      location: createForm.location || [targetPincode, targetDivision, targetDistrict, targetState].filter(Boolean).join(', ')
     };
 
     if (isAdmin) {
@@ -519,11 +579,6 @@ export const TaskWorkflowModule: React.FC = () => {
       }
       payload.assignedAgentId = createForm.assignedAgentId;
     } else {
-      // Type B Agent request
-      if (!nextLowerLevel) {
-        setActionError('Pincode Agents cannot initiate task requests as no lower hierarchy level exists.');
-        return;
-      }
       payload.targetLevel = nextLowerLevel;
     }
 
@@ -1185,6 +1240,14 @@ export const TaskWorkflowModule: React.FC = () => {
                     No active approved agents found in this exact territory. Please verify agent registrations.
                   </p>
                 )}
+              </div>
+            )}
+
+            {/* Inline Modal Error Banner */}
+            {actionError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-bold flex items-center gap-2 animate-fade-in">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{actionError}</span>
               </div>
             )}
 

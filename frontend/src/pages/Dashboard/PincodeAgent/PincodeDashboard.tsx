@@ -190,18 +190,38 @@ export const PincodeDashboard: React.FC = () => {
                 <span>Shop Name</span>
                 <span>KYC Status</span>
               </div>
-              {recentVendors.length === 0 ? (
-                <p className="py-3 text-center text-xs text-slate-400">No active assigned merchants in registry.</p>
-              ) : (
-                recentVendors.map((item, i) => (
-                  <div key={i} className="py-3 flex justify-between text-xs font-semibold">
-                    <span className="text-[#1b1c1c]">{item.name}</span>
-                    <span className={`font-bold ${item.kycStatus === 'approved' ? 'text-green-600' : 'text-[#864f19]'}`}>
-                      {item.kycStatus === 'approved' ? 'Approved & Synced' : `KYC ${item.kycStatus}`}
-                    </span>
-                  </div>
-                ))
-              )}
+              {(() => {
+                const validVendors = recentVendors.filter(item => Boolean((item.name || (item as any).businessName || '').trim()));
+                if (validVendors.length === 0) {
+                  return (
+                    <p className="py-4 text-center text-xs text-slate-500 font-medium">
+                      No vendors registered in your assigned territory yet.
+                    </p>
+                  );
+                }
+                return validVendors.map((item, i) => {
+                  const shopName = (item.name || (item as any).businessName || '').trim();
+                  const rawKyc = String(item.kycStatus || '').toLowerCase().trim();
+                  const isApproved = rawKyc === 'approved' || rawKyc === 'verified';
+                  const isRejected = rawKyc === 'rejected';
+                  const kycDisplay = isApproved
+                    ? 'Approved & Synced'
+                    : isRejected
+                    ? 'Rejected'
+                    : rawKyc.startsWith('kyc ')
+                    ? (rawKyc.charAt(0).toUpperCase() + rawKyc.slice(1))
+                    : `KYC ${rawKyc.charAt(0).toUpperCase() + rawKyc.slice(1) || 'Pending'}`;
+
+                  return (
+                    <div key={(item as any).id || (item as any)._id || i} className="py-3 flex justify-between text-xs font-semibold">
+                      <span className="text-[#1b1c1c] font-bold">{shopName}</span>
+                      <span className={`font-bold ${isApproved ? 'text-green-600' : isRejected ? 'text-red-600' : 'text-[#864f19]'}`}>
+                        {kycDisplay}
+                      </span>
+                    </div>
+                  );
+                });
+              })()}
             </>
           )}
 

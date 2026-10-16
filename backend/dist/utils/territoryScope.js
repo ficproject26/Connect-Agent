@@ -369,6 +369,7 @@ function buildVendorScopeFilter(scope, divisionPincodes) {
                 $or: [
                     { pincode: scope.pincode },
                     { assignedPincode: scope.pincode },
+                    { 'location.pincode': scope.pincode },
                     { assignedAgent: scope.agentId },
                     { agentId: scope.agentId },
                     { onboardedBy: scope.agentId }

@@ -60,13 +60,44 @@ const getDashboardStats = async (req, res) => {
                 .sort({ createdAt: -1 })
                 .limit(5)
                 .lean(),
-            Vendor_1.default.find(vendorFilter)
-                .select('businessName ownerName phone category status location state district pincode createdAt')
+            Vendor_1.default.find({
+                ...vendorFilter,
+                $or: [
+                    { businessName: { $exists: true, $nin: ['', null] } },
+                    { name: { $exists: true, $nin: ['', null] } }
+                ]
+            })
+                .select('businessName name ownerName phone category status kycStatus location state district division pincode createdAt')
                 .populate('category', 'name')
                 .sort({ createdAt: -1 })
-                .limit(5)
+                .limit(10)
                 .lean()
         ]);
+        const sanitizedRecentVendors = (recentVendors || [])
+            .map((v) => {
+            const rawName = (v.businessName || v.name || '').trim();
+            let effectiveKyc = String(v.kycStatus || '').trim().toLowerCase();
+            if (!effectiveKyc) {
+                const s = String(v.status || '').trim().toLowerCase();
+                effectiveKyc = (s === 'approved' || s === 'active') ? 'approved' : 'pending';
+            }
+            else if (effectiveKyc.includes('approved') || effectiveKyc === 'verified') {
+                effectiveKyc = 'approved';
+            }
+            else if (effectiveKyc.includes('reject')) {
+                effectiveKyc = 'rejected';
+            }
+            else {
+                effectiveKyc = 'pending';
+            }
+            return {
+                ...v,
+                name: rawName,
+                businessName: rawName,
+                kycStatus: effectiveKyc
+            };
+        })
+            .filter((v) => Boolean(v.name));
         const totalTargetsAll = totalAssignments + totalTasks;
         const completedTargetsAll = completedAssignments + completedTasks;
         const overdueTargetsAll = overdueAssignments + overdueTasks;
@@ -97,7 +128,7 @@ const getDashboardStats = async (req, res) => {
                 }
             },
             recentAssignments,
-            recentVendors
+            recentVendors: sanitizedRecentVendors
         };
         // Cache dashboard summary for 20 seconds
         await cache_service_1.cacheService.set(cacheKey, resultPayload, 20);

@@ -388,10 +388,10 @@ export const ProfileModule: React.FC = () => {
                       division: (user as any)?.assignedDivision,
                       pincode: (user as any)?.assignedPincode
                     };
-                    const aState = (aTerritory?.state || (user as any)?.assignedState || '').trim();
-                    const aDistrict = (aTerritory?.district || (user as any)?.assignedDistrict || '').trim();
-                    const aDivision = (aTerritory?.division || (user as any)?.assignedDivision || '').trim();
-                    const aPincode = (aTerritory?.pincode || (user as any)?.assignedPincode || '').trim();
+                    const aState = (aTerritory?.state || (user as any)?.assignedState || (user as any)?.state || '').trim();
+                    const aDistrict = (aTerritory?.district || (user as any)?.assignedDistrict || (user as any)?.district || '').trim();
+                    const aDivision = (aTerritory?.division || (user as any)?.assignedDivision || (user as any)?.division || '').trim();
+                    const aPincode = (aTerritory?.pincode || (user as any)?.assignedPincode || (user as any)?.pincode || '').trim();
 
                     if (uRole === 'state') {
                       return (
@@ -450,7 +450,7 @@ export const ProfileModule: React.FC = () => {
                         </div>
                         <div>
                           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">DIVISION</span>
-                          <p className="text-slate-900 font-extrabold mt-0.5">{aDivision || '—'}</p>
+                          <p className="text-slate-900 font-extrabold mt-0.5">{aDivision || 'Unavailable'}</p>
                         </div>
                         <div>
                           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">ASSIGNED PINCODE</span>

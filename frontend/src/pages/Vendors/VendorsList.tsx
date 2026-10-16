@@ -270,7 +270,9 @@ export const VendorsList: React.FC = () => {
   // Sync API backend vendors into state with strict canonical deduplication
   useEffect(() => {
     if (apiVendorsData && apiVendorsData.length > 0) {
-      const mappedApiVendors: Vendor[] = apiVendorsData.map((v: any) => {
+      const mappedApiVendors: Vendor[] = apiVendorsData
+        .filter((v: any) => Boolean((v.businessName || v.name || v.storeName || '').trim()))
+        .map((v: any) => {
         const assignedAgentName = (() => {
           if (typeof v.assignedAgent === 'object' && v.assignedAgent?.name) {
             const role = v.assignedAgent.role ? ` (${v.assignedAgent.role.charAt(0).toUpperCase() + v.assignedAgent.role.slice(1)} Agent)` : '';
@@ -289,10 +291,11 @@ export const VendorsList: React.FC = () => {
         })();
 
         const regDate = v.createdAt ? formatLocalDate(new Date(v.createdAt)) : formatLocalDate(new Date());
+        const realName = (v.businessName || v.name || v.storeName || '').trim();
 
         return {
           id: v.registrationId || v.id || v._id || `REG-${Math.floor(1000 + Math.random() * 9000)}`,
-          name: v.businessName || v.name || v.storeName || 'Vendor',
+          name: realName,
           ownerName: v.ownerName || 'Merchant Owner',
           phone: v.phone || '',
           email: v.email || '',
@@ -301,7 +304,13 @@ export const VendorsList: React.FC = () => {
           district: v.district || userDistrict,
           pincode: v.pincode || userPincode,
           role: 'Merchant Partner',
-          kycStatus: v.kycStatus || 'pending',
+          kycStatus: (() => {
+            const raw = String(v.kycStatus || '').toLowerCase().trim();
+            if (raw === 'approved' || raw === 'verified') return 'approved';
+            if (raw === 'rejected') return 'rejected';
+            if (String(v.status || '').toLowerCase() === 'approved' || String(v.status || '').toLowerCase() === 'active') return 'approved';
+            return 'pending';
+          })(),
           status: (() => {
             const s = String(v.status || '').toLowerCase().trim();
             if (s === 'approved' || s === 'active') return 'active';
@@ -327,6 +336,7 @@ export const VendorsList: React.FC = () => {
 
         // Preserve truly offline/local-only items that do NOT match any server item by ID or canonical key
         const localOnly = prev.filter(item => {
+          if (!item.name || !item.name.trim() || item.name === 'undefined' || item.name === 'Vendor') return false;
           if (serverIds.has(item.id)) return false;
           const key = getVendorCanonicalKey(item);
           if (key && serverKeys.has(key)) return false;
@@ -361,6 +371,9 @@ export const VendorsList: React.FC = () => {
   // 1. SCOPED VENDORS LIST BASED ON LOGGED IN AGENT HIERARCHY (STRICT STATE ISOLATION)
   const scopedVendors = useMemo(() => {
     const filtered = vendors.filter(vendor => {
+      // Must have a real valid shop name
+      if (!vendor.name || !vendor.name.trim() || vendor.name === 'undefined' || vendor.name === 'Vendor') return false;
+
       // 1. First enforce strict State Territory match (use agent's own state as fallback)
       const vendorState = (vendor.state || userState).toLowerCase();
       const activeState = userState.toLowerCase();
@@ -1204,7 +1217,7 @@ export const VendorsList: React.FC = () => {
         <CardBody className="p-0 overflow-x-auto">
           {filteredVendors.length === 0 ? (
             <div className="py-12 text-center space-y-2">
-              <p className="text-sm font-bold text-slate-500">No vendors found under your assigned {activeRole} territory hierarchy.</p>
+              <p className="text-sm font-bold text-slate-500">No vendors registered in your assigned territory yet.</p>
             </div>
           ) : (
             <table className="w-full text-left border-collapse">
