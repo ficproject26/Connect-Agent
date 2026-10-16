@@ -57,6 +57,7 @@ export interface IAgent extends Document {
   registrationFeePaid: boolean;
   performanceScore: number;
   alternateMobile?: string;
+  altPhone?: string;
   preferredLanguage?: string;
   bloodGroup?: string;
   profilePhoto?: string;
@@ -167,6 +168,7 @@ const agentSchema = new Schema<IAgent>({
   registrationFeePaid: { type: Boolean, default: false },
   performanceScore: { type: Number, default: 0 },
   alternateMobile: { type: String, default: '' },
+  altPhone: { type: String, default: '' },
   preferredLanguage: { type: String, default: 'English' },
   bloodGroup: { type: String, default: 'O+' },
   profilePhoto: { type: String, default: '' },

@@ -55,6 +55,7 @@ export interface IAgent extends Document {
     registrationFeePaid: boolean;
     performanceScore: number;
     alternateMobile?: string;
+    altPhone?: string;
     preferredLanguage?: string;
     bloodGroup?: string;
     profilePhoto?: string;

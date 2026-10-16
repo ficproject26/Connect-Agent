@@ -155,6 +155,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Map kycStatus to status for compatibility
       agent.status = isApproved ? 'active' : 'pending_approval';
       agent.mobile = agent.phone;
+      if (!agent.alternateMobile && (agent.altPhone || agent.alternativePhone || agent.secondaryPhone)) {
+        agent.alternateMobile = agent.altPhone || agent.alternativePhone || agent.secondaryPhone;
+      }
       const finalAgent = applySavedProfileOverrides(agent);
       setUser(finalAgent);
       try {
@@ -252,6 +255,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const agent = data.agent || data.user || {};
         agent.status = (agent.kycStatus === 'approved' || agent.status === 'approved' || agent.status === 'active') ? 'active' : 'pending_approval';
         agent.mobile = agent.phone;
+        if (!agent.alternateMobile && (agent.altPhone || agent.alternativePhone || agent.secondaryPhone)) {
+          agent.alternateMobile = agent.altPhone || agent.alternativePhone || agent.secondaryPhone;
+        }
         localStorage.setItem('agent_token', data.token);
         setToken(data.token);
         const finalAgent = applySavedProfileOverrides(agent);

@@ -31,12 +31,27 @@ export const ProfileModule: React.FC = () => {
   const [name, setName] = useState(user?.name || '');
   const [email, setEmail] = useState(user?.email || '');
   const [mobile, setMobile] = useState(user?.mobile || user?.phone || '');
-  const [altMobile, setAltMobile] = useState(user?.alternateMobile || '');
+  const [altMobile, setAltMobile] = useState(user?.alternateMobile || (user as any)?.altPhone || (user as any)?.alternativePhone || (user as any)?.secondaryPhone || '');
   const [lang, setLang] = useState(user?.preferredLanguage || 'English');
   const [blood, setBlood] = useState(user?.bloodGroup || 'O+');
   const [profilePic, setProfilePic] = useState(user?.profilePhoto || '');
   const [profileSaveError, setProfileSaveError] = useState('');
   const [profileSaveSuccess, setProfileSaveSuccess] = useState('');
+
+  // Synchronize form state whenever user is refetched or loaded from backend session
+  useEffect(() => {
+    if (user) {
+      if (user.name) setName(user.name);
+      if (user.email) setEmail(user.email);
+      const rawMobile = user.mobile || user.phone || '';
+      if (rawMobile) setMobile(rawMobile);
+      const rawAlt = user.alternateMobile || (user as any).altPhone || (user as any).alternativePhone || (user as any).secondaryPhone || '';
+      if (rawAlt) setAltMobile(rawAlt);
+      if (user.preferredLanguage) setLang(user.preferredLanguage);
+      if (user.bloodGroup) setBlood(user.bloodGroup);
+      if (user.profilePhoto) setProfilePic(user.profilePhoto);
+    }
+  }, [user]);
   const [vehicleDetails, setVehicleDetails] = useState<UserProfile['vehicleDetails']>(() => {
     const details = user?.vehicleDetails;
     if (details) {
@@ -112,12 +127,20 @@ export const ProfileModule: React.FC = () => {
         return;
       }
 
+      const cleanAlt = altMobile.trim();
+      if (cleanAlt && !/^[6-9]\d{9}$/.test(cleanAlt)) {
+        setProfileSaveError('Alternate Mobile must be a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.');
+        setIsSubmitting(false);
+        return;
+      }
+
       const res = await api.put('/auth/profile', {
         name: cleanName,
         email: cleanEmail,
         phone: cleanPhone,
         mobile: cleanPhone,
-        alternateMobile: altMobile.trim(),
+        alternateMobile: cleanAlt,
+        altPhone: cleanAlt,
         preferredLanguage: lang,
         bloodGroup: blood,
         profilePhoto: profilePic,
@@ -131,7 +154,8 @@ export const ProfileModule: React.FC = () => {
           email: savedAgent.email,
           mobile: savedAgent.phone || savedAgent.mobile,
           phone: savedAgent.phone || savedAgent.mobile,
-          alternateMobile: savedAgent.alternateMobile,
+          alternateMobile: savedAgent.alternateMobile || savedAgent.altPhone || cleanAlt,
+          altPhone: savedAgent.altPhone || savedAgent.alternateMobile || cleanAlt,
           preferredLanguage: savedAgent.preferredLanguage,
           bloodGroup: savedAgent.bloodGroup,
           profilePhoto: savedAgent.profilePhoto,
@@ -143,7 +167,8 @@ export const ProfileModule: React.FC = () => {
           email: cleanEmail,
           mobile: cleanPhone,
           phone: cleanPhone,
-          alternateMobile: altMobile.trim(),
+          alternateMobile: cleanAlt,
+          altPhone: cleanAlt,
           preferredLanguage: lang,
           bloodGroup: blood,
           profilePhoto: profilePic,
@@ -288,6 +313,8 @@ export const ProfileModule: React.FC = () => {
                   <Input
                     label="Alternate Mobile"
                     maxLength={10}
+                    inputMode="numeric"
+                    placeholder="Enter 10-digit alternate mobile"
                     value={altMobile}
                     onChange={(e) => setAltMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
                   />

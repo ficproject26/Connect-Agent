@@ -162,7 +162,7 @@ const updateBankDetails = async (req, res) => {
         }
         const cleanAccNo = String(accountNumber).trim();
         if (!/^\d{8,20}$/.test(cleanAccNo)) {
-            return res.status(400).json({ message: 'Account number must contain between 8 and 20 numeric digits.' });
+            return res.status(400).json({ message: 'Account number must contain 8–20 digits.' });
         }
         const cleanIfsc = String(ifscCode).toUpperCase().trim();
         const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;

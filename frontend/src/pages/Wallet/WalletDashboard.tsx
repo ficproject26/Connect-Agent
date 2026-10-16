@@ -219,7 +219,7 @@ export const WalletDashboard: React.FC = () => {
 
     const cleanAccNo = editBankForm.accountNumber.trim();
     if (!/^\d{8,20}$/.test(cleanAccNo)) {
-      setBankFormError('Account number must contain between 8 and 20 numeric digits.');
+      setBankFormError('Account number must contain 8–20 digits.');
       return;
     }
 
@@ -641,14 +641,17 @@ export const WalletDashboard: React.FC = () => {
               <Input
                 label=""
                 placeholder="e.g. 123456789012"
+                inputMode="numeric"
+                maxLength={20}
                 value={editBankForm.accountNumber}
                 onChange={(e) => {
-                  setEditBankForm({ ...editBankForm, accountNumber: e.target.value });
+                  const val = e.target.value.replace(/\D/g, '').slice(0, 20);
+                  setEditBankForm({ ...editBankForm, accountNumber: val });
                   setBankFormError('');
                 }}
                 className="mb-0 animate-none"
               />
-              <p className="text-[10px] text-slate-400 mt-1 font-medium">8 to 20 numeric digits</p>
+              <p className="text-[10px] text-slate-400 mt-1 font-medium">Account number must contain 8–20 digits</p>
             </div>
             
             <div>

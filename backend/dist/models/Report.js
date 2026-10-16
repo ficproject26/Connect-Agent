@@ -5,6 +5,12 @@ const mongoose_1 = require("mongoose");
 const reportSchema = new mongoose_1.Schema({
     agent: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Agent', required: true },
     type: { type: String, enum: ['daily', 'weekly', 'monthly', 'vendor', 'performance', 'visit'], required: true },
+    title: { type: String },
+    reportNumber: { type: String },
+    division: { type: String },
+    district: { type: String },
+    state: { type: String },
+    pincode: { type: String },
     content: { type: mongoose_1.Schema.Types.Mixed, required: true },
     remarks: { type: String },
     reviewedBy: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Agent' },

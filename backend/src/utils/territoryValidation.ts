@@ -167,6 +167,7 @@ export function validateVendorFieldFormats(data: {
   panNumber?: string;
   aadhaarNumber?: string;
   pincode?: string;
+  accountNumber?: string;
 }): { valid: boolean; error?: string } {
   // Mobile: Exactly 10 digits, starts with 6, 7, 8, 9
   if (data.phone) {
@@ -219,6 +220,17 @@ export function validateVendorFieldFormats(data: {
       return {
         valid: false,
         error: 'Postal Code (Pincode) must be exactly 6 numeric digits.'
+      };
+    }
+  }
+
+  // Bank Account Number: 8 to 20 numeric digits only
+  if ((data as any).accountNumber) {
+    const acc = String((data as any).accountNumber).trim();
+    if (!/^\d{8,20}$/.test(acc)) {
+      return {
+        valid: false,
+        error: 'Account number must contain 8–20 digits.'
       };
     }
   }

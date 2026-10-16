@@ -191,6 +191,16 @@ function validateVendorFieldFormats(data) {
             };
         }
     }
+    // Bank Account Number: 8 to 20 numeric digits only
+    if (data.accountNumber) {
+        const acc = String(data.accountNumber).trim();
+        if (!/^\d{8,20}$/.test(acc)) {
+            return {
+                valid: false,
+                error: 'Account number must contain 8–20 digits.'
+            };
+        }
+    }
     return { valid: true };
 }
 //# sourceMappingURL=territoryValidation.js.map

@@ -159,6 +159,17 @@ const getVendors = async (req, res) => {
             .populate('assignedAgent', 'name email role')
             .sort({ createdAt: -1 })
             .lean();
+        // Enrich assignedAgent name if populate did not resolve an agent document
+        for (const v of rawVendors) {
+            if (!v.assignedAgent || typeof v.assignedAgent !== 'object' || !v.assignedAgent.name) {
+                if (v.agentName && typeof v.agentName === 'string' && v.agentName.trim()) {
+                    v.assignedAgent = { name: v.agentName.trim(), role: 'field' };
+                }
+                else if (v.onboardedBy && typeof v.onboardedBy === 'string' && !v.onboardedBy.match(/^[0-9a-fA-F]{24}$/)) {
+                    v.assignedAgent = { name: v.onboardedBy.trim(), role: 'field' };
+                }
+            }
+        }
         // Deduplicate vendor records that represent the exact same vendor registration,
         // ensuring the application returns the canonical record.
         const canonicalMap = new Map();
@@ -240,7 +251,8 @@ const createVendor = async (req, res) => {
             email: data.email,
             panNumber: data.panNumber || data.pan,
             aadhaarNumber: data.aadhaarNumber || data.aadhaar,
-            pincode: data.pincode
+            pincode: data.pincode,
+            accountNumber: data.accountNumber || data.bankDetails?.accountNumber || req.body.accountNumber || req.body.bankDetails?.accountNumber
         });
         if (!fieldValidation.valid) {
             return res.status(400).json({ message: fieldValidation.error });
@@ -571,6 +583,13 @@ const updateVendor = async (req, res) => {
             return res.status(403).json({
                 message: 'Modifications locked: Cannot edit vendor details once KYC status is Approved.'
             });
+        }
+        const rawBankAcc = data.accountNumber || data.bankDetails?.accountNumber || req.body.accountNumber || req.body.bankDetails?.accountNumber;
+        if (rawBankAcc) {
+            const cleanAcc = String(rawBankAcc).trim();
+            if (!/^\d{8,20}$/.test(cleanAcc)) {
+                return res.status(400).json({ message: 'Account number must contain 8–20 digits.' });
+            }
         }
         const updateFields = { ...data, updatedAt: new Date() };
         // Prevent privilege escalation or unauthorized status bypass via updateVendor

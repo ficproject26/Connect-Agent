@@ -386,8 +386,12 @@ export const register = async (req: Request, res: Response) => {
     const randDigits = Math.floor(1000 + Math.random() * 9000);
     const registrationId = `REG-${dateStr}-${randDigits}`;
 
+    const cleanAlt = String(validatedData.altPhone || (req.body as any).alternateMobile || (req.body as any).alternativePhone || (req.body as any).secondaryPhone || '').trim();
+
     const newAgent = new Agent({
       ...validatedData,
+      alternateMobile: cleanAlt,
+      altPhone: cleanAlt,
       territory: cleanTerritory,
       assignedTerritory: cleanAssignedTerritory,
       address: cleanAddress,
@@ -412,7 +416,8 @@ export const register = async (req: Request, res: Response) => {
               name: validatedData.name,
               email: validatedData.email.toLowerCase(),
               phone: validatedData.phone,
-              altPhone: (req.body as any).altPhone || (req.body as any).alternativePhone || (req.body as any).secondaryPhone || '',
+              altPhone: cleanAlt,
+              alternateMobile: cleanAlt,
               dob: parsedDob || (req.body as any).dob || (req.body as any).dateOfBirth || '',
               gender: validatedData.gender || (req.body as any).gender || '',
               qualification: validatedData.qualification || (req.body as any).qualification || (req.body as any).highestQualification || '',
@@ -958,6 +963,10 @@ export const getMe = async (req: Request, res: Response) => {
       });
     }
 
+    const effectiveAlt = String(agent.alternateMobile || agent.altPhone || (agent as any).alternativePhone || (agent as any).secondaryPhone || '').trim();
+    agent.alternateMobile = effectiveAlt;
+    agent.altPhone = effectiveAlt;
+
     return res.status(200).json({ agent });
   } catch (error) {
     console.error('Get profile error:', error);
@@ -972,7 +981,7 @@ export const updateProfile = async (req: Request, res: Response) => {
 
     const allowedFields = [
       'name', 'phone', 'mobile', 'territory', 'assignedTerritory', 'address', 'fullAddress',
-      'alternateMobile', 'preferredLanguage', 'bloodGroup', 'profilePhoto',
+      'alternateMobile', 'altPhone', 'preferredLanguage', 'bloodGroup', 'profilePhoto',
       'vehicleDetails', 'bankDetails', 'dob', 'gender', 'qualification', 'experience', 'previousCompany'
     ];
     const updates: Record<string, unknown> = {};
@@ -982,6 +991,15 @@ export const updateProfile = async (req: Request, res: Response) => {
 
     if (req.body.mobile && !updates.phone) {
       updates.phone = req.body.mobile;
+    }
+
+    if (req.body.alternateMobile !== undefined || req.body.altPhone !== undefined) {
+      const rawAlt = String(req.body.alternateMobile !== undefined ? req.body.alternateMobile : req.body.altPhone).trim();
+      if (rawAlt && !/^[6-9]\d{9}$/.test(rawAlt)) {
+        return res.status(400).json({ message: 'Alternate mobile number must be a valid 10-digit Indian mobile number.' });
+      }
+      updates.alternateMobile = rawAlt;
+      updates.altPhone = rawAlt;
     }
 
     // Keep territory and assignedTerritory synchronized if either is passed without touching address
@@ -1044,13 +1062,23 @@ export const updateProfile = async (req: Request, res: Response) => {
         const userUpdates: Record<string, any> = {};
         if (updates.name) userUpdates.name = updates.name;
         if (updates.phone) { userUpdates.phone = updates.phone; userUpdates.mobile = updates.phone; }
-        if (updates.alternateMobile) userUpdates.alternateMobile = updates.alternateMobile;
+        if (updates.alternateMobile !== undefined) {
+          userUpdates.alternateMobile = updates.alternateMobile;
+          userUpdates.altPhone = updates.alternateMobile;
+        }
         if (updates.preferredLanguage) userUpdates.preferredLanguage = updates.preferredLanguage;
         if (updates.bloodGroup) userUpdates.bloodGroup = updates.bloodGroup;
         if (updates.profilePhoto) userUpdates.profilePhoto = updates.profilePhoto;
         if (updates.vehicleDetails) userUpdates.vehicleDetails = updates.vehicleDetails;
         if (updates.bankDetails) {
           const bd = updates.bankDetails as any;
+          if (bd.accountNumber !== undefined && bd.accountNumber !== '') {
+            const cleanAcc = String(bd.accountNumber).trim();
+            if (!/^\d{8,20}$/.test(cleanAcc)) {
+              return res.status(400).json({ message: 'Account number must contain 8–20 digits.' });
+            }
+            bd.accountNumber = cleanAcc;
+          }
           userUpdates.bankDetails = bd;
           userUpdates.bankName = bd.bankName;
           userUpdates.accountNo = bd.accountNumber;

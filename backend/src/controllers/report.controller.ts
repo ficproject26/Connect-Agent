@@ -2,8 +2,12 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import Report from '../models/Report';
 
+import mongoose from 'mongoose';
+import Agent from '../models/Agent';
+
 const createReportSchema = z.object({
   type: z.enum(['daily', 'weekly', 'monthly', 'vendor', 'performance', 'visit']),
+  title: z.string().optional(),
   content: z.record(z.unknown()),
   remarks: z.string().optional()
 });
@@ -18,11 +22,49 @@ export const getReports = async (req: Request, res: Response) => {
     const agentId = (req as any).agent?.agentId;
     if (!agentId) return res.status(401).json({ message: 'Unauthorized' });
 
+    const agentRecord = (req as any).agentRecord || {};
+    const role = String(agentRecord.role || (req as any).agent?.role || '').toLowerCase();
+    const assignedDiv = (agentRecord.territory?.division || agentRecord.assignedTerritory?.division || agentRecord.assignedDivision || (req.query.division as string) || '').trim();
+
     const { page = '1', limit = '20', type } = req.query;
     const pageNum = parseInt(page as string, 10);
     const limitNum = parseInt(limit as string, 10);
 
-    const filter: Record<string, unknown> = { agent: agentId };
+    let filter: Record<string, unknown> = {};
+
+    if (role === 'division' && assignedDiv) {
+      // Find subordinate agents belonging to this division
+      const subordinateAgents = await Agent.find({
+        $or: [
+          { 'territory.division': new RegExp(`^${assignedDiv}$`, 'i') },
+          { 'assignedTerritory.division': new RegExp(`^${assignedDiv}$`, 'i') },
+          { assignedDivision: new RegExp(`^${assignedDiv}$`, 'i') },
+          { division: new RegExp(`^${assignedDiv}$`, 'i') }
+        ]
+      }).select('_id').lean();
+
+      const validAgentIds: any[] = [agentId];
+      if (mongoose.Types.ObjectId.isValid(agentId)) {
+        validAgentIds.push(new mongoose.Types.ObjectId(agentId));
+      }
+      subordinateAgents.forEach(sub => {
+        validAgentIds.push(sub._id);
+      });
+
+      filter = {
+        $or: [
+          { agent: { $in: validAgentIds } },
+          { division: new RegExp(`^${assignedDiv}$`, 'i') }
+        ]
+      };
+    } else if (role === 'admin' || role === 'superadmin') {
+      if (assignedDiv) {
+        filter = { division: new RegExp(`^${assignedDiv}$`, 'i') };
+      }
+    } else {
+      filter = { agent: agentId };
+    }
+
     if (type) filter.type = type;
 
     const total = await Report.countDocuments(filter);
@@ -69,9 +111,22 @@ export const createReport = async (req: Request, res: Response) => {
     const agentId = (req as any).agent?.agentId;
     if (!agentId) return res.status(401).json({ message: 'Unauthorized' });
 
+    const agentRecord = (req as any).agentRecord || {};
     const data = createReportSchema.parse(req.body);
 
-    const report = new Report({ ...data, agent: agentId });
+    const division = agentRecord.territory?.division || agentRecord.assignedTerritory?.division || agentRecord.assignedDivision || '';
+    const district = agentRecord.territory?.district || agentRecord.assignedTerritory?.district || agentRecord.assignedDistrict || '';
+    const state = agentRecord.territory?.state || agentRecord.assignedTerritory?.state || agentRecord.assignedState || '';
+    const pincode = agentRecord.territory?.pincode || agentRecord.assignedTerritory?.pincode || agentRecord.assignedPincode || '';
+
+    const report = new Report({
+      ...data,
+      agent: agentId,
+      division,
+      district,
+      state,
+      pincode
+    });
     await report.save();
     await report.populate('agent', 'name email role');
 

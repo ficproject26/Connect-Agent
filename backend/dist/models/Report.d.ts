@@ -2,6 +2,12 @@ import { Schema, Document, Types } from 'mongoose';
 export interface IReport extends Document {
     agent: Types.ObjectId;
     type: 'daily' | 'weekly' | 'monthly' | 'vendor' | 'performance' | 'visit';
+    title?: string;
+    reportNumber?: string;
+    division?: string;
+    district?: string;
+    state?: string;
+    pincode?: string;
     content: Schema.Types.Mixed;
     remarks?: string;
     reviewedBy?: Types.ObjectId;

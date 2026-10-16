@@ -538,8 +538,8 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
     if (!formData.accountHolderName.trim()) return 'Account Holder Name is required.';
     if (!formData.branch.trim()) return 'Bank Branch Name is required.';
     if (!formData.bankCity.trim()) return 'Bank City is required.';
-    if (!formData.accountNumber || formData.accountNumber.length < 8 || formData.accountNumber.length > 18) {
-      return 'Valid 8 to 18-digit Bank Account Number is required.';
+    if (!formData.accountNumber || !/^\d{8,20}$/.test(formData.accountNumber.trim())) {
+      return 'Account number must contain 8–20 digits.';
     }
     const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
     if (!formData.ifscCode || !ifscRegex.test(formData.ifscCode.toUpperCase())) {
@@ -1249,11 +1249,11 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Input
-                  label="Account Number (8 to 18 Digits) *"
-                  placeholder="Enter 8-18 digit bank account number"
+                  label="Account Number (8 to 20 Digits) *"
+                  placeholder="Enter 8-20 digit bank account number"
                   value={formData.accountNumber}
-                  onChange={(e) => setFormData({ ...formData, accountNumber: e.target.value.replace(/\D/g, '').slice(0, 18) })}
-                  maxLength={18}
+                  onChange={(e) => setFormData({ ...formData, accountNumber: e.target.value.replace(/\D/g, '').slice(0, 20) })}
+                  maxLength={20}
                   inputMode="numeric"
                   required
                 />

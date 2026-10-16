@@ -34,6 +34,7 @@ export declare function validateVendorFieldFormats(data: {
     panNumber?: string;
     aadhaarNumber?: string;
     pincode?: string;
+    accountNumber?: string;
 }): {
     valid: boolean;
     error?: string;

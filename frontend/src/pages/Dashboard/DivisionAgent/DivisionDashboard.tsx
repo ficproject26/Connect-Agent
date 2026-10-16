@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../../context/AuthContext';
-import { targetService } from '../../../api';
+import { targetService, notificationService } from '../../../api';
+import api from '../../../utils/api';
 import { Modal, Button } from '../../../components/ui';
 import { downloadReport } from '../../../utils/downloadReport';
 import {
@@ -119,6 +120,81 @@ export const DivisionDashboard: React.FC = () => {
     refetchOnWindowFocus: true
   });
 
+  // Fetch real division vendors scoped to authenticated division
+  const { data: divisionVendors = [] } = useQuery({
+    queryKey: ['divisionVendors', userDivision],
+    queryFn: async () => {
+      try {
+        const res = await api.get('/vendors', { params: { limit: 1000 } });
+        const list = res.data?.vendors || [];
+        const uDiv = (userDivision || '').toLowerCase().trim();
+        return list.filter((v: any) => {
+          if (!uDiv) return true;
+          const vDiv = (v.division || v.assignedDivision || '').toLowerCase().trim();
+          if (vDiv) return vDiv.includes(uDiv) || uDiv.includes(vDiv);
+          if (v.pincode && divisionPincodesList.some(p => p.code === String(v.pincode).trim())) return true;
+          return false;
+        });
+      } catch (err) {
+        console.warn('Failed to fetch division vendors:', err);
+        return [];
+      }
+    },
+    staleTime: 30000,
+    refetchInterval: 45000,
+    refetchOnWindowFocus: true
+  });
+
+  // Calculate actual registered vendors and active vendors independently
+  const totalRegisteredVendors = divisionVendors.length;
+  const activeDivisionVendors = divisionVendors.filter((v: any) => {
+    const s = String(v.status || '').toLowerCase().trim();
+    return s === 'active' || s === 'approved' || s === 'verified';
+  }).length;
+
+  // Real division reports query scoped to division
+  const { data: divisionReports = [] } = useQuery({
+    queryKey: ['divisionReports', userDivision, (user as any)?._id || (user as any)?.id],
+    queryFn: async () => {
+      try {
+        const res = await api.get('/reports', { params: { division: userDivision } });
+        const list = res.data?.reports || [];
+        const uDiv = (userDivision || '').toLowerCase().trim();
+        return list.filter((r: any) => {
+          if (!uDiv) return true;
+          const rDiv = (r.division || r.assignedDivision || '').toLowerCase().trim();
+          if (rDiv) return rDiv.includes(uDiv) || uDiv.includes(rDiv);
+          return true;
+        });
+      } catch (err) {
+        return [];
+      }
+    },
+    staleTime: 30000,
+    refetchInterval: 45000
+  });
+
+  // Real division alerts/notifications query
+  const { data: divisionAlerts = [] } = useQuery({
+    queryKey: ['divisionAlerts', userDivision, (user as any)?._id || (user as any)?.id],
+    queryFn: async () => {
+      try {
+        const res = await notificationService.getAll({ limit: 20 });
+        const list = res.data?.notifications || res.data || [];
+        const uDiv = (userDivision || '').toLowerCase().trim();
+        return list.filter((n: any) => {
+          if (!uDiv) return true;
+          if (n.division && n.division.toLowerCase().trim() !== uDiv) return false;
+          return true;
+        });
+      } catch (err) {
+        return [];
+      }
+    },
+    staleTime: 30000,
+    refetchInterval: 45000
+  });
+
   // Compute real performance from subordinate data
   const totalAssignedTargets = pincodeAgentsList.reduce((sum, s) => sum + (s.assignedTargets || 0), 0);
   const totalCompletedTargets = pincodeAgentsList.reduce((sum, s) => sum + (s.completedTargets || 0), 0);
@@ -126,9 +202,8 @@ export const DivisionDashboard: React.FC = () => {
     ? Math.round((totalCompletedTargets / totalAssignedTargets) * 1000) / 10
     : 0;
 
-  const totalDivisionVendors = pincodeAgentsList.reduce((sum, s) => sum + (s.totalOnboardedShops || 0), 0);
-  const vendorGrowthPercent = totalDivisionVendors > 0
-    ? (totalAssignedTargets > 0 ? Math.min(100, Math.max(0, Math.round((totalDivisionVendors / totalAssignedTargets) * 100))) : 100)
+  const vendorGrowthPercent = totalRegisteredVendors > 0
+    ? (totalAssignedTargets > 0 ? Math.min(100, Math.max(0, Math.round((totalRegisteredVendors / totalAssignedTargets) * 100))) : 100)
     : 0;
 
   const handleAssign = async (e: React.FormEvent) => {
@@ -202,8 +277,8 @@ export const DivisionDashboard: React.FC = () => {
         {[
           { label: 'Assigned Pincodes', val: `${divisionPincodesList.length} Pincodes`, icon: <MapPin className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
           { label: 'Active Pincode Agents', val: `${pincodeAgentsList.length} active`, icon: <Users className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
-          { label: 'Total Vendors', val: `${totalDivisionVendors} registered`, icon: <Users className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
-          { label: 'Active Vendors', val: `${totalDivisionVendors} active`, icon: <CheckCircle2 className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
+          { label: 'Total Vendors', val: `${totalRegisteredVendors} registered`, icon: <Users className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
+          { label: 'Active Vendors', val: `${activeDivisionVendors} active`, icon: <CheckCircle2 className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
           { label: "Today's Targets", val: `${totalAssignedTargets} targets`, icon: <Target className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
           { label: 'Pending Targets', val: `${Math.max(0, totalAssignedTargets - totalCompletedTargets)} remaining`, icon: <Clock className="w-4 h-4 text-[#4f4635]" />, bg: 'bg-[#efe1ca]' },
           { label: 'Open Tickets', val: '0 unresolved', icon: <Ticket className="w-4 h-4 text-red-700" />, bg: 'bg-red-50' },
@@ -244,7 +319,7 @@ export const DivisionDashboard: React.FC = () => {
             <div>
               <div className="flex justify-between text-xs font-bold text-[#52443a] mb-1">
                 <span>Vendor Growth</span>
-                <span className="text-green-600 font-extrabold">{totalDivisionVendors} total vendors ({vendorGrowthPercent}%)</span>
+                <span className="text-green-600 font-extrabold">{totalRegisteredVendors} total vendors ({vendorGrowthPercent}%)</span>
               </div>
               <div className="w-full bg-[#f6f3f2] h-2 rounded-full overflow-hidden">
                 <div
@@ -321,7 +396,25 @@ export const DivisionDashboard: React.FC = () => {
                   <span>Merchant Shop</span>
                   <span>Status</span>
                 </div>
-                <p className="py-6 text-center text-xs text-slate-400 font-semibold">Merchant onboarding logs for {userDivision} synced.</p>
+                {divisionVendors.length === 0 ? (
+                  <p className="py-6 text-center text-xs text-slate-400 font-semibold">No registered vendors found in {userDivision}.</p>
+                ) : (
+                  divisionVendors.map((v: any) => (
+                    <div key={v.id || v._id} className="py-3 flex justify-between items-center text-xs font-semibold">
+                      <div>
+                        <span className="font-bold text-[#1b1c1c] block">{v.businessName || v.name}</span>
+                        <span className="text-[10px] text-[#864f19] uppercase font-black">PIN: {v.pincode} • {v.category || v.storeType || 'Merchant'}</span>
+                      </div>
+                      <span className={`inline-block text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded ${
+                        (v.status || '').toLowerCase() === 'active' || (v.status || '').toLowerCase() === 'approved'
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : 'bg-amber-50 text-[#864f19]'
+                      }`}>
+                        {v.status}
+                      </span>
+                    </div>
+                  ))
+                )}
               </>
             )}
 
@@ -455,64 +548,65 @@ export const DivisionDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Reports and Notification Center */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        
-        {/* Reports */}
-        <div className="bg-white rounded-[16px] border border-[#eae8e7] shadow-sm p-6 space-y-4">
-          <div className="border-b border-[#eae8e7] pb-3">
-            <h3 className="font-extrabold text-sm text-[#1b1c1c]">Division Reports Center</h3>
-          </div>
+      {/* Reports and Notification Center (Only rendered when real records exist) */}
+      {(divisionReports.length > 0 || divisionAlerts.length > 0) && (
+        <div className={`grid grid-cols-1 ${divisionReports.length > 0 && divisionAlerts.length > 0 ? 'md:grid-cols-2' : 'md:grid-cols-1'} gap-6`}>
           
-          <div className="space-y-3">
-            {[
-              { title: 'Division Report', desc: 'Overall division-level performance logs' },
-              { title: 'Vendor Report', desc: 'Registered merchant statistics' },
-              { title: 'Target Report', desc: 'District targets completion logs' }
-            ].map((rep, idx) => (
-              <div key={idx} className="flex justify-between items-center p-3 bg-[#fbf9f8] rounded-xl border border-[#eae8e7]/55">
-                <div className="space-y-0.5">
-                  <span className="text-xs font-bold text-[#1b1c1c]">{rep.title}</span>
-                  <p className="text-[10px] text-[#52443a]">{rep.desc}</p>
-                </div>
-                <button 
-                  onClick={() => downloadReport(rep.title, user?.role || 'division', user)}
-                  title={`Download ${rep.title}`}
-                  className="p-2 bg-white text-[#864f19] border border-[#d7c3b5]/50 rounded-lg hover:bg-[#864f19] hover:text-white transition cursor-pointer flex items-center justify-center shadow-xs"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                </button>
+          {/* Reports (Hidden when 0 reports exist) */}
+          {divisionReports.length > 0 && (
+            <div className="bg-white rounded-[16px] border border-[#eae8e7] shadow-sm p-6 space-y-4">
+              <div className="border-b border-[#eae8e7] pb-3">
+                <h3 className="font-extrabold text-sm text-[#1b1c1c]">Division Reports Center</h3>
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Notifications and Escalated alerts */}
-        <div className="bg-white rounded-[16px] border border-[#eae8e7] shadow-sm p-6 space-y-4">
-          <div className="border-b border-[#eae8e7] pb-3">
-            <h3 className="font-extrabold text-sm text-[#1b1c1c]">Division Alerts & Alerts Panel</h3>
-          </div>
-          
-          <div className="space-y-3">
-            {[
-              { type: 'New Vendor Alert', msg: `New vendor registration pending document audit in ${userDivision || 'Division'}.`, time: '10m ago', alert: false },
-              { type: 'Escalated Ticket', msg: `Ticket ID #TK-9742: Merchant terminal query logged at PIN ${divisionPincodesList[0]?.code || userPincode || '—'}.`, time: '2h ago', alert: true },
-              { type: 'Field Visit Alert', msg: `Pincode Sector ${divisionPincodesList[0]?.code || userPincode || '—'} field report submitted successfully.`, time: '4h ago', alert: false }
-            ].map((notif, idx) => (
-              <div key={idx} className="flex items-start gap-3 p-3 bg-[#fbf9f8] rounded-xl border border-[#eae8e7]/50">
-                <div className={`h-2 w-2 rounded-full mt-1 shrink-0 ${notif.alert ? 'bg-[#ba1a1a]' : 'bg-[#864f19]'}`} />
-                <div className="flex-grow space-y-0.5">
-                  <div className="flex justify-between items-center text-[10px] font-bold">
-                    <span className={notif.alert ? 'text-[#ba1a1a]' : 'text-[#864f19]'}>{notif.type}</span>
-                    <span className="text-[#52443a] font-medium">{notif.time}</span>
+              
+              <div className="space-y-3">
+                {divisionReports.map((rep: any, idx: number) => (
+                  <div key={rep._id || rep.id || idx} className="flex justify-between items-center p-3 bg-[#fbf9f8] rounded-xl border border-[#eae8e7]/55">
+                    <div className="space-y-0.5">
+                      <span className="text-xs font-bold text-[#1b1c1c]">{rep.title || rep.reportNumber || rep.type || 'Division Report'}</span>
+                      <p className="text-[10px] text-[#52443a]">{rep.remarks || rep.desc || rep.summary?.description || 'Division performance log'}</p>
+                    </div>
+                    <button 
+                      onClick={() => downloadReport(rep.title || rep.reportNumber || rep.type || 'Division Report', user?.role || 'division', user)}
+                      title={`Download ${rep.title || rep.reportNumber || 'Report'}`}
+                      className="p-2 bg-white text-[#864f19] border border-[#d7c3b5]/50 rounded-lg hover:bg-[#864f19] hover:text-white transition cursor-pointer flex items-center justify-center shadow-xs"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                  <p className="text-xs text-[#52443a] leading-normal">{notif.msg}</p>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </div>
+          )}
+
+          {/* Notifications and Escalated alerts (Hidden when 0 alerts exist) */}
+          {divisionAlerts.length > 0 && (
+            <div className="bg-white rounded-[16px] border border-[#eae8e7] shadow-sm p-6 space-y-4">
+              <div className="border-b border-[#eae8e7] pb-3">
+                <h3 className="font-extrabold text-sm text-[#1b1c1c]">Division Alerts & Alerts Panel</h3>
+              </div>
+              
+              <div className="space-y-3">
+                {divisionAlerts.map((notif: any, idx: number) => {
+                  const isHigh = notif.priority === 'high' || notif.alert;
+                  return (
+                    <div key={notif._id || notif.id || idx} className="flex items-start gap-3 p-3 bg-[#fbf9f8] rounded-xl border border-[#eae8e7]/50">
+                      <div className={`h-2 w-2 rounded-full mt-1 shrink-0 ${isHigh ? 'bg-[#ba1a1a]' : 'bg-[#864f19]'}`} />
+                      <div className="flex-grow space-y-0.5">
+                        <div className="flex justify-between items-center text-[10px] font-bold">
+                          <span className={isHigh ? 'text-[#ba1a1a]' : 'text-[#864f19]'}>{notif.title || notif.type || notif.category || 'Division Alert'}</span>
+                          <span className="text-[#52443a] font-medium">{notif.time || (notif.createdAt ? new Date(notif.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '')}</span>
+                        </div>
+                        <p className="text-xs text-[#52443a] leading-normal">{notif.message || notif.msg}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
-      </div>
+      )}
 
       {/* Pincode Agent Audit Modal */}
       {selectedAgent && (

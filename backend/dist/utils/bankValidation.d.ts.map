@@ -1,0 +1,1 @@
+{"version":3,"file":"bankValidation.d.ts","sourceRoot":"","sources":["../../src/utils/bankValidation.ts"],"names":[],"mappings":"AAAA,eAAO,MAAM,kBAAkB,QAAe,CAAC;AAC/C,eAAO,MAAM,0BAA0B,kDAA6C,CAAC;AAErF,eAAO,MAAM,oBAAoB,GAAI,KAAK,MAAM,GAAG,MAAM,GAAG,SAAS,GAAG,IAAI,KAAG,OAI9E,CAAC;AAEF,eAAO,MAAM,qBAAqB,GAAI,OAAO,MAAM,GAAG,MAAM,GAAG,SAAS,GAAG,IAAI,KAAG,MAGjF,CAAC"}

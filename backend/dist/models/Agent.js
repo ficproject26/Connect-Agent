@@ -89,6 +89,7 @@ const agentSchema = new mongoose_1.Schema({
     registrationFeePaid: { type: Boolean, default: false },
     performanceScore: { type: Number, default: 0 },
     alternateMobile: { type: String, default: '' },
+    altPhone: { type: String, default: '' },
     preferredLanguage: { type: String, default: 'English' },
     bloodGroup: { type: String, default: 'O+' },
     profilePhoto: { type: String, default: '' },

@@ -6,8 +6,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.reviewReport = exports.createReport = exports.getReportById = exports.getReports = void 0;
 const zod_1 = require("zod");
 const Report_1 = __importDefault(require("../models/Report"));
+const mongoose_1 = __importDefault(require("mongoose"));
+const Agent_1 = __importDefault(require("../models/Agent"));
 const createReportSchema = zod_1.z.object({
     type: zod_1.z.enum(['daily', 'weekly', 'monthly', 'vendor', 'performance', 'visit']),
+    title: zod_1.z.string().optional(),
     content: zod_1.z.record(zod_1.z.unknown()),
     remarks: zod_1.z.string().optional()
 });
@@ -20,10 +23,45 @@ const getReports = async (req, res) => {
         const agentId = req.agent?.agentId;
         if (!agentId)
             return res.status(401).json({ message: 'Unauthorized' });
+        const agentRecord = req.agentRecord || {};
+        const role = String(agentRecord.role || req.agent?.role || '').toLowerCase();
+        const assignedDiv = (agentRecord.territory?.division || agentRecord.assignedTerritory?.division || agentRecord.assignedDivision || req.query.division || '').trim();
         const { page = '1', limit = '20', type } = req.query;
         const pageNum = parseInt(page, 10);
         const limitNum = parseInt(limit, 10);
-        const filter = { agent: agentId };
+        let filter = {};
+        if (role === 'division' && assignedDiv) {
+            // Find subordinate agents belonging to this division
+            const subordinateAgents = await Agent_1.default.find({
+                $or: [
+                    { 'territory.division': new RegExp(`^${assignedDiv}$`, 'i') },
+                    { 'assignedTerritory.division': new RegExp(`^${assignedDiv}$`, 'i') },
+                    { assignedDivision: new RegExp(`^${assignedDiv}$`, 'i') },
+                    { division: new RegExp(`^${assignedDiv}$`, 'i') }
+                ]
+            }).select('_id').lean();
+            const validAgentIds = [agentId];
+            if (mongoose_1.default.Types.ObjectId.isValid(agentId)) {
+                validAgentIds.push(new mongoose_1.default.Types.ObjectId(agentId));
+            }
+            subordinateAgents.forEach(sub => {
+                validAgentIds.push(sub._id);
+            });
+            filter = {
+                $or: [
+                    { agent: { $in: validAgentIds } },
+                    { division: new RegExp(`^${assignedDiv}$`, 'i') }
+                ]
+            };
+        }
+        else if (role === 'admin' || role === 'superadmin') {
+            if (assignedDiv) {
+                filter = { division: new RegExp(`^${assignedDiv}$`, 'i') };
+            }
+        }
+        else {
+            filter = { agent: agentId };
+        }
         if (type)
             filter.type = type;
         const total = await Report_1.default.countDocuments(filter);
@@ -71,8 +109,20 @@ const createReport = async (req, res) => {
         const agentId = req.agent?.agentId;
         if (!agentId)
             return res.status(401).json({ message: 'Unauthorized' });
+        const agentRecord = req.agentRecord || {};
         const data = createReportSchema.parse(req.body);
-        const report = new Report_1.default({ ...data, agent: agentId });
+        const division = agentRecord.territory?.division || agentRecord.assignedTerritory?.division || agentRecord.assignedDivision || '';
+        const district = agentRecord.territory?.district || agentRecord.assignedTerritory?.district || agentRecord.assignedDistrict || '';
+        const state = agentRecord.territory?.state || agentRecord.assignedTerritory?.state || agentRecord.assignedState || '';
+        const pincode = agentRecord.territory?.pincode || agentRecord.assignedTerritory?.pincode || agentRecord.assignedPincode || '';
+        const report = new Report_1.default({
+            ...data,
+            agent: agentId,
+            division,
+            district,
+            state,
+            pincode
+        });
         await report.save();
         await report.populate('agent', 'name email role');
         return res.status(201).json({ message: 'Report submitted successfully', report });

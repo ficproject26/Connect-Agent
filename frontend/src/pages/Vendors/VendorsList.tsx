@@ -271,9 +271,22 @@ export const VendorsList: React.FC = () => {
   useEffect(() => {
     if (apiVendorsData && apiVendorsData.length > 0) {
       const mappedApiVendors: Vendor[] = apiVendorsData.map((v: any) => {
-        const assignedAgentName = typeof v.assignedAgent === 'object' && v.assignedAgent?.name
-          ? `${v.assignedAgent.name}${v.assignedAgent.role ? ` (${v.assignedAgent.role.charAt(0).toUpperCase() + v.assignedAgent.role.slice(1)} Agent)` : ''}`
-          : (typeof v.assignedAgent === 'string' && v.assignedAgent ? v.assignedAgent : (user?.name ? `${user.name} (Field Agent)` : 'Field Agent'));
+        const assignedAgentName = (() => {
+          if (typeof v.assignedAgent === 'object' && v.assignedAgent?.name) {
+            const role = v.assignedAgent.role ? ` (${v.assignedAgent.role.charAt(0).toUpperCase() + v.assignedAgent.role.slice(1)} Agent)` : '';
+            return `${v.assignedAgent.name}${role}`;
+          }
+          if (v.agentName && typeof v.agentName === 'string' && v.agentName.trim()) {
+            return `${v.agentName.trim()} (Field Agent)`;
+          }
+          if (typeof v.assignedAgent === 'string' && v.assignedAgent.trim() && !v.assignedAgent.match(/^[0-9a-fA-F]{24}$/)) {
+            return v.assignedAgent.trim();
+          }
+          if (typeof v.onboardedBy === 'string' && v.onboardedBy.trim() && !v.onboardedBy.match(/^[0-9a-fA-F]{24}$/)) {
+            return v.onboardedBy.trim();
+          }
+          return 'Unavailable';
+        })();
 
         const regDate = v.createdAt ? formatLocalDate(new Date(v.createdAt)) : formatLocalDate(new Date());
 
