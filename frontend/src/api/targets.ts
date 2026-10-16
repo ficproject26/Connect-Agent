@@ -16,8 +16,8 @@ export const targetService = {
     api.post('/targets/allocate', payload),
 
   // Fetch list of subordinate agents for assignment dropdowns
-  getSubordinates: () =>
-    api.get('/targets/subordinates'),
+  getSubordinates: (params?: { district?: string; division?: string; role?: string }) =>
+    api.get('/targets/subordinates', { params }),
 
   // Get all targets created by agent
   getTargets: (params?: { page?: number; limit?: number; type?: string }) =>

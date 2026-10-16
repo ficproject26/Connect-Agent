@@ -243,7 +243,11 @@ const getSubordinates = async (req, res) => {
         const { district, division, role } = req.query;
         const scope = await (0, territoryScope_1.getAgentTerritoryScope)(agentId, agentEmail);
         const filter = (0, territoryScope_1.buildTerritoryFilter)(scope);
-        filter.status = { $nin: ['rejected', 'suspended'] };
+        // Only active and approved agents should be counted or listed as active subordinates
+        filter.status = { $in: ['active', 'approved'] };
+        // When caller is a Division Agent, downstream subordinates are strictly Pincode Agents
+        const effectiveRole = role ? role.toLowerCase().trim() : (scope?.role === 'division' ? 'pincode' : '');
+        const effectiveDivision = division ? division.trim() : (scope?.role === 'division' ? (scope?.division || '') : '');
         if (district) {
             filter.$and = filter.$and || [];
             const dClean = district.trim();
@@ -259,39 +263,37 @@ const getSubordinates = async (req, res) => {
                 ]
             });
         }
-        if (division) {
+        if (effectiveDivision) {
             filter.$and = filter.$and || [];
-            const divClean = division.trim();
-            const baseDiv = divClean.replace(/\s+division$/i, '').trim();
+            const baseDiv = effectiveDivision.replace(/\s+division$/i, '').trim();
             const divRegex = new RegExp(`^\\s*${baseDiv}(\\s+division)?\\s*$`, 'i');
             filter.$and.push({
                 $or: [
                     { 'assignedTerritory.division': divRegex },
-                    { 'assignedTerritory.divisionId': new RegExp(`^\\s*${divClean}\\s*$`, 'i') },
+                    { 'assignedTerritory.divisionId': new RegExp(`^\\s*${effectiveDivision}\\s*$`, 'i') },
                     { 'territory.division': divRegex },
                     { division: divRegex },
                     { assignedDivision: divRegex }
                 ]
             });
         }
-        if (role) {
-            const rClean = role.toLowerCase().trim();
+        if (effectiveRole) {
             filter.$and = filter.$and || [];
-            let rolePatterns = [rClean];
-            if (rClean === 'district') {
+            let rolePatterns = [effectiveRole];
+            if (effectiveRole === 'district') {
                 rolePatterns = ['district', 'district_agent', 'district_lead', 'district admin'];
             }
-            else if (rClean === 'division') {
+            else if (effectiveRole === 'division') {
                 rolePatterns = ['division', 'division_agent', 'division_lead', 'division_manager'];
             }
-            else if (rClean === 'pincode') {
+            else if (effectiveRole === 'pincode') {
                 rolePatterns = ['pincode', 'pincode_agent'];
             }
             filter.$and.push({
                 $or: [
                     { role: { $in: rolePatterns.map(p => new RegExp(`^${p}$`, 'i')) } },
-                    { level: { $in: [rClean, ...rolePatterns].map(p => new RegExp(`^${p}$`, 'i')) } },
-                    { role: 'agent', level: { $in: [rClean, ...rolePatterns].map(p => new RegExp(`^${p}$`, 'i')) } }
+                    { level: { $in: [effectiveRole, ...rolePatterns].map(p => new RegExp(`^${p}$`, 'i')) } },
+                    { role: 'agent', level: { $in: [effectiveRole, ...rolePatterns].map(p => new RegExp(`^${p}$`, 'i')) } }
                 ]
             });
         }
@@ -303,24 +305,30 @@ const getSubordinates = async (req, res) => {
         try {
             const db = mongoose_1.default.connection.db;
             if (db) {
-                const userFilter = { status: { $nin: ['rejected', 'suspended'] } };
-                const rClean = role ? role.toLowerCase().trim() : '';
+                const userFilter = { status: { $in: ['active', 'approved'] } };
+                const rClean = effectiveRole;
                 if (rClean === 'district') {
                     userFilter.$or = [
-                        { role: { $in: ['district', 'district_agent', 'district_lead', 'District Admin', 'agent'] } },
-                        { level: /district/i }
+                        { role: { $in: ['district', 'district_agent', 'district_lead', 'District Admin'] } },
+                        { level: /^district/i }
                     ];
                 }
                 else if (rClean === 'division') {
                     userFilter.$or = [
-                        { role: { $in: ['division', 'division_agent', 'division_lead', 'division_manager', 'agent'] } },
-                        { level: /division/i }
+                        { role: { $in: ['division', 'division_agent', 'division_lead', 'division_manager'] } },
+                        { level: /^division/i }
                     ];
                 }
                 else if (rClean === 'pincode') {
                     userFilter.$or = [
-                        { role: { $in: ['pincode', 'pincode_agent', 'agent'] } },
-                        { level: /pincode/i }
+                        { role: { $in: ['pincode', 'pincode_agent'] } },
+                        { level: /^pincode/i }
+                    ];
+                }
+                else if (scope?.role === 'division') {
+                    userFilter.$or = [
+                        { role: { $in: ['pincode', 'pincode_agent'] } },
+                        { level: /^pincode/i }
                     ];
                 }
                 const userDocs = await db.collection('users').find(userFilter).limit(50).maxTimeMS(4000).toArray();
@@ -331,7 +339,15 @@ const getSubordinates = async (req, res) => {
                     const uEmail = (u.email || '').toLowerCase();
                     if (existingIds.has(uId) || (uEmail && existingEmails.has(uEmail)))
                         continue;
-                    const uRole = (u.role || u.level || 'pincode').toLowerCase();
+                    const uRole = (u.role || u.level || '').toLowerCase();
+                    const uStatus = (u.status || '').toLowerCase().trim();
+                    if (uStatus !== 'active' && uStatus !== 'approved')
+                        continue;
+                    // Check role qualification
+                    if (scope?.role === 'division' || rClean === 'pincode') {
+                        if (!uRole.includes('pincode'))
+                            continue;
+                    }
                     const uState = (u.assignedTerritory?.state || u.territory?.state || u.state || u.assignedState || '').trim();
                     const uDist = (u.assignedTerritory?.district || u.territory?.district || u.district || u.assignedDistrict || '').trim();
                     const uDiv = (u.assignedTerritory?.division || u.territory?.division || u.division || u.assignedDivision || '').trim();
@@ -345,14 +361,20 @@ const getSubordinates = async (req, res) => {
                             continue;
                         }
                     }
-                    if (division) {
-                        const baseDiv = division.replace(/\s+division$/i, '').trim().toLowerCase();
+                    if (effectiveDivision) {
+                        const baseDiv = effectiveDivision.replace(/\s+division$/i, '').trim().toLowerCase();
                         if (!uDiv || (!uDiv.toLowerCase().includes(baseDiv) && !baseDiv.includes(uDiv.toLowerCase()))) {
                             continue;
                         }
                     }
+                    else if (scope?.role === 'division') {
+                        // Must have a matching division
+                        continue;
+                    }
                     // Map normalized role
                     let normRole = rClean || (uRole.includes('district') ? 'district' : uRole.includes('division') ? 'division' : 'pincode');
+                    if (scope?.role === 'division' && normRole !== 'pincode')
+                        continue;
                     subordinates.push({
                         _id: u._id,
                         name: u.name || 'District Agent',

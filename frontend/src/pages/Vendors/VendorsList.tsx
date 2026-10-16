@@ -116,8 +116,18 @@ export const VendorsList: React.FC = () => {
   });
 
 
+  const isKycApprovedVendor = (v: Vendor | null | undefined): boolean => {
+    if (!v) return false;
+    const kyc = (v.kycStatus || '').toLowerCase().trim();
+    return kyc === 'approved' || kyc === 'verified' || kyc === 'completed';
+  };
+
   const handleOpenEdit = (vendor: Vendor) => {
     if (!vendor) return;
+    if (isKycApprovedVendor(vendor)) {
+      addNotification('Vendor Locked', 'Cannot edit vendor details once KYC status is Approved.', 'medium', 'system');
+      return;
+    }
     setEditingVendor(vendor);
     setEditForm({
       name: vendor.name || '',
@@ -137,6 +147,11 @@ export const VendorsList: React.FC = () => {
 
   const handleSaveEdit = async () => {
     if (!editingVendor) return;
+    if (isKycApprovedVendor(editingVendor)) {
+      addNotification('Vendor Locked', 'Cannot edit vendor details once KYC status is Approved.', 'high', 'system');
+      setIsEditModalOpen(false);
+      return;
+    }
     try {
       setIsSavingEdit(true);
       const vendorId = editingVendor.id;
@@ -1243,14 +1258,16 @@ export const VendorsList: React.FC = () => {
                         >
                           <Eye className="w-3.5 h-3.5" /> Details
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEdit(vendor)}
-                          className="py-1 px-2.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1"
-                          title="Edit Vendor"
-                        >
-                          <Edit className="w-3.5 h-3.5" /> Edit
-                        </button>
+                        {!isKycApprovedVendor(vendor) && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEdit(vendor)}
+                            className="py-1 px-2.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1"
+                            title="Edit Vendor"
+                          >
+                            <Edit className="w-3.5 h-3.5" /> Edit
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

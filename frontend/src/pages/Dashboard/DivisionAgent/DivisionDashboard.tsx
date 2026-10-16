@@ -69,17 +69,21 @@ export const DivisionDashboard: React.FC = () => {
     queryKey: ['divisionSubordinates', userDivision],
     queryFn: async () => {
       try {
-        const res = await targetService.getSubordinates();
+        const res = await targetService.getSubordinates({ role: 'pincode', division: userDivision });
         if (res.data?.subordinates) {
           const rawSubs = Array.isArray(res.data.subordinates) ? res.data.subordinates : [];
-          // Defensive territory isolation: only allow pincode agents belonging to this division
+          // Defensive territory isolation: only allow active, approved pincode agents belonging to this division
           const uDiv = (userDivision || '').trim().toLowerCase();
           const filteredSubs = rawSubs.filter((s: any) => {
-            const sRole = (s.role || '').toLowerCase();
-            if (sRole !== 'pincode') return false;
+            const sRole = (s.role || s.level || '').toLowerCase();
+            if (sRole !== 'pincode' && sRole !== 'pincode_agent') return false;
+
+            const sStatus = (s.status || '').toLowerCase().trim();
+            if (sStatus !== 'active' && sStatus !== 'approved') return false;
+
             if (uDiv) {
-              const sDiv = (typeof s.territory === 'object' ? s.territory?.division : s.division || '').trim().toLowerCase();
-              if (sDiv && !sDiv.includes(uDiv) && !uDiv.includes(sDiv)) return false;
+              const sDiv = (typeof s.territory === 'object' ? s.territory?.division : s.division || s.assignedDivision || s.assignedTerritory?.division || '').trim().toLowerCase();
+              if (!sDiv || (!sDiv.includes(uDiv) && !uDiv.includes(sDiv))) return false;
             }
             return true;
           });
@@ -100,6 +104,8 @@ export const DivisionDashboard: React.FC = () => {
           }));
           setPincodeAgentsList(mapped);
           setSelectedAgentId(prev => prev && mapped.some(m => m.id === prev) ? prev : (mapped[0]?.id || ''));
+        } else {
+          setPincodeAgentsList([]);
         }
         return res.data;
       } catch (err) {
@@ -118,6 +124,11 @@ export const DivisionDashboard: React.FC = () => {
   const totalCompletedTargets = pincodeAgentsList.reduce((sum, s) => sum + (s.completedTargets || 0), 0);
   const realPerformanceScore = totalAssignedTargets > 0
     ? Math.round((totalCompletedTargets / totalAssignedTargets) * 1000) / 10
+    : 0;
+
+  const totalDivisionVendors = pincodeAgentsList.reduce((sum, s) => sum + (s.totalOnboardedShops || 0), 0);
+  const vendorGrowthPercent = totalDivisionVendors > 0
+    ? (totalAssignedTargets > 0 ? Math.min(100, Math.max(0, Math.round((totalDivisionVendors / totalAssignedTargets) * 100))) : 100)
     : 0;
 
   const handleAssign = async (e: React.FormEvent) => {
@@ -191,10 +202,10 @@ export const DivisionDashboard: React.FC = () => {
         {[
           { label: 'Assigned Pincodes', val: `${divisionPincodesList.length} Pincodes`, icon: <MapPin className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
           { label: 'Active Pincode Agents', val: `${pincodeAgentsList.length} active`, icon: <Users className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
-          { label: 'Total Vendors', val: `${pincodeAgentsList.reduce((sum, s) => sum + (s.totalOnboardedShops || 0), 0)} registered`, icon: <Users className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
-          { label: 'Active Vendors', val: `${pincodeAgentsList.reduce((sum, s) => sum + (s.totalOnboardedShops || 0), 0)} active`, icon: <CheckCircle2 className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
-          { label: "Today's Targets", val: `${pincodeAgentsList.reduce((sum, s) => sum + (s.assignedTargets || 0), 0)} targets`, icon: <Target className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
-          { label: 'Pending Targets', val: `${pincodeAgentsList.reduce((sum, s) => sum + Math.max(0, (s.assignedTargets || 0) - (s.completedTargets || 0)), 0)} remaining`, icon: <Clock className="w-4 h-4 text-[#4f4635]" />, bg: 'bg-[#efe1ca]' },
+          { label: 'Total Vendors', val: `${totalDivisionVendors} registered`, icon: <Users className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
+          { label: 'Active Vendors', val: `${totalDivisionVendors} active`, icon: <CheckCircle2 className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
+          { label: "Today's Targets", val: `${totalAssignedTargets} targets`, icon: <Target className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
+          { label: 'Pending Targets', val: `${Math.max(0, totalAssignedTargets - totalCompletedTargets)} remaining`, icon: <Clock className="w-4 h-4 text-[#4f4635]" />, bg: 'bg-[#efe1ca]' },
           { label: 'Open Tickets', val: '0 unresolved', icon: <Ticket className="w-4 h-4 text-red-700" />, bg: 'bg-red-50' },
           { label: 'Division Performance', val: `${realPerformanceScore}%`, icon: <TrendingUp className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' }
         ].map((card, idx) => (
@@ -233,10 +244,13 @@ export const DivisionDashboard: React.FC = () => {
             <div>
               <div className="flex justify-between text-xs font-bold text-[#52443a] mb-1">
                 <span>Vendor Growth</span>
-                <span className="text-green-600">{pincodeAgentsList.reduce((sum, s) => sum + (s.totalOnboardedShops || 0), 0)} total vendors</span>
+                <span className="text-green-600 font-extrabold">{totalDivisionVendors} total vendors ({vendorGrowthPercent}%)</span>
               </div>
               <div className="w-full bg-[#f6f3f2] h-2 rounded-full overflow-hidden">
-                <div className="bg-emerald-600 h-full rounded-full" style={{ width: pincodeAgentsList.length > 0 ? '100%' : '0%' }}></div>
+                <div
+                  className="bg-emerald-600 h-full rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${vendorGrowthPercent}%` }}
+                ></div>
               </div>
             </div>
             <div>

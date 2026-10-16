@@ -563,6 +563,15 @@ const updateVendor = async (req, res) => {
         const query = isObjectId
             ? { $or: [{ _id: rawId }, { registrationId: rawId }] }
             : { registrationId: rawId };
+        const existingVendor = await Vendor_1.default.findOne(query);
+        if (!existingVendor)
+            return res.status(404).json({ message: 'Vendor not found' });
+        const currentKyc = (existingVendor.kycStatus || '').toLowerCase().trim();
+        if (currentKyc === 'approved' || currentKyc === 'verified') {
+            return res.status(403).json({
+                message: 'Modifications locked: Cannot edit vendor details once KYC status is Approved.'
+            });
+        }
         const updateFields = { ...data, updatedAt: new Date() };
         // Prevent privilege escalation or unauthorized status bypass via updateVendor
         delete updateFields.status;
