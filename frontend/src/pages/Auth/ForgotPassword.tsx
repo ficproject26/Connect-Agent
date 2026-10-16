@@ -4,9 +4,12 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Mail, ArrowLeft, Send } from 'lucide-react';
+import { isValidEmail, normalizeEmail } from '../../utils/formValidation';
 
 const forgotSchema = z.object({
-  email: z.string().email('Please enter a valid email address').transform(val => val.toLowerCase().trim()),
+  email: z.string().refine(val => isValidEmail(val), {
+    message: 'Please enter a valid email address (e.g. name@example.com).'
+  }).transform(val => normalizeEmail(val)),
 });
 
 type ForgotFields = z.infer<typeof forgotSchema>;

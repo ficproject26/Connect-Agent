@@ -1,3 +1,20 @@
+
+import {
+  formatName,
+  isValidName,
+  isValidEmail,
+  normalizeEmail,
+  sanitizeIndianMobile,
+  isValidIndianMobile,
+  validatePassword,
+  isValidPassword,
+  formatPan,
+  isValidPan,
+  sanitizeAadhaar,
+  isValidAadhaar,
+  isAtLeast18YearsOld,
+  getMax18DobString
+} from '../../utils/formValidation';
 import {
   getActiveStateList,
   getActiveDistrictList,
@@ -567,20 +584,25 @@ export const RegisterWizard: React.FC = () => {
     setFormErrors('');
 
     if (currentStep === 1) {
-      if (!personalInfo.name || !personalInfo.phone || !personalInfo.email || !personalInfo.password || !personalInfo.confirmPassword) {
-        setFormErrors('All personal credential fields are required.');
+      if (!personalInfo.name || !isValidName(personalInfo.name)) {
+        setFormErrors('Please enter a valid Full Name (2-100 characters).');
+        return;
+      }
+      if (!isValidIndianMobile(personalInfo.phone)) {
+        setFormErrors('Mobile number must start with 6, 7, 8, or 9 and be exactly 10 digits.');
+        return;
+      }
+      if (!isValidEmail(personalInfo.email)) {
+        setFormErrors('Please enter a valid email address (e.g. agent@example.com).');
+        return;
+      }
+      const pwdValidation = validatePassword(personalInfo.password);
+      if (!pwdValidation.valid) {
+        setFormErrors(pwdValidation.errors[0]);
         return;
       }
       if (personalInfo.password !== personalInfo.confirmPassword) {
         setFormErrors('Passwords do not match.');
-        return;
-      }
-      if (personalInfo.password.length < 6) {
-        setFormErrors('Password must be at least 6 characters long.');
-        return;
-      }
-      if (!/^[6-9][0-9]{9}$/.test(personalInfo.phone)) {
-        setFormErrors('Mobile number must start with 6, 7, 8, or 9 and be exactly 10 digits.');
         return;
       }
     }
@@ -594,19 +616,19 @@ export const RegisterWizard: React.FC = () => {
         setFormErrors('Please select your Date of Birth.');
         return;
       }
-      if (personalInfo.dob > maxDobDate) {
-        setFormErrors('You must be at least 18 years old to register as an agent.');
+      if (!isAtLeast18YearsOld(personalInfo.dob)) {
+        setFormErrors('You must be at least 18 years old to register.');
         return;
       }
-      if (personalInfo.altPhone && !/^[6-9][0-9]{9}$/.test(personalInfo.altPhone)) {
+      if (personalInfo.altPhone && !isValidIndianMobile(personalInfo.altPhone)) {
         setFormErrors('Alternative mobile number must start with 6, 7, 8, or 9 and be 10 digits.');
         return;
       }
-      if (!personalInfo.aadhaarNumber || !/^\d{12}$/.test(personalInfo.aadhaarNumber)) {
+      if (!personalInfo.aadhaarNumber || !isValidAadhaar(personalInfo.aadhaarNumber)) {
         setFormErrors('Please enter a valid 12-digit Aadhaar Number.');
         return;
       }
-      if (!personalInfo.panNumber || !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(personalInfo.panNumber)) {
+      if (!personalInfo.panNumber || !isValidPan(personalInfo.panNumber)) {
         setFormErrors('Please enter a valid PAN Number in format ABCDE1234F.');
         return;
       }
@@ -684,6 +706,36 @@ export const RegisterWizard: React.FC = () => {
   const handleFinalSubmit = async () => {
     setFormErrors('');
 
+    // Field-level validations
+    if (!isValidName(personalInfo.name)) {
+      setFormErrors('Please enter a valid Full Name.');
+      return;
+    }
+    if (!isValidIndianMobile(personalInfo.phone)) {
+      setFormErrors('Please enter a valid 10-digit primary mobile number.');
+      return;
+    }
+    if (!isValidEmail(personalInfo.email)) {
+      setFormErrors('Please enter a valid email address.');
+      return;
+    }
+    if (!validatePassword(personalInfo.password).valid) {
+      setFormErrors('Password does not meet required complexity.');
+      return;
+    }
+    if (!isAtLeast18YearsOld(personalInfo.dob)) {
+      setFormErrors('You must be at least 18 years old to register.');
+      return;
+    }
+    if (!isValidAadhaar(personalInfo.aadhaarNumber)) {
+      setFormErrors('Aadhaar number must be exactly 12 numeric digits.');
+      return;
+    }
+    if (!isValidPan(personalInfo.panNumber)) {
+      setFormErrors('PAN number must be 10 characters in format ABCDE1234F.');
+      return;
+    }
+
     // Document validations
     if (!documents.aadhaarCard.dataUrl || !documents.panCard.dataUrl || !documents.passportPhoto.dataUrl || !documents.signature.dataUrl) {
       setFormErrors('All required documents (Aadhaar, PAN, Passport Photo, and Signature) must be uploaded.');
@@ -701,13 +753,13 @@ export const RegisterWizard: React.FC = () => {
       const formattedAddressString = `${address.buildingNo.trim()}, ${address.street.trim()}, ${address.locality.trim()}, ${address.postOffice.trim()} P.O., ${address.taluk.trim()} Taluk, ${address.district.trim()}, ${address.state.trim()} - ${address.pincode.trim()}`;
 
       const payload = {
-        name: personalInfo.name,
-        email: (personalInfo.email || '').toLowerCase().trim(),
+        name: formatName(personalInfo.name),
+        email: normalizeEmail(personalInfo.email),
         password: personalInfo.password,
-        phone: personalInfo.phone,
-        altPhone: personalInfo.altPhone || '',
-        aadhaarNumber: personalInfo.aadhaarNumber || '',
-        panNumber: personalInfo.panNumber || '',
+        phone: sanitizeIndianMobile(personalInfo.phone),
+        altPhone: personalInfo.altPhone ? sanitizeIndianMobile(personalInfo.altPhone) : '',
+        aadhaarNumber: sanitizeAadhaar(personalInfo.aadhaarNumber),
+        panNumber: formatPan(personalInfo.panNumber),
         role: role,
         dob: personalInfo.dob,
         gender: personalInfo.gender,
@@ -943,7 +995,7 @@ export const RegisterWizard: React.FC = () => {
                       label="Full Name (Required)"
                       placeholder="e.g. Ramesh Kumar"
                       value={personalInfo.name}
-                      onChange={(e) => setPersonalInfo({ ...personalInfo, name: e.target.value })}
+                      onChange={(e) => setPersonalInfo({ ...personalInfo, name: formatName(e.target.value) })}
                     />
                   </div>
 
@@ -955,9 +1007,7 @@ export const RegisterWizard: React.FC = () => {
                       placeholder="e.g. 9876543210"
                       value={personalInfo.phone}
                       onChange={(e) => {
-                        let val = e.target.value.replace(/\D/g, '');
-                        if (val.length > 0 && !/^[6-9]/.test(val)) val = '';
-                        if (val.length > 10) val = val.slice(0, 10);
+                        const val = sanitizeIndianMobile(e.target.value);
                         setPersonalInfo({ ...personalInfo, phone: val });
                       }}
                     />
@@ -1102,12 +1152,11 @@ export const RegisterWizard: React.FC = () => {
                     <Input
                       label="• Alternative Mobile Number (Optional)"
                       maxLength={10}
+                      inputMode="numeric"
                       placeholder="e.g. 9876543210"
                       value={personalInfo.altPhone || ''}
                       onChange={(e) => {
-                        let val = e.target.value.replace(/\D/g, '');
-                        if (val.length > 0 && !/^[6-9]/.test(val)) val = '';
-                        if (val.length > 10) val = val.slice(0, 10);
+                        const val = sanitizeIndianMobile(e.target.value);
                         setPersonalInfo({ ...personalInfo, altPhone: val });
                       }}
                     />
@@ -1125,8 +1174,8 @@ export const RegisterWizard: React.FC = () => {
                       value={personalInfo.dob}
                       onChange={(e) => {
                         const val = e.target.value;
-                        if (val && val > maxDobDate) {
-                          setFormErrors('Must be at least 18 years old to register.');
+                        if (val && !isAtLeast18YearsOld(val)) {
+                          setFormErrors('You must be at least 18 years old to register.');
                           setPersonalInfo({ ...personalInfo, dob: '' });
                         } else {
                           setFormErrors('');
@@ -1156,9 +1205,10 @@ export const RegisterWizard: React.FC = () => {
                   <Input
                     label="• Aadhaar Number (12 Digits - Required)"
                     maxLength={12}
+                    inputMode="numeric"
                     placeholder="e.g. 123456789012"
                     value={personalInfo.aadhaarNumber || ''}
-                    onChange={(e) => setPersonalInfo({ ...personalInfo, aadhaarNumber: e.target.value.replace(/\D/g, '').slice(0, 12) })}
+                    onChange={(e) => setPersonalInfo({ ...personalInfo, aadhaarNumber: sanitizeAadhaar(e.target.value) })}
                   />
 
                   {/* 5. PAN Number */}
@@ -1167,7 +1217,7 @@ export const RegisterWizard: React.FC = () => {
                     maxLength={10}
                     placeholder="e.g. ABCDE1234F"
                     value={personalInfo.panNumber || ''}
-                    onChange={(e) => setPersonalInfo({ ...personalInfo, panNumber: e.target.value.toUpperCase().slice(0, 10) })}
+                    onChange={(e) => setPersonalInfo({ ...personalInfo, panNumber: formatPan(e.target.value) })}
                   />
                 </div>
 

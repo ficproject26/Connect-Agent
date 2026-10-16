@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.verifyMobileOtp = exports.sendOtp = exports.resetPassword = exports.verifyOtp = exports.forgotPassword = exports.updateKyc = exports.updateProfile = exports.getMe = exports.login = exports.register = void 0;
+exports.verifyMobileOtp = exports.sendOtp = exports.resetPassword = exports.verifyOtp = exports.forgotPassword = exports.updateKyc = exports.changePassword = exports.updateProfile = exports.getMe = exports.login = exports.register = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const Agent_1 = __importDefault(require("../models/Agent"));
@@ -13,12 +13,23 @@ const districtAssignment_1 = require("../utils/districtAssignment");
 const eventBus_1 = require("../realtime/eventBus");
 const auth_middleware_1 = require("../middleware/auth.middleware");
 const zod_1 = require("zod");
+const formValidation_1 = require("../utils/formValidation");
 const registerSchema = zod_1.z.object({
-    name: zod_1.z.string().min(2, 'Name must be at least 2 characters'),
-    email: zod_1.z.string().email('Invalid email address'),
-    password: zod_1.z.string().min(6, 'Password must be at least 6 characters'),
-    phone: zod_1.z.string().min(10, 'Phone must be at least 10 digits'),
-    altPhone: zod_1.z.string().optional().default(''),
+    name: zod_1.z.string().min(2, 'Name must be at least 2 characters').refine(val => (0, formValidation_1.isValidName)(val), {
+        message: 'Name contains invalid characters.'
+    }).transform(val => (0, formValidation_1.formatName)(val)),
+    email: zod_1.z.string().refine(val => (0, formValidation_1.isValidEmail)(val), {
+        message: 'Please enter a valid email address (e.g. name@example.com).'
+    }).transform(val => (0, formValidation_1.normalizeEmail)(val)),
+    password: zod_1.z.string().refine(val => (0, formValidation_1.validatePassword)(val).valid, {
+        message: 'Password must be at least 6 characters and contain at least one uppercase letter, one number, and one special character (e.g. Rathika@123).'
+    }),
+    phone: zod_1.z.string().transform(val => (0, formValidation_1.sanitizeIndianMobile)(val)).refine(val => (0, formValidation_1.isValidIndianMobile)(val), {
+        message: 'Mobile number must start with 6, 7, 8, or 9 and be exactly 10 digits.'
+    }),
+    altPhone: zod_1.z.string().optional().default('').refine(val => !val || (0, formValidation_1.isValidIndianMobile)(val), {
+        message: 'Alternate mobile number must start with 6, 7, 8, or 9 and be exactly 10 digits.'
+    }).transform(val => val ? (0, formValidation_1.sanitizeIndianMobile)(val) : ''),
     role: zod_1.z.enum(['state', 'district', 'division', 'pincode', 'delivery_partner', 'technician']),
     dob: zod_1.z.string().optional().or(zod_1.z.date().optional()),
     gender: zod_1.z.string().optional(),
@@ -42,8 +53,12 @@ const registerSchema = zod_1.z.object({
     buildingNo: zod_1.z.string().optional(),
     streetName: zod_1.z.string().optional(),
     postOffice: zod_1.z.string().optional(),
-    aadhaarNumber: zod_1.z.string().optional(),
-    panNumber: zod_1.z.string().optional(),
+    aadhaarNumber: zod_1.z.string().optional().refine(val => !val || (0, formValidation_1.isValidAadhaar)(val), {
+        message: 'Aadhaar number must be exactly 12 numeric digits.'
+    }).transform(val => val ? (0, formValidation_1.sanitizeAadhaar)(val) : ''),
+    panNumber: zod_1.z.string().optional().refine(val => !val || (0, formValidation_1.isValidPan)(val), {
+        message: 'PAN number must be 10 characters in format ABCDE1234F (5 letters, 4 digits, 1 letter).'
+    }).transform(val => val ? (0, formValidation_1.formatPan)(val) : ''),
     assignedTerritory: zod_1.z.object({
         state: zod_1.z.string().optional().default(''),
         stateId: zod_1.z.string().optional().default(''),
@@ -80,11 +95,14 @@ const loginSchema = zod_1.z.object({
 const register = async (req, res) => {
     try {
         const validatedData = registerSchema.parse(req.body);
-        // Parse dob to Date object or undefined if invalid
+        // Parse dob to Date object and validate 18+ requirement
         let parsedDob;
         if (validatedData.dob) {
             const d = new Date(validatedData.dob);
             if (!isNaN(d.getTime())) {
+                if (!(0, formValidation_1.isAtLeast18YearsOld)(d)) {
+                    return res.status(400).json({ message: 'You must be at least 18 years old to register.' });
+                }
                 parsedDob = d;
             }
         }
@@ -942,13 +960,53 @@ const updateProfile = async (req, res) => {
         if (req.body.mobile && !updates.phone) {
             updates.phone = req.body.mobile;
         }
+        if (updates.name) {
+            const rawName = String(updates.name).trim();
+            if (!(0, formValidation_1.isValidName)(rawName)) {
+                return res.status(400).json({ message: 'Name contains invalid characters or does not meet length requirements.' });
+            }
+            updates.name = (0, formValidation_1.formatName)(rawName);
+        }
+        if (updates.phone) {
+            const rawPhone = String(updates.phone).trim();
+            if (!(0, formValidation_1.isValidIndianMobile)(rawPhone)) {
+                return res.status(400).json({ message: 'Mobile number must be a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.' });
+            }
+            updates.phone = (0, formValidation_1.sanitizeIndianMobile)(rawPhone);
+        }
         if (req.body.alternateMobile !== undefined || req.body.altPhone !== undefined) {
             const rawAlt = String(req.body.alternateMobile !== undefined ? req.body.alternateMobile : req.body.altPhone).trim();
-            if (rawAlt && !/^[6-9]\d{9}$/.test(rawAlt)) {
-                return res.status(400).json({ message: 'Alternate mobile number must be a valid 10-digit Indian mobile number.' });
+            if (rawAlt) {
+                if (!(0, formValidation_1.isValidIndianMobile)(rawAlt)) {
+                    return res.status(400).json({ message: 'Alternate mobile number must be a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.' });
+                }
+                updates.alternateMobile = (0, formValidation_1.sanitizeIndianMobile)(rawAlt);
+                updates.altPhone = (0, formValidation_1.sanitizeIndianMobile)(rawAlt);
             }
-            updates.alternateMobile = rawAlt;
-            updates.altPhone = rawAlt;
+            else {
+                updates.alternateMobile = '';
+                updates.altPhone = '';
+            }
+        }
+        if (updates.bankDetails) {
+            const bd = updates.bankDetails;
+            if (bd.accountNumber) {
+                const accValidation = (0, formValidation_1.validateBankAccount)(bd.accountNumber, bd.bankName);
+                if (!accValidation.valid) {
+                    return res.status(400).json({ message: accValidation.error || 'Invalid account number.' });
+                }
+                bd.accountNumber = (0, formValidation_1.sanitizeAccountNumber)(bd.accountNumber);
+            }
+            if (bd.ifscCode) {
+                const ifsc = (0, formValidation_1.formatIfsc)(bd.ifscCode);
+                if (!(0, formValidation_1.isValidIfsc)(ifsc)) {
+                    return res.status(400).json({ message: 'Invalid IFSC code format (e.g. SBIN0001234).' });
+                }
+                bd.ifscCode = ifsc;
+            }
+            if (bd.accountHolder) {
+                bd.accountHolder = (0, formValidation_1.formatName)(String(bd.accountHolder).trim());
+            }
         }
         // Keep territory and assignedTerritory synchronized if either is passed without touching address
         if (updates.assignedTerritory && !updates.territory) {
@@ -1016,13 +1074,6 @@ const updateProfile = async (req, res) => {
                     userUpdates.vehicleDetails = updates.vehicleDetails;
                 if (updates.bankDetails) {
                     const bd = updates.bankDetails;
-                    if (bd.accountNumber !== undefined && bd.accountNumber !== '') {
-                        const cleanAcc = String(bd.accountNumber).trim();
-                        if (!/^\d{8,20}$/.test(cleanAcc)) {
-                            return res.status(400).json({ message: 'Account number must contain 8–20 digits.' });
-                        }
-                        bd.accountNumber = cleanAcc;
-                    }
                     userUpdates.bankDetails = bd;
                     userUpdates.bankName = bd.bankName;
                     userUpdates.accountNo = bd.accountNumber;
@@ -1046,6 +1097,47 @@ const updateProfile = async (req, res) => {
     }
 };
 exports.updateProfile = updateProfile;
+const changePassword = async (req, res) => {
+    try {
+        const agentId = req.agent?.agentId;
+        if (!agentId)
+            return res.status(401).json({ message: 'Unauthorized' });
+        const { currentPassword, newPassword } = req.body;
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ message: 'Current password and new password are required.' });
+        }
+        const agent = await Agent_1.default.findById(agentId);
+        if (!agent) {
+            return res.status(404).json({ message: 'Agent account not found.' });
+        }
+        const isMatch = await bcryptjs_1.default.compare(currentPassword, agent.password);
+        if (!isMatch) {
+            return res.status(400).json({ message: 'Current password entered is incorrect.' });
+        }
+        const pwdValidation = (0, formValidation_1.validatePassword)(newPassword);
+        if (!pwdValidation.valid) {
+            return res.status(400).json({ message: pwdValidation.errors[0] || 'New password does not meet requirements.' });
+        }
+        const hashedPassword = await bcryptjs_1.default.hash(newPassword, 10);
+        agent.password = hashedPassword;
+        agent.updatedAt = new Date();
+        await agent.save();
+        // Also sync password to users collection if present
+        const db = mongoose_1.default.connection.db;
+        if (db) {
+            await db.collection('users').updateOne({ email: agent.email.toLowerCase() }, { $set: { password: hashedPassword, updatedAt: new Date() } }).catch(() => { });
+        }
+        return res.status(200).json({
+            success: true,
+            message: 'Password changed successfully.'
+        });
+    }
+    catch (error) {
+        console.error('changePassword error:', error);
+        return res.status(500).json({ message: 'Internal server error while updating password.' });
+    }
+};
+exports.changePassword = changePassword;
 const updateKyc = async (req, res) => {
     try {
         const agentId = req.agent?.agentId;

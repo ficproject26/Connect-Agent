@@ -14,6 +14,14 @@ import { FieldShopVisitModal } from './FieldShopVisitModal';
 import { AgentOnboardedVendorsModal } from './AgentOnboardedVendorsModal';
 import { getDistrictsForState, getDivisionsForDistrict, getPincodesForDivision, getLocationFromPincode } from '../../utils/locationData';
 import { CANONICAL_MAIN_CATEGORIES } from '../../services/categoryService';
+import {
+  formatName,
+  isValidName,
+  isValidEmail,
+  normalizeEmail,
+  sanitizeIndianMobile,
+  isValidIndianMobile
+} from '../../utils/formValidation';
 
 interface Vendor {
   id: string;
@@ -152,15 +160,32 @@ export const VendorsList: React.FC = () => {
       setIsEditModalOpen(false);
       return;
     }
+    if (editForm.ownerName && !isValidName(editForm.ownerName)) {
+      addNotification('Validation Error', 'Owner / Contact Person Name contains invalid characters or does not meet length requirements.', 'high', 'system');
+      return;
+    }
+    if (editForm.phone && !isValidIndianMobile(editForm.phone)) {
+      addNotification('Validation Error', 'Mobile number must be a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.', 'high', 'system');
+      return;
+    }
+    if (editForm.email && !isValidEmail(editForm.email)) {
+      addNotification('Validation Error', 'Please enter a valid email address (e.g. merchant@example.com).', 'high', 'system');
+      return;
+    }
+
+    const cleanOwnerName = editForm.ownerName ? formatName(editForm.ownerName) : '';
+    const cleanPhone = editForm.phone ? sanitizeIndianMobile(editForm.phone) : '';
+    const cleanEmail = editForm.email ? normalizeEmail(editForm.email) : '';
+
     try {
       setIsSavingEdit(true);
       const vendorId = editingVendor.id;
       await api.patch(`/vendors/${vendorId}`, {
         businessName: editForm.name,
         name: editForm.name,
-        ownerName: editForm.ownerName,
-        phone: editForm.phone,
-        email: editForm.email,
+        ownerName: cleanOwnerName,
+        phone: cleanPhone,
+        email: cleanEmail,
         storeType: editForm.storeType,
         category: editForm.storeType,
         gst: editForm.businessGst,
@@ -1429,7 +1454,7 @@ export const VendorsList: React.FC = () => {
                 <input
                   type="text"
                   value={editForm.ownerName}
-                  onChange={(e) => setEditForm(prev => ({ ...prev, ownerName: e.target.value }))}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, ownerName: formatName(e.target.value) }))}
                   placeholder="Owner Name"
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800 bg-white focus:ring-1 focus:ring-[#864f19] focus:outline-none"
                 />
@@ -1439,8 +1464,10 @@ export const VendorsList: React.FC = () => {
                 <label className="block text-[11px] font-bold text-slate-700 mb-1">Phone Number *</label>
                 <input
                   type="tel"
+                  maxLength={10}
+                  inputMode="numeric"
                   value={editForm.phone}
-                  onChange={(e) => setEditForm(prev => ({ ...prev, phone: e.target.value }))}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, phone: sanitizeIndianMobile(e.target.value) }))}
                   placeholder="10-digit Phone"
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800 bg-white focus:ring-1 focus:ring-[#864f19] focus:outline-none"
                 />
@@ -1451,7 +1478,7 @@ export const VendorsList: React.FC = () => {
                 <input
                   type="email"
                   value={editForm.email}
-                  onChange={(e) => setEditForm(prev => ({ ...prev, email: e.target.value }))}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, email: e.target.value.toLowerCase().trim() }))}
                   placeholder="vendor@example.com"
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800 bg-white focus:ring-1 focus:ring-[#864f19] focus:outline-none"
                 />

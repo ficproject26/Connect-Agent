@@ -9,6 +9,7 @@ import {
   AlertTriangle, ArrowLeft, Laptop, Shield, RefreshCw
 } from 'lucide-react';
 import api from '../../utils/api';
+import { validatePassword, isValidPassword } from '../../utils/formValidation';
 
 export const SecuritySettings: React.FC = () => {
   const navigate = useNavigate();
@@ -26,14 +27,14 @@ export const SecuritySettings: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState('');
 
   // Password validation checks
-  const hasMinLength = newPassword.length >= 8;
+  const pwdValidation = validatePassword(newPassword);
+  const hasMinLength = newPassword.length >= 6;
   const hasUpper = /[A-Z]/.test(newPassword);
-  const hasLower = /[a-z]/.test(newPassword);
   const hasNumber = /[0-9]/.test(newPassword);
-  const hasSpecial = /[^A-Za-z0-9]/.test(newPassword);
+  const hasSpecial = /[^A-Za-z0-9\s]/.test(newPassword);
   const passwordsMatch = Boolean(newPassword && newPassword === confirmPassword);
 
-  const isFormValid = hasMinLength && hasUpper && hasLower && hasNumber && passwordsMatch && currentPassword;
+  const isFormValid = pwdValidation.valid && passwordsMatch && currentPassword;
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,8 +46,8 @@ export const SecuritySettings: React.FC = () => {
       return;
     }
 
-    if (!hasMinLength || !hasUpper || !hasLower || !hasNumber) {
-      setErrorMessage('New password does not meet security requirements.');
+    if (!pwdValidation.valid) {
+      setErrorMessage(pwdValidation.errors[0]);
       return;
     }
 
@@ -286,19 +287,19 @@ export const SecuritySettings: React.FC = () => {
                 <div className="grid grid-cols-2 gap-2 text-slate-600">
                   <span className={`flex items-center gap-1.5 ${hasMinLength ? 'text-emerald-700 font-bold' : ''}`}>
                     <CheckCircle2 className={`w-3.5 h-3.5 ${hasMinLength ? 'text-emerald-600' : 'text-slate-300'}`} />
-                    At least 8 characters
+                    At least 6 characters
                   </span>
                   <span className={`flex items-center gap-1.5 ${hasUpper ? 'text-emerald-700 font-bold' : ''}`}>
                     <CheckCircle2 className={`w-3.5 h-3.5 ${hasUpper ? 'text-emerald-600' : 'text-slate-300'}`} />
                     Uppercase letter (A-Z)
                   </span>
-                  <span className={`flex items-center gap-1.5 ${hasLower ? 'text-emerald-700 font-bold' : ''}`}>
-                    <CheckCircle2 className={`w-3.5 h-3.5 ${hasLower ? 'text-emerald-600' : 'text-slate-300'}`} />
-                    Lowercase letter (a-z)
-                  </span>
                   <span className={`flex items-center gap-1.5 ${hasNumber ? 'text-emerald-700 font-bold' : ''}`}>
                     <CheckCircle2 className={`w-3.5 h-3.5 ${hasNumber ? 'text-emerald-600' : 'text-slate-300'}`} />
-                    Number (0-9)
+                    Numeric digit (0-9)
+                  </span>
+                  <span className={`flex items-center gap-1.5 ${hasSpecial ? 'text-emerald-700 font-bold' : ''}`}>
+                    <CheckCircle2 className={`w-3.5 h-3.5 ${hasSpecial ? 'text-emerald-600' : 'text-slate-300'}`} />
+                    Special character (e.g. @#$%)
                   </span>
                   <span className={`flex items-center gap-1.5 col-span-2 ${passwordsMatch ? 'text-emerald-700 font-bold' : ''}`}>
                     <CheckCircle2 className={`w-3.5 h-3.5 ${passwordsMatch ? 'text-emerald-600' : 'text-slate-300'}`} />

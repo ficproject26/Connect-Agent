@@ -11,6 +11,13 @@ import {
   validateGeographicConsistency,
   validateVendorFieldFormats
 } from '../utils/territoryValidation';
+import {
+  formatName,
+  formatPan,
+  formatIfsc,
+  normalizeEmail,
+  sanitizeIndianMobile
+} from '../utils/formValidation';
 import { publishEntityEvent } from '../realtime/eventBus';
 
 const createVendorSchema = z.object({
@@ -268,17 +275,26 @@ export const createVendor = async (req: Request, res: Response) => {
 
     const data = createVendorSchema.parse(req.body);
     if (data.email) {
-      data.email = data.email.toLowerCase().trim();
+      data.email = normalizeEmail(data.email);
+    }
+    if ((data as any).ownerName) {
+      (data as any).ownerName = formatName((data as any).ownerName);
+    }
+    if (data.phone) {
+      data.phone = sanitizeIndianMobile(data.phone);
     }
 
     // 1. Strict field format validation
     const fieldValidation = validateVendorFieldFormats({
+      ownerName: (data as any).ownerName || (data as any).contactPerson || req.body.ownerName || req.body.contactPerson,
       phone: data.phone,
       email: data.email,
-      panNumber: (data as any).panNumber || (data as any).pan,
-      aadhaarNumber: (data as any).aadhaarNumber || (data as any).aadhaar,
+      panNumber: (data as any).panNumber || (data as any).pan || req.body.panNumber || req.body.pan,
+      aadhaarNumber: (data as any).aadhaarNumber || (data as any).aadhaar || req.body.aadhaarNumber || req.body.aadhaar,
       pincode: data.pincode,
-      accountNumber: (data as any).accountNumber || (data as any).bankDetails?.accountNumber || req.body.accountNumber || req.body.bankDetails?.accountNumber
+      accountNumber: (data as any).accountNumber || (data as any).bankDetails?.accountNumber || req.body.accountNumber || req.body.bankDetails?.accountNumber,
+      bankName: (data as any).bankName || (data as any).bankDetails?.bankName || req.body.bankName || req.body.bankDetails?.bankName,
+      ifscCode: (data as any).ifscCode || (data as any).bankDetails?.ifscCode || req.body.ifscCode || req.body.bankDetails?.ifscCode
     });
     if (!fieldValidation.valid) {
       return res.status(400).json({ message: fieldValidation.error });
@@ -634,12 +650,30 @@ export const updateVendor = async (req: Request, res: Response) => {
       });
     }
 
-    const rawBankAcc = (data as any).accountNumber || (data as any).bankDetails?.accountNumber || req.body.accountNumber || req.body.bankDetails?.accountNumber;
-    if (rawBankAcc) {
-      const cleanAcc = String(rawBankAcc).trim();
-      if (!/^\d{8,20}$/.test(cleanAcc)) {
-        return res.status(400).json({ message: 'Account number must contain 8–20 digits.' });
-      }
+    // Field format validation
+    const fieldValidation = validateVendorFieldFormats({
+      ownerName: (data as any).ownerName || (data as any).name || (data as any).contactPerson || req.body.ownerName || req.body.name || req.body.contactPerson,
+      phone: data.phone,
+      email: data.email,
+      panNumber: (data as any).panNumber || (data as any).pan || (data as any).businessGst || req.body.panNumber || req.body.pan,
+      aadhaarNumber: (data as any).aadhaarNumber || (data as any).aadhaar || req.body.aadhaarNumber || req.body.aadhaar,
+      pincode: data.pincode,
+      accountNumber: (data as any).accountNumber || (data as any).bankDetails?.accountNumber || req.body.accountNumber || req.body.bankDetails?.accountNumber,
+      bankName: (data as any).bankName || (data as any).bankDetails?.bankName || req.body.bankName || req.body.bankDetails?.bankName,
+      ifscCode: (data as any).ifscCode || (data as any).bankDetails?.ifscCode || req.body.ifscCode || req.body.bankDetails?.ifscCode
+    });
+    if (!fieldValidation.valid) {
+      return res.status(400).json({ message: fieldValidation.error });
+    }
+
+    if (data.email) {
+      data.email = normalizeEmail(data.email);
+    }
+    if ((data as any).ownerName) {
+      (data as any).ownerName = formatName((data as any).ownerName);
+    }
+    if (data.phone) {
+      data.phone = sanitizeIndianMobile(data.phone);
     }
 
     const updateFields: any = { ...data, updatedAt: new Date() };

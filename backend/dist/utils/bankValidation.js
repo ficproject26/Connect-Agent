@@ -1,19 +1,19 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sanitizeAccountNumber = exports.isValidAccountNumber = exports.BANK_ACCOUNT_ERROR_MESSAGE = exports.BANK_ACCOUNT_REGEX = void 0;
+exports.isValidAccountNumber = exports.BANK_ACCOUNT_ERROR_MESSAGE = exports.BANK_ACCOUNT_REGEX = exports.maskAccountNumber = exports.sanitizeAccountNumber = exports.validateBankAccount = exports.getBankRule = exports.BANK_SPECIFIC_RULES = void 0;
+var formValidation_1 = require("./formValidation");
+Object.defineProperty(exports, "BANK_SPECIFIC_RULES", { enumerable: true, get: function () { return formValidation_1.BANK_SPECIFIC_RULES; } });
+Object.defineProperty(exports, "getBankRule", { enumerable: true, get: function () { return formValidation_1.getBankRule; } });
+Object.defineProperty(exports, "validateBankAccount", { enumerable: true, get: function () { return formValidation_1.validateBankAccount; } });
+Object.defineProperty(exports, "sanitizeAccountNumber", { enumerable: true, get: function () { return formValidation_1.sanitizeAccountNumber; } });
+Object.defineProperty(exports, "maskAccountNumber", { enumerable: true, get: function () { return formValidation_1.maskAccountNumber; } });
+const formValidation_2 = require("./formValidation");
 exports.BANK_ACCOUNT_REGEX = /^\d{8,20}$/;
-exports.BANK_ACCOUNT_ERROR_MESSAGE = 'Account number must contain 8–20 digits.';
-const isValidAccountNumber = (acc) => {
+exports.BANK_ACCOUNT_ERROR_MESSAGE = 'Account number must contain 8–20 numeric digits.';
+const isValidAccountNumber = (acc, bankName) => {
     if (!acc)
         return false;
-    const clean = String(acc).trim();
-    return exports.BANK_ACCOUNT_REGEX.test(clean);
+    return (0, formValidation_2.validateBankAccount)(acc, bankName).valid;
 };
 exports.isValidAccountNumber = isValidAccountNumber;
-const sanitizeAccountNumber = (value) => {
-    if (!value)
-        return '';
-    return String(value).replace(/\D/g, '').slice(0, 20);
-};
-exports.sanitizeAccountNumber = sanitizeAccountNumber;
 //# sourceMappingURL=bankValidation.js.map

@@ -1,3 +1,21 @@
+import {
+  formatName,
+  isValidName,
+  isValidEmail,
+  normalizeEmail,
+  sanitizeIndianMobile,
+  isValidIndianMobile,
+  validatePassword,
+  isValidPassword,
+  formatPan,
+  isValidPan,
+  sanitizeAadhaar,
+  isValidAadhaar,
+  validateBankAccount,
+  sanitizeAccountNumber,
+  isValidIfsc,
+  formatIfsc
+} from '../../utils/formValidation';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Modal, Button, Input, Select } from '../../components/ui';
 import {
@@ -426,9 +444,10 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
 
   // Password Checklist validation
   const passwordCriteria = {
-    length: formData.password.length >= 8,
+    length: formData.password.length >= 6,
     uppercase: /[A-Z]/.test(formData.password),
     number: /[0-9]/.test(formData.password),
+    special: /[^A-Za-z0-9\s]/.test(formData.password),
     match: formData.password !== '' && formData.password === formData.confirmPassword
   };
 
@@ -437,15 +456,13 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
     if (!formData.businessName.trim()) return 'Business / Shop Name is required.';
     
     // Mobile validation: exactly 10 digits, starts with 6, 7, 8, 9
-    const cleanPhone = formData.phone.replace(/\D/g, '');
-    if (!cleanPhone || cleanPhone.length !== 10 || !/^[6-9]\d{9}$/.test(cleanPhone)) {
+    // Mobile validation: exactly 10 digits starting with 6, 7, 8, 9
+    if (!isValidIndianMobile(formData.phone)) {
       return 'Business Phone Number must be a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.';
     }
 
-    // Email validation: standard email format, no spaces
-    const cleanEmail = formData.email.trim();
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    if (!cleanEmail || cleanEmail.includes(' ') || !emailRegex.test(cleanEmail)) {
+    // Email validation
+    if (!isValidEmail(formData.email)) {
       return 'Valid Email Address is required (e.g. name@example.com). Spaces and invalid formats are not allowed.';
     }
     
@@ -475,25 +492,24 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
   };
 
   const validateStep2 = (): string => {
-    if (!formData.ownerName.trim()) return 'Owner / Contact Person Name is required.';
+    if (!formData.ownerName.trim() || !isValidName(formData.ownerName.trim())) {
+      return 'Owner / Contact Person Name contains invalid characters or does not meet length requirements.';
+    }
     
     // Owner Phone: exactly 10 digits, starts with 6, 7, 8, 9
-    const cleanPhone = formData.phone.replace(/\D/g, '');
-    if (!cleanPhone || cleanPhone.length !== 10 || !/^[6-9]\d{9}$/.test(cleanPhone)) {
+    if (!isValidIndianMobile(formData.phone)) {
       return 'Owner Phone Number must be a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.';
     }
 
     // Alternate Phone (optional, but if provided must be 10 digits starting with 6-9)
-    if (formData.alternatePhone) {
-      const altClean = formData.alternatePhone.replace(/\D/g, '');
-      if (altClean.length !== 10 || !/^[6-9]\d{9}$/.test(altClean)) {
-        return 'Alternate Phone Number must be a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.';
-      }
+    if (formData.alternatePhone && !isValidIndianMobile(formData.alternatePhone)) {
+      return 'Alternate Phone Number must be a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.';
     }
 
     if (!formData.password) return 'Account Password is required.';
-    if (!passwordCriteria.length || !passwordCriteria.uppercase || !passwordCriteria.number) {
-      return 'Password does not meet required criteria (min 8 chars, 1 uppercase, 1 number).';
+    const pwdValidation = validatePassword(formData.password);
+    if (!pwdValidation.valid) {
+      return pwdValidation.errors[0];
     }
     if (!passwordCriteria.match) return 'Passwords do not match.';
     return '';
@@ -535,14 +551,18 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
   };
 
   const validateStep4 = (): string => {
-    if (!formData.accountHolderName.trim()) return 'Account Holder Name is required.';
+    if (!formData.accountHolderName.trim() || !isValidName(formData.accountHolderName.trim())) {
+      return 'Valid Account Holder Name is required.';
+    }
     if (!formData.branch.trim()) return 'Bank Branch Name is required.';
     if (!formData.bankCity.trim()) return 'Bank City is required.';
-    if (!formData.accountNumber || !/^\d{8,20}$/.test(formData.accountNumber.trim())) {
-      return 'Account number must contain 8–20 digits.';
+    
+    const accValidation = validateBankAccount(formData.accountNumber, formData.bankName);
+    if (!accValidation.valid) {
+      return accValidation.error || 'Account number must contain 8–20 digits.';
     }
-    const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
-    if (!formData.ifscCode || !ifscRegex.test(formData.ifscCode.toUpperCase())) {
+
+    if (!isValidIfsc(formData.ifscCode)) {
       return 'Valid 11-character IFSC Code (e.g. SBIN0004821) is required.';
     }
     return '';
@@ -1039,7 +1059,7 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                   label="Owner / Contact Person Name *"
                   placeholder="e.g. Ramesh Kumar"
                   value={formData.ownerName}
-                  onChange={(e) => setFormData({ ...formData, ownerName: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, ownerName: formatName(e.target.value) })}
                   required
                 />
                 <Input
@@ -1252,7 +1272,7 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                   label="Account Number (8 to 20 Digits) *"
                   placeholder="Enter 8-20 digit bank account number"
                   value={formData.accountNumber}
-                  onChange={(e) => setFormData({ ...formData, accountNumber: e.target.value.replace(/\D/g, '').slice(0, 20) })}
+                  onChange={(e) => setFormData({ ...formData, accountNumber: sanitizeAccountNumber(e.target.value) })}
                   maxLength={20}
                   inputMode="numeric"
                   required
@@ -1317,7 +1337,7 @@ export const OnboardVendorWizardModal: React.FC<OnboardVendorWizardModalProps> =
                   label="Account Holder Name *"
                   placeholder="e.g. Ramesh Kumar / Business Name"
                   value={formData.accountHolderName}
-                  onChange={(e) => setFormData({ ...formData, accountHolderName: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, accountHolderName: formatName(e.target.value) })}
                   required
                 />
               </div>

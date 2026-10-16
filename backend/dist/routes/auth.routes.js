@@ -30,7 +30,10 @@ router.get('/profile', auth_middleware_1.authMiddleware, auth_controller_1.getMe
 router.put('/profile', auth_middleware_1.authMiddleware, (0, validate_middleware_1.validate)(auth_schema_1.updateProfileSchema), auth_controller_1.updateProfile);
 router.patch('/profile', auth_middleware_1.authMiddleware, (0, validate_middleware_1.validate)(auth_schema_1.updateProfileSchema), auth_controller_1.updateProfile);
 router.patch('/kyc', auth_middleware_1.authMiddleware, auth_controller_1.updateKyc);
-// Password reset routes
+// Password reset and change routes
+router.post('/change-password', auth_middleware_1.authMiddleware, auth_controller_1.changePassword);
+router.post('/auth/change-password', auth_middleware_1.authMiddleware, auth_controller_1.changePassword);
+router.post('/api/auth/change-password', auth_middleware_1.authMiddleware, auth_controller_1.changePassword);
 router.post('/forgot-password', auth_controller_1.forgotPassword);
 router.post('/verify-otp', auth_controller_1.verifyOtp);
 router.post('/reset-password', auth_controller_1.resetPassword);

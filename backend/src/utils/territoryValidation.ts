@@ -158,21 +158,44 @@ export async function validateGeographicConsistency(vendor: {
   }
 }
 
+import {
+  isValidName,
+  isValidEmail,
+  isValidIndianMobile,
+  isValidPan,
+  formatPan,
+  isValidAadhaar,
+  validateBankAccount,
+  isValidIfsc,
+  formatIfsc
+} from './formValidation';
+
 /**
- * Validate input fields (Phone, Email, PAN, Aadhaar, Pincode).
+ * Validate input fields (Name, Phone, Email, PAN, Aadhaar, Pincode, Bank Account, IFSC).
  */
 export function validateVendorFieldFormats(data: {
+  name?: string;
+  ownerName?: string;
   phone?: string;
   email?: string;
   panNumber?: string;
   aadhaarNumber?: string;
   pincode?: string;
   accountNumber?: string;
+  bankName?: string;
+  ifscCode?: string;
 }): { valid: boolean; error?: string } {
+  // Name validation
+  if (data.ownerName && !isValidName(data.ownerName)) {
+    return {
+      valid: false,
+      error: 'Owner / Contact person name contains invalid characters or does not meet length requirements.'
+    };
+  }
+
   // Mobile: Exactly 10 digits, starts with 6, 7, 8, 9
   if (data.phone) {
-    const cleanPhone = data.phone.replace(/\D/g, '');
-    if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+    if (!isValidIndianMobile(data.phone)) {
       return {
         valid: false,
         error: 'Mobile number must be exactly 10 numeric digits starting with 6, 7, 8, or 9.'
@@ -182,19 +205,18 @@ export function validateVendorFieldFormats(data: {
 
   // Email: Standard email format
   if (data.email) {
-    const cleanEmail = data.email.trim();
-    if (cleanEmail.includes(' ') || !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(cleanEmail)) {
+    if (!isValidEmail(data.email)) {
       return {
         valid: false,
-        error: 'Please enter a valid email address (e.g. merchant@example.com). Spaces are not allowed.'
+        error: 'Please enter a valid email address (e.g. merchant@example.com). Spaces and invalid formats are not allowed.'
       };
     }
   }
 
   // PAN: 5 uppercase letters, 4 digits, 1 uppercase letter
   if (data.panNumber) {
-    const pan = data.panNumber.trim().toUpperCase();
-    if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(pan)) {
+    const pan = formatPan(data.panNumber);
+    if (!isValidPan(pan)) {
       return {
         valid: false,
         error: 'PAN number must be exactly 10 characters in the format 5 letters, 4 digits, 1 letter (e.g. ABCDE1234F).'
@@ -204,8 +226,7 @@ export function validateVendorFieldFormats(data: {
 
   // Aadhaar: Exactly 12 digits
   if (data.aadhaarNumber) {
-    const aadhaar = data.aadhaarNumber.replace(/\D/g, '');
-    if (!/^\d{12}$/.test(aadhaar)) {
+    if (!isValidAadhaar(data.aadhaarNumber)) {
       return {
         valid: false,
         error: 'Aadhaar number must be exactly 12 numeric digits.'
@@ -224,13 +245,24 @@ export function validateVendorFieldFormats(data: {
     }
   }
 
-  // Bank Account Number: 8 to 20 numeric digits only
-  if ((data as any).accountNumber) {
-    const acc = String((data as any).accountNumber).trim();
-    if (!/^\d{8,20}$/.test(acc)) {
+  // Bank Account Number
+  if (data.accountNumber) {
+    const accValidation = validateBankAccount(data.accountNumber, data.bankName);
+    if (!accValidation.valid) {
       return {
         valid: false,
-        error: 'Account number must contain 8–20 digits.'
+        error: accValidation.error || 'Account number must contain 8–20 digits.'
+      };
+    }
+  }
+
+  // IFSC Code
+  if (data.ifscCode) {
+    const ifsc = formatIfsc(data.ifscCode);
+    if (!isValidIfsc(ifsc)) {
+      return {
+        valid: false,
+        error: 'IFSC code must be exactly 11 characters starting with 4 letters, followed by 0, and 6 alphanumeric characters (e.g. SBIN0001234).'
       };
     }
   }

@@ -4,6 +4,14 @@ import { Wallet, ArrowUpRight, ArrowDownLeft, Clock, CheckCircle2, XCircle, Send
 import { useAuth } from '../../context/AuthContext';
 import api from '../../utils/api';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  validateBankAccount,
+  sanitizeAccountNumber,
+  isValidIfsc,
+  formatIfsc,
+  formatName,
+  isValidName
+} from '../../utils/formValidation';
 
 interface Transaction {
   transactionId: string;
@@ -217,22 +225,22 @@ export const WalletDashboard: React.FC = () => {
       return;
     }
 
-    const cleanAccNo = editBankForm.accountNumber.trim();
-    if (!/^\d{8,20}$/.test(cleanAccNo)) {
-      setBankFormError('Account number must contain 8–20 digits.');
+    const accValidation = validateBankAccount(editBankForm.accountNumber, cleanBankName);
+    if (!accValidation.valid) {
+      setBankFormError(accValidation.error || 'Account number must contain 8–20 digits.');
       return;
     }
+    const cleanAccNo = sanitizeAccountNumber(editBankForm.accountNumber);
 
-    const cleanIfsc = editBankForm.ifscCode.toUpperCase().trim();
-    const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
-    if (!ifscRegex.test(cleanIfsc)) {
+    const cleanIfsc = formatIfsc(editBankForm.ifscCode);
+    if (!isValidIfsc(cleanIfsc)) {
       setBankFormError('Invalid IFSC format. Must be 4 uppercase letters, followed by 0, and 6 alphanumeric characters (e.g. SBIN0001428).');
       return;
     }
 
-    const cleanHolder = editBankForm.holderName.trim();
-    if (!cleanHolder) {
-      setBankFormError('Account holder name is required.');
+    const cleanHolder = formatName(editBankForm.holderName.trim());
+    if (!cleanHolder || !isValidName(cleanHolder)) {
+      setBankFormError('Please enter a valid Account Holder Name.');
       return;
     }
 
@@ -645,13 +653,13 @@ export const WalletDashboard: React.FC = () => {
                 maxLength={20}
                 value={editBankForm.accountNumber}
                 onChange={(e) => {
-                  const val = e.target.value.replace(/\D/g, '').slice(0, 20);
+                  const val = sanitizeAccountNumber(e.target.value);
                   setEditBankForm({ ...editBankForm, accountNumber: val });
                   setBankFormError('');
                 }}
                 className="mb-0 animate-none"
               />
-              <p className="text-[10px] text-slate-400 mt-1 font-medium">Account number must contain 8–20 digits</p>
+              <p className="text-[10px] text-slate-400 mt-1 font-medium">Numeric digits only (8–20 digits according to bank rule)</p>
             </div>
             
             <div>
@@ -662,7 +670,7 @@ export const WalletDashboard: React.FC = () => {
                 maxLength={11}
                 value={editBankForm.ifscCode}
                 onChange={(e) => {
-                  setEditBankForm({ ...editBankForm, ifscCode: e.target.value.toUpperCase().slice(0, 11) });
+                  setEditBankForm({ ...editBankForm, ifscCode: formatIfsc(e.target.value) });
                   setBankFormError('');
                 }}
                 className="mb-0 animate-none uppercase"
@@ -677,7 +685,7 @@ export const WalletDashboard: React.FC = () => {
                 placeholder="Holder Name"
                 value={editBankForm.holderName}
                 onChange={(e) => {
-                  setEditBankForm({ ...editBankForm, holderName: e.target.value });
+                  setEditBankForm({ ...editBankForm, holderName: formatName(e.target.value) });
                   setBankFormError('');
                 }}
                 className="mb-0 animate-none"

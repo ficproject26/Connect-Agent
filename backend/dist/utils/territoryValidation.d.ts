@@ -26,15 +26,19 @@ export declare function validateGeographicConsistency(vendor: {
     canonicalData?: any;
 }>;
 /**
- * Validate input fields (Phone, Email, PAN, Aadhaar, Pincode).
+ * Validate input fields (Name, Phone, Email, PAN, Aadhaar, Pincode, Bank Account, IFSC).
  */
 export declare function validateVendorFieldFormats(data: {
+    name?: string;
+    ownerName?: string;
     phone?: string;
     email?: string;
     panNumber?: string;
     aadhaarNumber?: string;
     pincode?: string;
     accountNumber?: string;
+    bankName?: string;
+    ifscCode?: string;
 }): {
     valid: boolean;
     error?: string;

@@ -3,6 +3,13 @@ import mongoose from 'mongoose';
 import Wallet from '../models/Wallet';
 import Agent from '../models/Agent';
 import { publishEntityEvent } from '../realtime/eventBus';
+import {
+  validateBankAccount,
+  isValidIfsc,
+  formatIfsc,
+  formatName,
+  isValidName
+} from '../utils/formValidation';
 
 // Helper to generate a transaction ID
 const generateTxId = () => `TXN-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
@@ -161,24 +168,29 @@ export const updateBankDetails = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Account number and IFSC code are required' });
     }
 
-    const cleanAccNo = String(accountNumber).trim();
-    if (!/^\d{8,20}$/.test(cleanAccNo)) {
-      return res.status(400).json({ message: 'Account number must contain 8–20 digits.' });
+    const accValidation = validateBankAccount(accountNumber, bankName);
+    if (!accValidation.valid) {
+      return res.status(400).json({ message: accValidation.error || 'Account number must contain 8–20 digits.' });
     }
 
-    const cleanIfsc = String(ifscCode).toUpperCase().trim();
-    const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
-    if (!ifscRegex.test(cleanIfsc)) {
+    const cleanIfsc = formatIfsc(ifscCode);
+    if (!isValidIfsc(cleanIfsc)) {
       return res.status(400).json({
         message: 'Invalid IFSC code format. Indian IFSC must be 4 uppercase letters, followed by 0, and 6 alphanumeric characters (e.g., SBIN0001428).'
       });
     }
 
+    const rawHolder = (holderName || accountHolder || '').trim();
+    if (rawHolder && !isValidName(rawHolder)) {
+      return res.status(400).json({ message: 'Account holder name contains invalid characters.' });
+    }
+    const cleanHolder = rawHolder ? formatName(rawHolder) : '';
+
     const updatedBank = {
       bankName: (bankName || 'State Bank of India').trim(),
-      accountNumber: cleanAccNo,
+      accountNumber: String(accountNumber).replace(/\D/g, '').trim(),
       ifscCode: cleanIfsc,
-      accountHolder: (holderName || accountHolder || '').trim()
+      accountHolder: cleanHolder
     };
 
     let updatedAgent: any = null;

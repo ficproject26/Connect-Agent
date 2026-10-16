@@ -12,6 +12,7 @@ const Agent_1 = __importDefault(require("../models/Agent"));
 const territoryScope_1 = require("../utils/territoryScope");
 const cache_service_1 = require("../services/cache.service");
 const territoryValidation_1 = require("../utils/territoryValidation");
+const formValidation_1 = require("../utils/formValidation");
 const eventBus_1 = require("../realtime/eventBus");
 const createVendorSchema = zod_1.z.object({
     businessName: zod_1.z.string().optional(),
@@ -267,16 +268,25 @@ const createVendor = async (req, res) => {
             return res.status(401).json({ message: 'Unauthorized' });
         const data = createVendorSchema.parse(req.body);
         if (data.email) {
-            data.email = data.email.toLowerCase().trim();
+            data.email = (0, formValidation_1.normalizeEmail)(data.email);
+        }
+        if (data.ownerName) {
+            data.ownerName = (0, formValidation_1.formatName)(data.ownerName);
+        }
+        if (data.phone) {
+            data.phone = (0, formValidation_1.sanitizeIndianMobile)(data.phone);
         }
         // 1. Strict field format validation
         const fieldValidation = (0, territoryValidation_1.validateVendorFieldFormats)({
+            ownerName: data.ownerName || data.contactPerson || req.body.ownerName || req.body.contactPerson,
             phone: data.phone,
             email: data.email,
-            panNumber: data.panNumber || data.pan,
-            aadhaarNumber: data.aadhaarNumber || data.aadhaar,
+            panNumber: data.panNumber || data.pan || req.body.panNumber || req.body.pan,
+            aadhaarNumber: data.aadhaarNumber || data.aadhaar || req.body.aadhaarNumber || req.body.aadhaar,
             pincode: data.pincode,
-            accountNumber: data.accountNumber || data.bankDetails?.accountNumber || req.body.accountNumber || req.body.bankDetails?.accountNumber
+            accountNumber: data.accountNumber || data.bankDetails?.accountNumber || req.body.accountNumber || req.body.bankDetails?.accountNumber,
+            bankName: data.bankName || data.bankDetails?.bankName || req.body.bankName || req.body.bankDetails?.bankName,
+            ifscCode: data.ifscCode || data.bankDetails?.ifscCode || req.body.ifscCode || req.body.bankDetails?.ifscCode
         });
         if (!fieldValidation.valid) {
             return res.status(400).json({ message: fieldValidation.error });
@@ -608,12 +618,29 @@ const updateVendor = async (req, res) => {
                 message: 'Modifications locked: Cannot edit vendor details once KYC status is Approved.'
             });
         }
-        const rawBankAcc = data.accountNumber || data.bankDetails?.accountNumber || req.body.accountNumber || req.body.bankDetails?.accountNumber;
-        if (rawBankAcc) {
-            const cleanAcc = String(rawBankAcc).trim();
-            if (!/^\d{8,20}$/.test(cleanAcc)) {
-                return res.status(400).json({ message: 'Account number must contain 8–20 digits.' });
-            }
+        // Field format validation
+        const fieldValidation = (0, territoryValidation_1.validateVendorFieldFormats)({
+            ownerName: data.ownerName || data.name || data.contactPerson || req.body.ownerName || req.body.name || req.body.contactPerson,
+            phone: data.phone,
+            email: data.email,
+            panNumber: data.panNumber || data.pan || data.businessGst || req.body.panNumber || req.body.pan,
+            aadhaarNumber: data.aadhaarNumber || data.aadhaar || req.body.aadhaarNumber || req.body.aadhaar,
+            pincode: data.pincode,
+            accountNumber: data.accountNumber || data.bankDetails?.accountNumber || req.body.accountNumber || req.body.bankDetails?.accountNumber,
+            bankName: data.bankName || data.bankDetails?.bankName || req.body.bankName || req.body.bankDetails?.bankName,
+            ifscCode: data.ifscCode || data.bankDetails?.ifscCode || req.body.ifscCode || req.body.bankDetails?.ifscCode
+        });
+        if (!fieldValidation.valid) {
+            return res.status(400).json({ message: fieldValidation.error });
+        }
+        if (data.email) {
+            data.email = (0, formValidation_1.normalizeEmail)(data.email);
+        }
+        if (data.ownerName) {
+            data.ownerName = (0, formValidation_1.formatName)(data.ownerName);
+        }
+        if (data.phone) {
+            data.phone = (0, formValidation_1.sanitizeIndianMobile)(data.phone);
         }
         const updateFields = { ...data, updatedAt: new Date() };
         // Prevent privilege escalation or unauthorized status bypass via updateVendor

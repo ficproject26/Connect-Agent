@@ -12,6 +12,14 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { formatRegistrationDate } from '../../utils/date';
 import api from '../../utils/api';
+import {
+  formatName,
+  isValidName,
+  isValidEmail,
+  normalizeEmail,
+  sanitizeIndianMobile,
+  isValidIndianMobile
+} from '../../utils/formValidation';
 
 const getVehicleLabel = (type: string) => {
   switch (type) {
@@ -111,24 +119,30 @@ export const ProfileModule: React.FC = () => {
     setProfileSaveSuccess('');
 
     try {
-      const cleanName = name.trim();
-      const cleanEmail = email.toLowerCase().trim();
-      const cleanPhone = mobile.trim();
+      const cleanName = formatName(name.trim());
+      const cleanEmail = normalizeEmail(email);
+      const cleanPhone = sanitizeIndianMobile(mobile);
+      const cleanAlt = altMobile ? sanitizeIndianMobile(altMobile) : '';
 
-      if (!cleanName) {
-        setProfileSaveError('Full Name is required.');
+      if (!isValidName(cleanName)) {
+        setProfileSaveError('Please enter a valid Full Name (2-100 characters).');
         setIsSubmitting(false);
         return;
       }
 
-      if (!cleanPhone || cleanPhone.length < 10) {
-        setProfileSaveError('Please enter a valid 10-digit primary mobile number.');
+      if (!isValidEmail(cleanEmail)) {
+        setProfileSaveError('Please enter a valid email address.');
         setIsSubmitting(false);
         return;
       }
 
-      const cleanAlt = altMobile.trim();
-      if (cleanAlt && !/^[6-9]\d{9}$/.test(cleanAlt)) {
+      if (!isValidIndianMobile(cleanPhone)) {
+        setProfileSaveError('Please enter a valid 10-digit primary mobile number starting with 6, 7, 8, or 9.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (cleanAlt && !isValidIndianMobile(cleanAlt)) {
         setProfileSaveError('Alternate Mobile must be a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.');
         setIsSubmitting(false);
         return;
@@ -299,7 +313,7 @@ export const ProfileModule: React.FC = () => {
               
               <CardBody className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Input label="Full Name" value={name} onChange={(e) => setName(e.target.value)} />
+                  <Input label="Full Name" value={name} onChange={(e) => setName(formatName(e.target.value))} />
                   <Input label="Email Address" type="email" value={email} onChange={(e) => setEmail(e.target.value.toLowerCase().trim())} />
                 </div>
 
@@ -307,8 +321,9 @@ export const ProfileModule: React.FC = () => {
                   <Input
                     label="Primary Mobile"
                     maxLength={10}
+                    inputMode="numeric"
                     value={mobile}
-                    onChange={(e) => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    onChange={(e) => setMobile(sanitizeIndianMobile(e.target.value))}
                   />
                   <Input
                     label="Alternate Mobile"
@@ -316,7 +331,7 @@ export const ProfileModule: React.FC = () => {
                     inputMode="numeric"
                     placeholder="Enter 10-digit alternate mobile"
                     value={altMobile}
-                    onChange={(e) => setAltMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    onChange={(e) => setAltMobile(sanitizeIndianMobile(e.target.value))}
                   />
                 </div>
 

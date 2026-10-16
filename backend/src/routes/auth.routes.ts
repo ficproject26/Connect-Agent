@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { register, login, getMe, updateProfile, updateKyc, forgotPassword, verifyOtp, resetPassword, sendOtp, verifyMobileOtp } from '../controllers/auth.controller';
+import { register, login, getMe, updateProfile, updateKyc, forgotPassword, verifyOtp, resetPassword, sendOtp, verifyMobileOtp, changePassword } from '../controllers/auth.controller';
 
 import { authMiddleware } from '../middleware/auth.middleware';
 import { validate } from '../middleware/validate.middleware';
@@ -37,7 +37,10 @@ router.put('/profile', authMiddleware, validate(updateProfileSchema), updateProf
 router.patch('/profile', authMiddleware, validate(updateProfileSchema), updateProfile);
 router.patch('/kyc', authMiddleware, updateKyc);
 
-// Password reset routes
+// Password reset and change routes
+router.post('/change-password', authMiddleware, changePassword);
+router.post('/auth/change-password', authMiddleware, changePassword);
+router.post('/api/auth/change-password', authMiddleware, changePassword);
 router.post('/forgot-password', forgotPassword);
 router.post('/verify-otp', verifyOtp);
 router.post('/reset-password', resetPassword);

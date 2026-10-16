@@ -3,6 +3,7 @@ export declare const register: (req: Request, res: Response) => Promise<Response
 export declare const login: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const getMe: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const updateProfile: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const changePassword: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const updateKyc: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const forgotPassword: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const verifyOtp: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;

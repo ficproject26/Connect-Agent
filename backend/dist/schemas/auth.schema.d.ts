@@ -1,28 +1,46 @@
 import { z } from 'zod';
 export declare const indianMobileRegex: RegExp;
-export declare const phoneSchema: z.ZodEffects<z.ZodEffects<z.ZodEffects<z.ZodString, string, string>, string, string>, string, string>;
-export declare const optionalPhoneSchema: z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>;
+export declare const nameSchema: z.ZodEffects<z.ZodEffects<z.ZodString, string, string>, string, string>;
+export declare const emailSchema: z.ZodEffects<z.ZodEffects<z.ZodString, string, string>, string, string>;
+export declare const phoneSchema: z.ZodEffects<z.ZodEffects<z.ZodString, string, string>, string, string>;
+export declare const optionalPhoneSchema: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
+export declare const passwordSchema: z.ZodEffects<z.ZodString, string, string>;
+export declare const optionalAadhaarSchema: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
+export declare const optionalPanSchema: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
+export declare const dobSchema: z.ZodEffects<z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodDate]>>, string | Date | undefined, string | Date | undefined>;
 export declare const registerSchema: z.ZodObject<{
     body: z.ZodObject<{
-        name: z.ZodString;
-        email: z.ZodString;
-        password: z.ZodString;
-        phone: z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>;
-        phoneNumber: z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>;
+        name: z.ZodEffects<z.ZodEffects<z.ZodString, string, string>, string, string>;
+        email: z.ZodEffects<z.ZodEffects<z.ZodString, string, string>, string, string>;
+        password: z.ZodEffects<z.ZodString, string, string>;
+        phone: z.ZodUnion<[z.ZodEffects<z.ZodEffects<z.ZodString, string, string>, string, string>, z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>]>;
+        phoneNumber: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
+        altPhone: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
+        dob: z.ZodEffects<z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodDate]>>, string | Date | undefined, string | Date | undefined>;
+        aadhaarNumber: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
+        panNumber: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
         role: z.ZodOptional<z.ZodEnum<["state", "district", "division", "pincode", "delivery_partner", "technician", "admin", "state_head", "zonal_head", "district_head", "division_agent", "field_agent"]>>;
     }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
-        name: z.ZodString;
-        email: z.ZodString;
-        password: z.ZodString;
-        phone: z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>;
-        phoneNumber: z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>;
+        name: z.ZodEffects<z.ZodEffects<z.ZodString, string, string>, string, string>;
+        email: z.ZodEffects<z.ZodEffects<z.ZodString, string, string>, string, string>;
+        password: z.ZodEffects<z.ZodString, string, string>;
+        phone: z.ZodUnion<[z.ZodEffects<z.ZodEffects<z.ZodString, string, string>, string, string>, z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>]>;
+        phoneNumber: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
+        altPhone: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
+        dob: z.ZodEffects<z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodDate]>>, string | Date | undefined, string | Date | undefined>;
+        aadhaarNumber: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
+        panNumber: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
         role: z.ZodOptional<z.ZodEnum<["state", "district", "division", "pincode", "delivery_partner", "technician", "admin", "state_head", "zonal_head", "district_head", "division_agent", "field_agent"]>>;
     }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
-        name: z.ZodString;
-        email: z.ZodString;
-        password: z.ZodString;
-        phone: z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>;
-        phoneNumber: z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>;
+        name: z.ZodEffects<z.ZodEffects<z.ZodString, string, string>, string, string>;
+        email: z.ZodEffects<z.ZodEffects<z.ZodString, string, string>, string, string>;
+        password: z.ZodEffects<z.ZodString, string, string>;
+        phone: z.ZodUnion<[z.ZodEffects<z.ZodEffects<z.ZodString, string, string>, string, string>, z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>]>;
+        phoneNumber: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
+        altPhone: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
+        dob: z.ZodEffects<z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodDate]>>, string | Date | undefined, string | Date | undefined>;
+        aadhaarNumber: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
+        panNumber: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
         role: z.ZodOptional<z.ZodEnum<["state", "district", "division", "pincode", "delivery_partner", "technician", "admin", "state_head", "zonal_head", "district_head", "division_agent", "field_agent"]>>;
     }, z.ZodTypeAny, "passthrough">>;
 }, "strip", z.ZodTypeAny, {
@@ -32,6 +50,10 @@ export declare const registerSchema: z.ZodObject<{
         password: string;
         phone?: string | undefined;
         role?: "state" | "district" | "division" | "pincode" | "delivery_partner" | "technician" | "division_agent" | "admin" | "state_head" | "zonal_head" | "district_head" | "field_agent" | undefined;
+        dob?: string | Date | undefined;
+        altPhone?: string | undefined;
+        aadhaarNumber?: string | undefined;
+        panNumber?: string | undefined;
         phoneNumber?: string | undefined;
     } & {
         [k: string]: unknown;
@@ -43,6 +65,10 @@ export declare const registerSchema: z.ZodObject<{
         password: string;
         phone?: string | undefined;
         role?: "state" | "district" | "division" | "pincode" | "delivery_partner" | "technician" | "division_agent" | "admin" | "state_head" | "zonal_head" | "district_head" | "field_agent" | undefined;
+        dob?: string | Date | undefined;
+        altPhone?: string | undefined;
+        aadhaarNumber?: string | undefined;
+        panNumber?: string | undefined;
         phoneNumber?: string | undefined;
     } & {
         [k: string]: unknown;
@@ -50,8 +76,8 @@ export declare const registerSchema: z.ZodObject<{
 }>;
 export declare const loginSchema: z.ZodObject<{
     body: z.ZodObject<{
-        email: z.ZodOptional<z.ZodString>;
-        phone: z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>;
+        email: z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>;
+        phone: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
         password: z.ZodString;
     }, "strip", z.ZodTypeAny, {
         password: string;
@@ -77,25 +103,37 @@ export declare const loginSchema: z.ZodObject<{
 }>;
 export declare const updateProfileSchema: z.ZodObject<{
     body: z.ZodObject<{
-        name: z.ZodOptional<z.ZodString>;
-        phone: z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>;
-        phoneNumber: z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>;
+        name: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
+        email: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
+        phone: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
+        phoneNumber: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
+        mobile: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
+        alternateMobile: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
+        altPhone: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
         address: z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodRecord<z.ZodString, z.ZodAny>]>>;
         assignedTerritory: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodAny>>;
         territory: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodAny>>;
         fullAddress: z.ZodOptional<z.ZodString>;
     }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
-        name: z.ZodOptional<z.ZodString>;
-        phone: z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>;
-        phoneNumber: z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>;
+        name: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
+        email: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
+        phone: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
+        phoneNumber: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
+        mobile: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
+        alternateMobile: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
+        altPhone: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
         address: z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodRecord<z.ZodString, z.ZodAny>]>>;
         assignedTerritory: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodAny>>;
         territory: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodAny>>;
         fullAddress: z.ZodOptional<z.ZodString>;
     }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
-        name: z.ZodOptional<z.ZodString>;
-        phone: z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>;
-        phoneNumber: z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>;
+        name: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
+        email: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
+        phone: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
+        phoneNumber: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
+        mobile: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
+        alternateMobile: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
+        altPhone: z.ZodEffects<z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, string | undefined>, string | undefined, string | undefined>;
         address: z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodRecord<z.ZodString, z.ZodAny>]>>;
         assignedTerritory: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodAny>>;
         territory: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodAny>>;
@@ -104,11 +142,15 @@ export declare const updateProfileSchema: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     body: {
         name?: string | undefined;
+        email?: string | undefined;
         phone?: string | undefined;
         territory?: Record<string, any> | undefined;
         assignedTerritory?: Record<string, any> | undefined;
         address?: string | Record<string, any> | undefined;
         fullAddress?: string | undefined;
+        alternateMobile?: string | undefined;
+        altPhone?: string | undefined;
+        mobile?: string | undefined;
         phoneNumber?: string | undefined;
     } & {
         [k: string]: unknown;
@@ -116,11 +158,15 @@ export declare const updateProfileSchema: z.ZodObject<{
 }, {
     body: {
         name?: string | undefined;
+        email?: string | undefined;
         phone?: string | undefined;
         territory?: Record<string, any> | undefined;
         assignedTerritory?: Record<string, any> | undefined;
         address?: string | Record<string, any> | undefined;
         fullAddress?: string | undefined;
+        alternateMobile?: string | undefined;
+        altPhone?: string | undefined;
+        mobile?: string | undefined;
         phoneNumber?: string | undefined;
     } & {
         [k: string]: unknown;

@@ -137,14 +137,21 @@ async function validateGeographicConsistency(vendor) {
         return { consistent: true };
     }
 }
+const formValidation_1 = require("./formValidation");
 /**
- * Validate input fields (Phone, Email, PAN, Aadhaar, Pincode).
+ * Validate input fields (Name, Phone, Email, PAN, Aadhaar, Pincode, Bank Account, IFSC).
  */
 function validateVendorFieldFormats(data) {
+    // Name validation
+    if (data.ownerName && !(0, formValidation_1.isValidName)(data.ownerName)) {
+        return {
+            valid: false,
+            error: 'Owner / Contact person name contains invalid characters or does not meet length requirements.'
+        };
+    }
     // Mobile: Exactly 10 digits, starts with 6, 7, 8, 9
     if (data.phone) {
-        const cleanPhone = data.phone.replace(/\D/g, '');
-        if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+        if (!(0, formValidation_1.isValidIndianMobile)(data.phone)) {
             return {
                 valid: false,
                 error: 'Mobile number must be exactly 10 numeric digits starting with 6, 7, 8, or 9.'
@@ -153,18 +160,17 @@ function validateVendorFieldFormats(data) {
     }
     // Email: Standard email format
     if (data.email) {
-        const cleanEmail = data.email.trim();
-        if (cleanEmail.includes(' ') || !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(cleanEmail)) {
+        if (!(0, formValidation_1.isValidEmail)(data.email)) {
             return {
                 valid: false,
-                error: 'Please enter a valid email address (e.g. merchant@example.com). Spaces are not allowed.'
+                error: 'Please enter a valid email address (e.g. merchant@example.com). Spaces and invalid formats are not allowed.'
             };
         }
     }
     // PAN: 5 uppercase letters, 4 digits, 1 uppercase letter
     if (data.panNumber) {
-        const pan = data.panNumber.trim().toUpperCase();
-        if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(pan)) {
+        const pan = (0, formValidation_1.formatPan)(data.panNumber);
+        if (!(0, formValidation_1.isValidPan)(pan)) {
             return {
                 valid: false,
                 error: 'PAN number must be exactly 10 characters in the format 5 letters, 4 digits, 1 letter (e.g. ABCDE1234F).'
@@ -173,8 +179,7 @@ function validateVendorFieldFormats(data) {
     }
     // Aadhaar: Exactly 12 digits
     if (data.aadhaarNumber) {
-        const aadhaar = data.aadhaarNumber.replace(/\D/g, '');
-        if (!/^\d{12}$/.test(aadhaar)) {
+        if (!(0, formValidation_1.isValidAadhaar)(data.aadhaarNumber)) {
             return {
                 valid: false,
                 error: 'Aadhaar number must be exactly 12 numeric digits.'
@@ -191,13 +196,23 @@ function validateVendorFieldFormats(data) {
             };
         }
     }
-    // Bank Account Number: 8 to 20 numeric digits only
+    // Bank Account Number
     if (data.accountNumber) {
-        const acc = String(data.accountNumber).trim();
-        if (!/^\d{8,20}$/.test(acc)) {
+        const accValidation = (0, formValidation_1.validateBankAccount)(data.accountNumber, data.bankName);
+        if (!accValidation.valid) {
             return {
                 valid: false,
-                error: 'Account number must contain 8–20 digits.'
+                error: accValidation.error || 'Account number must contain 8–20 digits.'
+            };
+        }
+    }
+    // IFSC Code
+    if (data.ifscCode) {
+        const ifsc = (0, formValidation_1.formatIfsc)(data.ifscCode);
+        if (!(0, formValidation_1.isValidIfsc)(ifsc)) {
+            return {
+                valid: false,
+                error: 'IFSC code must be exactly 11 characters starting with 4 letters, followed by 0, and 6 alphanumeric characters (e.g. SBIN0001234).'
             };
         }
     }

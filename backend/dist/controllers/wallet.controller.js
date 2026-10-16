@@ -8,6 +8,7 @@ const mongoose_1 = __importDefault(require("mongoose"));
 const Wallet_1 = __importDefault(require("../models/Wallet"));
 const Agent_1 = __importDefault(require("../models/Agent"));
 const eventBus_1 = require("../realtime/eventBus");
+const formValidation_1 = require("../utils/formValidation");
 // Helper to generate a transaction ID
 const generateTxId = () => `TXN-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 const FAKE_DESCRIPTIONS = [
@@ -160,22 +161,26 @@ const updateBankDetails = async (req, res) => {
         if (!accountNumber || !ifscCode) {
             return res.status(400).json({ message: 'Account number and IFSC code are required' });
         }
-        const cleanAccNo = String(accountNumber).trim();
-        if (!/^\d{8,20}$/.test(cleanAccNo)) {
-            return res.status(400).json({ message: 'Account number must contain 8–20 digits.' });
+        const accValidation = (0, formValidation_1.validateBankAccount)(accountNumber, bankName);
+        if (!accValidation.valid) {
+            return res.status(400).json({ message: accValidation.error || 'Account number must contain 8–20 digits.' });
         }
-        const cleanIfsc = String(ifscCode).toUpperCase().trim();
-        const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
-        if (!ifscRegex.test(cleanIfsc)) {
+        const cleanIfsc = (0, formValidation_1.formatIfsc)(ifscCode);
+        if (!(0, formValidation_1.isValidIfsc)(cleanIfsc)) {
             return res.status(400).json({
                 message: 'Invalid IFSC code format. Indian IFSC must be 4 uppercase letters, followed by 0, and 6 alphanumeric characters (e.g., SBIN0001428).'
             });
         }
+        const rawHolder = (holderName || accountHolder || '').trim();
+        if (rawHolder && !(0, formValidation_1.isValidName)(rawHolder)) {
+            return res.status(400).json({ message: 'Account holder name contains invalid characters.' });
+        }
+        const cleanHolder = rawHolder ? (0, formValidation_1.formatName)(rawHolder) : '';
         const updatedBank = {
             bankName: (bankName || 'State Bank of India').trim(),
-            accountNumber: cleanAccNo,
+            accountNumber: String(accountNumber).replace(/\D/g, '').trim(),
             ifscCode: cleanIfsc,
-            accountHolder: (holderName || accountHolder || '').trim()
+            accountHolder: cleanHolder
         };
         let updatedAgent = null;
         if (agentId && mongoose_1.default.isValidObjectId(agentId)) {

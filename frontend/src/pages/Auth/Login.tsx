@@ -9,11 +9,18 @@ import { AgentNetworkHero } from '../../components/auth/AgentNetworkHero';
 import api from '../../utils/api';
 import connectPortalLogo from '../../assets/connect_portal_logo.png';
 
-const INDIAN_MOBILE_REGEX = /^[6-9][0-9]{9}$/;
+import {
+  isValidEmail,
+  normalizeEmail,
+  sanitizeIndianMobile,
+  isValidIndianMobile
+} from '../../utils/formValidation';
 
 const loginSchema = z.object({
-  email: z.string().email('Please enter a valid email address').transform(val => val.toLowerCase().trim()),
-  password: z.string().min(6, 'Password must be at least 6 characters long'),
+  email: z.string().refine(val => isValidEmail(val), {
+    message: 'Please enter a valid email address (e.g. name@example.com).'
+  }).transform(val => normalizeEmail(val)),
+  password: z.string().min(1, 'Password is required.'),
 });
 
 type LoginFields = z.infer<typeof loginSchema>;
@@ -33,15 +40,11 @@ export const Login: React.FC = () => {
   });
 
   const handleMobileChange = (val: string) => {
-    let clean = val.replace(/\D/g, '');
-    if (clean.length > 0 && !/^[6-9]/.test(clean)) {
-      clean = '';
-    }
-    if (clean.length > 10) clean = clean.slice(0, 10);
+    const clean = sanitizeIndianMobile(val);
     setMobileNumber(clean);
   };
 
-  const isMobileValid = INDIAN_MOBILE_REGEX.test(mobileNumber);
+  const isMobileValid = isValidIndianMobile(mobileNumber);
 
   const getMobileHint = () => {
     if (mobileNumber.length === 0) {
