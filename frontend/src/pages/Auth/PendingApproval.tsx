@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth, isAgentApproved } from '../../context/AuthContext';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Clock, CheckCircle2, LogOut } from 'lucide-react';
@@ -9,7 +9,7 @@ export const PendingApproval: React.FC = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
 
-  const isApproved = !!user && (user.kycStatus === 'approved' || (user as any).status === 'approved' || (user as any).status === 'active') && user.kycStatus !== 'pending' && (user as any).status !== 'pending' && (user as any).status !== 'pending_approval';
+  const isApproved = !!user && isAgentApproved(user);
 
   React.useEffect(() => {
     if (isApproved) {

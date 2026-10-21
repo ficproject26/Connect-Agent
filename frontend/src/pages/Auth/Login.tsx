@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth, isAgentApproved } from '../../context/AuthContext';
 import { AlertCircle, Eye, EyeOff, Smartphone, Mail, ArrowRight } from 'lucide-react';
 import { AgentNetworkHero } from '../../components/auth/AgentNetworkHero';
 import api from '../../utils/api';
@@ -107,7 +107,8 @@ export const Login: React.FC = () => {
       const cleanEmail = (data.email || '').toLowerCase().trim();
       const loggedInUser: any = await login(cleanEmail, data.password);
       if (loggedInUser) {
-        if (loggedInUser.kycStatus === 'pending' || loggedInUser.status === 'pending_approval') {
+        const approved = isAgentApproved(loggedInUser);
+        if (!approved) {
           navigate('/pending');
           return;
         }

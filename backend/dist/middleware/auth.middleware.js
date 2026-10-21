@@ -83,7 +83,7 @@ const authMiddleware = async (req, res, next) => {
         let agent = null;
         if (mongoose_1.default.Types.ObjectId.isValid(decoded.agentId)) {
             agent = await Agent_1.default.findById(decoded.agentId)
-                .select('_id name email phone role status kycStatus rejectionReason territory assignedTerritory')
+                .select('_id name email phone role status kycStatus isApproved isActive rejectionReason territory assignedTerritory')
                 .lean();
         }
         if (!agent && decoded.agentId) {
@@ -92,7 +92,7 @@ const authMiddleware = async (req, res, next) => {
                     { registrationId: decoded.agentId },
                     { email: decoded.email?.toLowerCase() }
                 ]
-            }).select('_id name email phone role status kycStatus rejectionReason territory assignedTerritory')
+            }).select('_id name email phone role status kycStatus isApproved isActive rejectionReason territory assignedTerritory')
                 .lean();
         }
         // Fallback: Check shared 'users' collection ONLY if genuine agent role (never convert other roles)
@@ -116,6 +116,8 @@ const authMiddleware = async (req, res, next) => {
                         role: canonicalUserRole,
                         status: userDoc.status || 'pending',
                         kycStatus: userDoc.kycStatus || userDoc.status || 'pending',
+                        isApproved: userDoc.isApproved,
+                        isActive: userDoc.isActive,
                         rejectionReason: userDoc.rejectionReason,
                         territory: userDoc.territory || {},
                         assignedTerritory: userDoc.assignedTerritory || {}
@@ -135,12 +137,12 @@ const authMiddleware = async (req, res, next) => {
             });
         }
         agent.role = canonicalAgentRole;
-        // 2. Account Status Check: Enforce Suspended / Deactivated
+        // 2. Account Status Check: Enforce Suspended / Deactivated / Revoked / Deleted
         const agentStatus = String(agent.status || '').toLowerCase();
-        if (agentStatus === 'suspended' || agentStatus === 'inactive') {
+        if (agentStatus === 'suspended' || agentStatus === 'inactive' || agentStatus === 'revoked' || agentStatus === 'deleted') {
             return res.status(403).json({
                 message: 'Your account has been suspended or deactivated. Access revoked.',
-                status: 'suspended',
+                status: agentStatus === 'revoked' ? 'revoked' : 'suspended',
                 role: agent.role
             });
         }
@@ -155,7 +157,12 @@ const authMiddleware = async (req, res, next) => {
             });
         }
         // 4. Approval Status Check: Enforce Pending (Fail closed)
-        const isApproved = agentKycStatus === 'approved' || agentStatus === 'approved' || agentStatus === 'active';
+        const isApproved = agentKycStatus === 'approved' ||
+            agentKycStatus === 'verified' ||
+            agentStatus === 'approved' ||
+            agentStatus === 'active' ||
+            agent.isApproved === true ||
+            agent.isActive === true;
         if (!isApproved) {
             return res.status(403).json({
                 message: 'Your account registration is awaiting Admin approval. Protected resources cannot be accessed.',
@@ -187,7 +194,7 @@ const optionalAuthMiddleware = async (req, res, next) => {
                 const decoded = (0, jwt_1.verifyToken)(token);
                 if (decoded?.agentId && mongoose_1.default.Types.ObjectId.isValid(decoded.agentId)) {
                     const agent = await Agent_1.default.findById(decoded.agentId)
-                        .select('_id name email phone role status kycStatus rejectionReason territory assignedTerritory')
+                        .select('_id name email phone role status kycStatus isApproved isActive rejectionReason territory assignedTerritory')
                         .lean();
                     if (agent) {
                         req.agent = {

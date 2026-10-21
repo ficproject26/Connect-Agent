@@ -84,6 +84,29 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+export const isAgentApproved = (agent: any): boolean => {
+  if (!agent) return false;
+  const kyc = String(agent.kycStatus || '').trim().toLowerCase();
+  const st = String(agent.status || '').trim().toLowerCase();
+
+  // Explicit rejection or revocation/suspension takes absolute precedence
+  if (kyc === 'rejected' || st === 'rejected' || st === 'suspended' || st === 'inactive' || st === 'revoked' || st === 'deleted' || kyc === 'revoked') {
+    return false;
+  }
+
+  const hasApprovedKyc = kyc === 'approved' || kyc === 'verified';
+  const hasApprovedStatus = st === 'approved' || st === 'active';
+  const flagApproved = agent.isApproved === true || agent.isActive === true;
+
+  const isPending = kyc === 'pending' || kyc === 'pending_verification' || st === 'pending' || st === 'pending_approval' || st === 'pending_sub_admin_approval';
+
+  if (isPending && !hasApprovedKyc && !hasApprovedStatus && !flagApproved) {
+    return false;
+  }
+
+  return hasApprovedKyc || hasApprovedStatus || flagApproved;
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<AgentProfile | null>(() => {
     try {
@@ -136,7 +159,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const savedStr = localStorage.getItem(userKey);
       if (savedStr) {
         const saved = JSON.parse(savedStr);
-        return { ...agentData, ...saved };
+        // Authoritative security rule: Never allow client-side saved drafts to override server-persisted approval status, KYC status, role, or identity
+        const {
+          status,
+          kycStatus,
+          isApproved,
+          isActive,
+          role,
+          _id,
+          email,
+          rejectionReason,
+          registrationId,
+          ...safeOverrides
+        } = saved;
+        return { ...agentData, ...safeOverrides };
       }
     } catch (e) {
       console.error('Error parsing saved agent profile:', e);
@@ -152,15 +188,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error('No agent profile returned');
       }
 
-      const isApproved = agent.kycStatus === 'approved' || agent.status === 'approved' || agent.status === 'active';
-      if (!isApproved && (agent.kycStatus === 'rejected' || agent.status === 'rejected' || agent.status === 'suspended' || agent.status === 'inactive')) {
-        console.warn('Agent account is not active or approved. Logging out.');
+      const approved = isAgentApproved(agent);
+      const st = String(agent.status || '').trim().toLowerCase();
+      const kyc = String(agent.kycStatus || '').trim().toLowerCase();
+
+      const isRevokedOrSuspended = st === 'suspended' || st === 'inactive' || st === 'revoked' || st === 'deleted' || kyc === 'revoked';
+      const isRejected = kyc === 'rejected' || st === 'rejected';
+
+      if (isRevokedOrSuspended || isRejected) {
+        console.warn('Agent account is suspended, revoked, or rejected. Logging out.');
         logout();
         return;
       }
 
-      // Map kycStatus to status for compatibility
-      agent.status = isApproved ? 'active' : 'pending_approval';
+      // Authoritative status normalization: If approved, ensure active/approved status
+      agent.status = approved ? 'active' : 'pending_approval';
+      agent.kycStatus = approved ? 'approved' : (agent.kycStatus || 'pending');
       agent.mobile = agent.phone;
       if (!agent.alternateMobile && (agent.altPhone || agent.alternativePhone || agent.secondaryPhone)) {
         agent.alternateMobile = agent.altPhone || agent.alternativePhone || agent.secondaryPhone;
@@ -174,11 +217,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       fetchNotifications().catch(() => {});
     } catch (err: any) {
       console.warn('Backend session verification failed on /auth/me:', err?.response?.data?.message || err.message);
-      // Only force logout on genuine authentication rejection (401 invalid token, 403 account suspended/rejected)
-      // Never log out on 404 or transient server errors when valid cached agent data exists.
-      if (err?.response?.status === 401 || err?.response?.status === 403) {
+      const status = err?.response?.status;
+      const serverStatus = err?.response?.data?.status;
+
+      // Only force logout on genuine authentication rejection (401 invalid token, 403 account suspended/rejected/revoked)
+      if (status === 401 || (status === 403 && (serverStatus === 'suspended' || serverStatus === 'rejected' || serverStatus === 'revoked'))) {
         logout();
+      } else if (status === 403 && serverStatus === 'pending') {
+        // Genuinely pending approval - reflect pending status without clearing token
+        setUser((prev) => {
+          if (!prev) return null;
+          const updated = { ...prev, status: 'pending_approval' as const, kycStatus: 'pending' as const };
+          try { localStorage.setItem('agent_user', JSON.stringify(updated)); } catch (_) {}
+          return updated;
+        });
       }
+      // On network errors (status undefined, ERR_NETWORK, timeout, 500, etc.), do NOT logout and do NOT overwrite status! Keep current cached user!
     }
   };
 
@@ -260,7 +314,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (response?.data?.token) {
         const data = response.data;
         const agent = data.agent || data.user || {};
-        agent.status = (agent.kycStatus === 'approved' || agent.status === 'approved' || agent.status === 'active') ? 'active' : 'pending_approval';
+        const approved = isAgentApproved(agent);
+        agent.status = approved ? 'active' : 'pending_approval';
+        if (approved) {
+          agent.kycStatus = 'approved';
+        }
         agent.mobile = agent.phone;
         if (!agent.alternateMobile && (agent.altPhone || agent.alternativePhone || agent.secondaryPhone)) {
           agent.alternateMobile = agent.altPhone || agent.alternativePhone || agent.secondaryPhone;
@@ -292,7 +350,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
    */
   const loginWithToken = (newToken: string, agentData: AgentProfile) => {
     const agent = { ...agentData };
-    agent.status = (agent.kycStatus === 'approved' || (agent.status as string) === 'approved' || (agent.status as string) === 'active') ? 'active' as any : 'pending_approval' as any;
+    const approved = isAgentApproved(agent);
+    agent.status = approved ? 'active' as any : 'pending_approval' as any;
+    if (approved) {
+      agent.kycStatus = 'approved' as any;
+    }
     agent.mobile = agent.phone;
     localStorage.setItem('agent_token', newToken);
     setToken(newToken);
@@ -317,7 +379,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
         if (data.token) {
           const { token: newToken, agent } = data;
-          agent.status = (agent.kycStatus === 'approved' || agent.status === 'approved' || agent.status === 'active') ? 'active' : 'pending_approval';
+          const approved = isAgentApproved(agent);
+          agent.status = approved ? 'active' : 'pending_approval';
+          if (approved) {
+            agent.kycStatus = 'approved';
+          }
           agent.mobile = agent.phone;
           localStorage.setItem('agent_token', newToken);
           setToken(newToken);

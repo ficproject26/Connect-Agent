@@ -1,6 +1,6 @@
 import React from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, isAgentApproved } from '../context/AuthContext';
 
 interface ProtectedRouteProps {
   allowedRoles?: string[];
@@ -22,12 +22,15 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
     return <Navigate to="/login" replace />;
   }
 
-  const userKycStatus = (user.kycStatus || '').toLowerCase();
-  const userStatus = String(user.status || '').toLowerCase();
+  const userKycStatus = (user.kycStatus || '').toLowerCase().trim();
+  const userStatus = String(user.status || '').toLowerCase().trim();
 
-  const isPending = userKycStatus === 'pending' || userStatus === 'pending_approval' || userStatus === 'pending';
-  const isRejectedOrSuspended = userKycStatus === 'rejected' || userStatus === 'rejected' || userStatus === 'suspended' || userStatus === 'inactive';
-  const isApproved = (userKycStatus === 'approved' || userStatus === 'approved' || userStatus === 'active') && !isPending && !isRejectedOrSuspended;
+  const isRejectedOrSuspended = userKycStatus === 'rejected' || userStatus === 'rejected' || 
+                                userStatus === 'suspended' || userStatus === 'inactive' || 
+                                userStatus === 'revoked' || userStatus === 'deleted' || userKycStatus === 'revoked';
+
+  const isApproved = !isRejectedOrSuspended && isAgentApproved(user);
+  const isPending = !isApproved && !isRejectedOrSuspended;
 
   // Handle pending verification redirects (except for the pending page itself)
   if (isPending && window.location.pathname !== '/pending') {

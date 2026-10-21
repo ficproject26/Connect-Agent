@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth, isAgentApproved } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import {
   Menu, Bell, LogOut, Settings, HelpCircle, Search, X, Laptop, Clock,
@@ -73,10 +73,14 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
   const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';
   const effectiveRole = (rawRole === 'agent' ? ((user as any)?.level || 'pincode') : rawRole).toLowerCase();
 
-  const userKycStatus = (user?.kycStatus || 'approved').toLowerCase();
-  const userStatus = String(user?.status || 'active').toLowerCase();
+  const userKycStatus = (user?.kycStatus || 'approved').toLowerCase().trim();
+  const userStatus = String(user?.status || 'active').toLowerCase().trim();
 
-  if (userKycStatus === 'pending' || userStatus === 'pending_approval' || userStatus === 'pending') {
+  const isApproved = !!user && isAgentApproved(user);
+
+  const isPending = !isApproved && (userKycStatus === 'pending' || userKycStatus === 'pending_verification' || userStatus === 'pending_approval' || userStatus === 'pending' || userStatus === 'pending_sub_admin_approval');
+
+  if (isPending) {
     return (
       <div className="min-h-screen bg-[#fbf9f8] flex items-center justify-center p-6">
         <div className="max-w-md w-full bg-white rounded-2xl p-8 border border-[#eae8e7] shadow-sm text-center space-y-4">
@@ -101,7 +105,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
     );
   }
 
-  if (userKycStatus === 'rejected' || userStatus === 'rejected') {
+  if (!isApproved && (userKycStatus === 'rejected' || userStatus === 'rejected')) {
     return (
       <div className="min-h-screen bg-[#fbf9f8] flex items-center justify-center p-6">
         <div className="max-w-md w-full bg-white rounded-2xl p-8 border border-rose-200 shadow-sm text-center space-y-4">
@@ -126,7 +130,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
     );
   }
 
-  if (userStatus === 'suspended' || userStatus === 'inactive') {
+  if (!isApproved && (userStatus === 'suspended' || userStatus === 'inactive' || userStatus === 'revoked' || userStatus === 'deleted' || userKycStatus === 'revoked')) {
     return (
       <div className="min-h-screen bg-[#fbf9f8] flex items-center justify-center p-6">
         <div className="max-w-md w-full bg-white rounded-2xl p-8 border border-slate-200 shadow-sm text-center space-y-4">
