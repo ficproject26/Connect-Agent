@@ -734,17 +734,60 @@ const getHierarchyTree = async (req, res) => {
         const pincodesByDivision = new Map();
         let canonicalDistricts = [];
         let canonicalDivisions = [];
+        const stateMapById = new Map();
+        const stateMapByName = new Map();
         try {
             const db = mongoose_1.default.connection.db;
             if (db) {
-                const [allDbPincodes, dbDists, dbDivs] = await Promise.all([
+                const [allDbPincodes, dbDists, dbDivs, dbStates] = await Promise.all([
                     db.collection('pincodes').find({}, { projection: { code: 1, pincode: 1, division: 1 } }).toArray(),
                     db.collection('districts').find({ status: { $regex: /^active$/i } }).toArray(),
-                    db.collection('divisions').find({ status: { $regex: /^active$/i } }).toArray()
+                    db.collection('divisions').find({ status: { $regex: /^active$/i } }).toArray(),
+                    db.collection('states').find({}).toArray()
                 ]);
-                canonicalDistricts = dbDists || [];
-                canonicalDivisions = dbDivs || [];
-                for (const p of allDbPincodes) {
+                for (const st of (dbStates || [])) {
+                    const idStr = String(st._id);
+                    const name = String(st.name || '').trim();
+                    stateMapById.set(idStr, name);
+                    if (st.stateId)
+                        stateMapById.set(String(st.stateId), name);
+                    stateMapByName.set(name.toLowerCase(), idStr);
+                }
+                const getDistrictVerifiedState = (d) => {
+                    if (d.state && typeof d.state === 'string' && d.state.trim())
+                        return d.state.trim();
+                    if (d.stateId && stateMapById.has(String(d.stateId)))
+                        return stateMapById.get(String(d.stateId));
+                    return '';
+                };
+                // Filter canonical districts strictly to the authenticated user's authorized territory scope
+                const callerStateLower = (scope?.state || '').toLowerCase().trim();
+                const callerStateId = stateMapByName.get(callerStateLower);
+                const stateMatchedDistricts = (dbDists || []).filter(d => {
+                    if (!callerStateLower)
+                        return true;
+                    const dState = getDistrictVerifiedState(d).toLowerCase().trim();
+                    const dStateId = d.stateId ? String(d.stateId) : '';
+                    return dState === callerStateLower || (callerStateId && dStateId === callerStateId);
+                });
+                const callerDistLower = (scope?.district || '').toLowerCase().trim();
+                canonicalDistricts = stateMatchedDistricts.filter(d => {
+                    if (!callerDistLower)
+                        return true;
+                    const dName = cleanWord(String(d.name || ''));
+                    const cDist = cleanWord(callerDistLower);
+                    return dName === cDist || dName.includes(cDist) || cDist.includes(dName);
+                });
+                const allowedDistrictIds = new Set(canonicalDistricts.map(d => String(d._id)));
+                const allowedDistrictNames = new Set(canonicalDistricts.map(d => cleanWord(String(d.name || ''))));
+                canonicalDivisions = (dbDivs || []).filter(div => {
+                    if (!callerStateLower)
+                        return true;
+                    const divDistId = div.districtId ? String(div.districtId) : '';
+                    const divDistName = cleanWord(String(div.district || ''));
+                    return allowedDistrictIds.has(divDistId) || allowedDistrictNames.has(divDistName);
+                });
+                for (const p of (allDbPincodes || [])) {
                     const code = String(p.code || p.pincode || '').trim();
                     const div = cleanWord(String(p.division || ''));
                     if (code && div) {
@@ -797,7 +840,7 @@ const getHierarchyTree = async (req, res) => {
                 teamApprovedKyc: matchingPincodes.length + 1
             };
         });
-        // 1b. Map active canonical divisions into the division list (ensuring Salem and all active divisions appear)
+        // 1b. Map active canonical divisions into the division list strictly if they have onboarded pincode agents
         const allDivisions = [...enrichedDivisions];
         const registeredDivNames = new Set(enrichedDivisions.map(d => cleanWord(getAgentDivision(d))));
         const registeredDivIds = new Set(enrichedDivisions.map(d => String(d.assignedTerritory?.divisionId || d._id)));
@@ -808,7 +851,7 @@ const getHierarchyTree = async (req, res) => {
                 continue;
             const parentDist = canonicalDistricts.find(cd => String(cd._id) === String(cDiv.districtId));
             const distName = parentDist?.name || cDiv.district || '';
-            const stateName = scope?.state || 'Tamil Nadu';
+            const verifiedState = parentDist ? (parentDist.state || stateMapById.get(String(parentDist.stateId)) || scope?.state || '') : (scope?.state || '');
             const knownDivPincodes = pincodesByDivision.get(cNameNorm);
             const matchingPincodes = pincodeAgents
                 .filter(pin => {
@@ -829,49 +872,52 @@ const getHierarchyTree = async (req, res) => {
                 return false;
             })
                 .map(pin => enrichAgentData(pin));
-            allDivisions.push({
-                _id: cDiv._id,
-                name: cDiv.name,
-                email: '',
-                phone: '',
-                registrationId: `DIV-${String(cDiv._id).substring(0, 6)}`,
-                role: 'division',
-                status: 'approved',
-                kycStatus: 'approved',
-                registrationFeePaid: true,
-                performanceScore: 0,
-                earnings: 0,
-                tieupsToday: 0,
-                tieupsYesterday: 0,
-                totalTieups: 0,
-                territory: {
-                    state: stateName,
-                    district: distName,
-                    division: cDiv.name,
-                    pincode: ''
-                },
-                assignedTerritory: {
-                    state: stateName,
-                    stateId: String(parentDist?.stateId || ''),
-                    district: distName,
-                    districtId: String(cDiv.districtId || parentDist?._id || ''),
-                    division: cDiv.name,
-                    divisionId: cIdStr,
-                    taluk: '',
-                    pincode: '',
-                    pincodeId: ''
-                },
-                address: {},
-                fullAddress: '',
-                plusPoints: ['Active Division'],
-                minusPoints: [],
-                createdAt: cDiv.createdAt || new Date(),
-                pincodes: matchingPincodes,
-                teamSize: matchingPincodes.length,
-                teamEarnings: matchingPincodes.reduce((acc, p) => acc + (p.earnings || 0), 0),
-                teamPendingKyc: 0,
-                teamApprovedKyc: matchingPincodes.length
-            });
+            // Only include division if it actually has onboarded agents
+            if (matchingPincodes.length > 0) {
+                allDivisions.push({
+                    _id: cDiv._id,
+                    name: cDiv.name,
+                    email: '',
+                    phone: '',
+                    registrationId: cDiv.code || `DIV-${String(cDiv._id).substring(0, 6)}`,
+                    role: 'division',
+                    status: 'approved',
+                    kycStatus: 'approved',
+                    registrationFeePaid: true,
+                    performanceScore: 0,
+                    earnings: 0,
+                    tieupsToday: 0,
+                    tieupsYesterday: 0,
+                    totalTieups: 0,
+                    territory: {
+                        state: verifiedState,
+                        district: distName,
+                        division: cDiv.name,
+                        pincode: ''
+                    },
+                    assignedTerritory: {
+                        state: verifiedState,
+                        stateId: String(parentDist?.stateId || ''),
+                        district: distName,
+                        districtId: String(cDiv.districtId || parentDist?._id || ''),
+                        division: cDiv.name,
+                        divisionId: cIdStr,
+                        taluk: '',
+                        pincode: '',
+                        pincodeId: ''
+                    },
+                    address: {},
+                    fullAddress: '',
+                    plusPoints: ['Active Division'],
+                    minusPoints: [],
+                    createdAt: cDiv.createdAt || new Date(),
+                    pincodes: matchingPincodes,
+                    teamSize: matchingPincodes.length,
+                    teamEarnings: matchingPincodes.reduce((acc, p) => acc + (p.earnings || 0), 0),
+                    teamPendingKyc: 0,
+                    teamApprovedKyc: matchingPincodes.length
+                });
+            }
         }
         const enrichedPincodes = pincodeAgents.map(pin => enrichAgentData(pin));
         // 2. Group district agents by canonical district to enforce strictly 1 active assignment per district
@@ -894,7 +940,7 @@ const getHierarchyTree = async (req, res) => {
             })[0];
             const leadAgent = enrichAgentData(leadAgentDoc);
             const canonicalName = getAgentDistrict(leadAgent) || distKey;
-            const distState = getAgentState(leadAgent);
+            const distState = getAgentState(leadAgent) || scope?.state || '';
             // Match child divisions strictly belonging to this district (from allDivisions)
             const matchingDivisions = allDivisions.filter(div => {
                 const divDist = getAgentDistrict(div).toLowerCase();
@@ -934,7 +980,7 @@ const getHierarchyTree = async (req, res) => {
                 teamApprovedKyc: 1 + matchingDivisions.length + totalPincodes
             });
         });
-        // Also include canonical districts that do not yet have a lead agent, attaching their active divisions
+        // Also include canonical districts within authorized scope that have child divisions/agents, but no lead agent
         for (const cDist of canonicalDistricts) {
             const cDistKey = (cDist.name || '').toLowerCase();
             const existing = uniqueDistrictsList.find(d => cleanWord(d.district || d.name) === cleanWord(cDist.name));
@@ -946,49 +992,52 @@ const getHierarchyTree = async (req, res) => {
                         return true;
                     return cleanWord(divDist) === cleanWord(cDist.name);
                 });
-                const totalPincodes = matchingDivisions.reduce((acc, d) => acc + (d.pincodes?.length || d.teamSize || 0), 0);
-                const stateName = scope?.state || 'Tamil Nadu';
-                uniqueDistrictsList.push({
-                    _id: cDist._id,
-                    name: `${cDist.name} District`,
-                    email: '',
-                    phone: '',
-                    registrationId: cDist.code || `DIST-${cDist._id}`,
-                    role: 'district',
-                    status: 'approved',
-                    kycStatus: 'approved',
-                    registrationFeePaid: true,
-                    performanceScore: 0,
-                    earnings: 0,
-                    tieupsToday: 0,
-                    tieupsYesterday: 0,
-                    totalTieups: 0,
-                    territory: {
-                        state: stateName,
+                // Only include if there are actually onboarded child divisions/agents in this district
+                if (matchingDivisions.length > 0) {
+                    const totalPincodes = matchingDivisions.reduce((acc, d) => acc + (d.pincodes?.length || d.teamSize || 0), 0);
+                    const verifiedState = cDist.state || stateMapById.get(String(cDist.stateId)) || scope?.state || '';
+                    uniqueDistrictsList.push({
+                        _id: cDist._id,
+                        name: `${cDist.name} District`,
+                        email: '',
+                        phone: '',
+                        registrationId: cDist.code || `DIST-${cDist._id}`,
+                        role: 'district',
+                        status: 'approved',
+                        kycStatus: 'approved',
+                        registrationFeePaid: true,
+                        performanceScore: 0,
+                        earnings: 0,
+                        tieupsToday: 0,
+                        tieupsYesterday: 0,
+                        totalTieups: 0,
+                        territory: {
+                            state: verifiedState,
+                            district: cDist.name,
+                            division: '',
+                            pincode: ''
+                        },
+                        assignedTerritory: {
+                            state: verifiedState,
+                            stateId: String(cDist.stateId || ''),
+                            district: cDist.name,
+                            districtId: String(cDist._id),
+                            division: '',
+                            divisionId: '',
+                            taluk: '',
+                            pincode: '',
+                            pincodeId: ''
+                        },
                         district: cDist.name,
-                        division: '',
-                        pincode: ''
-                    },
-                    assignedTerritory: {
-                        state: stateName,
-                        stateId: String(cDist.stateId || ''),
-                        district: cDist.name,
-                        districtId: String(cDist._id),
-                        division: '',
-                        divisionId: '',
-                        taluk: '',
-                        pincode: '',
-                        pincodeId: ''
-                    },
-                    district: cDist.name,
-                    agents: [],
-                    agentCount: 0,
-                    divisions: matchingDivisions,
-                    teamSize: matchingDivisions.length + totalPincodes,
-                    teamEarnings: matchingDivisions.reduce((acc, d) => acc + (d.teamEarnings || d.earnings || 0), 0),
-                    teamPendingKyc: 0,
-                    teamApprovedKyc: matchingPincodesCount(matchingDivisions)
-                });
+                        agents: [],
+                        agentCount: 0,
+                        divisions: matchingDivisions,
+                        teamSize: matchingDivisions.length + totalPincodes,
+                        teamEarnings: matchingDivisions.reduce((acc, d) => acc + (d.teamEarnings || d.earnings || 0), 0),
+                        teamPendingKyc: 0,
+                        teamApprovedKyc: matchingPincodesCount(matchingDivisions)
+                    });
+                }
             }
         }
         function matchingPincodesCount(divs) {
@@ -1000,6 +1049,12 @@ const getHierarchyTree = async (req, res) => {
         // Nest districts strictly under their matching state
         let finalDistricts = enrichedDistricts;
         let finalDivisions = enrichedDivisions;
+        if (scope?.role === 'state' && stateAgents.length === 0) {
+            const requesterAgent = await Agent_1.default.findById(requesterId).lean();
+            if (requesterAgent) {
+                stateAgents.push(requesterAgent);
+            }
+        }
         if (scope?.role === 'district' && districtAgents.length === 0) {
             const requesterAgent = await Agent_1.default.findById(requesterId).lean();
             if (requesterAgent) {

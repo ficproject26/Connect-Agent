@@ -55,18 +55,44 @@ const formatLocalDate = (d: Date): string => {
 
 export const getVendorCanonicalKey = (v: {
   id?: string;
+  _id?: string;
   phone?: string;
+  mobile?: string;
   pincode?: string;
   name?: string;
   businessName?: string;
+  storeName?: string;
+  registrationId?: string;
+  vendorId?: string;
+  district?: string;
+  location?: any;
+  ownerName?: string;
 }): string => {
-  const phone = (v.phone || '').replace(/\D/g, '');
-  const pin = (v.pincode || '').trim();
-  const name = (v.name || v.businessName || '').trim().toLowerCase();
-  if (phone && pin && name) {
-    return `VENDOR_${phone}_${pin}_${name}`;
+  if (!v) return '';
+  const regId = String(v.registrationId || v.vendorId || '').trim().toUpperCase();
+  if (regId && !regId.startsWith('REG-TEMP') && regId.length > 5) {
+    return `REG_${regId}`;
   }
-  return v.id ? `ID_${v.id}` : '';
+
+  const rawPhone = String(v.phone || v.mobile || '').replace(/\D/g, '');
+  const phone = rawPhone.length >= 10 ? rawPhone.slice(-10) : '';
+  const name = String(v.name || v.businessName || v.storeName || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const pin = String(v.pincode || (v.location && v.location.pincode) || '').trim();
+  const dist = String(v.district || (v.location && v.location.district) || '').trim().toLowerCase();
+
+  if (phone && name) return `PHONE_NAME_${phone}_${name}`;
+  if (phone && pin) return `PHONE_PIN_${phone}_${pin}`;
+
+  const idStr = String(v.id || (v as any)._id || '');
+  const baseIdMatch = idStr.match(/^(v_[a-z0-9_]+?)_\d{10,14}$/i);
+  if (baseIdMatch) {
+    const baseId = baseIdMatch[1].toLowerCase();
+    return name ? `BASE_NAME_${baseId}_${name}` : `BASE_${baseId}`;
+  }
+  if (name && pin) return `NAME_PIN_${name}_${pin}`;
+  const owner = String(v.ownerName || '').trim().toLowerCase();
+  if (name && dist && owner) return `NAME_DIST_OWNER_${name}_${dist}_${owner}`;
+  return idStr ? `ID_${idStr}` : '';
 };
 
 const getVendorTimestamp = (vendor: Vendor): number => {
@@ -353,24 +379,42 @@ export const VendorsList: React.FC = () => {
         };
       });
 
-      const uniqueApiVendors = Array.from(new Map(mappedApiVendors.map(v => [v.id, v])).values());
+      // Deduplicate mapped API vendors by canonical vendor key
+      const apiCanonicalMap = new Map<string, Vendor>();
+      for (const v of mappedApiVendors) {
+        const key = getVendorCanonicalKey(v);
+        if (!apiCanonicalMap.has(key)) {
+          apiCanonicalMap.set(key, v);
+        } else {
+          const existing = apiCanonicalMap.get(key)!;
+          const score = (x: Vendor) => (x.phone ? 4 : 0) + (x.ownerName ? 2 : 0) + (x.businessGst ? 1 : 0);
+          if (score(v) > score(existing)) {
+            apiCanonicalMap.set(key, v);
+          }
+        }
+      }
+      const uniqueApiVendors = Array.from(apiCanonicalMap.values());
 
       setVendors(prev => {
         const serverKeys = new Set(uniqueApiVendors.map(getVendorCanonicalKey));
-        const serverIds = new Set(uniqueApiVendors.map(v => v.id));
 
-        // Preserve truly offline/local-only items that do NOT match any server item by ID or canonical key
+        // Preserve truly offline/local-only items that do NOT match any server item by canonical key
         const localOnly = prev.filter(item => {
           if (!item.name || !item.name.trim() || item.name === 'undefined' || item.name === 'Vendor') return false;
-          if (serverIds.has(item.id)) return false;
           const key = getVendorCanonicalKey(item);
-          if (key && serverKeys.has(key)) return false;
+          if (!key || serverKeys.has(key)) return false;
           return true;
         });
 
-        const reconciled = Array.from(
-          new Map([...uniqueApiVendors, ...localOnly].map(item => [item.id, item])).values()
-        );
+        // Reconcile and deduplicate across both using canonical vendor key
+        const reconciledMap = new Map<string, Vendor>();
+        for (const item of [...uniqueApiVendors, ...localOnly]) {
+          const key = getVendorCanonicalKey(item);
+          if (!reconciledMap.has(key)) {
+            reconciledMap.set(key, item);
+          }
+        }
+        const reconciled = Array.from(reconciledMap.values());
 
         // Update localStorage to remove any stale duplicate records
         try {
@@ -439,8 +483,15 @@ export const VendorsList: React.FC = () => {
       return true; // State Lead sees all vendors within their assigned state
     });
 
-    // Safely deduplicate by immutable ID so no vendor record can ever appear twice
-    return Array.from(new Map(filtered.map(item => [item.id, item])).values());
+    // Safely deduplicate by canonical vendor key so no vendor record can ever appear twice
+    const scopedMap = new Map<string, Vendor>();
+    for (const v of filtered) {
+      const key = getVendorCanonicalKey(v);
+      if (!scopedMap.has(key)) {
+        scopedMap.set(key, v);
+      }
+    }
+    return Array.from(scopedMap.values());
   }, [vendors, activeRole, userState, userDistrict, userDivision, userPincode, divisionPincodes]);
 
   // Extract unique filter dropdown values strictly scoped to assigned State

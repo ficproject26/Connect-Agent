@@ -283,25 +283,62 @@ export const getVendors = async (req: Request, res: Response) => {
       }
     }
 
-    // Deduplicate vendor records that represent the exact same vendor registration
+    // Robust canonical vendor deduplication
+    const getVendorCanonicalKey = (v: any): string => {
+      if (!v) return '';
+      const regId = String(v.registrationId || v.vendorId || '').trim().toUpperCase();
+      if (regId && !regId.startsWith('REG-TEMP') && regId.length > 5) {
+        return `REG_${regId}`;
+      }
+
+      const rawPhone = String(v.phone || v.mobile || '').replace(/\D/g, '');
+      const phone = rawPhone.length >= 10 ? rawPhone.slice(-10) : '';
+      const name = String(v.businessName || v.name || v.storeName || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      const pin = String(v.pincode || (v.location && v.location.pincode) || '').trim();
+      const dist = String(v.district || (v.location && v.location.district) || '').trim().toLowerCase();
+
+      if (phone && name) return `PHONE_NAME_${phone}_${name}`;
+      if (phone && pin) return `PHONE_PIN_${phone}_${pin}`;
+
+      const idStr = String(v._id || v.id || '');
+      const baseIdMatch = idStr.match(/^(v_[a-z0-9_]+?)_\d{10,14}$/i);
+      if (baseIdMatch) {
+        const baseId = baseIdMatch[1].toLowerCase();
+        return name ? `BASE_NAME_${baseId}_${name}` : `BASE_${baseId}`;
+      }
+      if (name && pin) return `NAME_PIN_${name}_${pin}`;
+      const owner = String(v.ownerName || '').trim().toLowerCase();
+      if (name && dist && owner) return `NAME_DIST_OWNER_${name}_${dist}_${owner}`;
+      return idStr ? `ID_${idStr}` : '';
+    };
+
     const canonicalMap = new Map<string, any>();
     for (const v of rawVendors) {
-      const phone = v.phone ? v.phone.replace(/\D/g, '') : '';
-      const pin = v.pincode ? v.pincode.trim() : '';
-      const name = (v.businessName || (v as any).name || '').trim().toLowerCase();
+      const canonicalKey = getVendorCanonicalKey(v);
 
-      const canonicalKey = (phone && pin && name)
-        ? `VENDOR_${phone}_${pin}_${name}`
-        : (v.registrationId ? `REG_${v.registrationId}` : `ID_${v._id}`);
+      const vAny = v as any;
+      const vCat = vAny.category?.name || (typeof vAny.category === 'string' ? vAny.category : '') || vAny.storeType || 'Services';
 
       if (!canonicalMap.has(canonicalKey)) {
-        canonicalMap.set(canonicalKey, v);
+        canonicalMap.set(canonicalKey, { ...v, categories: [vCat].filter(Boolean) });
       } else {
         const existing = canonicalMap.get(canonicalKey);
-        const isExistingApproved = (existing.status || '').toLowerCase() === 'active' || (existing.kycStatus || '').toLowerCase() === 'approved';
-        const isCurrentApproved = (v.status || '').toLowerCase() === 'active' || (v.kycStatus || '').toLowerCase() === 'approved';
-        if (!isExistingApproved && isCurrentApproved) {
-          canonicalMap.set(canonicalKey, v);
+        // Merge multiple categories
+        if (vCat && !existing.categories.includes(vCat)) {
+          existing.categories.push(vCat);
+        }
+
+        // Keep the more complete record (has phone, registrationId, ownerName, or newer timestamp)
+        const score = (x: any) =>
+          (x.phone ? 4 : 0) +
+          (x.registrationId ? 4 : 0) +
+          (x.ownerName ? 2 : 0) +
+          (x.gst ? 2 : 0) +
+          ((x.status || '').toLowerCase() === 'active' ? 1 : 0);
+
+        if (score(v) > score(existing)) {
+          const mergedCategories = existing.categories;
+          canonicalMap.set(canonicalKey, { ...v, categories: mergedCategories });
         }
       }
     }
@@ -312,8 +349,8 @@ export const getVendors = async (req: Request, res: Response) => {
         ...v,
         name: realName,
         businessName: realName,
-        kycStatus: 'approved',
-        status: 'active'
+        kycStatus: v.kycStatus || 'approved',
+        status: v.status || 'active'
       };
     });
     const total = deduplicated.length;

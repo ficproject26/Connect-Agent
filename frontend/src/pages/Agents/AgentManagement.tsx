@@ -182,8 +182,9 @@ export const AgentManagement: React.FC = () => {
 
     const stateFilteredDistricts = rawDistricts.filter((d: any) => {
       if (!isApprovedAgent(d)) return false;
-      const st = (d.territory?.state || d.state || userState).toLowerCase();
-      return targetState && (st.includes(targetState) || targetState.includes(st));
+      const st = (d.territory?.state || d.assignedTerritory?.state || d.state || '').trim().toLowerCase();
+      if (!st) return false;
+      return targetState && (st === targetState || st.includes(targetState) || targetState.includes(st));
     });
 
     // Deduplicate districts by canonical district identifier or district name, strictly 1 agent per district
@@ -515,14 +516,16 @@ export const AgentManagement: React.FC = () => {
 
   // 2. Division Agents belonging to State
   const stateDivisionAgents: AgentNode[] = useMemo(() => {
+    const targetState = userState.toLowerCase();
     const fromDistricts = (assignedStateNode.districts || []).flatMap(d => {
       const distName = d.territory?.district || d.name || '';
+      const distState = d.territory?.state || userState;
       return (d.divisions || []).map((div: any) => ({
         ...div,
         role: 'division' as const,
         territory: {
           ...div.territory,
-          state: div.territory?.state || userState,
+          state: div.territory?.state || distState,
           district: div.territory?.district || distName,
           division: div.territory?.division || div.name
         },
@@ -531,19 +534,28 @@ export const AgentManagement: React.FC = () => {
       }));
     });
 
-    const fromHierarchy = (hierarchyData?.divisions || []).map((div: any) => ({
-      ...div,
-      role: 'division' as const,
-      territory: {
-        ...div.territory,
-        state: div.territory?.state || div.assignedTerritory?.state || userState,
-        district: div.territory?.district || div.assignedTerritory?.district || div.district,
-        division: div.territory?.division || div.assignedTerritory?.division || div.name
-      }
-    }));
+    const fromHierarchy = (hierarchyData?.divisions || [])
+      .filter((div: any) => {
+        const st = (div.territory?.state || div.assignedTerritory?.state || div.state || '').trim().toLowerCase();
+        return !st || st === targetState || st.includes(targetState) || targetState.includes(st);
+      })
+      .map((div: any) => ({
+        ...div,
+        role: 'division' as const,
+        territory: {
+          ...div.territory,
+          state: div.territory?.state || div.assignedTerritory?.state || userState,
+          district: div.territory?.district || div.assignedTerritory?.district || div.district,
+          division: div.territory?.division || div.assignedTerritory?.division || div.name
+        }
+      }));
 
     const fromRawAgents = (hierarchyData?.agents || [])
-      .filter((a: any) => normalizeRoleName(a.role) === 'division')
+      .filter((a: any) => {
+        if (normalizeRoleName(a.role) !== 'division') return false;
+        const st = (a.assignedTerritory?.state || a.territory?.state || a.state || '').trim().toLowerCase();
+        return !st || st === targetState || st.includes(targetState) || targetState.includes(st);
+      })
       .map((a: any) => ({
         ...a,
         role: 'division' as const,
@@ -570,15 +582,17 @@ export const AgentManagement: React.FC = () => {
 
   // 3. Pincode Agents belonging to State
   const statePincodeAgents: AgentNode[] = useMemo(() => {
+    const targetState = userState.toLowerCase();
     const fromDivisions = stateDivisionAgents.flatMap((div: any) => {
       const distName = div.territory?.district || div.district || '';
       const divName = div.territory?.division || div.name || '';
+      const divState = div.territory?.state || userState;
       return (div.pincodes || []).map((pin: any) => ({
         ...pin,
         role: 'pincode' as const,
         territory: {
           ...pin.territory,
-          state: pin.territory?.state || userState,
+          state: pin.territory?.state || divState,
           district: pin.territory?.district || distName,
           division: pin.territory?.division || divName,
           pincode: pin.territory?.pincode || pin.pincode
@@ -586,20 +600,29 @@ export const AgentManagement: React.FC = () => {
       }));
     });
 
-    const fromHierarchy = (hierarchyData?.pincodes || []).map((pin: any) => ({
-      ...pin,
-      role: 'pincode' as const,
-      territory: {
-        ...pin.territory,
-        state: pin.territory?.state || pin.assignedTerritory?.state || userState,
-        district: pin.territory?.district || pin.assignedTerritory?.district,
-        division: pin.territory?.division || pin.assignedTerritory?.division,
-        pincode: pin.territory?.pincode || pin.assignedTerritory?.pincode || pin.pincode
-      }
-    }));
+    const fromHierarchy = (hierarchyData?.pincodes || [])
+      .filter((pin: any) => {
+        const st = (pin.territory?.state || pin.assignedTerritory?.state || pin.state || '').trim().toLowerCase();
+        return !st || st === targetState || st.includes(targetState) || targetState.includes(st);
+      })
+      .map((pin: any) => ({
+        ...pin,
+        role: 'pincode' as const,
+        territory: {
+          ...pin.territory,
+          state: pin.territory?.state || pin.assignedTerritory?.state || userState,
+          district: pin.territory?.district || pin.assignedTerritory?.district,
+          division: pin.territory?.division || pin.assignedTerritory?.division,
+          pincode: pin.territory?.pincode || pin.assignedTerritory?.pincode || pin.pincode
+        }
+      }));
 
     const fromRawAgents = (hierarchyData?.agents || [])
-      .filter((a: any) => normalizeRoleName(a.role) === 'pincode')
+      .filter((a: any) => {
+        if (normalizeRoleName(a.role) !== 'pincode') return false;
+        const st = (a.assignedTerritory?.state || a.territory?.state || a.state || '').trim().toLowerCase();
+        return !st || st === targetState || st.includes(targetState) || targetState.includes(st);
+      })
       .map((a: any) => ({
         ...a,
         role: 'pincode' as const,
@@ -901,7 +924,7 @@ export const AgentManagement: React.FC = () => {
                               </div>
                               <p className="text-xs font-bold text-[#52443a] flex items-center gap-1.5 mt-0.5">
                                 <MapPin className="w-3.5 h-3.5 text-[#864f19]" />
-                                District: {dist.territory?.district || dist.name} ({userState})
+                                District: {dist.territory?.district || dist.name}
                               </p>
                             </div>
 
@@ -996,7 +1019,7 @@ export const AgentManagement: React.FC = () => {
                             <h4 className="text-base font-black text-[#1b1c1c] mt-1">{formatCleanAgentName(div.name, 'Division Manager', divName)}</h4>
                             <p className="text-xs font-bold text-[#52443a] flex items-center gap-1.5 mt-0.5">
                               <MapPin className="w-3.5 h-3.5 text-[#864f19]" />
-                              District: <span className="font-extrabold text-[#1b1c1c]">{divDist}</span> • Division: <span className="font-extrabold text-amber-800">{divName}</span> ({userState})
+                              District: <span className="font-extrabold text-[#1b1c1c]">{divDist}</span> • Division: <span className="font-extrabold text-amber-800">{divName}</span>
                             </p>
                           </div>
 
@@ -1175,7 +1198,7 @@ export const AgentManagement: React.FC = () => {
                                   </div>
                                   <p className="text-xs font-bold text-[#52443a] flex items-center gap-1.5 mt-0.5">
                                     <MapPin className="w-3.5 h-3.5 text-[#864f19]" />
-                                    District: {dist.territory?.district || dist.name} ({userState})
+                                    District: {dist.territory?.district || dist.name}
                                   </p>
                                 </div>
 
