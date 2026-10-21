@@ -46,10 +46,10 @@ export interface ITicket extends Document {
 
 const ticketSchema = new Schema<ITicket>({
   ticketId: { type: String, required: true, unique: true },
-  creator: { type: Schema.Types.Mixed, ref: 'Agent', required: true },
+  creator: { type: Schema.Types.Mixed, required: true },
   creatorRole: { type: String },
   creatorName: { type: String },
-  assignedTo: { type: Schema.Types.Mixed, ref: 'Agent' },
+  assignedTo: { type: Schema.Types.Mixed },
   assignedAgent: { type: String },
   assignedAgentIdStr: { type: String },
   assignedAgentRole: { type: String },

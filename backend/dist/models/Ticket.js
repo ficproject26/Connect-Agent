@@ -4,10 +4,10 @@ exports.Ticket = void 0;
 const mongoose_1 = require("mongoose");
 const ticketSchema = new mongoose_1.Schema({
     ticketId: { type: String, required: true, unique: true },
-    creator: { type: mongoose_1.Schema.Types.Mixed, ref: 'Agent', required: true },
+    creator: { type: mongoose_1.Schema.Types.Mixed, required: true },
     creatorRole: { type: String },
     creatorName: { type: String },
-    assignedTo: { type: mongoose_1.Schema.Types.Mixed, ref: 'Agent' },
+    assignedTo: { type: mongoose_1.Schema.Types.Mixed },
     assignedAgent: { type: String },
     assignedAgentIdStr: { type: String },
     assignedAgentRole: { type: String },

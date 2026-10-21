@@ -137,6 +137,148 @@ const createTicketSchema = zod_1.z.object({
     attachmentUrl: zod_1.z.string().optional(),
     assignedAgent: zod_1.z.string().optional()
 });
+/**
+ * Safely resolves and populates 'creator' and 'assignedTo' for ticket records.
+ * Handles both MongoDB ObjectIds and custom string IDs (e.g. ADM-XXXXX, registration IDs)
+ * from either the Agent or User collections without triggering Mongoose CastError.
+ */
+async function populateTicketParties(ticketDocs) {
+    if (!ticketDocs || ticketDocs.length === 0)
+        return ticketDocs;
+    const rawIds = new Set();
+    ticketDocs.forEach((t) => {
+        const cId = t.creator && typeof t.creator === 'object' ? (t.creator._id || t.creator.id) : t.creator;
+        const aId = t.assignedTo && typeof t.assignedTo === 'object' ? (t.assignedTo._id || t.assignedTo.id) : t.assignedTo;
+        if (cId)
+            rawIds.add(String(cId).trim());
+        if (aId)
+            rawIds.add(String(aId).trim());
+    });
+    if (rawIds.size === 0)
+        return ticketDocs;
+    const allIdList = Array.from(rawIds);
+    const objectIds = [];
+    const stringIds = [];
+    allIdList.forEach((id) => {
+        if (mongoose_1.default.Types.ObjectId.isValid(id) && id.length === 24) {
+            objectIds.push(new mongoose_1.default.Types.ObjectId(id));
+        }
+        stringIds.push(id);
+    });
+    const partyMap = new Map();
+    // 1. Query Agent collection
+    const agentQueryOr = [];
+    if (objectIds.length > 0)
+        agentQueryOr.push({ _id: { $in: objectIds } });
+    if (stringIds.length > 0) {
+        agentQueryOr.push({ registrationId: { $in: stringIds } });
+        agentQueryOr.push({ agentId: { $in: stringIds } });
+    }
+    if (agentQueryOr.length > 0) {
+        const agents = await Agent_1.default.find({ $or: agentQueryOr })
+            .select('_id name email role level phone mobile registrationId agentId')
+            .lean();
+        agents.forEach((ag) => {
+            const obj = {
+                _id: String(ag._id),
+                name: ag.name || '',
+                email: ag.email || '',
+                role: ag.role || ag.level || '',
+                phone: ag.phone || ag.mobile || ''
+            };
+            partyMap.set(String(ag._id), obj);
+            if (ag.registrationId)
+                partyMap.set(String(ag.registrationId), obj);
+            if (ag.agentId)
+                partyMap.set(String(ag.agentId), obj);
+        });
+    }
+    // 2. Query users collection
+    const db = mongoose_1.default.connection.db;
+    if (db) {
+        const userQueryOr = [];
+        if (objectIds.length > 0)
+            userQueryOr.push({ _id: { $in: objectIds } });
+        if (stringIds.length > 0) {
+            userQueryOr.push({ _id: { $in: stringIds } });
+            userQueryOr.push({ id: { $in: stringIds } });
+            userQueryOr.push({ registrationId: { $in: stringIds } });
+        }
+        if (userQueryOr.length > 0) {
+            const users = await db.collection('users')
+                .find({ $or: userQueryOr }, { projection: { _id: 1, id: 1, name: 1, email: 1, role: 1, level: 1, phone: 1, mobile: 1, registrationId: 1 } })
+                .toArray();
+            users.forEach((u) => {
+                const obj = {
+                    _id: String(u._id),
+                    name: u.name || '',
+                    email: u.email || '',
+                    role: u.role || (u.level ? String(u.level) : ''),
+                    phone: u.phone || u.mobile || ''
+                };
+                const idKey = String(u._id);
+                if (!partyMap.has(idKey))
+                    partyMap.set(idKey, obj);
+                if (u.id && !partyMap.has(String(u.id)))
+                    partyMap.set(String(u.id), obj);
+                if (u.registrationId && !partyMap.has(String(u.registrationId)))
+                    partyMap.set(String(u.registrationId), obj);
+            });
+        }
+    }
+    // Populate into tickets
+    ticketDocs.forEach((t) => {
+        if (t.creator) {
+            const cKey = String(t.creator && typeof t.creator === 'object' ? (t.creator._id || t.creator.id) : t.creator).trim();
+            if (partyMap.has(cKey)) {
+                t.creator = partyMap.get(cKey);
+            }
+            else if (t.creatorName) {
+                t.creator = {
+                    _id: cKey,
+                    name: t.creatorName,
+                    role: t.creatorRole || 'Agent',
+                    email: '',
+                    phone: ''
+                };
+            }
+            else if (typeof t.creator !== 'object') {
+                t.creator = {
+                    _id: cKey,
+                    name: t.creatorRole || 'Agent',
+                    role: t.creatorRole || 'Agent',
+                    email: '',
+                    phone: ''
+                };
+            }
+        }
+        if (t.assignedTo) {
+            const aKey = String(t.assignedTo && typeof t.assignedTo === 'object' ? (t.assignedTo._id || t.assignedTo.id) : t.assignedTo).trim();
+            if (partyMap.has(aKey)) {
+                t.assignedTo = partyMap.get(aKey);
+            }
+            else if (t.assignedAgent) {
+                t.assignedTo = {
+                    _id: aKey,
+                    name: t.assignedAgent,
+                    role: t.assignedAgentRole || 'Support Executive',
+                    phone: t.assignedAgentPhone || '',
+                    email: ''
+                };
+            }
+            else if (typeof t.assignedTo !== 'object') {
+                t.assignedTo = {
+                    _id: aKey,
+                    name: 'Support Executive',
+                    role: 'Support Executive',
+                    phone: '',
+                    email: ''
+                };
+            }
+        }
+    });
+    return ticketDocs;
+}
 // GET /api/tickets
 const getTickets = async (req, res) => {
     try {
@@ -199,12 +341,11 @@ const getTickets = async (req, res) => {
         const total = await Ticket_1.default.countDocuments(filter);
         const tickets = await Ticket_1.default.find(filter)
             .select('ticketId creator creatorRole creatorName assignedTo assignedAgent assignedAgentIdStr assignedAgentRole assignedAgentPhone assignedAgentPincode assignedAgentDistrict assignedAgentDivision assignedAgentState assignmentStatus assignmentHistory vendorId vendorName storeName ticketType subject state district division pincode territory category description priority status attachmentName attachmentUrl resolutionDetails createdAt updatedAt')
-            .populate('creator', 'name email role phone')
-            .populate('assignedTo', 'name email role phone')
             .sort({ createdAt: -1 })
             .skip((pageNum - 1) * limitNum)
             .limit(limitNum)
             .lean();
+        await populateTicketParties(tickets);
         // Enrich tickets with assigned agent details if missing with safe error handling
         const enrichedTickets = await Promise.all(tickets.map(async (t) => {
             try {
@@ -260,12 +401,10 @@ const getTicketById = async (req, res) => {
         const agentRole = req.agent?.role;
         if (!agentId)
             return res.status(401).json({ message: 'Unauthorized' });
-        const ticket = await Ticket_1.default.findById(req.params.id)
-            .populate('creator', 'name email role phone')
-            .populate('assignedTo', 'name email role phone')
-            .lean();
-        if (!ticket)
+        const rawTicket = await Ticket_1.default.findById(req.params.id).lean();
+        if (!rawTicket)
             return res.status(404).json({ message: 'Ticket not found' });
+        const [ticket] = await populateTicketParties([rawTicket]);
         const isAdminOrExecutive = agentRole === 'admin' || agentRole === 'executive';
         if (!isAdminOrExecutive) {
             const agentIdStr = agentId.toString();
@@ -474,7 +613,8 @@ const createTicket = async (req, res) => {
             attachmentUrl: data.attachmentUrl
         });
         await ticket.save();
-        await ticket.populate('creator', 'name email role phone');
+        const ticketObj = ticket.toObject ? ticket.toObject() : ticket;
+        await populateTicketParties([ticketObj]);
         // Invalidate dashboard stats cache
         await cache_service_1.cacheService.delByPrefix('dashboard:');
         // Publish Realtime Ticket Event
@@ -501,7 +641,7 @@ const createTicket = async (req, res) => {
         if (ticket.assignedTo) {
             notification_service_1.default.notifyTicketUpdate(ticket, ticket.assignedTo, 'assigned').catch(() => { });
         }
-        return res.status(201).json({ message: 'Support ticket created successfully', ticket });
+        return res.status(201).json({ message: 'Support ticket created successfully', ticket: ticketObj });
     }
     catch (error) {
         if (error instanceof zod_1.z.ZodError) {
@@ -595,10 +735,8 @@ const updateTicketStatus = async (req, res) => {
         }
         ticket.updatedAt = new Date();
         await ticket.save();
-        await ticket.populate([
-            { path: 'creator', select: 'name email role phone' },
-            { path: 'assignedTo', select: 'name email role phone' }
-        ]);
+        const ticketObj = ticket.toObject ? ticket.toObject() : ticket;
+        await populateTicketParties([ticketObj]);
         // Invalidate dashboard stats cache
         await cache_service_1.cacheService.delByPrefix('dashboard:');
         // Publish Realtime Ticket Status Event
@@ -628,7 +766,7 @@ const updateTicketStatus = async (req, res) => {
         if (creatorId && String(creatorId) !== String(ticket.assignedTo)) {
             notification_service_1.default.notifyTicketUpdate(ticket, creatorId, ticket.status).catch(() => { });
         }
-        return res.status(200).json({ message: 'Ticket status updated', ticket });
+        return res.status(200).json({ message: 'Ticket status updated', ticket: ticketObj });
     }
     catch (error) {
         console.error('Update ticket status error:', error);
