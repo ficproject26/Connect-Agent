@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateShopVisit = exports.getShopVisitById = exports.recordShopVisit = exports.getFieldVisitAgents = exports.getFieldVisits = exports.completeFieldVisit = exports.startFieldVisit = void 0;
+exports.revalidateEligibility = exports.updateShopVisit = exports.getShopVisitById = exports.recordShopVisit = exports.getFieldVisitAgents = exports.getFieldVisits = exports.completeFieldVisit = exports.startFieldVisit = void 0;
 const zod_1 = require("zod");
 const FieldVisit_1 = __importDefault(require("../models/FieldVisit"));
 const Vendor_1 = __importDefault(require("../models/Vendor"));
@@ -139,9 +139,9 @@ const getFieldVisits = async (req, res) => {
         const agentRole = req.agent?.role;
         if (!agentId && !agentEmail)
             return res.status(401).json({ message: 'Unauthorized' });
-        const { page = '1', limit = '100', status, vendorId, agent: specificAgent, district, division, pincode, startDate, endDate, date } = req.query;
-        const pageNum = parseInt(page, 10);
-        const limitNum = parseInt(limit, 10);
+        const { page = '1', limit = '15', status, vendorId, agent: specificAgent, district, division, pincode, startDate, endDate, date, search, category, scope: queryScope } = req.query;
+        const pageNum = Math.max(1, parseInt(page, 10) || 1);
+        const limitNum = (limit === 'all' || parseInt(limit, 10) >= 1000) ? 1000 : (parseInt(limit, 10) || 15);
         const filter = {};
         const scope = await (0, territoryScope_1.getAgentTerritoryScope)(agentId, agentEmail);
         if (!scope)
@@ -164,11 +164,18 @@ const getFieldVisits = async (req, res) => {
                 { recordedById: agentId },
                 { managerId: agentId }
             ];
-            if (scope.pincode) {
-                pinConds.push({ pincode: scope.pincode }, { pincodeCode: scope.pincode });
-            }
             filter.$and = filter.$and || [];
             filter.$and.push({ $or: pinConds });
+            if (scope.pincode) {
+                filter.$and.push({
+                    $or: [
+                        { pincode: scope.pincode },
+                        { pincodeCode: scope.pincode },
+                        { 'assignedTerritory.pincode': scope.pincode },
+                        { 'vendor.pincode': scope.pincode }
+                    ]
+                });
+            }
         }
         else if (scope.role === 'division') {
             const divConds = [
@@ -191,17 +198,7 @@ const getFieldVisits = async (req, res) => {
             ];
             if (scope.district) {
                 const cleanD = scope.district.replace(/\s+district$/i, '').trim();
-                distConds.push({ district: new RegExp(cleanD, 'i') }, { 'assignedTerritory.district': new RegExp(cleanD, 'i') });
-                try {
-                    const db = mongoose_1.default.connection.db;
-                    if (db) {
-                        const dDoc = await db.collection('districts').findOne({ name: new RegExp(`^${cleanD}$`, 'i') });
-                        if (dDoc) {
-                            distConds.push({ districtId: String(dDoc._id) }, { districtId: dDoc._id });
-                        }
-                    }
-                }
-                catch (_) { }
+                distConds.push({ district: new RegExp(cleanD, 'i') }, { 'vendor.district': new RegExp(cleanD, 'i') }, { 'assignedTerritory.district': new RegExp(cleanD, 'i') });
             }
             filter.$and = filter.$and || [];
             filter.$and.push({ $or: distConds });
@@ -214,20 +211,37 @@ const getFieldVisits = async (req, res) => {
             ];
             if (scope.state) {
                 const cleanS = scope.state.replace(/\s+state$/i, '').trim();
-                stateConds.push({ state: new RegExp(cleanS, 'i') }, { 'assignedTerritory.state': new RegExp(cleanS, 'i') });
-                try {
-                    const db = mongoose_1.default.connection.db;
-                    if (db) {
-                        const sDoc = await db.collection('states').findOne({ name: new RegExp(`^${cleanS}$`, 'i') });
-                        if (sDoc) {
-                            stateConds.push({ stateId: String(sDoc._id) }, { stateId: sDoc._id });
-                        }
-                    }
-                }
-                catch (_) { }
+                stateConds.push({ state: new RegExp(cleanS, 'i') }, { 'vendor.state': new RegExp(cleanS, 'i') }, { 'assignedTerritory.state': new RegExp(cleanS, 'i') });
             }
             filter.$and = filter.$and || [];
             filter.$and.push({ $or: stateConds });
+        }
+        // View scope filter
+        if (queryScope === 'self' || queryScope === 'my_reports') {
+            filter.$and = filter.$and || [];
+            filter.$and.push({
+                $or: [
+                    { agent: agentId },
+                    { recordedById: String(agentId) },
+                    { managerId: String(agentId) }
+                ]
+            });
+        }
+        else if (queryScope === 'state_agents') {
+            filter.$and = filter.$and || [];
+            filter.$and.push({ recordedByRole: /state/i });
+        }
+        else if (queryScope === 'district_agents') {
+            filter.$and = filter.$and || [];
+            filter.$and.push({ recordedByRole: /district/i });
+        }
+        else if (queryScope === 'division_agents') {
+            filter.$and = filter.$and || [];
+            filter.$and.push({ recordedByRole: /division/i });
+        }
+        else if (queryScope === 'pincode_agents') {
+            filter.$and = filter.$and || [];
+            filter.$and.push({ recordedByRole: /pincode/i });
         }
         if (specificAgent && specificAgent !== 'all') {
             filter.$and = filter.$and || [];
@@ -240,8 +254,44 @@ const getFieldVisits = async (req, res) => {
                 ]
             });
         }
-        if (status && status !== 'all') {
-            if (status === 'in_progress') {
+        if (category && category !== 'All') {
+            filter.$and = filter.$and || [];
+            filter.$and.push({
+                $or: [
+                    { category: new RegExp(`^${category}$`, 'i') },
+                    { businessCategory: new RegExp(`^${category}$`, 'i') }
+                ]
+            });
+        }
+        if (search && String(search).trim()) {
+            const q = String(search).trim();
+            filter.$and = filter.$and || [];
+            filter.$and.push({
+                $or: [
+                    { shopName: new RegExp(q, 'i') },
+                    { notInterestedReason: new RegExp(q, 'i') },
+                    { category: new RegExp(q, 'i') },
+                    { businessCategory: new RegExp(q, 'i') },
+                    { recordedByName: new RegExp(q, 'i') },
+                    { managerName: new RegExp(q, 'i') }
+                ]
+            });
+        }
+        // Base filter for KPI calculations before interest status filter (preserving RegExp & ObjectId)
+        const baseKpiFilter = {
+            ...filter,
+            $and: filter.$and ? [...filter.$and] : []
+        };
+        if (status && status !== 'all' && status !== 'All') {
+            if (status === 'YES') {
+                filter.$and = filter.$and || [];
+                filter.$and.push({ $or: [{ interestedStatus: 'YES' }, { interestStatus: 'YES' }] });
+            }
+            else if (status === 'NO') {
+                filter.$and = filter.$and || [];
+                filter.$and.push({ $or: [{ interestedStatus: 'NO' }, { interestStatus: 'NO' }] });
+            }
+            else if (status === 'in_progress') {
                 filter.status = { $in: ['in_progress', 'started'] };
             }
             else {
@@ -310,14 +360,29 @@ const getFieldVisits = async (req, res) => {
                 ]
             });
         }
-        const total = await FieldVisit_1.default.countDocuments(filter);
-        const rawVisits = await FieldVisit_1.default.find(filter)
-            .populate('agent', 'name email role phone territory assignedTerritory registrationId')
-            .populate('vendor', 'storeName businessName contactPerson phone pincode address district division state')
-            .sort({ createdAt: -1 })
-            .skip((pageNum - 1) * limitNum)
-            .limit(limitNum)
-            .lean();
+        const [matchingVisits, pageVisits] = await Promise.all([
+            FieldVisit_1.default.find(baseKpiFilter).select('interestedStatus interestStatus status').lean(),
+            FieldVisit_1.default.find(filter)
+                .populate('agent', 'name email role phone territory assignedTerritory registrationId')
+                .populate('vendor', 'storeName businessName contactPerson phone pincode address district division state')
+                .sort({ createdAt: -1 })
+                .skip((pageNum - 1) * limitNum)
+                .limit(limitNum)
+                .lean()
+        ]);
+        const kpiTotal = matchingVisits.length;
+        const kpiInterested = matchingVisits.filter(v => v.interestedStatus === 'YES' || v.interestStatus === 'YES').length;
+        const kpiNotInterested = matchingVisits.filter(v => v.interestedStatus === 'NO' || v.interestStatus === 'NO').length;
+        let total = kpiTotal;
+        if (status && status !== 'all' && status !== 'All') {
+            if (status === 'YES')
+                total = kpiInterested;
+            else if (status === 'NO')
+                total = kpiNotInterested;
+            else
+                total = matchingVisits.filter(v => v.status === status).length;
+        }
+        const rawVisits = pageVisits;
         // Normalize visits to guarantee agent and vendor fields are populated even for legacy records
         const visits = rawVisits.map((v) => {
             const normalizedAgent = v.agent || {
@@ -336,6 +401,11 @@ const getFieldVisits = async (req, res) => {
                 division: v.division || scope.division,
                 pincode: v.pincode || v.pincodeCode || scope.pincode
             };
+            const isInterested = (v.interestedStatus === 'YES' || v.interestStatus === 'YES');
+            const rawStat = String(v.onboardingStatus || v.status || '').toLowerCase().trim();
+            const isCompleted = ['onboarded', 'completed', 'success', 'approved', 'active'].includes(rawStat) ||
+                (v.vendorId && (v.status === 'Approved' || v.status === 'Active'));
+            const isEligibleForResume = isInterested && !isCompleted;
             return {
                 ...v,
                 agent: normalizedAgent,
@@ -344,12 +414,22 @@ const getFieldVisits = async (req, res) => {
                 district: v.district || normalizedVendor.district,
                 division: v.division || normalizedVendor.division,
                 pincode: v.pincode || v.pincodeCode || normalizedVendor.pincode,
-                status: (v.status || '').toLowerCase() === 'started' ? 'in_progress' : v.status
+                status: (v.status || '').toLowerCase() === 'started' ? 'in_progress' : v.status,
+                isEligibleForResume,
+                isOnboardingCompleted: isCompleted,
+                onboardingStatus: isCompleted ? 'COMPLETED' : (v.onboardingStatus || (isInterested ? 'PENDING' : 'NOT_INTERESTED'))
             };
         });
         return res.status(200).json({
+            success: true,
             visits,
-            pagination: { page: pageNum, limit: limitNum, total, pages: Math.ceil(total / limitNum) }
+            data: visits,
+            pagination: { page: pageNum, limit: limitNum, total, pages: Math.ceil(total / limitNum) },
+            kpi: {
+                total: kpiTotal,
+                interested: kpiInterested,
+                notInterested: kpiNotInterested
+            }
         });
     }
     catch (error) {
@@ -720,4 +800,38 @@ const updateShopVisit = async (req, res) => {
     }
 };
 exports.updateShopVisit = updateShopVisit;
+// GET /api/field-visits/:id/eligibility or /api/shop-visits/:id/eligibility
+const revalidateEligibility = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const visit = await FieldVisit_1.default.findById(id).lean();
+        if (!visit) {
+            return res.status(404).json({
+                success: false,
+                eligible: false,
+                message: 'Shop visit record not found'
+            });
+        }
+        const isInterested = (visit.interestedStatus === 'YES' || visit.interestStatus === 'YES');
+        const rawStat = String(visit.onboardingStatus || visit.status || '').toLowerCase().trim();
+        const isCompleted = ['onboarded', 'completed', 'success', 'approved', 'active'].includes(rawStat) ||
+            (visit.vendorId && (visit.status === 'Approved' || visit.status === 'Active'));
+        const isEligibleForResume = isInterested && !isCompleted;
+        return res.status(200).json({
+            success: true,
+            eligible: isEligibleForResume,
+            isEligibleForResume,
+            data: visit,
+            visit,
+            message: isEligibleForResume
+                ? 'Shop visit is eligible for vendor onboarding'
+                : 'This shop has already completed onboarding or is no longer eligible.'
+        });
+    }
+    catch (error) {
+        console.error('Error revalidating eligibility:', error);
+        return res.status(500).json({ success: false, message: 'Failed to revalidate eligibility' });
+    }
+};
+exports.revalidateEligibility = revalidateEligibility;
 //# sourceMappingURL=fieldVisit.controller.js.map

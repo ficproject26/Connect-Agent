@@ -15,7 +15,7 @@ interface SidebarItem {
 }
 
 export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, logout, notifications } = useAuth();
+  const { user, logout, notifications, markNotificationRead, fetchNotifications } = useAuth();
   const { theme, toggleTheme, t } = useTheme();
 
   const navigate = useNavigate();
@@ -289,54 +289,93 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                 {/* Notifications Dropdown */}
                 <div className="relative" ref={notifMenuRef}>
                   <button
-                    onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
+                    onClick={() => {
+                      const next = !notifDropdownOpen;
+                      setNotifDropdownOpen(next);
+                      if (next && fetchNotifications) fetchNotifications();
+                    }}
                     className="p-2 text-[#52443a] hover:bg-[#eae8e7] rounded-full transition-colors relative border-none bg-transparent cursor-pointer flex items-center"
+                    aria-label="Notifications"
                   >
                     <span className="material-symbols-outlined text-xl">notifications</span>
                     {unreadNotifs.length > 0 && (
-                      <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-[#ba1a1a] rounded-full"></span>
+                      <span className="absolute -top-0.5 -right-0.5 bg-[#ba1a1a] text-white text-[9px] font-extrabold h-4 min-w-[16px] px-1 rounded-full flex items-center justify-center shadow-sm border border-white">
+                        {unreadNotifs.length > 99 ? '99+' : unreadNotifs.length}
+                      </span>
                     )}
                   </button>
 
                   {notifDropdownOpen && (
-                    <div className="absolute right-0 mt-2 w-72 bg-white border border-[#d7c3b5]/40 rounded-2xl shadow-xl py-3 z-50 text-xs text-left animate-fade-in space-y-2">
-                      <div className="px-4 pb-2 border-b border-slate-100 flex justify-between items-center">
-                        <span className="font-extrabold text-slate-800">Unread Alerts ({unreadNotifs.length})</span>
+                    <div className="absolute right-0 mt-2 w-80 bg-white border border-[#d7c3b5]/40 rounded-2xl shadow-xl py-0 z-50 text-xs text-left animate-fade-in overflow-hidden">
+                      <div className="px-4 py-2.5 border-b border-slate-100 flex justify-between items-center bg-[#fbf9f8]">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-extrabold text-slate-800">Alerts</span>
+                          {unreadNotifs.length > 0 && (
+                            <span className="bg-amber-100 text-[#864f19] text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                              {unreadNotifs.length} new
+                            </span>
+                          )}
+                        </div>
                         <Link to="/shared/notifications" onClick={() => setNotifDropdownOpen(false)} className="text-[#864f19] hover:underline font-bold text-[10px] uppercase">View All</Link>
                       </div>
-                      <div className="max-h-[240px] overflow-y-auto divide-y divide-slate-50">
-                        {unreadNotifs.length === 0 ? (
-                          <p className="py-6 text-center text-slate-400 font-semibold">No new notifications</p>
+                      <div className="max-h-[280px] overflow-y-auto divide-y divide-slate-100">
+                        {notifications.length === 0 ? (
+                          <div className="py-8 text-center text-slate-400 font-semibold space-y-1">
+                            <Bell className="w-5 h-5 mx-auto text-slate-300 opacity-60" />
+                            <p className="text-xs">No notifications</p>
+                          </div>
                         ) : (
-                          unreadNotifs.slice(0, 4).map((notif) => (
+                          notifications.slice(0, 6).map((notif) => (
                             <div
                               key={notif.id}
                               onClick={() => {
+                                if (!notif.read) markNotificationRead(notif.id);
                                 setNotifDropdownOpen(false);
-                                navigate('/shared/notifications');
+                                if (notif.link) {
+                                  navigate(notif.link);
+                                } else {
+                                  navigate('/shared/notifications');
+                                }
                               }}
-                              className="p-3 hover:bg-[#fbf9f8] transition-colors space-y-0.5 cursor-pointer"
+                              className={`p-3 transition-colors space-y-1 cursor-pointer ${
+                                !notif.read ? 'bg-amber-50/40 hover:bg-amber-50/70' : 'hover:bg-slate-50'
+                              }`}
                             >
-                              <div className="flex justify-between items-center">
-                                <span className="font-bold text-[#1b1c1c] text-[11px] truncate max-w-[170px]">{notif.title}</span>
-                                <span className={`text-[8px] font-extrabold px-1.5 py-0.5 rounded uppercase ${
+                              <div className="flex justify-between items-start gap-1">
+                                <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                  {!notif.read && (
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-600 shrink-0" />
+                                  )}
+                                  <span className={`text-[11px] truncate ${!notif.read ? 'font-bold text-[#1b1c1c]' : 'font-medium text-slate-600'}`}>
+                                    {notif.title}
+                                  </span>
+                                </div>
+                                <span className={`text-[8px] font-extrabold px-1.5 py-0.5 rounded uppercase shrink-0 ${
                                   notif.priority === 'high' ? 'bg-red-50 text-red-700' : 'bg-slate-100 text-slate-600'
-                                }`}>{notif.priority}</span>
+                                }`}>
+                                  {notif.status || notif.priority}
+                                </span>
                               </div>
-                              <p className="text-slate-500 text-[10px] leading-relaxed line-clamp-2">{notif.message}</p>
+                              <p className="text-slate-500 text-[10px] leading-relaxed line-clamp-2 pl-3">
+                                {notif.message}
+                              </p>
+                              <div className="flex justify-between items-center pl-3 pt-0.5 text-[9px] text-slate-400">
+                                <span>{new Date(notif.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                {notif.link && <span className="text-[#864f19] font-bold hover:underline">View details →</span>}
+                              </div>
                             </div>
                           ))
                         )}
                       </div>
-                      <div className="p-2 border-t border-slate-100 text-center bg-[#fbf9f8] rounded-b-2xl">
+                      <div className="p-2.5 border-t border-slate-100 text-center bg-[#fbf9f8]">
                         <button
                           onClick={() => {
                             setNotifDropdownOpen(false);
                             navigate('/shared/notifications');
                           }}
-                          className="w-full text-[11px] font-bold text-[#864f19] hover:underline cursor-pointer bg-transparent border-none py-1 flex items-center justify-center gap-1"
+                          className="w-full text-[11px] font-bold text-[#864f19] hover:underline cursor-pointer bg-transparent border-none py-0.5 flex items-center justify-center gap-1"
                         >
-                          View All Notifications →
+                          View All Notifications ({notifications.length}) →
                         </button>
                       </div>
                     </div>

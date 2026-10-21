@@ -51,7 +51,10 @@ export interface NotificationItem {
   timestamp: Date;
   read: boolean;
   priority: 'high' | 'medium' | 'low';
-  category: 'delivery' | 'technician' | 'system' | 'announcement';
+  category: 'delivery' | 'technician' | 'system' | 'announcement' | 'task' | 'vendor' | 'kyc' | 'ticket';
+  link?: string;
+  status?: string;
+  metadata?: any;
 }
 
 interface AuthContextType {
@@ -60,6 +63,7 @@ interface AuthContextType {
   token: string | null;
   loading: boolean;
   notifications: NotificationItem[];
+  fetchNotifications: () => Promise<void>;
   soundProfile: 'chirp' | 'melody' | 'siren';
   soundVolume: number;
   login: (email: string, password?: string) => Promise<any>;
@@ -112,7 +116,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         timestamp: new Date(n.createdAt),
         read: n.read,
         priority: n.priority || 'low',
-        category: n.category || 'system'
+        category: n.category || 'system',
+        link: n.link || n.metadata?.link,
+        status: n.status || n.metadata?.status,
+        metadata: n.metadata
       }));
       setNotifications(mapped);
     } catch (err: any) {
@@ -541,6 +548,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         token,
         loading,
         notifications,
+        fetchNotifications,
         soundProfile,
         soundVolume,
         login,

@@ -99,11 +99,21 @@ export async function getAgentTerritoryScope(agentId: string, email?: string): P
     }
     if (!agent) return null;
 
-    const rawRole = (agent.role || agent.level || 'pincode').toLowerCase();
-    const normalizedRole = rawRole === 'agent' ? (agent.level || 'pincode').toLowerCase() : rawRole;
+    const rawRoleStr = String(agent.role || '').toLowerCase();
+    const rawLevelStr = String(agent.level || '').toLowerCase();
+    let canonicalRole = 'pincode';
+    if (rawRoleStr.includes('state') || rawLevelStr.includes('state') || rawLevelStr === '1') {
+      canonicalRole = 'state';
+    } else if (rawRoleStr.includes('district') || rawLevelStr.includes('district') || rawLevelStr === '2') {
+      canonicalRole = 'district';
+    } else if (rawRoleStr.includes('division') || rawLevelStr.includes('division') || rawLevelStr === '3') {
+      canonicalRole = 'division';
+    } else {
+      canonicalRole = 'pincode';
+    }
 
     const scope: TerritoryScope = {
-      role: normalizedRole,
+      role: canonicalRole,
       state: (agent.assignedTerritory?.state || agent.territory?.state || agent.state || agent.assignedState || '').trim(),
       district: (agent.assignedTerritory?.district || agent.territory?.district || agent.district || agent.assignedDistrict || '').trim(),
       division: (agent.assignedTerritory?.division || agent.territory?.division || agent.division || agent.assignedDivision || '').trim(),
@@ -173,7 +183,9 @@ export function buildTerritoryFilter(scope: TerritoryScope | null, divisionPinco
 
   const validRoles = ['state', 'district', 'division', 'pincode', 'agent', 'state_manager', 'district_agent', 'district_manager', 'division_agent', 'division_manager', 'pincode_agent'];
 
-  if (scope.role === 'state') {
+  const role = (scope.role || '').toLowerCase();
+
+  if (role === 'state' || role.includes('state')) {
     if (!scope.state) return { _id: null };
 
     return {
@@ -194,7 +206,7 @@ export function buildTerritoryFilter(scope: TerritoryScope | null, divisionPinco
     };
   }
 
-  if (scope.role === 'district') {
+  if (role === 'district' || role.includes('district')) {
     if (!scope.district) return { _id: null };
 
     const stateConditions = scope.state ? [
@@ -230,7 +242,7 @@ export function buildTerritoryFilter(scope: TerritoryScope | null, divisionPinco
     };
   }
 
-  if (scope.role === 'division') {
+  if (role === 'division' || role.includes('division')) {
     if (!scope.division) return { _id: null };
 
     const districtConditions = scope.district ? [
@@ -259,7 +271,8 @@ export function buildTerritoryFilter(scope: TerritoryScope | null, divisionPinco
       { 'assignedTerritory.division': containsRegex(scope.division) },
       { 'territory.division': containsRegex(scope.division) },
       { division: containsRegex(scope.division) },
-      { assignedDivision: containsRegex(scope.division) }
+      { assignedDivision: containsRegex(scope.division) },
+      { assignedArea: containsRegex(scope.division) }
     ];
 
     if (Array.isArray(divisionPincodes) && divisionPincodes.length > 0) {
@@ -287,7 +300,7 @@ export function buildTerritoryFilter(scope: TerritoryScope | null, divisionPinco
     };
   }
 
-  if (scope.role === 'pincode') {
+  if (role === 'pincode' || role.includes('pincode') || role === 'agent') {
     if (!scope.pincode) return { _id: null };
 
     const pinRoles = ['pincode', 'pincode_agent'];
@@ -322,7 +335,9 @@ export function buildTerritoryFilter(scope: TerritoryScope | null, divisionPinco
 export function buildVendorScopeFilter(scope: TerritoryScope | null, divisionPincodes?: string[]): Record<string, any> {
   if (!scope) return { _id: null };
 
-  if (scope.role === 'state') {
+  const role = (scope.role || '').toLowerCase();
+
+  if (role === 'state' || role.includes('state')) {
     if (!scope.state) return { _id: null };
 
     return {
@@ -334,7 +349,7 @@ export function buildVendorScopeFilter(scope: TerritoryScope | null, divisionPin
     };
   }
 
-  if (scope.role === 'district') {
+  if (role === 'district' || role.includes('district')) {
     if (!scope.district) return { _id: null };
 
     const stateConditions = scope.state ? [
@@ -361,7 +376,7 @@ export function buildVendorScopeFilter(scope: TerritoryScope | null, divisionPin
     };
   }
 
-  if (scope.role === 'division') {
+  if (role === 'division' || role.includes('division')) {
     if (!scope.division) return { _id: null };
 
     const districtConditions = scope.district ? [
@@ -404,26 +419,33 @@ export function buildVendorScopeFilter(scope: TerritoryScope | null, divisionPin
     };
   }
 
-  if (scope.role === 'pincode') {
+  if (role === 'pincode' || role.includes('pincode') || role === 'agent') {
+    const agentMatches: any[] = [scope.agentId];
+    if (mongoose.Types.ObjectId.isValid(scope.agentId)) {
+      agentMatches.push(new mongoose.Types.ObjectId(scope.agentId));
+    }
+    const agentFilterClauses: any[] = [
+      { assignedAgent: { $in: agentMatches } },
+      { agentId: { $in: agentMatches } },
+      { onboardedBy: { $in: agentMatches } },
+      { onboardedByAgentId: { $in: agentMatches } }
+    ];
+
     if (scope.pincode) {
       return {
-        $or: [
-          { pincode: scope.pincode },
-          { assignedPincode: scope.pincode },
-          { 'location.pincode': scope.pincode },
-          { assignedAgent: scope.agentId },
-          { agentId: scope.agentId },
-          { onboardedBy: scope.agentId }
+        $and: [
+          {
+            $or: [
+              { pincode: scope.pincode },
+              { assignedPincode: scope.pincode },
+              { 'location.pincode': scope.pincode }
+            ]
+          },
+          { $or: agentFilterClauses }
         ]
       };
     }
-    return {
-      $or: [
-        { assignedAgent: scope.agentId },
-        { agentId: scope.agentId },
-        { onboardedBy: scope.agentId }
-      ]
-    };
+    return { $or: agentFilterClauses };
   }
 
   return { _id: null };

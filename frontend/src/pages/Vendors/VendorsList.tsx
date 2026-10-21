@@ -388,16 +388,26 @@ export const VendorsList: React.FC = () => {
     }
   }, [apiVendorsData, user?.name, userState, userDistrict, userDivision, userPincode, userVendorsKey]);
 
-  // Reset divisionFilter if districtFilter changes to an incompatible value
+  // Reset child filters when parent changes
   useEffect(() => {
     setDivisionFilter('all');
+    setPincodeFilter('all');
   }, [districtFilter]);
 
-  // 1. SCOPED VENDORS LIST BASED ON LOGGED IN AGENT HIERARCHY (STRICT STATE ISOLATION)
+  useEffect(() => {
+    setPincodeFilter('all');
+  }, [divisionFilter]);
+
+  // 1. SCOPED VENDORS LIST BASED ON LOGGED IN AGENT HIERARCHY (STRICT STATE ISOLATION & FULL ACTIVE ELIGIBILITY)
   const scopedVendors = useMemo(() => {
     const filtered = vendors.filter(vendor => {
       // Must have a real valid shop name
       if (!vendor.name || !vendor.name.trim() || vendor.name === 'undefined' || vendor.name === 'Vendor') return false;
+
+      // Section 6: Vendors must strictly be active and fully KYC approved
+      const isApprovedKyc = vendor.kycStatus === 'approved';
+      const isActiveStatus = vendor.status === 'active';
+      if (!isApprovedKyc || !isActiveStatus) return false;
 
       // 1. First enforce strict State Territory match (use agent's own state as fallback)
       const vendorState = (vendor.state || userState).toLowerCase();
@@ -408,7 +418,7 @@ export const VendorsList: React.FC = () => {
 
       // 2. Role-based scoping within assigned State
       if (activeRole === 'pincode') {
-        // Match on agent's actual pincode only — no hardcoded fallbacks
+        // Section 5: Pincode Agent only sees vendors assigned to them in their pincode
         return vendor.pincode === userPincode;
       }
 
@@ -436,22 +446,23 @@ export const VendorsList: React.FC = () => {
   // Extract unique filter dropdown values strictly scoped to assigned State
   const categories = useMemo(() => Array.from(new Set([...CANONICAL_MAIN_CATEGORIES, ...scopedVendors.map(v => v.storeType).filter(Boolean)])), [scopedVendors]);
   const districts = useMemo(() => getDistrictsForState(userState), [userState]);
-  const effectiveDistrictForDivisions = activeRole === 'district' ? userDistrict : districtFilter;
+  const effectiveDistrictForDivisions = activeRole === 'district' || activeRole === 'division' || activeRole === 'pincode' ? userDistrict : districtFilter;
   const divisions = useMemo(() => {
     if (!effectiveDistrictForDivisions || effectiveDistrictForDivisions === 'all') return [];
     return getDivisionsForDistrict(effectiveDistrictForDivisions, userState);
   }, [effectiveDistrictForDivisions, userState]);
 
+  const effectiveDivisionForPincodes = activeRole === 'division' || activeRole === 'pincode' ? userDivision : divisionFilter;
   const pincodes = useMemo(() => {
-    if (divisionFilter && divisionFilter !== 'all') {
-      const divPins = getPincodesForDivision(divisionFilter);
+    if (effectiveDivisionForPincodes && effectiveDivisionForPincodes !== 'all') {
+      const divPins = getPincodesForDivision(effectiveDivisionForPincodes);
       if (divPins.length > 0) return divPins;
     }
     return Array.from(new Set(scopedVendors.map(v => v.pincode).filter(Boolean)));
-  }, [scopedVendors, divisionFilter]);
+  }, [scopedVendors, effectiveDivisionForPincodes]);
   const agents = useMemo(() => Array.from(new Set(scopedVendors.map(v => v.assignedAgent).filter(Boolean))), [scopedVendors]);
 
-  // Compute 6 KPI Card Metrics from SCOPED vendors list with dynamic calendar boundaries
+  // Compute 6 KPI Card Metrics from SCOPED active vendors list with dynamic calendar boundaries
   const metrics = useMemo(() => {
     const now = new Date();
     const curYear = now.getFullYear();
@@ -463,6 +474,7 @@ export const VendorsList: React.FC = () => {
     const startOfYesterday = new Date(curYear, curMonth, curDate - 1, 0, 0, 0, 0).getTime();
     const last7DaysStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).getTime();
 
+    const totalActive = scopedVendors.length;
     const todayOnboard = scopedVendors.filter(v => {
       const t = getVendorTimestamp(v);
       return t >= startOfToday && t <= endOfToday;
@@ -473,9 +485,8 @@ export const VendorsList: React.FC = () => {
       return t >= last7DaysStart;
     }).length;
 
-    const pendingKyc = scopedVendors.filter(v => v.kycStatus === 'pending').length;
-    const activeCount = scopedVendors.filter(v => v.status === 'active').length;
-    const inactiveCount = scopedVendors.filter(v => v.status === 'inactive').length;
+    const territoryPincodesCovered = new Set(scopedVendors.map(v => v.pincode).filter(Boolean)).size;
+    const categoriesCount = new Set(scopedVendors.map(v => v.storeType).filter(Boolean)).size;
     const recentlyUpdated = scopedVendors.filter(v => {
       const t = getVendorTimestamp(v);
       return t >= startOfYesterday;
@@ -484,9 +495,9 @@ export const VendorsList: React.FC = () => {
     return {
       todayOnboard,
       weekOnboard,
-      pendingKyc,
-      activeCount,
-      inactiveCount,
+      totalActive,
+      territoryPincodesCovered,
+      categoriesCount,
       recentlyUpdated
     };
   }, [scopedVendors]);
@@ -711,6 +722,37 @@ export const VendorsList: React.FC = () => {
     fullAddress: '',
     landmark: ''
   });
+
+  // Pick up Resume Onboarding prefill passed from Reports Module
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem('connect_resume_onboard');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        sessionStorage.removeItem('connect_resume_onboard');
+        if (parsed && parsed.fieldVisitId) {
+          setFieldVisitPrefill({
+            shopName: parsed.shopName || '',
+            category: parsed.category || 'Services',
+            storefrontPhoto: parsed.storefrontPhoto || '',
+            fieldVisitId: parsed.fieldVisitId
+          });
+          setNewVendor(prev => ({
+            ...prev,
+            name: parsed.shopName || prev.name,
+            storeType: parsed.category || prev.storeType,
+            phone: parsed.mobile || prev.phone,
+            pincode: parsed.pincode || prev.pincode,
+            district: parsed.district || prev.district,
+            division: parsed.division || prev.division,
+            state: parsed.state || prev.state,
+            fullAddress: parsed.address || prev.fullAddress
+          }));
+          setIsAddModalOpen(true);
+        }
+      }
+    } catch (e) {}
+  }, []);
 
   const handlePincodeOnboardChange = (pin: string) => {
     const cleaned = pin.replace(/\D/g, '').slice(0, 6);
@@ -977,6 +1019,12 @@ export const VendorsList: React.FC = () => {
 
       {/* 6 EXECUTIVE KPI METRIC CARDS (SCOPED TO ACTIVE ROLE HIERARCHY) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="bg-emerald-50/70 p-4 rounded-2xl border border-emerald-200 shadow-sm">
+          <p className="text-[10px] font-black uppercase text-emerald-900 tracking-wider">Active Vendors</p>
+          <p className="text-2xl font-black text-emerald-700 mt-1">{metrics.totalActive}</p>
+          <p className="text-[10px] text-emerald-700 font-semibold mt-0.5">Fully approved & active</p>
+        </div>
+
         <div className="bg-white p-4 rounded-2xl border border-[#d7c3b5]/40 shadow-sm">
           <p className="text-[10px] font-black uppercase text-[#52443a] tracking-wider">Today's Onboarding</p>
           <p className="text-2xl font-black text-[#864f19] mt-1">{metrics.todayOnboard}</p>
@@ -989,22 +1037,16 @@ export const VendorsList: React.FC = () => {
           <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Last 7 days</p>
         </div>
 
-        <div className="bg-amber-50/70 p-4 rounded-2xl border border-amber-200 shadow-sm">
-          <p className="text-[10px] font-black uppercase text-amber-900 tracking-wider">Pending KYC</p>
-          <p className="text-2xl font-black text-amber-800 mt-1">{metrics.pendingKyc}</p>
-          <p className="text-[10px] text-amber-700 font-semibold mt-0.5">Awaiting KYC Team</p>
+        <div className="bg-white p-4 rounded-2xl border border-[#d7c3b5]/40 shadow-sm">
+          <p className="text-[10px] font-black uppercase text-[#52443a] tracking-wider">Territory Coverage</p>
+          <p className="text-2xl font-black text-[#864f19] mt-1">{metrics.territoryPincodesCovered}</p>
+          <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Active PIN areas</p>
         </div>
 
-        <div className="bg-emerald-50/70 p-4 rounded-2xl border border-emerald-200 shadow-sm">
-          <p className="text-[10px] font-black uppercase text-emerald-900 tracking-wider">Active Vendors</p>
-          <p className="text-2xl font-black text-emerald-700 mt-1">{metrics.activeCount}</p>
-          <p className="text-[10px] text-emerald-700 font-semibold mt-0.5">Operational merchants</p>
-        </div>
-
-        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 shadow-sm">
-          <p className="text-[10px] font-black uppercase text-slate-600 tracking-wider">Inactive Vendors</p>
-          <p className="text-2xl font-black text-slate-700 mt-1">{metrics.inactiveCount}</p>
-          <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Offboarded / Paused</p>
+        <div className="bg-white p-4 rounded-2xl border border-[#d7c3b5]/40 shadow-sm">
+          <p className="text-[10px] font-black uppercase text-[#52443a] tracking-wider">Categories</p>
+          <p className="text-2xl font-black text-purple-700 mt-1">{metrics.categoriesCount}</p>
+          <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Merchant sectors</p>
         </div>
 
         <div className="bg-white p-4 rounded-2xl border border-[#d7c3b5]/40 shadow-sm">

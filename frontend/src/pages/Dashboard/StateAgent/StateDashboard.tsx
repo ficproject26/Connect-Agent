@@ -3,7 +3,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { downloadReport } from '../../../utils/downloadReport';
 import {
   TrendingUp, Download, ShieldAlert, Award,
-  Clock, CheckCircle2, ChevronRight, Users, Target, Ticket, FileText, Plus, Landmark, Megaphone, Send, BarChart2, Briefcase, ListCollapse, GitFork, MapPin, Layers, Building2, ChevronDown
+  Clock, CheckCircle2, ChevronRight, Users, Target, Ticket, FileText, Plus, Landmark, Megaphone, Send, BarChart2, Briefcase, ListCollapse, GitFork, MapPin, Layers, Building2, ChevronDown, ChevronUp
 } from 'lucide-react';
 
 import { useQuery } from '@tanstack/react-query';
@@ -15,6 +15,16 @@ export const StateDashboard: React.FC = () => {
   const [announcementText, setAnnouncementText] = useState('');
   const [broadcasted, setBroadcasted] = useState(false);
   const [activeTab, setActiveTab] = useState<'districts' | 'divisions' | 'rankings'>('districts');
+
+  const INITIAL_LIMIT = 10;
+  const [showAllStateDistricts, setShowAllStateDistricts] = useState(false);
+  const [showAllDrilledDivisions, setShowAllDrilledDivisions] = useState(false);
+  const [showAllDrilledPincodes, setShowAllDrilledPincodes] = useState(false);
+  const [showAllPerfDistricts, setShowAllPerfDistricts] = useState(false);
+  const [showAllPerfDivisions, setShowAllPerfDivisions] = useState(false);
+  const [showAllTabDistricts, setShowAllTabDistricts] = useState(false);
+  const [showAllTabDivisions, setShowAllTabDivisions] = useState(false);
+  const [showAllTabRankings, setShowAllTabRankings] = useState(false);
 
   // Hierarchy drill-down state
   const [drilledDistrictId, setDrilledDistrictId] = useState<string | null>(null);
@@ -417,7 +427,7 @@ export const StateDashboard: React.FC = () => {
               {stateDistricts.length === 0 ? (
                 <p className="col-span-full text-xs text-slate-400 italic text-center py-4">No active districts recorded under {userState}.</p>
               ) : (
-                stateDistricts.map((dist: any) => {
+                (showAllStateDistricts ? stateDistricts : stateDistricts.slice(0, INITIAL_LIMIT)).map((dist: any) => {
                   const territoryStr = dist.territory?.district || dist.district || 'District Area';
                   const agentCount = dist.agents?.length || (dist.agentCount ? dist.agentCount : 1);
                   const agentName = formatCleanAgentName(dist.name, 'District Agent', territoryStr);
@@ -456,6 +466,25 @@ export const StateDashboard: React.FC = () => {
                 })
               )}
             </div>
+            {stateDistricts.length > INITIAL_LIMIT && (
+              <div className="pt-2 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => setShowAllStateDistricts(!showAllStateDistricts)}
+                  className="px-4 py-2 text-xs font-bold text-[#864f19] bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 rounded-xl transition cursor-pointer shadow-2xs inline-flex items-center gap-1.5"
+                >
+                  {showAllStateDistricts ? (
+                    <>
+                      <ChevronUp className="w-3.5 h-3.5" /> Show Less
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="w-3.5 h-3.5" /> View All ({stateDistricts.length})
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -499,7 +528,7 @@ export const StateDashboard: React.FC = () => {
               {(activeDrilledDistrict.divisions || []).length === 0 ? (
                 <p className="col-span-full text-xs text-slate-400 italic text-center py-4">No active divisions under this district.</p>
               ) : (
-                (activeDrilledDistrict.divisions || []).map((div: any) => {
+                (showAllDrilledDivisions ? (activeDrilledDistrict.divisions || []) : (activeDrilledDistrict.divisions || []).slice(0, INITIAL_LIMIT)).map((div: any) => {
                   const divTerritory = div.territory?.division || div.division || 'Division Sector';
                   const agentName = formatCleanAgentName(div.name, 'Division Management', divTerritory);
                   const pinCount = div.pincodes?.length || 0;
@@ -530,6 +559,25 @@ export const StateDashboard: React.FC = () => {
                 })
               )}
             </div>
+            {(activeDrilledDistrict.divisions || []).length > INITIAL_LIMIT && (
+              <div className="pt-2 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => setShowAllDrilledDivisions(!showAllDrilledDivisions)}
+                  className="px-4 py-2 text-xs font-bold text-[#864f19] bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 rounded-xl transition cursor-pointer shadow-2xs inline-flex items-center gap-1.5"
+                >
+                  {showAllDrilledDivisions ? (
+                    <>
+                      <ChevronUp className="w-3.5 h-3.5" /> Show Less
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="w-3.5 h-3.5" /> View All ({(activeDrilledDistrict.divisions || []).length})
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -559,7 +607,7 @@ export const StateDashboard: React.FC = () => {
               {(activeDrilledDivision.pincodes || []).length === 0 ? (
                 <p className="col-span-full text-xs text-slate-400 italic text-center py-4">No pincode agents assigned to this division yet.</p>
               ) : (
-                (activeDrilledDivision.pincodes || []).map((pin: any) => {
+                (showAllDrilledPincodes ? (activeDrilledDivision.pincodes || []) : (activeDrilledDivision.pincodes || []).slice(0, INITIAL_LIMIT)).map((pin: any) => {
                   const pinCodeStr = pin.territory?.pincode || pin.pincode || 'Sector';
                   const agentName = formatCleanAgentName(pin.name, 'Pincode Agent', `PIN ${pinCodeStr}`);
                   return (
@@ -584,6 +632,25 @@ export const StateDashboard: React.FC = () => {
                 })
               )}
             </div>
+            {(activeDrilledDivision.pincodes || []).length > INITIAL_LIMIT && (
+              <div className="pt-2 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => setShowAllDrilledPincodes(!showAllDrilledPincodes)}
+                  className="px-4 py-2 text-xs font-bold text-[#864f19] bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 rounded-xl transition cursor-pointer shadow-2xs inline-flex items-center gap-1.5"
+                >
+                  {showAllDrilledPincodes ? (
+                    <>
+                      <ChevronUp className="w-3.5 h-3.5" /> Show Less
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="w-3.5 h-3.5" /> View All ({(activeDrilledDivision.pincodes || []).length})
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -649,12 +716,31 @@ export const StateDashboard: React.FC = () => {
             {districtsList.length === 0 ? (
               <p className="text-xs text-slate-400 italic text-center py-4">No district performance records in {userState}.</p>
             ) : (
-              districtsList.map((dist, index) => (
+              (showAllPerfDistricts ? districtsList : districtsList.slice(0, INITIAL_LIMIT)).map((dist, index) => (
                 <div key={index} className="flex justify-between text-xs font-semibold p-2 bg-[#fbf9f8] rounded-lg">
                   <span className="text-[#52443a] truncate">{dist.name}</span>
                   <span className="text-[#34647b] font-bold">{dist.val}</span>
                 </div>
               ))
+            )}
+            {districtsList.length > INITIAL_LIMIT && (
+              <div className="pt-2 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => setShowAllPerfDistricts(!showAllPerfDistricts)}
+                  className="px-3 py-1.5 text-[11px] font-bold text-[#864f19] bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 rounded-lg transition cursor-pointer inline-flex items-center gap-1"
+                >
+                  {showAllPerfDistricts ? (
+                    <>
+                      <ChevronUp className="w-3 h-3" /> Show Less
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="w-3 h-3" /> View All ({districtsList.length})
+                    </>
+                  )}
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -666,12 +752,31 @@ export const StateDashboard: React.FC = () => {
             {divisionsList.length === 0 ? (
               <p className="text-xs text-slate-400 italic text-center py-4">No division performance records in {userState}.</p>
             ) : (
-              divisionsList.map((div, index) => (
+              (showAllPerfDivisions ? divisionsList : divisionsList.slice(0, INITIAL_LIMIT)).map((div, index) => (
                 <div key={index} className="flex justify-between text-xs font-bold p-2 bg-[#fbf9f8] rounded-lg">
                   <span className="text-[#52443a] truncate">{div.name}</span>
                   <span className="text-[#864f19]">{div.score}</span>
                 </div>
               ))
+            )}
+            {divisionsList.length > INITIAL_LIMIT && (
+              <div className="pt-2 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => setShowAllPerfDivisions(!showAllPerfDivisions)}
+                  className="px-3 py-1.5 text-[11px] font-bold text-[#864f19] bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 rounded-lg transition cursor-pointer inline-flex items-center gap-1"
+                >
+                  {showAllPerfDivisions ? (
+                    <>
+                      <ChevronUp className="w-3 h-3" /> Show Less
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="w-3 h-3" /> View All ({divisionsList.length})
+                    </>
+                  )}
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -701,12 +806,31 @@ export const StateDashboard: React.FC = () => {
                 {districtsList.length === 0 ? (
                   <p className="py-6 text-center text-xs text-slate-400 font-semibold">No district agents registered under {userState}.</p>
                 ) : (
-                  districtsList.map((item, i) => (
+                  (showAllTabDistricts ? districtsList : districtsList.slice(0, INITIAL_LIMIT)).map((item, i) => (
                     <div key={i} className="py-3 flex justify-between items-center text-xs font-semibold">
                       <span className="text-[#1b1c1c] font-bold">{item.name}</span>
                       <span className="text-[#34647b] font-extrabold">{item.divs}</span>
                     </div>
                   ))
+                )}
+                {districtsList.length > INITIAL_LIMIT && (
+                  <div className="pt-3 flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() => setShowAllTabDistricts(!showAllTabDistricts)}
+                      className="px-4 py-2 text-xs font-bold text-[#864f19] bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 rounded-xl transition cursor-pointer shadow-2xs inline-flex items-center gap-1.5"
+                    >
+                      {showAllTabDistricts ? (
+                        <>
+                          <ChevronUp className="w-3.5 h-3.5" /> Show Less
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="w-3.5 h-3.5" /> View All ({districtsList.length})
+                        </>
+                      )}
+                    </button>
+                  </div>
                 )}
               </>
             )}
@@ -721,12 +845,31 @@ export const StateDashboard: React.FC = () => {
                 {divisionsList.length === 0 ? (
                   <p className="py-6 text-center text-xs text-slate-400 font-semibold">No division management registered under {userState}.</p>
                 ) : (
-                  divisionsList.map((item, i) => (
+                  (showAllTabDivisions ? divisionsList : divisionsList.slice(0, INITIAL_LIMIT)).map((item, i) => (
                     <div key={i} className="py-3 flex justify-between items-center text-xs font-semibold">
                       <span className="text-[#1b1c1c] font-bold">{item.name}</span>
                       <span className="text-[#34647b] font-extrabold">{item.pins}</span>
                     </div>
                   ))
+                )}
+                {divisionsList.length > INITIAL_LIMIT && (
+                  <div className="pt-3 flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() => setShowAllTabDivisions(!showAllTabDivisions)}
+                      className="px-4 py-2 text-xs font-bold text-[#864f19] bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 rounded-xl transition cursor-pointer shadow-2xs inline-flex items-center gap-1.5"
+                    >
+                      {showAllTabDivisions ? (
+                        <>
+                          <ChevronUp className="w-3.5 h-3.5" /> Show Less
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="w-3.5 h-3.5" /> View All ({divisionsList.length})
+                        </>
+                      )}
+                    </button>
+                  </div>
                 )}
               </>
             )}
@@ -741,7 +884,7 @@ export const StateDashboard: React.FC = () => {
                 {agentRankingsList.length === 0 ? (
                   <p className="py-6 text-center text-xs text-slate-400 font-semibold">No agent rankings recorded under {userState} yet.</p>
                 ) : (
-                  agentRankingsList.map((item, i) => (
+                  (showAllTabRankings ? agentRankingsList : agentRankingsList.slice(0, INITIAL_LIMIT)).map((item, i) => (
                     <div key={i} className="py-3 flex justify-between items-center text-xs font-semibold">
                       <div>
                         <span className="text-[#1b1c1c] font-bold block">{item.name}</span>
@@ -752,6 +895,25 @@ export const StateDashboard: React.FC = () => {
                       <span className="text-[#864f19] font-black text-sm">{item.score}% Score</span>
                     </div>
                   ))
+                )}
+                {agentRankingsList.length > INITIAL_LIMIT && (
+                  <div className="pt-3 flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() => setShowAllTabRankings(!showAllTabRankings)}
+                      className="px-4 py-2 text-xs font-bold text-[#864f19] bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 rounded-xl transition cursor-pointer shadow-2xs inline-flex items-center gap-1.5"
+                    >
+                      {showAllTabRankings ? (
+                        <>
+                          <ChevronUp className="w-3.5 h-3.5" /> Show Less
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="w-3.5 h-3.5" /> View All ({agentRankingsList.length})
+                        </>
+                      )}
+                    </button>
+                  </div>
                 )}
               </>
             )}

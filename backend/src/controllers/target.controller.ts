@@ -256,7 +256,10 @@ export const getSubordinates = async (req: Request, res: Response) => {
     const filter: any = buildTerritoryFilter(scope);
 
     // Only active and approved agents should be counted or listed as active subordinates
-    filter.status = { $in: ['active', 'approved'] };
+    filter.$or = [
+      { status: { $in: ['active', 'Active', 'approved', 'Approved', 'verified', 'Verified'] } },
+      { kycStatus: { $in: ['active', 'Active', 'approved', 'Approved', 'verified', 'Verified'] } }
+    ];
 
     // When caller is a Division Agent, downstream subordinates are strictly Pincode Agents
     const effectiveRole = role ? (role as string).toLowerCase().trim() : (scope?.role === 'division' ? 'pincode' : '');
@@ -320,29 +323,36 @@ export const getSubordinates = async (req: Request, res: Response) => {
     try {
       const db = mongoose.connection.db;
       if (db) {
-        const userFilter: any = { status: { $in: ['active', 'approved'] } };
+        const userFilter: any = {
+          $or: [
+            { status: { $in: ['active', 'Active', 'approved', 'Approved', 'verified', 'Verified'] } },
+            { kycStatus: { $in: ['active', 'Active', 'approved', 'Approved', 'verified', 'Verified'] } },
+            { isApproved: true }
+          ]
+        };
         const rClean = effectiveRole;
 
         if (rClean === 'district') {
-          userFilter.$or = [
-            { role: { $in: ['district', 'district_agent', 'district_lead', 'District Admin'] } },
-            { level: /^district/i }
-          ];
+          userFilter.$and = [{
+            $or: [
+              { role: { $in: ['district', 'district_agent', 'district_lead', 'District Admin'] } },
+              { level: /^district/i }
+            ]
+          }];
         } else if (rClean === 'division') {
-          userFilter.$or = [
-            { role: { $in: ['division', 'division_agent', 'division_lead', 'division_manager'] } },
-            { level: /^division/i }
-          ];
-        } else if (rClean === 'pincode') {
-          userFilter.$or = [
-            { role: { $in: ['pincode', 'pincode_agent'] } },
-            { level: /^pincode/i }
-          ];
-        } else if (scope?.role === 'division') {
-          userFilter.$or = [
-            { role: { $in: ['pincode', 'pincode_agent'] } },
-            { level: /^pincode/i }
-          ];
+          userFilter.$and = [{
+            $or: [
+              { role: { $in: ['division', 'division_agent', 'division_lead', 'division_manager'] } },
+              { level: /^division/i }
+            ]
+          }];
+        } else if (rClean === 'pincode' || scope?.role === 'division') {
+          userFilter.$and = [{
+            $or: [
+              { role: { $in: ['pincode', 'pincode_agent'] } },
+              { level: /^pincode/i }
+            ]
+          }];
         }
 
         const userDocs = await db.collection('users').find(userFilter).limit(50).maxTimeMS(4000).toArray();
@@ -356,7 +366,8 @@ export const getSubordinates = async (req: Request, res: Response) => {
 
           const uRole = (u.role || u.level || '').toLowerCase();
           const uStatus = (u.status || '').toLowerCase().trim();
-          if (uStatus !== 'active' && uStatus !== 'approved') continue;
+          const uKyc = (u.kycStatus || '').toLowerCase().trim();
+          if (uStatus !== 'active' && uStatus !== 'approved' && uKyc !== 'verified' && uKyc !== 'approved' && !u.isApproved) continue;
 
           // Check role qualification
           if (scope?.role === 'division' || rClean === 'pincode') {

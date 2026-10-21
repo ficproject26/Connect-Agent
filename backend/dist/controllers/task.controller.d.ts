@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { ITask } from '../models/Task';
 export interface UserContext {
     id: string;
+    registrationId?: string;
     name: string;
     email: string;
     role: string;

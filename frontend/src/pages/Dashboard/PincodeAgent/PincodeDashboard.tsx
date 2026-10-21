@@ -4,7 +4,7 @@ import { useToast } from '../../../context/ToastContext';
 import { downloadReport } from '../../../utils/downloadReport';
 import {
   TrendingUp, Clock, CheckCircle2,
-  Plus, Users, Target, Ticket, Send, ShieldAlert, FileText, Camera, Download, Loader2, MessageSquare
+  Plus, Users, Target, Ticket, Send, ShieldAlert, FileText, Camera, Download, Loader2, MessageSquare, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../../utils/api';
@@ -36,6 +36,16 @@ export const PincodeDashboard: React.FC = () => {
   };
   const recentVendors = dashboardData?.recentVendors || [];
   const recentAssignments = dashboardData?.recentAssignments || [];
+
+  const INITIAL_LIMIT = 10;
+  const [showAllVendors, setShowAllVendors] = useState(false);
+  const [showAllAssignments, setShowAllAssignments] = useState(false);
+  const [showAllTickets, setShowAllTickets] = useState(false);
+  const [showAllFieldAlerts, setShowAllFieldAlerts] = useState(false);
+
+  const validVendors = React.useMemo(() => {
+    return recentVendors.filter(item => Boolean((item.name || (item as any).businessName || '').trim()));
+  }, [recentVendors]);
 
   const [activeTab, setActiveTab] = useState<'vendors' | 'schedule' | 'support' | 'chat'>('vendors');
 
@@ -190,16 +200,12 @@ export const PincodeDashboard: React.FC = () => {
                 <span>Shop Name</span>
                 <span>KYC Status</span>
               </div>
-              {(() => {
-                const validVendors = recentVendors.filter(item => Boolean((item.name || (item as any).businessName || '').trim()));
-                if (validVendors.length === 0) {
-                  return (
-                    <p className="py-4 text-center text-xs text-slate-500 font-medium">
-                      No vendors registered in your assigned territory yet.
-                    </p>
-                  );
-                }
-                return validVendors.map((item, i) => {
+              {validVendors.length === 0 ? (
+                <p className="py-4 text-center text-xs text-slate-500 font-medium">
+                  No vendors registered in your assigned territory yet.
+                </p>
+              ) : (
+                (showAllVendors ? validVendors : validVendors.slice(0, INITIAL_LIMIT)).map((item, i) => {
                   const shopName = (item.name || (item as any).businessName || '').trim();
                   const rawKyc = String(item.kycStatus || '').toLowerCase().trim();
                   const isApproved = rawKyc === 'approved' || rawKyc === 'verified';
@@ -220,8 +226,27 @@ export const PincodeDashboard: React.FC = () => {
                       </span>
                     </div>
                   );
-                });
-              })()}
+                })
+              )}
+              {validVendors.length > INITIAL_LIMIT && (
+                <div className="pt-3 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => setShowAllVendors(!showAllVendors)}
+                    className="px-4 py-2 text-xs font-bold text-[#864f19] bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 rounded-xl transition cursor-pointer shadow-2xs inline-flex items-center gap-1.5"
+                  >
+                    {showAllVendors ? (
+                      <>
+                        <ChevronUp className="w-3.5 h-3.5" /> Show Less
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="w-3.5 h-3.5" /> View All ({validVendors.length})
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
             </>
           )}
 
@@ -234,12 +259,31 @@ export const PincodeDashboard: React.FC = () => {
               {recentAssignments.length === 0 ? (
                 <p className="py-3 text-center text-xs text-slate-400">No task schedules assigned for today.</p>
               ) : (
-                recentAssignments.map((item, i) => (
+                (showAllAssignments ? recentAssignments : recentAssignments.slice(0, INITIAL_LIMIT)).map((item, i) => (
                   <div key={i} className="py-3 flex justify-between text-xs font-semibold">
                     <span className="text-[#1b1c1c]">{item.target?.title || 'Territory Audit Visit'}</span>
                     <span className="text-[#34647b]">{item.status === 'completed' ? 'Completed' : 'Upcoming'} • Value: {item.target?.targetValue || 0}</span>
                   </div>
                 ))
+              )}
+              {recentAssignments.length > INITIAL_LIMIT && (
+                <div className="pt-3 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => setShowAllAssignments(!showAllAssignments)}
+                    className="px-4 py-2 text-xs font-bold text-[#864f19] bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 rounded-xl transition cursor-pointer shadow-2xs inline-flex items-center gap-1.5"
+                  >
+                    {showAllAssignments ? (
+                      <>
+                        <ChevronUp className="w-3.5 h-3.5" /> Show Less
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="w-3.5 h-3.5" /> View All ({recentAssignments.length})
+                      </>
+                    )}
+                  </button>
+                </div>
               )}
             </>
           )}
@@ -253,7 +297,7 @@ export const PincodeDashboard: React.FC = () => {
               {!userTicketsData || userTicketsData.length === 0 ? (
                 <p className="py-3 text-center text-xs text-slate-400">No support tickets logged yet.</p>
               ) : (
-                userTicketsData.map((item: any, i: number) => (
+                (showAllTickets ? userTicketsData : userTicketsData.slice(0, INITIAL_LIMIT)).map((item: any, i: number) => (
                   <div key={i} className="py-3 flex justify-between text-xs font-semibold">
                     <span className="text-[#1b1c1c]">{item.ticketId || item._id ? `#${item.ticketId || String(item._id).slice(-6)}: ${item.category || item.subject || 'Ticket'}` : item.category}</span>
                     <span className={`font-extrabold ${item.status === 'resolved' ? 'text-emerald-700' : 'text-amber-600'}`}>
@@ -261,6 +305,25 @@ export const PincodeDashboard: React.FC = () => {
                     </span>
                   </div>
                 ))
+              )}
+              {userTicketsData && userTicketsData.length > INITIAL_LIMIT && (
+                <div className="pt-3 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => setShowAllTickets(!showAllTickets)}
+                    className="px-4 py-2 text-xs font-bold text-[#864f19] bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 rounded-xl transition cursor-pointer shadow-2xs inline-flex items-center gap-1.5"
+                  >
+                    {showAllTickets ? (
+                      <>
+                        <ChevronUp className="w-3.5 h-3.5" /> Show Less
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="w-3.5 h-3.5" /> View All ({userTicketsData.length})
+                      </>
+                    )}
+                  </button>
+                </div>
               )}
             </>
           )}
@@ -351,7 +414,7 @@ export const PincodeDashboard: React.FC = () => {
                 All field alerts & reminders cleared.
               </div>
             ) : (
-              fieldAlerts.map((notif) => (
+              (showAllFieldAlerts ? fieldAlerts : fieldAlerts.slice(0, INITIAL_LIMIT)).map((notif) => (
                 <div 
                   key={notif.id} 
                   className="flex items-start gap-3 p-3 bg-[#fbf9f8] rounded-xl border border-[#eae8e7]/50 relative group"
@@ -373,6 +436,25 @@ export const PincodeDashboard: React.FC = () => {
                   </button>
                 </div>
               ))
+            )}
+            {fieldAlerts.length > INITIAL_LIMIT && (
+              <div className="pt-2 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => setShowAllFieldAlerts(!showAllFieldAlerts)}
+                  className="px-3 py-1.5 text-[11px] font-bold text-[#864f19] bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 rounded-lg transition cursor-pointer inline-flex items-center gap-1"
+                >
+                  {showAllFieldAlerts ? (
+                    <>
+                      <ChevronUp className="w-3 h-3" /> Show Less
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="w-3 h-3" /> View All ({fieldAlerts.length})
+                    </>
+                  )}
+                </button>
+              </div>
             )}
           </div>
         </div>

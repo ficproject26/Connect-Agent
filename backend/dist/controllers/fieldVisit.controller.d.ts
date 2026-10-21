@@ -6,4 +6,5 @@ export declare const getFieldVisitAgents: (req: Request, res: Response) => Promi
 export declare const recordShopVisit: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const getShopVisitById: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const updateShopVisit: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const revalidateEligibility: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 //# sourceMappingURL=fieldVisit.controller.d.ts.map

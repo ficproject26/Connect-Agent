@@ -19,6 +19,7 @@ import {
   sanitizeIndianMobile
 } from '../utils/formValidation';
 import { publishEntityEvent } from '../realtime/eventBus';
+import NotificationService from '../services/notification.service';
 
 const createVendorSchema = z.object({
   businessName: z.string().optional(),
@@ -74,15 +75,75 @@ export const getVendors = async (req: Request, res: Response) => {
     if (!agentId) return res.status(401).json({ message: 'Unauthorized' });
 
     const scope = await getAgentTerritoryScope(agentId);
+    if (!scope) return res.status(403).json({ message: 'Forbidden: Missing agent territory scope' });
+
     let divisionPincodes: string[] = [];
     if (scope?.role === 'division' && scope.division) {
       divisionPincodes = await getDivisionPincodes(scope.division);
     }
     const scopeFilter = buildVendorScopeFilter(scope, divisionPincodes);
 
-    const { page = '1', limit = '50', status, category, search, startDate, endDate, dateFilter } = req.query;
+    const {
+      page = '1',
+      limit = '50',
+      status,
+      category,
+      search,
+      startDate,
+      endDate,
+      dateFilter,
+      state: qState,
+      district: qDistrict,
+      division: qDivision,
+      pincode: qPincode
+    } = req.query;
     const pageNum = parseInt(page as string, 10);
     const limitNum = parseInt(limit as string, 10);
+
+    // Validate requested drill-down territory parameters against Agent's authoritative scope
+    if (qState && typeof qState === 'string' && qState.trim()) {
+      const cleanState = qState.trim().toLowerCase();
+      if (scope.state && !scope.state.toLowerCase().includes(cleanState) && !cleanState.includes(scope.state.toLowerCase())) {
+        return res.status(403).json({ message: `Forbidden: Cannot access vendors outside your assigned state "${scope.state}".` });
+      }
+    }
+    if (qDistrict && typeof qDistrict === 'string' && qDistrict.trim() && qDistrict !== 'all') {
+      const cleanDist = qDistrict.trim().toLowerCase().replace(/\s+district$/i, '');
+      if (scope.role === 'district' && scope.district) {
+        const agentDist = scope.district.toLowerCase().replace(/\s+district$/i, '');
+        if (cleanDist !== agentDist && !cleanDist.includes(agentDist) && !agentDist.includes(cleanDist)) {
+          return res.status(403).json({ message: `Forbidden: Cannot access vendors outside your assigned district "${scope.district}".` });
+        }
+      } else if (scope.role === 'division' || scope.role === 'pincode') {
+        const agentDist = (scope.district || '').toLowerCase().replace(/\s+district$/i, '');
+        if (agentDist && cleanDist !== agentDist && !cleanDist.includes(agentDist) && !agentDist.includes(cleanDist)) {
+          return res.status(403).json({ message: 'Forbidden: Cannot access vendors outside your assigned district.' });
+        }
+      }
+    }
+    if (qDivision && typeof qDivision === 'string' && qDivision.trim() && qDivision !== 'all') {
+      const cleanDiv = qDivision.trim().toLowerCase().replace(/\s+division$/i, '');
+      if (scope.role === 'division' && scope.division) {
+        const agentDiv = scope.division.toLowerCase().replace(/\s+division$/i, '');
+        if (cleanDiv !== agentDiv && !cleanDiv.includes(agentDiv) && !agentDiv.includes(cleanDiv)) {
+          return res.status(403).json({ message: `Forbidden: Cannot access vendors outside your assigned division "${scope.division}".` });
+        }
+      } else if (scope.role === 'pincode') {
+        const agentDiv = (scope.division || '').toLowerCase().replace(/\s+division$/i, '');
+        if (agentDiv && cleanDiv !== agentDiv && !cleanDiv.includes(agentDiv) && !agentDiv.includes(cleanDiv)) {
+          return res.status(403).json({ message: 'Forbidden: Cannot access vendors outside your assigned division.' });
+        }
+      }
+    }
+    if (qPincode && typeof qPincode === 'string' && qPincode.trim() && qPincode !== 'all') {
+      const cleanPin = qPincode.trim();
+      if (scope.role === 'pincode' && scope.pincode && cleanPin !== scope.pincode) {
+        return res.status(403).json({ message: `Forbidden: Cannot access vendors outside your assigned pincode "${scope.pincode}".` });
+      }
+      if (scope.role === 'division' && divisionPincodes.length > 0 && !divisionPincodes.includes(cleanPin)) {
+        return res.status(403).json({ message: 'Forbidden: Pincode does not belong to your assigned division.' });
+      }
+    }
 
     const filterConditions: any[] = [
       scopeFilter,
@@ -91,12 +152,48 @@ export const getVendors = async (req: Request, res: Response) => {
           { businessName: { $exists: true, $nin: ['', null] } },
           { name: { $exists: true, $nin: ['', null] } }
         ]
+      },
+      // Requirement 6: Vendor Tab must show ONLY vendors who are BOTH fully onboarded/approved AND currently active
+      {
+        kycStatus: { $in: ['approved', 'Approved', 'verified', 'Verified'] },
+        status: { $in: ['active', 'Active', 'approved', 'Approved', 'verified', 'Verified'] }
+      },
+      {
+        kycStatus: { $nin: ['pending', 'rejected', 'suspended', 'pending_verification', 'under_review', 'Pending', 'Rejected', 'KYC Pending', 'Pending Pincode Admin Approval'] },
+        status: { $nin: ['pending', 'rejected', 'suspended', 'inactive', 'Deleted', 'deleted', 'PENDING_PINCODE_APPROVAL', 'Pending', 'Rejected'] }
       }
     ];
 
-    if (status && status !== 'all') {
-      filterConditions.push({ status: { $regex: new RegExp(`^${status}$`, 'i') } });
+    // Optional drill-down filters (applied on verified scope)
+    if (qDistrict && typeof qDistrict === 'string' && qDistrict.trim() && qDistrict !== 'all') {
+      const baseD = qDistrict.trim().replace(/\s+district$/i, '');
+      filterConditions.push({
+        $or: [
+          { district: new RegExp(`^\\s*${baseD}(\\s+district)?\\s*$`, 'i') },
+          { assignedDistrict: new RegExp(`^\\s*${baseD}(\\s+district)?\\s*$`, 'i') },
+          { 'location.address': new RegExp(baseD, 'i') }
+        ]
+      });
     }
+    if (qDivision && typeof qDivision === 'string' && qDivision.trim() && qDivision !== 'all') {
+      const baseDiv = qDivision.trim().replace(/\s+division$/i, '');
+      filterConditions.push({
+        $or: [
+          { division: new RegExp(baseDiv, 'i') },
+          { assignedDivision: new RegExp(baseDiv, 'i') }
+        ]
+      });
+    }
+    if (qPincode && typeof qPincode === 'string' && qPincode.trim() && qPincode !== 'all') {
+      filterConditions.push({
+        $or: [
+          { pincode: qPincode.trim() },
+          { assignedPincode: qPincode.trim() },
+          { 'location.pincode': qPincode.trim() }
+        ]
+      });
+    }
+
     if (category && category !== 'all') {
       filterConditions.push({
         $or: [
@@ -146,7 +243,6 @@ export const getVendors = async (req: Request, res: Response) => {
       } else if (dateFilter === '30days') {
         dateConditions.$gte = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       } else if (dateFilter === 'this_month') {
-        // First day of current calendar month at 00:00:00 through last day of current calendar month at 23:59:59.999
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
         const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
         dateConditions.$gte = startOfMonth;
@@ -187,17 +283,13 @@ export const getVendors = async (req: Request, res: Response) => {
       }
     }
 
-    // Deduplicate vendor records that represent the exact same vendor registration,
-    // ensuring the application returns the canonical record.
+    // Deduplicate vendor records that represent the exact same vendor registration
     const canonicalMap = new Map<string, any>();
     for (const v of rawVendors) {
-      const gst = v.gst ? v.gst.trim().toUpperCase() : '';
       const phone = v.phone ? v.phone.replace(/\D/g, '') : '';
       const pin = v.pincode ? v.pincode.trim() : '';
       const name = (v.businessName || (v as any).name || '').trim().toLowerCase();
 
-      // Canonical key for a single business establishment registration:
-      // Preserves separate valid registrations for different branches/locations
       const canonicalKey = (phone && pin && name)
         ? `VENDOR_${phone}_${pin}_${name}`
         : (v.registrationId ? `REG_${v.registrationId}` : `ID_${v._id}`);
@@ -205,10 +297,9 @@ export const getVendors = async (req: Request, res: Response) => {
       if (!canonicalMap.has(canonicalKey)) {
         canonicalMap.set(canonicalKey, v);
       } else {
-        // If duplicate records exist in the DB, prefer active / approved status or earlier registration
         const existing = canonicalMap.get(canonicalKey);
-        const isExistingApproved = (existing.status || '').toLowerCase() === 'active' || existing.kycStatus === 'approved';
-        const isCurrentApproved = (v.status || '').toLowerCase() === 'active' || v.kycStatus === 'approved';
+        const isExistingApproved = (existing.status || '').toLowerCase() === 'active' || (existing.kycStatus || '').toLowerCase() === 'approved';
+        const isCurrentApproved = (v.status || '').toLowerCase() === 'active' || (v.kycStatus || '').toLowerCase() === 'approved';
         if (!isExistingApproved && isCurrentApproved) {
           canonicalMap.set(canonicalKey, v);
         }
@@ -217,16 +308,12 @@ export const getVendors = async (req: Request, res: Response) => {
 
     const deduplicated = Array.from(canonicalMap.values()).map((v: any) => {
       const realName = (v.businessName || v.name || '').trim();
-      const rawKyc = (v.kycStatus || '').toString().toLowerCase().trim();
-      let normalizedKyc = 'pending';
-      if (rawKyc === 'approved' || rawKyc === 'verified') normalizedKyc = 'approved';
-      else if (rawKyc === 'rejected') normalizedKyc = 'rejected';
-      else if (String(v.status || '').toLowerCase() === 'approved' || String(v.status || '').toLowerCase() === 'active') normalizedKyc = 'approved';
       return {
         ...v,
         name: realName,
         businessName: realName,
-        kycStatus: normalizedKyc
+        kycStatus: 'approved',
+        status: 'active'
       };
     });
     const total = deduplicated.length;
@@ -234,7 +321,14 @@ export const getVendors = async (req: Request, res: Response) => {
 
     return res.status(200).json({
       vendors: paginatedVendors,
-      pagination: { page: pageNum, limit: limitNum, total, pages: Math.ceil(total / limitNum) }
+      pagination: { page: pageNum, limit: limitNum, total, pages: Math.ceil(total / limitNum) },
+      userScope: {
+        role: scope.role,
+        state: scope.state,
+        district: scope.district,
+        division: scope.division,
+        pincode: scope.pincode
+      }
     });
   } catch (error) {
     console.error('Get vendors error:', error);
@@ -248,18 +342,51 @@ export const getVendorById = async (req: Request, res: Response) => {
     const agentId = (req as any).agent?.agentId;
     if (!agentId) return res.status(401).json({ message: 'Unauthorized' });
 
+    const scope = await getAgentTerritoryScope(agentId);
+    if (!scope) return res.status(403).json({ message: 'Forbidden: Missing territory scope' });
+
     const rawId = req.params.id;
     const isObjectId = mongoose.Types.ObjectId.isValid(rawId);
     const query = isObjectId
       ? { $or: [{ _id: rawId }, { registrationId: rawId }] }
       : { registrationId: rawId };
 
-    const vendor = await Vendor.findOne(query)
+    const vendor: any = await Vendor.findOne(query)
       .populate('assignedAgent', 'name email role phone')
       .populate('documents')
       .lean();
 
     if (!vendor) return res.status(404).json({ message: 'Vendor not found' });
+
+    // Territory and assignment authorization validation
+    const vState = (vendor.state || '').trim().toLowerCase();
+    const vDist = (vendor.district || '').trim().toLowerCase();
+    const vDiv = (vendor.division || '').trim().toLowerCase();
+    const vPin = (vendor.pincode || '').trim();
+
+    if (scope.role === 'state' && scope.state) {
+      if (vState && !vState.includes(scope.state.toLowerCase()) && !scope.state.toLowerCase().includes(vState)) {
+        return res.status(403).json({ message: 'Forbidden: Vendor is outside your assigned state.' });
+      }
+    } else if (scope.role === 'district' && scope.district) {
+      const cleanDist = scope.district.toLowerCase().replace(/\s+district$/i, '');
+      if (vDist && !vDist.includes(cleanDist) && !cleanDist.includes(vDist)) {
+        return res.status(403).json({ message: 'Forbidden: Vendor is outside your assigned district.' });
+      }
+    } else if (scope.role === 'division' && scope.division) {
+      const cleanDiv = scope.division.toLowerCase().replace(/\s+division$/i, '');
+      if (vDiv && !vDiv.includes(cleanDiv) && !cleanDiv.includes(vDiv)) {
+        return res.status(403).json({ message: 'Forbidden: Vendor is outside your assigned division.' });
+      }
+    } else if (scope.role === 'pincode') {
+      const assignedAgentStr = String(vendor.assignedAgent?._id || vendor.assignedAgent || vendor.agentId || vendor.onboardedBy || '');
+      const isAssignedToAgent = assignedAgentStr === String(agentId);
+      const isPinMatch = scope.pincode ? vPin === scope.pincode : true;
+      if (!isAssignedToAgent || !isPinMatch) {
+        return res.status(403).json({ message: 'Forbidden: You are not authorized to access this vendor.' });
+      }
+    }
+
     return res.status(200).json({ vendor });
   } catch (error) {
     console.error('Get vendor by id error:', error);
@@ -596,6 +723,11 @@ export const createVendor = async (req: Request, res: Response) => {
       }
     }
 
+    // Trigger persistent vendor onboarding notification
+    NotificationService.notifyVendorOnboarding(vendor, agentId).catch((err) => {
+      console.error('Failed to dispatch vendor onboarding notification:', err);
+    });
+
     // Publish Realtime Entity Event
     publishEntityEvent({
       event: 'ENTITY_CREATED',
@@ -790,6 +922,12 @@ export const updateVendorStatus = async (req: Request, res: Response) => {
         status: vendor.status
       }
     }).catch(() => {});
+
+    // Dispatch KYC/onboarding status notification to the assigned agent
+    const recipient = (vendor as any).assignedAgent || (vendor as any).onboardedBy || (vendor as any).agentId || agentId;
+    NotificationService.notifyKycStatusChange(vendor, recipient, status).catch((err) => {
+      console.error('Failed to dispatch vendor status notification:', err);
+    });
 
     return res.status(200).json({ message: 'Vendor status updated', vendor });
   } catch (error) {

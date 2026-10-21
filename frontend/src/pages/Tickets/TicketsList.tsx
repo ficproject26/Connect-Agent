@@ -1,7 +1,7 @@
 import { getActiveDistricts, getActiveDivisions, getActivePincodes, TerritoryPincode } from '../../utils/territoryService';
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardBody } from '../../components/ui';
-import { Ticket, Send, Eye, Loader2, Paperclip, FileText, X, ShieldAlert, ArrowUpRight, CheckCircle2, RotateCcw, UserCheck } from 'lucide-react';
+import { Ticket, Send, Eye, Loader2, Paperclip, FileText, X, ShieldAlert, ArrowUpRight, CheckCircle2, RotateCcw, UserCheck, User, Store, AlertCircle } from 'lucide-react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -9,6 +9,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 interface SupportTicket {
   _id: string;
   ticketId: string;
+  ticketType?: 'my_issue' | 'vendor_issue' | 'agent_issue';
+  subject?: string;
+  vendorId?: string;
   territory?: string;
   vendorName?: string;
   raisedBy?: string;
@@ -121,6 +124,12 @@ export const TicketsList: React.FC = () => {
   const [vendorPhone, setVendorPhone] = useState('');
   const [attachment, setAttachment] = useState<{ fileName: string; dataUrl: string } | null>(null);
   
+  // Option A (My Issues) vs Option B (Vendor Issue)
+  const [ticketFormType, setTicketFormType] = useState<'my_issue' | 'vendor_issue'>('my_issue');
+  const [subject, setSubject] = useState('');
+  const [selectedVendorId, setSelectedVendorId] = useState('');
+  const [selectedVendorObj, setSelectedVendorObj] = useState<any>(null);
+
   // State Agent Scope specific creation inputs (Admin Master Territory Driven)
   const [selectedDistrict, setSelectedDistrict] = useState('');
   const [selectedDivision, setSelectedDivision] = useState('');
@@ -140,6 +149,51 @@ export const TicketsList: React.FC = () => {
   const [districtAvailablePincodes, setDistrictAvailablePincodes] = useState<TerritoryPincode[]>([]);
   const [isLoadingDistrictDivs, setIsLoadingDistrictDivs] = useState(false);
   const [isLoadingDistrictPins, setIsLoadingDistrictPins] = useState(false);
+
+  // Division Agent Scope cascading Pincode state
+  const [divisionSelectedPincode, setDivisionSelectedPincode] = useState('');
+  const [divisionAvailablePincodes, setDivisionAvailablePincodes] = useState<TerritoryPincode[]>([]);
+  const [isLoadingDivisionPins, setIsLoadingDivisionPins] = useState(false);
+
+  // Load Active Pincodes for Division Agent
+  useEffect(() => {
+    if (activeRole === 'division' && (userState || effectiveState) && userDistrict && userDivision) {
+      setIsLoadingDivisionPins(true);
+      getActivePincodes(effectiveState || userState, userDistrict, userDivision)
+        .then(pins => {
+          setDivisionAvailablePincodes(pins);
+          if (divisionSelectedPincode && !pins.some(p => p.code === divisionSelectedPincode)) {
+            setDivisionSelectedPincode('');
+          }
+        })
+        .catch(err => {
+          console.error('Failed to load pincodes for division:', err);
+        })
+        .finally(() => {
+          setIsLoadingDivisionPins(false);
+        });
+    }
+  }, [activeRole, effectiveState, userState, userDistrict, userDivision]);
+
+  // Derive resolved target territory for vendor selection
+  const targetDistrict = activeRole === 'state' ? selectedDistrict : userDistrict;
+  const targetDivision = activeRole === 'state' ? selectedDivision : (activeRole === 'district' ? districtSelectedDivision : userDivision);
+  const targetPincode = activeRole === 'state' ? selectedPincode : (activeRole === 'district' ? merchantPincode : (activeRole === 'division' ? divisionSelectedPincode : userPincode));
+
+  // Query active fully onboarded vendors for selected territory
+  const { data: eligibleVendors = [], isLoading: isLoadingVendors } = useQuery({
+    queryKey: ['ticketEligibleVendors', activeRole, effectiveState || userState, targetDistrict, targetDivision, targetPincode],
+    queryFn: async () => {
+      const params: any = { limit: 100 };
+      if (targetPincode) params.pincode = targetPincode;
+      else if (targetDivision) params.division = targetDivision;
+      else if (targetDistrict) params.district = targetDistrict;
+      if (effectiveState || userState) params.state = effectiveState || userState;
+      const res = await api.get('/vendors', { params });
+      return res.data?.vendors || [];
+    },
+    enabled: ticketFormType === 'vendor_issue' && (activeRole === 'pincode' || Boolean(targetPincode || targetDivision || targetDistrict))
+  });
 
   // Load Active Divisions for District Agent
   useEffect(() => {
@@ -277,8 +331,11 @@ export const TicketsList: React.FC = () => {
     return (rawTickets || []).map((t: any) => ({
       _id: t._id || `TK-${Math.floor(1000 + Math.random() * 9000)}`,
       ticketId: t.ticketId || `TKT-${Math.floor(10000 + Math.random() * 90000)}`,
+      ticketType: t.ticketType || (t.vendorId || t.vendorName ? 'vendor_issue' : 'my_issue'),
+      subject: t.subject || (t.ticketType === 'vendor_issue' ? `Vendor Issue - ${t.vendorName || 'Merchant'}` : (t.category ? `${t.category} Issue` : 'Support Ticket')),
+      vendorId: t.vendorId,
       territory: t.territory || [t.district, t.division, t.pincode].filter(Boolean).join(' → ') || (t.state ? `${t.state} Scope` : `${userState} Scope`),
-      vendorName: t.storeName || t.vendorName || t.vendor?.name || 'Assigned Merchant',
+      vendorName: t.ticketType === 'my_issue' ? '— (Agent Issue)' : (t.storeName || t.vendorName || t.vendor?.name || 'Assigned Merchant'),
       raisedBy: t.creatorName
         ? `${t.creatorName} (${(t.creatorRole || 'Agent').toUpperCase()})`
         : (t.creator?.name ? `${t.creator.name} (${(t.creator.role || 'Agent').toUpperCase()})` : (t.raisedBy || 'Downstream Agent')),
@@ -330,74 +387,71 @@ export const TicketsList: React.FC = () => {
     setFormError('');
     setFormSuccess('');
 
-    if (activeRole === 'state') {
-      if (!selectedDistrict.trim()) {
-        setFormError('Please select or enter the Target District.');
+    if (ticketFormType === 'my_issue') {
+      if (!subject.trim()) {
+        setFormError('Please enter an Issue Subject.');
         return;
       }
-      if (!selectedDivision.trim()) {
-        setFormError('Please enter the Target Division.');
-        return;
-      }
-    } else if (activeRole === 'district') {
-      if (!vendorShopName.trim()) {
-        setFormError('Please enter the Store Name.');
-        return;
-      }
-      if (!districtSelectedDivision.trim()) {
-        setFormError('Please select a Target Division.');
-        return;
-      }
-      if (!merchantPincode.trim()) {
-        setFormError('Please select a Target Pincode.');
+      if (!description.trim() || description.trim().length < 5) {
+        setFormError('Please provide Issue Details (minimum 5 characters).');
         return;
       }
     } else {
-      if (!vendorShopName.trim()) {
-        setFormError('Please enter the Store Name.');
+      // Vendor Issue
+      if (!selectedVendorId) {
+        setFormError('Please select an active, eligible merchant / vendor from the authorized territory.');
         return;
       }
-    }
-
-    if (!description.trim() || description.trim().length < 10) {
-      setFormError('Please provide Issue Details (minimum 10 characters required).');
-      return;
+      if (!subject.trim()) {
+        setFormError('Please enter an Issue Subject.');
+        return;
+      }
+      if (!description.trim() || description.trim().length < 5) {
+        setFormError('Please provide Detailed Problem Description (minimum 5 characters).');
+        return;
+      }
     }
 
     setIsSubmitting(true);
 
     try {
       const payload: any = {
+        ticketType: ticketFormType,
+        subject: subject.trim(),
         category,
         description: description.trim(),
         priority,
         attachmentName: attachment?.fileName,
-        vendorName: vendorName || (user?.name ? `${user.name} Merchant` : 'Assigned Merchant'),
-        storeName: vendorShopName.trim()
+        attachmentUrl: attachment?.dataUrl
       };
 
-      if (activeRole === 'state') {
-        payload.state = effectiveState || userState;
-        payload.district = selectedDistrict.trim();
-        payload.division = selectedDivision.trim();
-        payload.pincode = selectedPincode.trim();
-        payload.territory = `${selectedDistrict.trim()} → ${selectedDivision.trim()}${selectedPincode.trim() ? ` → ${selectedPincode.trim()}` : ''}`;
-        payload.assignedAgent = selectedDivision.trim() ? `${selectedDivision.trim()} Lead` : undefined;
+      if (ticketFormType === 'vendor_issue') {
+        payload.vendorId = selectedVendorId;
+        payload.vendorName = selectedVendorObj?.businessName || selectedVendorObj?.ownerName || vendorName;
+        payload.storeName = selectedVendorObj?.businessName || selectedVendorObj?.ownerName || vendorShopName;
+        payload.state = selectedVendorObj?.state || effectiveState || userState;
+        payload.district = selectedVendorObj?.district || targetDistrict;
+        payload.division = selectedVendorObj?.division || targetDivision;
+        payload.pincode = selectedVendorObj?.pincode || targetPincode;
+        payload.territory = [payload.district, payload.division, payload.pincode].filter(Boolean).join(' → ') || `${payload.state} Scope`;
       } else {
-        payload.state = userState;
+        payload.state = effectiveState || userState;
         payload.district = userDistrict;
-        payload.division = activeRole === 'district' ? (districtSelectedDivision.trim() || userDivision) : userDivision;
-        payload.pincode = merchantPincode.trim() || userPincode;
-        payload.territory = [payload.district, payload.division, payload.pincode].filter(Boolean).join(' → ');
+        payload.division = userDivision;
+        payload.pincode = userPincode;
+        payload.territory = [userDistrict, userDivision, userPincode].filter(Boolean).join(' → ') || `${payload.state} Scope`;
       }
 
       await api.post('/tickets', payload);
 
-      setFormSuccess('Support ticket successfully logged!');
+      setFormSuccess(ticketFormType === 'my_issue' ? 'Your personal issue ticket has been submitted successfully!' : 'Vendor issue ticket successfully logged!');
       setTicketRaised(true);
 
       // Reset form fields
+      setSubject('');
       setDescription('');
+      setSelectedVendorId('');
+      setSelectedVendorObj(null);
       setVendorShopName('');
       setVendorAddress('');
       setVendorPhone('');
@@ -559,8 +613,10 @@ export const TicketsList: React.FC = () => {
                   <thead>
                     <tr className="border-b border-[#eae8e7] bg-[#fbf9f8] text-[9px] font-black uppercase text-[#52443a] tracking-wider">
                       <th className="py-3 px-4">Ticket ID</th>
+                      <th className="py-3 px-4">Type</th>
+                      <th className="py-3 px-4">Subject & Details</th>
                       {activeRole === 'state' && <th className="py-3 px-4">Territory (District → Division → Pincode)</th>}
-                      <th className="py-3 px-4">Vendor</th>
+                      <th className="py-3 px-4">Merchant / Vendor</th>
                       {activeRole === 'state' && <th className="py-3 px-4">Raised By</th>}
                       <th className="py-3 px-4">Assigned Agent</th>
                       <th className="py-3 px-4">Category</th>
@@ -574,12 +630,40 @@ export const TicketsList: React.FC = () => {
                     {tickets.map((ticket) => (
                       <tr key={ticket._id} className="hover:bg-slate-50/50 transition">
                         <td className="py-3.5 px-4 font-bold text-[#864f19] whitespace-nowrap">{ticket.ticketId}</td>
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          {ticket.ticketType === 'my_issue' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-black uppercase bg-blue-50 text-blue-700 border border-blue-200">
+                              <User className="w-2.5 h-2.5" /> My Issue
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-black uppercase bg-amber-50 text-amber-800 border border-amber-200">
+                              <Store className="w-2.5 h-2.5" /> Vendor Issue
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 min-w-[180px] max-w-[240px]">
+                          <p className="font-bold text-slate-800 text-xs truncate" title={ticket.subject}>
+                            {ticket.subject || ticket.category}
+                          </p>
+                          <p className="text-[10px] text-slate-400 truncate" title={ticket.description}>
+                            {ticket.description}
+                          </p>
+                        </td>
                         {activeRole === 'state' && (
                           <td className="py-3.5 px-4 font-bold text-slate-800 text-[11px] min-w-[200px]">
                             {ticket.territory || `${userState} Scope`}
                           </td>
                         )}
-                        <td className="py-3.5 px-4 font-bold text-slate-800">{ticket.vendorName || 'Assigned Merchant'}</td>
+                        <td className="py-3.5 px-4 font-bold text-slate-800">
+                          {ticket.ticketType === 'my_issue' ? (
+                            <span className="text-slate-400 font-medium italic text-[11px]">— (Agent Issue)</span>
+                          ) : (
+                            <span className="flex items-center gap-1 text-slate-800">
+                              <Store className="w-3 h-3 text-[#864f19]" />
+                              {ticket.vendorName || 'Assigned Merchant'}
+                            </span>
+                          )}
+                        </td>
                         {activeRole === 'state' && (
                           <td className="py-3.5 px-4 font-extrabold text-[#34647b] text-[11px]">
                             {ticket.raisedBy || 'Downstream Agent'}
@@ -669,8 +753,25 @@ export const TicketsList: React.FC = () => {
                     Close ✕
                   </button>
                 </div>
+                <div className="flex items-center gap-2 mt-2">
+                  {selectedTicket.ticketType === 'my_issue' ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-black uppercase bg-blue-100 text-blue-800">
+                      <User className="w-3 h-3" /> My Issue (Agent Operational)
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-black uppercase bg-amber-100 text-amber-900">
+                      <Store className="w-3 h-3" /> Vendor Issue
+                    </span>
+                  )}
+                  <span className="text-xs font-bold text-slate-500">
+                    Category: <strong>{selectedTicket.category}</strong>
+                  </span>
+                </div>
                 <CardTitle className="text-sm font-extrabold text-slate-800 mt-1">
-                  Category: {selectedTicket.category} • Merchant: {selectedTicket.vendorName}
+                  {selectedTicket.subject ? `Subject: ${selectedTicket.subject}` : `Category: ${selectedTicket.category}`}
+                  {selectedTicket.ticketType !== 'my_issue' && selectedTicket.vendorName && selectedTicket.vendorName !== '— (Agent Issue)' && (
+                    <span className="text-slate-600 font-normal"> • Merchant: <strong>{selectedTicket.vendorName}</strong></span>
+                  )}
                 </CardTitle>
                 {selectedTicket.territory && (
                   <p className="text-[10px] font-bold text-[#864f19] mt-0.5">
@@ -825,279 +926,440 @@ export const TicketsList: React.FC = () => {
         <div className="bg-white rounded-[16px] border border-[#eae8e7] p-6 shadow-sm h-fit space-y-4">
           <div className="border-b border-[#eae8e7] pb-3">
             <h3 className="font-extrabold text-sm text-[#1b1c1c] flex items-center gap-1.5">
-              <Ticket className="w-4 h-4 text-[#864f19]" /> {activeRole === 'state' ? 'Create State Support Ticket' : 'Raise Support Ticket'}
+              <Ticket className="w-4 h-4 text-[#864f19]" /> Support Ticket Desk
             </h3>
             <p className="text-[10px] text-slate-500 mt-0.5 font-medium">
-              {activeRole === 'state' ? 'Log a state-wide ticket or issue for downstream agents and merchants.' : 'Select assigned merchant and describe the issue.'}
+              Submit an internal agent issue or report an active merchant / vendor problem.
             </p>
+          </div>
+
+          {/* Segmented Option A (My Issues) vs Option B (Vendor Issue) Switcher */}
+          <div className="grid grid-cols-2 p-1 bg-[#f3ede8] rounded-xl">
+            <button
+              type="button"
+              onClick={() => {
+                setTicketFormType('my_issue');
+                setFormError('');
+                setFormSuccess('');
+                setSubject('');
+                setDescription('');
+                setCategory('Account / Profile');
+              }}
+              className={`py-2 px-3 text-xs font-black rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer border-none ${
+                ticketFormType === 'my_issue'
+                  ? 'bg-[#864f19] text-white shadow-sm'
+                  : 'text-[#6e5d53] hover:text-[#1b1c1c] bg-transparent'
+              }`}
+            >
+              <User className="w-3.5 h-3.5" />
+              <span>1. My Issues</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTicketFormType('vendor_issue');
+                setFormError('');
+                setFormSuccess('');
+                setSubject('');
+                setDescription('');
+                setCategory('Vendor Query');
+              }}
+              className={`py-2 px-3 text-xs font-black rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer border-none ${
+                ticketFormType === 'vendor_issue'
+                  ? 'bg-[#864f19] text-white shadow-sm'
+                  : 'text-[#6e5d53] hover:text-[#1b1c1c] bg-transparent'
+              }`}
+            >
+              <Store className="w-3.5 h-3.5" />
+              <span>2. Vendor Issue</span>
+            </button>
           </div>
           
           <form onSubmit={handleRaiseTicket} className="space-y-4 text-xs font-semibold">
-            {activeRole === 'state' ? (
+            {ticketFormType === 'my_issue' ? (
+              /* OPTION A: MY ISSUES (AGENT OPERATIONAL ISSUE) */
               <>
-                {/* State Agent Scope Territory Selectors */}
-                <div className="space-y-1">
-                  <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Target District *</label>
-                  <select
-                    value={selectedDistrict}
-                    onChange={(e) => {
-                      setSelectedDistrict(e.target.value);
-                      setSelectedDivision('');
-                      setSelectedPincode('');
-                    }}
-                    disabled={isLoadingDistricts}
-                    className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                  >
-                    <option value="">-- Select District --</option>
-                    {isLoadingDistricts ? (
-                      <option value="" disabled>Loading districts...</option>
-                    ) : districtError ? (
-                      <option value="" disabled>{districtError}</option>
-                    ) : availableDistricts.length === 0 ? (
-                      <option value="" disabled>No districts configured for {effectiveState || userState || 'assigned state'}</option>
-                    ) : (
-                      availableDistricts.map(d => (
-                        <option key={d} value={d}>{d}</option>
-                      ))
-                    )}
-                  </select>
+                <div className="p-3 bg-blue-50/70 border border-blue-200/60 rounded-xl space-y-1">
+                  <span className="text-[10px] font-black uppercase text-blue-900 tracking-wider flex items-center gap-1">
+                    <User className="w-3 h-3 text-blue-700" /> Option A: Agent Operational / Personal Issue
+                  </span>
+                  <p className="text-[11px] text-blue-800 font-medium">
+                    Report an issue affecting you directly as a {activeRole.toUpperCase()} Agent (e.g. payouts, app crashes, territory discrepancies, task execution). No merchant selection required.
+                  </p>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Target Division *</label>
-                  <select
-                    value={selectedDivision}
-                    onChange={(e) => {
-                      setSelectedDivision(e.target.value);
-                      setSelectedPincode('');
-                    }}
-                    disabled={!selectedDistrict || isLoadingDivisions}
-                    className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19] disabled:opacity-50"
-                  >
-                    <option value="">-- Select Division --</option>
-                    {isLoadingDivisions ? (
-                      <option value="" disabled>Loading divisions...</option>
-                    ) : selectedDistrict && availableDivisions.length === 0 ? (
-                      <option value="" disabled>No divisions configured for {selectedDistrict}</option>
-                    ) : (
-                      availableDivisions.map(v => (
-                        <option key={v} value={v}>{v}</option>
-                      ))
-                    )}
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Pincode Sector & Responsible Agent (Optional)</label>
-                  <select
-                    value={selectedPincode}
-                    onChange={(e) => setSelectedPincode(e.target.value)}
-                    disabled={!selectedDivision || isLoadingPincodes}
-                    className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19] disabled:opacity-50"
-                  >
-                    <option value="">-- Select Pincode (Optional) --</option>
-                    {isLoadingPincodes ? (
-                      <option value="" disabled>Loading pincodes...</option>
-                    ) : selectedDivision && availablePincodes.length === 0 ? (
-                      <option value="" disabled>No pincodes configured for {selectedDivision}</option>
-                    ) : (
-                      availablePincodes.map(p => {
-                        const agentLabel = p.activeAgentId?.name ? ` (${p.activeAgentId.name} - Pincode Agent)` : '';
-                        return (
-                          <option key={p.code} value={p.code}>
-                            {p.code}{p.area ? ` - ${p.area}` : ''}{agentLabel}
-                          </option>
-                        );
-                      })
-                    )}
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Merchant / Store Name (Optional)</label>
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Issue Subject *</label>
                   <input
                     type="text"
-                    placeholder="e.g. Sri Rama Supermarket"
-                    value={vendorShopName}
-                    onChange={(e) => setVendorShopName(e.target.value)}
-                    className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                    required
+                    value={subject}
+                    onChange={(e) => {
+                      setSubject(e.target.value);
+                      if (formError) setFormError('');
+                    }}
+                    placeholder="e.g. Commission payout discrepancy for October..."
+                    className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs font-semibold text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Issue Category *</label>
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs font-semibold text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                  >
+                    <option value="Account / Profile">Account & Profile Access</option>
+                    <option value="Payout & Commission">Payout & Incentive Settlement</option>
+                    <option value="App / System Bug">App & Technical Glitch</option>
+                    <option value="Territory Assignment">Territory Allocation Dispute</option>
+                    <option value="Task Execution">Task Execution & Approvals</option>
+                    <option value="Field Visit Dispute">Field Visit Verification Dispute</option>
+                    <option value="General Query">General Inquiry / Guidance</option>
+                    <option value="Other">Other Operational Issue</option>
+                  </select>
+                </div>
+
+                <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 text-[11px] space-y-1">
+                  <span className="text-[9px] font-black text-[#864f19] uppercase tracking-wider block">Logged-In Agent Territory Hierarchy</span>
+                  <p className="text-slate-700">
+                    <strong>{effectiveState || userState || 'Tamil Nadu'}</strong>
+                    {userDistrict ? ` › ${userDistrict}` : ''}
+                    {resolvedDivision || userDivision ? ` › ${resolvedDivision || userDivision}` : ''}
+                    {userPincode ? ` › PIN ${userPincode}` : ''}
+                  </p>
+                  <p className="text-[10px] text-slate-500">
+                    Role: <span className="font-bold text-[#864f19] uppercase">{activeRole} Agent</span> • ID: <span className="font-mono">{user?.agentId || (user as any)?._id || 'Verified'}</span>
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Detailed Problem Description *</label>
+                  <textarea
+                    required
+                    minLength={5}
+                    value={description}
+                    onChange={(e) => {
+                      setDescription(e.target.value);
+                      if (formError) setFormError('');
+                    }}
+                    placeholder="Describe what occurred, any error messages, and what assistance is needed..."
+                    rows={4}
+                    className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs font-semibold text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19] resize-none"
                   />
                 </div>
               </>
             ) : (
+              /* OPTION B: VENDOR ISSUE (STEP 1: TERRITORY, STEP 2: VENDOR, STEP 3: DETAILS) */
               <>
-                {activeRole === 'pincode' ? (
-                  <>
-                    <div className="space-y-1">
-                      <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Vendor Name *</label>
-                      <input
-                        type="text"
-                        readOnly
-                        value={user?.name ? `${user.name} Merchant` : 'Pincodeagent Merchant'}
-                        className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs font-bold text-[#1b1c1c] focus:outline-none"
-                      />
-                    </div>
+                <div className="p-3 bg-amber-50/70 border border-amber-200/60 rounded-xl space-y-1">
+                  <span className="text-[10px] font-black uppercase text-amber-900 tracking-wider flex items-center gap-1">
+                    <Store className="w-3 h-3 text-amber-700" /> Option B: Vendor Issue (Territory-Aware)
+                  </span>
+                  <p className="text-[11px] text-amber-800 font-medium">
+                    Follow the steps below: select territory, pick an active/approved merchant, and report the issue.
+                  </p>
+                </div>
 
-                    <div className="space-y-1">
-                      <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Store Name *</label>
-                      <input
-                        type="text"
-                        required
-                        value={vendorShopName}
-                        onChange={(e) => setVendorShopName(e.target.value)}
-                        placeholder="Enter store name..."
-                        className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs font-bold text-[#864f19] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                      />
-                    </div>
+                {/* STEP 1: SELECT TERRITORY */}
+                <div className="space-y-2.5 border-b border-[#eae8e7] pb-3">
+                  <span className="text-[10px] font-black text-[#864f19] uppercase tracking-wider flex items-center gap-1">
+                    Step 1: Select Territory
+                  </span>
 
-                    <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 space-y-1.5 text-[11px]">
-                      <p className="text-[9px] font-black text-[#864f19] uppercase tracking-wider">Territory Location Details (Pincode Scope)</p>
-                      <p className="text-slate-800">State: <strong>{userState || '—'}</strong></p>
-                      <p className="text-slate-800">District: <strong>{userDistrict || '—'}</strong></p>
-                      <p className="text-slate-800">Division: <strong>{resolvedDivision || userDivision || 'Unavailable'}</strong></p>
-                      <p className="text-slate-800">Assigned Pincode: <strong className="text-[#864f19]">PIN {userPincode || '—'}</strong></p>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="space-y-1">
-                      <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Assigned Merchant Store Name *</label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="Enter merchant / store name..."
-                        value={vendorShopName}
-                        onChange={(e) => setVendorShopName(e.target.value)}
-                        className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                      />
-                    </div>
-
-                    {activeRole === 'district' ? (
-                      <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 space-y-1.5 text-[11px]">
-                        <p className="text-[9px] font-black text-[#864f19] uppercase tracking-wider">Territory Location Details (District Scope)</p>
-                        <p className="text-slate-800">State: <strong>{userState || '—'}</strong></p>
-                        <p className="text-slate-800">District: <strong className="text-[#864f19]">{userDistrict || '—'}</strong></p>
+                  {/* State Agent Scope */}
+                  {activeRole === 'state' && (
+                    <div className="space-y-2">
+                      <div className="p-2 bg-[#fbf9f8] rounded-lg border border-[#d7c3b5]/40 text-[11px] text-slate-700">
+                        State: <strong className="text-[#864f19]">{effectiveState || userState || 'Tamil Nadu'}</strong> (Locked)
                       </div>
-                    ) : (
-                      <div className="p-3 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 space-y-1.5 text-[11px]">
-                        <p className="text-[9px] font-black text-[#864f19] uppercase tracking-wider">Territory Location Details (Division Scope)</p>
-                        <p className="text-slate-800">State: <strong>{userState || '—'}</strong></p>
-                        <p className="text-slate-800">District: <strong>{userDistrict || '—'}</strong></p>
-                        <p className="text-slate-800">Assigned Division: <strong className="text-[#864f19]">{userDivision || '—'}</strong></p>
-                      </div>
-                    )}
-
-                    {activeRole === 'district' ? (
-                      <>
-                        <div className="space-y-1">
-                          <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Select Division *</label>
-                          <select
-                            value={districtSelectedDivision}
-                            onChange={(e) => {
-                              setDistrictSelectedDivision(e.target.value);
-                              setMerchantPincode('');
-                            }}
-                            disabled={isLoadingDistrictDivs}
-                            className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                          >
-                            <option value="">-- Select Division --</option>
-                            {isLoadingDistrictDivs ? (
-                              <option value="" disabled>Loading divisions...</option>
-                            ) : districtAvailableDivisions.length === 0 ? (
-                              <option value="" disabled>No divisions found for {userDistrict}</option>
-                            ) : (
-                              districtAvailableDivisions.map(v => (
-                                <option key={v} value={v}>{v}</option>
-                              ))
-                            )}
-                          </select>
-                        </div>
-
-                        <div className="space-y-1">
-                          <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Select Pincode *</label>
-                          <select
-                            value={merchantPincode}
-                            onChange={(e) => setMerchantPincode(e.target.value)}
-                            disabled={!districtSelectedDivision || isLoadingDistrictPins}
-                            className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19] disabled:opacity-50"
-                          >
-                            <option value="">-- Select Pincode --</option>
-                            {isLoadingDistrictPins ? (
-                              <option value="" disabled>Loading pincodes...</option>
-                            ) : districtSelectedDivision && districtAvailablePincodes.length === 0 ? (
-                              <option value="" disabled>No pincodes found for {districtSelectedDivision}</option>
-                            ) : (
-                              districtAvailablePincodes.map(p => (
-                                <option key={p.code} value={p.code}>
-                                  {p.code}{p.area ? ` - ${p.area}` : ''}
-                                </option>
-                              ))
-                            )}
-                          </select>
-                        </div>
-                      </>
-                    ) : (
                       <div className="space-y-1">
-                        <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Select Merchant Pincode *</label>
-                        <input
-                          type="text"
-                          value={merchantPincode}
-                          onChange={(e) => setMerchantPincode(e.target.value)}
-                          placeholder={`Enter pincode (your territory: ${userPincode || '—'})`}
-                          className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                        />
+                        <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">District *</label>
+                        <select
+                          value={selectedDistrict}
+                          onChange={(e) => {
+                            setSelectedDistrict(e.target.value);
+                            setSelectedDivision('');
+                            setSelectedPincode('');
+                            setSelectedVendorId('');
+                            setSelectedVendorObj(null);
+                          }}
+                          disabled={isLoadingDistricts}
+                          className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                        >
+                          <option value="">-- Select District --</option>
+                          {availableDistricts.map(d => (
+                            <option key={d} value={d}>{d}</option>
+                          ))}
+                        </select>
                       </div>
-                    )}
 
-                    <div className="space-y-1">
-                      <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Assigned Pincode Agent</label>
-                      <input
-                        type="text"
-                        placeholder="Enter agent name (optional)..."
-                        className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-                      />
+                      <div className="space-y-1">
+                        <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Division *</label>
+                        <select
+                          value={selectedDivision}
+                          onChange={(e) => {
+                            setSelectedDivision(e.target.value);
+                            setSelectedPincode('');
+                            setSelectedVendorId('');
+                            setSelectedVendorObj(null);
+                          }}
+                          disabled={!selectedDistrict || isLoadingDivisions}
+                          className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19] disabled:opacity-50"
+                        >
+                          <option value="">-- Select Division --</option>
+                          {availableDivisions.map(v => (
+                            <option key={v} value={v}>{v}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Pincode *</label>
+                        <select
+                          value={selectedPincode}
+                          onChange={(e) => {
+                            setSelectedPincode(e.target.value);
+                            setSelectedVendorId('');
+                            setSelectedVendorObj(null);
+                          }}
+                          disabled={!selectedDivision || isLoadingPincodes}
+                          className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19] disabled:opacity-50"
+                        >
+                          <option value="">-- Select Pincode --</option>
+                          {availablePincodes.map(p => (
+                            <option key={p.code} value={p.code}>{p.code}{p.area ? ` - ${p.area}` : ''}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
-                  </>
-                )}
+                  )}
+
+                  {/* District Agent Scope */}
+                  {activeRole === 'district' && (
+                    <div className="space-y-2">
+                      <div className="p-2 bg-[#fbf9f8] rounded-lg border border-[#d7c3b5]/40 text-[11px] text-slate-700">
+                        State: <strong>{effectiveState || userState || 'Tamil Nadu'}</strong> • District: <strong className="text-[#864f19]">{userDistrict}</strong> (Locked)
+                      </div>
+                      <div className="space-y-1">
+                        <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Division *</label>
+                        <select
+                          value={districtSelectedDivision}
+                          onChange={(e) => {
+                            setDistrictSelectedDivision(e.target.value);
+                            setMerchantPincode('');
+                            setSelectedVendorId('');
+                            setSelectedVendorObj(null);
+                          }}
+                          disabled={isLoadingDistrictDivs}
+                          className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                        >
+                          <option value="">-- Select Division --</option>
+                          {districtAvailableDivisions.map(v => (
+                            <option key={v} value={v}>{v}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Pincode *</label>
+                        <select
+                          value={merchantPincode}
+                          onChange={(e) => {
+                            setMerchantPincode(e.target.value);
+                            setSelectedVendorId('');
+                            setSelectedVendorObj(null);
+                          }}
+                          disabled={!districtSelectedDivision || isLoadingDistrictPins}
+                          className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19] disabled:opacity-50"
+                        >
+                          <option value="">-- Select Pincode --</option>
+                          {districtAvailablePincodes.map(p => (
+                            <option key={p.code} value={p.code}>{p.code}{p.area ? ` - ${p.area}` : ''}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Division Agent Scope */}
+                  {activeRole === 'division' && (
+                    <div className="space-y-2">
+                      <div className="p-2 bg-[#fbf9f8] rounded-lg border border-[#d7c3b5]/40 text-[11px] text-slate-700">
+                        State: <strong>{effectiveState || userState || 'Tamil Nadu'}</strong> • District: <strong>{userDistrict}</strong> • Division: <strong className="text-[#864f19]">{userDivision || resolvedDivision}</strong> (Locked)
+                      </div>
+                      <div className="space-y-1">
+                        <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Pincode *</label>
+                        <select
+                          value={divisionSelectedPincode}
+                          onChange={(e) => {
+                            setDivisionSelectedPincode(e.target.value);
+                            setSelectedVendorId('');
+                            setSelectedVendorObj(null);
+                          }}
+                          disabled={isLoadingDivisionPins}
+                          className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                        >
+                          <option value="">-- Select Pincode --</option>
+                          {divisionAvailablePincodes.map(p => (
+                            <option key={p.code} value={p.code}>{p.code}{p.area ? ` - ${p.area}` : ''}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Pincode Agent Scope */}
+                  {activeRole === 'pincode' && (
+                    <div className="p-2.5 bg-[#fbf9f8] rounded-xl border border-[#d7c3b5]/60 text-[11px] space-y-1">
+                      <span className="text-[9px] font-black text-[#864f19] uppercase tracking-wider block">Assigned Territory (Locked)</span>
+                      <p className="text-slate-800">
+                        {effectiveState || userState || 'Tamil Nadu'} › {userDistrict} › {resolvedDivision || userDivision || 'Thalaivasal'} › <strong className="text-[#864f19]">PIN {userPincode}</strong>
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* STEP 2: SELECT VENDOR */}
+                <div className="space-y-2 border-b border-[#eae8e7] pb-3">
+                  <span className="text-[10px] font-black text-[#864f19] uppercase tracking-wider flex items-center gap-1">
+                    Step 2: Select Vendor (Active & KYC Approved)
+                  </span>
+
+                  <div className="space-y-1">
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Active Merchant / Vendor *</label>
+                    <select
+                      value={selectedVendorId}
+                      onChange={(e) => {
+                        const vid = e.target.value;
+                        setSelectedVendorId(vid);
+                        const found = (eligibleVendors as any[]).find(v => String(v._id) === vid);
+                        setSelectedVendorObj(found || null);
+                        if (found) {
+                          setVendorShopName(found.businessName || found.ownerName || '');
+                          setVendorPhone(found.phone || '');
+                          setVendorAddress(found.address?.street || '');
+                          setMerchantPincode(found.pincode || '');
+                        } else {
+                          setVendorShopName('');
+                          setVendorPhone('');
+                          setVendorAddress('');
+                        }
+                      }}
+                      disabled={isLoadingVendors || (activeRole !== 'pincode' && !targetPincode)}
+                      className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs font-bold text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19] disabled:opacity-50"
+                    >
+                      {isLoadingVendors ? (
+                        <option value="" disabled>Loading active merchants...</option>
+                      ) : activeRole !== 'pincode' && !targetPincode ? (
+                        <option value="" disabled>-- Please select a Pincode above to view vendors --</option>
+                      ) : eligibleVendors.length === 0 ? (
+                        <option value="" disabled>No active, fully approved vendors found in this territory</option>
+                      ) : (
+                        <>
+                          <option value="">-- Choose Merchant / Store --</option>
+                          {eligibleVendors.map((v: any) => (
+                            <option key={v._id} value={v._id}>
+                              {v.businessName || v.ownerName} ({v.phone || v.pincode})
+                            </option>
+                          ))}
+                        </>
+                      )}
+                    </select>
+                  </div>
+
+                  {/* Selected Vendor Card */}
+                  {selectedVendorObj && (
+                    <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl text-[11px] space-y-1 animate-fade-in">
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-[#864f19] flex items-center gap-1">
+                          <Store className="w-3.5 h-3.5" /> {selectedVendorObj.businessName || selectedVendorObj.ownerName}
+                        </span>
+                        <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 uppercase">
+                          Active & Approved ✓
+                        </span>
+                      </div>
+                      <p className="text-slate-600">Category: <strong>{selectedVendorObj.category || selectedVendorObj.storeType || 'Retail'}</strong> • Phone: <strong>{selectedVendorObj.phone || '—'}</strong></p>
+                      <p className="text-slate-500 text-[10px]">Territory: {selectedVendorObj.district || targetDistrict} › {selectedVendorObj.division || targetDivision} › PIN {selectedVendorObj.pincode || targetPincode}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* STEP 3: DESCRIBE VENDOR ISSUE */}
+                <div className="space-y-3">
+                  <span className="text-[10px] font-black text-[#864f19] uppercase tracking-wider flex items-center gap-1">
+                    Step 3: Describe Problem
+                  </span>
+
+                  <div className="space-y-1">
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Merchant / Store Name</label>
+                    <input
+                      type="text"
+                      readOnly
+                      value={selectedVendorObj?.businessName || selectedVendorObj?.ownerName || vendorShopName || 'Select a vendor in Step 2'}
+                      className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs font-bold text-[#1b1c1c] focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Issue Subject *</label>
+                    <input
+                      type="text"
+                      required
+                      value={subject}
+                      onChange={(e) => {
+                        setSubject(e.target.value);
+                        if (formError) setFormError('');
+                      }}
+                      placeholder="e.g. Broken QR Standee, Store Closed, Bank Reconciliation..."
+                      className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs font-semibold text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Issue Category *</label>
+                    <select
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                      className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs font-semibold text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                    >
+                      <option value="Vendor Query">Vendor Query / General Issue</option>
+                      <option value="KYC Document Issue">KYC Document Issue</option>
+                      <option value="Portal Account Block">Portal Account Block</option>
+                      <option value="Hardware / QR Standee Request">Hardware / QR Standee Request</option>
+                      <option value="Payment Issue">Payment & Settlement Issue</option>
+                      <option value="Store Relocation / Info Update">Store Relocation / Info Update</option>
+                      <option value="Other">Other Merchant Issue</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Detailed Problem Description *</label>
+                    <textarea
+                      required
+                      minLength={5}
+                      value={description}
+                      onChange={(e) => {
+                        setDescription(e.target.value);
+                        if (formError) setFormError('');
+                      }}
+                      placeholder="Describe the vendor's issue or dispute in detail..."
+                      rows={4}
+                      className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs font-semibold text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19] resize-none"
+                    />
+                  </div>
+                </div>
               </>
             )}
 
+            {/* PRIORITY SELECTION (SHARED) */}
             <div className="space-y-1">
-              <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Select Issue Category *</label>
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
-              >
-                {activeRole === 'state' ? (
-                  <>
-                    <option value="Vendor">Vendor</option>
-                    <option value="KYC">KYC</option>
-                    <option value="Agent">Agent</option>
-                    <option value="Target/Task">Target/Task</option>
-                    <option value="Field Visit">Field Visit</option>
-                    <option value="Payment">Payment</option>
-                    <option value="System">System</option>
-                    <option value="Other">Other</option>
-                  </>
-                ) : (
-                  <>
-                    <option value="Vendor Query">Vendor Query</option>
-                    <option value="KYC Document Issue">KYC Document Issue</option>
-                    <option value="Portal Account Block">Portal Account Block</option>
-                    <option value="Hardware / QR Standee Request">Hardware / QR Standee Request</option>
-                    <option value="Payment Issue">Payment Issue</option>
-                  </>
-                )}
-              </select>
-            </div>
-
-            <div className="space-y-1">
-              <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Select Priority</label>
+              <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Priority</label>
               <select
                 value={priority}
                 onChange={(e: any) => setPriority(e.target.value)}
-                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
+                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2 px-3 text-xs font-semibold text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19]"
               >
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
@@ -1105,23 +1367,7 @@ export const TicketsList: React.FC = () => {
               </select>
             </div>
 
-            <div className="space-y-1">
-              <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Issue Details (Minimum 10 characters) *</label>
-              <textarea
-                required
-                minLength={10}
-                value={description}
-                onChange={(e) => {
-                  setDescription(e.target.value);
-                  if (formError) setFormError('');
-                }}
-                placeholder="Please describe the issue in detail (at least 10 characters)..."
-                rows={3}
-                className="w-full bg-[#fbf9f8] border border-[#d7c3b5]/60 rounded-xl py-2.5 px-3 text-xs text-[#1b1c1c] focus:outline-none focus:ring-1 focus:ring-[#864f19] resize-none"
-              />
-            </div>
-
-            {/* Optional Attachment Upload */}
+            {/* OPTIONAL ATTACHMENT UPLOAD (SHARED) */}
             <div className="space-y-1">
               <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Optional Attachment (JPG/PNG/PDF)</label>
               <div className="flex items-center gap-2">
@@ -1169,7 +1415,7 @@ export const TicketsList: React.FC = () => {
               ) : (
                 <>
                   <Send className="w-3.5 h-3.5" />
-                  <span>{activeRole === 'state' ? 'Log State Ticket' : 'Submit Support Ticket'}</span>
+                  <span>{ticketFormType === 'my_issue' ? 'Submit My Issue Ticket' : 'Log Vendor Issue Ticket'}</span>
                 </>
               )}
             </button>

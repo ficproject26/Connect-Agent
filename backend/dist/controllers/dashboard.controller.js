@@ -35,11 +35,16 @@ const getDashboardStats = async (req, res) => {
             { assignedAgentId: agentId },
             { assignedAgentId: { $in: agentMatches } }
         ];
+        const activeVendorFilter = {
+            ...vendorFilter,
+            kycStatus: { $in: ['approved', 'Approved', 'verified', 'Verified'] },
+            status: { $in: ['active', 'Active', 'approved', 'Approved', 'verified', 'Verified'] }
+        };
         // Run all aggregations in parallel for performance with field projections
         const [totalVendors, activeVendors, pendingVendors, totalAssignments, completedAssignments, overdueAssignments, totalTasks, completedTasks, overdueTasks, openTickets, resolvedTickets, unreadNotifications, totalReports, recentAssignments, recentVendors] = await Promise.all([
-            Vendor_1.default.countDocuments(vendorFilter),
-            Vendor_1.default.countDocuments({ ...vendorFilter, status: 'active' }),
-            Vendor_1.default.countDocuments({ ...vendorFilter, status: 'pending' }),
+            Vendor_1.default.countDocuments(activeVendorFilter),
+            Vendor_1.default.countDocuments(activeVendorFilter),
+            0,
             TargetAssignment_1.default.countDocuments({ assignedTo: { $in: agentMatches } }),
             TargetAssignment_1.default.countDocuments({ assignedTo: { $in: agentMatches }, status: 'completed' }),
             TargetAssignment_1.default.countDocuments({ assignedTo: { $in: agentMatches }, status: 'overdue' }),
@@ -61,7 +66,7 @@ const getDashboardStats = async (req, res) => {
                 .limit(5)
                 .lean(),
             Vendor_1.default.find({
-                ...vendorFilter,
+                ...activeVendorFilter,
                 $or: [
                     { businessName: { $exists: true, $nin: ['', null] } },
                     { name: { $exists: true, $nin: ['', null] } }
@@ -76,25 +81,11 @@ const getDashboardStats = async (req, res) => {
         const sanitizedRecentVendors = (recentVendors || [])
             .map((v) => {
             const rawName = (v.businessName || v.name || '').trim();
-            let effectiveKyc = String(v.kycStatus || '').trim().toLowerCase();
-            if (!effectiveKyc) {
-                const s = String(v.status || '').trim().toLowerCase();
-                effectiveKyc = (s === 'approved' || s === 'active') ? 'approved' : 'pending';
-            }
-            else if (effectiveKyc.includes('approved') || effectiveKyc === 'verified') {
-                effectiveKyc = 'approved';
-            }
-            else if (effectiveKyc.includes('reject')) {
-                effectiveKyc = 'rejected';
-            }
-            else {
-                effectiveKyc = 'pending';
-            }
             return {
                 ...v,
                 name: rawName,
                 businessName: rawName,
-                kycStatus: effectiveKyc
+                kycStatus: 'approved'
             };
         })
             .filter((v) => Boolean(v.name));

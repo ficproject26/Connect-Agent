@@ -3,9 +3,11 @@ import { z } from 'zod';
 import mongoose from 'mongoose';
 import Ticket from '../models/Ticket';
 import Agent from '../models/Agent';
+import Vendor from '../models/Vendor';
 import { getAgentTerritoryScope } from '../utils/territoryScope';
 import { cacheService } from '../services/cache.service';
 import { publishEntityEvent } from '../realtime/eventBus';
+import NotificationService from '../services/notification.service';
 
 // Simple unique ticket ID generator — format TKT-XXXXXX
 const generateTicketId = () =>
@@ -120,9 +122,12 @@ async function resolveResponsibleAgent(pincode?: string, division?: string, dist
 }
 
 const createTicketSchema = z.object({
+  ticketType: z.enum(['my_issue', 'vendor_issue', 'agent_issue']).optional(),
   category: z.string().min(1, 'Category is required'),
+  subject: z.string().optional(),
   description: z.string().min(1, 'Issue details are required'),
   priority: z.enum(['low', 'medium', 'high']).optional(),
+  vendorId: z.string().optional(),
   vendorName: z.string().optional(),
   storeName: z.string().optional(),
   state: z.string().optional(),
@@ -166,26 +171,28 @@ export const getTickets = async (req: Request, res: Response) => {
 
       if (scope) {
         if (scope.role === 'state' && scope.state) {
-          conditions.push(
-            { state: exactRegex(scope.state) },
-            { territory: containsRegex(scope.state) }
-          );
+          conditions.push({
+            $and: [
+              { state: exactRegex(scope.state) },
+              { $or: [{ ticketType: 'vendor_issue' }, { ticketType: { $exists: false } }, { assignedTo: { $in: agentQueryValues } }, { creator: { $in: agentQueryValues } }] }
+            ]
+          });
         } else if (scope.role === 'district' && scope.district) {
-          conditions.push(
-            { district: exactRegex(scope.district) },
-            { territory: containsRegex(scope.district) }
-          );
+          conditions.push({
+            $and: [
+              { district: exactRegex(scope.district) },
+              { $or: [{ ticketType: 'vendor_issue' }, { ticketType: { $exists: false } }, { assignedTo: { $in: agentQueryValues } }, { creator: { $in: agentQueryValues } }] }
+            ]
+          });
         } else if (scope.role === 'division' && scope.division) {
-          conditions.push(
-            { division: containsRegex(scope.division) },
-            { territory: containsRegex(scope.division) }
-          );
-        } else if (scope.role === 'pincode' && scope.pincode) {
-          conditions.push(
-            { pincode: scope.pincode },
-            { territory: containsRegex(scope.pincode) }
-          );
+          conditions.push({
+            $and: [
+              { division: containsRegex(scope.division) },
+              { $or: [{ ticketType: 'vendor_issue' }, { ticketType: { $exists: false } }, { assignedTo: { $in: agentQueryValues } }, { creator: { $in: agentQueryValues } }] }
+            ]
+          });
         }
+        // Note: For Pincode Agent, conditions remain creator or assignedTo, protecting agent isolation
       }
 
       filter.$or = conditions;
@@ -196,7 +203,7 @@ export const getTickets = async (req: Request, res: Response) => {
 
     const total = await Ticket.countDocuments(filter);
     const tickets = await Ticket.find(filter)
-      .select('ticketId creator creatorRole creatorName assignedTo assignedAgent assignedAgentIdStr assignedAgentRole assignedAgentPhone assignedAgentPincode assignedAgentDistrict assignedAgentDivision assignedAgentState assignmentStatus assignmentHistory vendorName storeName state district division pincode territory category description priority status attachmentName attachmentUrl resolutionDetails createdAt updatedAt')
+      .select('ticketId creator creatorRole creatorName assignedTo assignedAgent assignedAgentIdStr assignedAgentRole assignedAgentPhone assignedAgentPincode assignedAgentDistrict assignedAgentDivision assignedAgentState assignmentStatus assignmentHistory vendorId vendorName storeName ticketType subject state district division pincode territory category description priority status attachmentName attachmentUrl resolutionDetails createdAt updatedAt')
       .populate('creator', 'name email role phone')
       .populate('assignedTo', 'name email role phone')
       .sort({ createdAt: -1 })
@@ -254,22 +261,45 @@ export const getTicketById = async (req: Request, res: Response) => {
     const agentRole = (req as any).agent?.role;
     if (!agentId) return res.status(401).json({ message: 'Unauthorized' });
 
-    const isAdminOrExecutive = agentRole === 'admin' || agentRole === 'executive';
-    const filter: any = { _id: req.params.id };
-    if (!isAdminOrExecutive) {
-      const agentQueryValues: any[] = [agentId];
-      if (mongoose.Types.ObjectId.isValid(agentId)) {
-        agentQueryValues.push(new mongoose.Types.ObjectId(agentId));
-      }
-      filter.$or = [{ creator: { $in: agentQueryValues } }, { assignedTo: { $in: agentQueryValues } }];
-    }
-
-    const ticket = await Ticket.findOne(filter)
+    const ticket = await Ticket.findById(req.params.id)
       .populate('creator', 'name email role phone')
       .populate('assignedTo', 'name email role phone')
       .lean();
 
-    if (!ticket) return res.status(404).json({ message: 'Ticket not found or access denied' });
+    if (!ticket) return res.status(404).json({ message: 'Ticket not found' });
+
+    const isAdminOrExecutive = agentRole === 'admin' || agentRole === 'executive';
+    if (!isAdminOrExecutive) {
+      const agentIdStr = agentId.toString();
+      const creatorIdStr = (ticket.creator as any)?._id?.toString() || ticket.creator?.toString();
+      const assignedToIdStr = (ticket.assignedTo as any)?._id?.toString() || ticket.assignedTo?.toString();
+      const isDirectParty = creatorIdStr === agentIdStr || assignedToIdStr === agentIdStr;
+
+      if (!isDirectParty) {
+        const scope = await getAgentTerritoryScope(agentId);
+        if (!scope) {
+          return res.status(403).json({ message: 'Access denied: outside your jurisdiction' });
+        }
+
+        if (scope.role === 'pincode') {
+          return res.status(403).json({ message: 'Access denied: Pincode agent can only view tickets created by or assigned to them' });
+        }
+        if (scope.role === 'division') {
+          if (!ticket.division || !ticket.division.toLowerCase().includes(scope.division?.toLowerCase() || '')) {
+            return res.status(403).json({ message: 'Access denied: ticket is outside your division jurisdiction' });
+          }
+        } else if (scope.role === 'district') {
+          if (!ticket.district || ticket.district.toLowerCase() !== scope.district?.toLowerCase()) {
+            return res.status(403).json({ message: 'Access denied: ticket is outside your district jurisdiction' });
+          }
+        } else if (scope.role === 'state') {
+          if (!ticket.state || ticket.state.toLowerCase() !== scope.state?.toLowerCase()) {
+            return res.status(403).json({ message: 'Access denied: ticket is outside your state jurisdiction' });
+          }
+        }
+      }
+    }
+
     return res.status(200).json({ ticket });
   } catch (error) {
     console.error('Get ticket by id error:', error);
@@ -291,10 +321,80 @@ export const createTicket = async (req: Request, res: Response) => {
     const agentRole = scope?.role || (req as any).agent?.role || agent?.role || 'pincode';
     const agentName = agent?.name || (req as any).agent?.name || 'Agent';
 
-    const state = (data.state || scope?.state || agent?.assignedTerritory?.state || agent?.territory?.state || '').trim();
-    const district = (data.district || scope?.district || agent?.assignedTerritory?.district || agent?.territory?.district || '').trim();
-    const division = (data.division || scope?.division || agent?.assignedTerritory?.division || agent?.territory?.division || '').trim();
-    const pincode = (data.pincode || scope?.pincode || agent?.assignedTerritory?.pincode || agent?.territory?.pincode || '').trim();
+    let state = (data.state || scope?.state || agent?.assignedTerritory?.state || agent?.territory?.state || '').trim();
+    let district = (data.district || scope?.district || agent?.assignedTerritory?.district || agent?.territory?.district || '').trim();
+    let division = (data.division || scope?.division || agent?.assignedTerritory?.division || agent?.territory?.division || '').trim();
+    let pincode = (data.pincode || scope?.pincode || agent?.assignedTerritory?.pincode || agent?.territory?.pincode || '').trim();
+    let vendorName = data.vendorName || data.storeName || '';
+    let storeName = data.storeName || data.vendorName || '';
+    let resolvedVendorId = data.vendorId;
+
+    const ticketType = data.ticketType || (data.vendorId || data.vendorName ? 'vendor_issue' : 'my_issue');
+
+    if (ticketType === 'vendor_issue') {
+      if (!data.vendorId && !data.vendorName) {
+        return res.status(400).json({ message: 'A valid vendor must be selected for Vendor Issue tickets' });
+      }
+
+      if (data.vendorId) {
+        const vendorDoc = await Vendor.findOne({
+          $or: [
+            ...(mongoose.Types.ObjectId.isValid(data.vendorId) ? [{ _id: new mongoose.Types.ObjectId(data.vendorId) }] : []),
+            { _id: data.vendorId },
+            { registrationId: data.vendorId }
+          ]
+        }).lean();
+
+        if (!vendorDoc) {
+          return res.status(404).json({ message: 'Selected vendor not found' });
+        }
+
+        const isKycApproved = /^(approved|verified)$/i.test(vendorDoc.kycStatus || '');
+        const isActive = /^(active|approved|verified)$/i.test(vendorDoc.status || '');
+        if (!isKycApproved || !isActive) {
+          return res.status(400).json({ message: 'Selected vendor is not active or fully approved' });
+        }
+
+        if (scope) {
+          if (scope.role === 'state' && scope.state && vendorDoc.state && vendorDoc.state.toLowerCase() !== scope.state.toLowerCase()) {
+            return res.status(403).json({ message: `Vendor is outside your state jurisdiction (${scope.state})` });
+          }
+          if (scope.role === 'district' && scope.district && vendorDoc.district && vendorDoc.district.toLowerCase() !== scope.district.toLowerCase()) {
+            return res.status(403).json({ message: `Vendor is outside your district jurisdiction (${scope.district})` });
+          }
+          if (scope.role === 'division' && scope.division && vendorDoc.division && !vendorDoc.division.toLowerCase().includes(scope.division.toLowerCase())) {
+            return res.status(403).json({ message: `Vendor is outside your division jurisdiction (${scope.division})` });
+          }
+          if (scope.role === 'pincode') {
+            if (scope.pincode && vendorDoc.pincode && vendorDoc.pincode !== scope.pincode) {
+              return res.status(403).json({ message: `Vendor is outside your pincode jurisdiction (${scope.pincode})` });
+            }
+            const vAgentIds = [
+              vendorDoc.assignedAgent?.toString(),
+              vendorDoc.agentId?.toString(),
+              vendorDoc.onboardedBy?.toString(),
+              vendorDoc.onboardedByAgentId?.toString()
+            ].filter(Boolean);
+            if (!vAgentIds.includes(agentId.toString())) {
+              return res.status(403).json({ message: 'You can only raise vendor issue tickets for vendors assigned to you' });
+            }
+          }
+        }
+
+        vendorName = vendorDoc.businessName || vendorDoc.ownerName || vendorName;
+        storeName = vendorDoc.businessName || storeName;
+        state = vendorDoc.state || state;
+        district = vendorDoc.district || district;
+        division = vendorDoc.division || division;
+        pincode = vendorDoc.pincode || pincode;
+        resolvedVendorId = String(vendorDoc._id);
+      }
+    } else {
+      // My Issue ticket: No vendor attached, defaults to agent territory
+      vendorName = '';
+      storeName = '';
+      resolvedVendorId = undefined;
+    }
 
     // Backend territory authorization validation
     if (scope) {
@@ -313,8 +413,6 @@ export const createTicket = async (req: Request, res: Response) => {
     }
 
     const territory = data.territory || [district, division, pincode].filter(Boolean).join(' → ') || (state ? `${state} Scope` : '');
-    const vendorName = data.vendorName || data.storeName || '';
-    const storeName = data.storeName || data.vendorName || '';
 
     // Automatically resolve the responsible agent based on territory hierarchy
     const responsibleAgent: any = await resolveResponsibleAgent(pincode, division, district, state);
@@ -372,6 +470,9 @@ export const createTicket = async (req: Request, res: Response) => {
         assignedAt: new Date(),
         reason: 'Auto-assigned by territory hierarchy upon ticket creation'
       }] : [],
+      ticketType,
+      subject: data.subject || (ticketType === 'vendor_issue' ? `Vendor Issue - ${vendorName}` : 'Agent Support Ticket'),
+      vendorId: resolvedVendorId,
       category: data.category,
       description: data.description,
       priority: data.priority ?? 'medium',
@@ -413,6 +514,11 @@ export const createTicket = async (req: Request, res: Response) => {
         priority: ticket.priority
       }
     }).catch(() => {});
+
+    // Notify assigned agent
+    if (ticket.assignedTo) {
+      NotificationService.notifyTicketUpdate(ticket, ticket.assignedTo, 'assigned').catch(() => {});
+    }
 
     return res.status(201).json({ message: 'Support ticket created successfully', ticket });
   } catch (error: any) {
@@ -539,6 +645,15 @@ export const updateTicketStatus = async (req: Request, res: Response) => {
         status: ticket.status
       }
     }).catch(() => {});
+
+    // Notify assigned agent and ticket creator of status change
+    if (ticket.assignedTo) {
+      NotificationService.notifyTicketUpdate(ticket, ticket.assignedTo, ticket.status).catch(() => {});
+    }
+    const creatorId = (ticket.creator as any)?._id || ticket.creator;
+    if (creatorId && String(creatorId) !== String(ticket.assignedTo)) {
+      NotificationService.notifyTicketUpdate(ticket, creatorId, ticket.status).catch(() => {});
+    }
 
     return res.status(200).json({ message: 'Ticket status updated', ticket });
   } catch (error) {

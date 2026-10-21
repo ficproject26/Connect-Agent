@@ -8,8 +8,6 @@ const mongoose_1 = __importDefault(require("mongoose"));
 const Agent_1 = __importDefault(require("../models/Agent"));
 const AuditLog_1 = __importDefault(require("../models/AuditLog"));
 const Vendor_1 = __importDefault(require("../models/Vendor"));
-const TargetAssignment_1 = __importDefault(require("../models/TargetAssignment"));
-const Wallet_1 = __importDefault(require("../models/Wallet"));
 const territoryScope_1 = require("../utils/territoryScope");
 const districtAssignment_1 = require("../utils/districtAssignment");
 const cache_service_1 = require("../services/cache.service");
@@ -1087,7 +1085,19 @@ const getWeeklyLeaderboard = async (req, res) => {
         const requesterEmail = req.agent?.email;
         const scope = await (0, territoryScope_1.getAgentTerritoryScope)(requesterId, requesterEmail);
         const scopeFilter = (0, territoryScope_1.buildTerritoryFilter)(scope);
-        const roleFilter = req.query.role;
+        const canonicalRole = (scope?.role || 'pincode').toLowerCase();
+        const allowedTiers = canonicalRole === 'state' ? ['overall', 'district', 'division', 'pincode'] :
+            canonicalRole === 'district' ? ['overall', 'division', 'pincode'] :
+                canonicalRole === 'division' ? ['overall', 'pincode'] :
+                    ['overall'];
+        const reqTier = (req.query.tier || req.query.role || 'overall').toLowerCase();
+        if (reqTier && reqTier !== 'all' && reqTier !== 'overall' && !allowedTiers.includes(reqTier)) {
+            return res.status(403).json({
+                error: `Forbidden: Agent level '${canonicalRole}' is not authorized to access tier '${reqTier}'`,
+                allowedTiers
+            });
+        }
+        const activeTier = (reqTier === 'all' || !reqTier) ? 'overall' : reqTier;
         const timeframe = req.query.timeframe || 'this_week';
         const sortBy = req.query.sortBy || 'performanceScore';
         const reqStartDate = req.query.startDate;
@@ -1096,7 +1106,7 @@ const getWeeklyLeaderboard = async (req, res) => {
         const now = new Date();
         let start = null;
         let end = null;
-        if (reqStartDate && reqEndDate) {
+        if (reqStartDate && reqEndDate && reqStartDate !== 'all') {
             start = new Date(reqStartDate);
             start.setHours(0, 0, 0, 0);
             end = new Date(reqEndDate);
@@ -1119,6 +1129,16 @@ const getWeeklyLeaderboard = async (req, res) => {
             end.setDate(start.getDate() + 6);
             end.setHours(23, 59, 59, 999);
         }
+        else if (timeframe === 'last_week') {
+            const day = now.getDay();
+            const diffToMonday = (day === 0 ? -6 : 1) - day;
+            start = new Date(now);
+            start.setDate(now.getDate() + diffToMonday - 7);
+            start.setHours(0, 0, 0, 0);
+            end = new Date(start);
+            end.setDate(start.getDate() + 6);
+            end.setHours(23, 59, 59, 999);
+        }
         else if (timeframe === 'this_month') {
             start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
             end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
@@ -1127,77 +1147,24 @@ const getWeeklyLeaderboard = async (req, res) => {
             start = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
             end = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
         }
-        const filter = { ...scopeFilter };
-        if (roleFilter && roleFilter !== 'all') {
-            const rLower = roleFilter.toLowerCase();
-            if (rLower === 'district') {
-                filter.$or = [
-                    { role: { $in: ['district', 'district_manager', 'District Admin'] } },
-                    { level: { $in: ['district', 2, '2'] } }
-                ];
-            }
-            else if (rLower === 'division') {
-                filter.$or = [
-                    { role: { $in: ['division', 'division_manager', 'Division Admin', 'Divisional Admin'] } },
-                    { level: { $in: ['division', 3, '3'] } }
-                ];
-            }
-            else if (rLower === 'state') {
-                filter.$or = [
-                    { role: { $in: ['state', 'state_manager', 'State Admin'] } },
-                    { level: { $in: ['state', 1, '1'] } }
-                ];
-            }
-            else if (rLower === 'pincode') {
-                filter.$or = [
-                    { role: { $in: ['pincode', 'pincode_agent', 'pincode_manager', 'Pincode Admin'] } },
-                    { level: { $in: ['pincode', 4, '4'] } }
-                ];
-            }
-            else {
-                filter.role = roleFilter;
-            }
-        }
-        const agents = await Agent_1.default.find(filter)
+        // Query scoped agents from Agent model
+        const agents = await Agent_1.default.find(scopeFilter)
             .select('_id name email phone registrationId role level kycStatus registrationFeePaid performanceScore territory assignedTerritory createdAt')
             .lean();
-        // Also include approved agents from users collection
+        // Also include approved agents from users collection within the authorized territory
         try {
             const db = mongoose_1.default.connection.db;
             if (db) {
-                const userFilter = { status: { $nin: ['rejected', 'suspended'] } };
-                if (roleFilter && roleFilter !== 'all') {
-                    const rLower = roleFilter.toLowerCase();
-                    if (rLower === 'district') {
-                        userFilter.$or = [
-                            { role: /district/i },
-                            { level: /district/i },
-                            { level: 2 }
-                        ];
-                    }
-                    else if (rLower === 'division') {
-                        userFilter.$or = [
-                            { role: /division/i },
-                            { level: /division/i },
-                            { level: 3 }
-                        ];
-                    }
-                    else if (rLower === 'state') {
-                        userFilter.$or = [
-                            { role: /state/i },
-                            { level: /state/i },
-                            { level: 1 }
-                        ];
-                    }
-                    else if (rLower === 'pincode') {
-                        userFilter.$or = [
-                            { role: /pincode/i },
-                            { level: /pincode/i },
-                            { level: 4 }
-                        ];
-                    }
-                }
-                const userDocs = await db.collection('users').find(userFilter).limit(100).maxTimeMS(4000).toArray();
+                const userDocs = await db.collection('users')
+                    .find({
+                    $and: [
+                        scopeFilter,
+                        { status: { $nin: ['rejected', 'suspended'] } }
+                    ]
+                })
+                    .limit(100)
+                    .maxTimeMS(4000)
+                    .toArray();
                 const existingEmails = new Set(agents.map(a => (a.email || '').toLowerCase()));
                 const existingIds = new Set(agents.map(a => String(a._id)));
                 for (const u of userDocs) {
@@ -1206,18 +1173,11 @@ const getWeeklyLeaderboard = async (req, res) => {
                     if (existingIds.has(uId) || (uEmail && existingEmails.has(uEmail)))
                         continue;
                     const uTerritory = u.assignedTerritory || u.territory || {
-                        state: u.state || u.assignedState,
-                        district: u.district || u.assignedDistrict,
-                        division: u.division || u.assignedDivision,
-                        pincode: u.pincode || u.assignedPincode
+                        state: u.state || u.assignedState || '',
+                        district: u.district || u.assignedDistrict || '',
+                        division: u.division || u.assignedDivision || '',
+                        pincode: u.pincode || u.assignedPincode || ''
                     };
-                    // Check scope filter
-                    if (scope?.state && uTerritory.state && !uTerritory.state.toLowerCase().includes(scope.state.toLowerCase()) && !scope.state.toLowerCase().includes(uTerritory.state.toLowerCase())) {
-                        continue;
-                    }
-                    if (scope?.district && uTerritory.district && !uTerritory.district.toLowerCase().includes(scope.district.toLowerCase()) && !scope.district.toLowerCase().includes(uTerritory.district.toLowerCase())) {
-                        continue;
-                    }
                     let uRole = (u.role || u.level || 'pincode').toString().toLowerCase();
                     if (uRole.includes('district') || u.level === 2 || u.level === '2')
                         uRole = 'district';
@@ -1225,13 +1185,8 @@ const getWeeklyLeaderboard = async (req, res) => {
                         uRole = 'division';
                     else if (uRole.includes('state') || u.level === 1 || u.level === '1')
                         uRole = 'state';
-                    else if (uRole.includes('pincode') || u.level === 4 || u.level === '4')
-                        uRole = 'pincode';
                     else
                         uRole = 'pincode';
-                    if (roleFilter && roleFilter !== 'all' && uRole !== roleFilter.toLowerCase()) {
-                        continue;
-                    }
                     agents.push({
                         _id: u._id,
                         name: u.name || 'Agent',
@@ -1241,7 +1196,7 @@ const getWeeklyLeaderboard = async (req, res) => {
                         role: uRole,
                         kycStatus: u.kycStatus || 'approved',
                         registrationFeePaid: u.registrationFeePaid ?? true,
-                        performanceScore: 0,
+                        performanceScore: u.performanceScore || 0,
                         territory: uTerritory,
                         assignedTerritory: uTerritory,
                         createdAt: u.createdAt || new Date()
@@ -1255,41 +1210,66 @@ const getWeeklyLeaderboard = async (req, res) => {
         catch (usersErr) {
             console.warn('Fallback users query for leaderboard skipped:', usersErr);
         }
-        const agentIds = agents.map(a => a._id);
-        const agentIdStrings = new Set(agents.map(a => String(a._id)));
-        // Date-scoped TargetAssignment query
-        const targetQuery = {
-            $or: [
-                { assignedTo: { $in: agentIds } },
-                { assignedTo: { $in: Array.from(agentIdStrings) } }
-            ]
-        };
-        if (start && end) {
-            targetQuery.$and = [
-                {
-                    $or: [
-                        { createdAt: { $gte: start, $lte: end } },
-                        { dueDate: { $gte: start, $lte: end } },
-                        { completedAt: { $gte: start, $lte: end } }
-                    ]
-                }
-            ];
-        }
-        const [assignments, wallets] = await Promise.all([
-            TargetAssignment_1.default.find(targetQuery).populate('target').lean(),
-            Wallet_1.default.find({
+        // Query TargetAssignment and Wallet collections safely using native DB queries to avoid Mongoose CastErrors
+        const db = mongoose_1.default.connection.db;
+        const validObjectIds = agents
+            .map(a => a._id)
+            .filter(id => mongoose_1.default.Types.ObjectId.isValid(id))
+            .map(id => new mongoose_1.default.Types.ObjectId(id));
+        const stringIds = agents.map(a => String(a._id));
+        let assignments = [];
+        let wallets = [];
+        if (db && agents.length > 0) {
+            const targetQuery = {
                 $or: [
-                    { agent: { $in: agentIds } },
-                    { agent: { $in: Array.from(agentIdStrings) } }
+                    { assignedTo: { $in: validObjectIds } },
+                    { assignedTo: { $in: stringIds } }
                 ]
-            }).lean()
-        ]);
-        // Enrich and compute real leaderboard metrics strictly for active period
-        let leaderboard = agents.map(agent => {
+            };
+            if (start && end) {
+                targetQuery.$and = [
+                    {
+                        $or: [
+                            { createdAt: { $gte: start, $lte: end } },
+                            { dueDate: { $gte: start, $lte: end } },
+                            { completedAt: { $gte: start, $lte: end } }
+                        ]
+                    }
+                ];
+            }
+            const walletQuery = {
+                $or: [
+                    { agent: { $in: validObjectIds } },
+                    { agent: { $in: stringIds } }
+                ]
+            };
+            try {
+                const [rawAsgns, rawWallets] = await Promise.all([
+                    db.collection('targetassignments').find(targetQuery).toArray(),
+                    db.collection('wallets').find(walletQuery).toArray()
+                ]);
+                const targetIds = rawAsgns.map((a) => a.target).filter(Boolean);
+                const validTargetOIds = targetIds.filter((id) => mongoose_1.default.Types.ObjectId.isValid(id)).map((id) => new mongoose_1.default.Types.ObjectId(id));
+                const targetDocs = validTargetOIds.length > 0
+                    ? await db.collection('targets').find({ _id: { $in: validTargetOIds } }).toArray()
+                    : [];
+                const targetMap = new Map(targetDocs.map((t) => [String(t._id), t]));
+                assignments = rawAsgns.map((a) => ({
+                    ...a,
+                    target: targetMap.get(String(a.target)) || a.target
+                }));
+                wallets = rawWallets;
+            }
+            catch (queryErr) {
+                console.error('Error fetching assignments/wallets via native DB:', queryErr);
+            }
+        }
+        // Enrich agents with accurate performance metrics
+        const enrichedAgents = agents.map(agent => {
             const aIdStr = String(agent._id);
             const agentAsgns = assignments.filter((a) => String(a.assignedTo) === aIdStr);
-            const targetsTotal = agentAsgns.reduce((acc, a) => acc + (a.target?.targetValue || 1), 0);
-            const targetsCompleted = agentAsgns.filter((a) => a.status === 'completed').reduce((acc, a) => acc + (a.target?.targetValue || 1), 0);
+            const targetsTotal = agentAsgns.reduce((acc, a) => acc + (a.target?.targetValue || a.targetValue || 1), 0);
+            const targetsCompleted = agentAsgns.filter((a) => a.status === 'completed').reduce((acc, a) => acc + (a.target?.targetValue || a.targetValue || 1), 0);
             const agentWallet = wallets.find((w) => String(w.agent) === aIdStr);
             const weeklyEarnings = (agentWallet?.transactions || [])
                 .filter((t) => {
@@ -1303,46 +1283,252 @@ const getWeeklyLeaderboard = async (req, res) => {
                 .reduce((acc, t) => acc + (t.amount || 0), 0);
             const realScore = targetsTotal > 0
                 ? Math.min(100, Math.round((targetsCompleted / targetsTotal) * 100))
-                : 0;
+                : (agent.performanceScore || 0);
             const terr = agent.assignedTerritory || agent.territory || {};
+            let agentRoleNorm = (agent.role || agent.level || 'pincode').toString().toLowerCase();
+            if (agentRoleNorm.includes('state'))
+                agentRoleNorm = 'state';
+            else if (agentRoleNorm.includes('district'))
+                agentRoleNorm = 'district';
+            else if (agentRoleNorm.includes('division'))
+                agentRoleNorm = 'division';
+            else
+                agentRoleNorm = 'pincode';
             return {
-                _id: agent._id,
+                _id: String(agent._id),
                 name: agent.name,
                 email: agent.email,
                 phone: agent.phone,
                 registrationId: agent.registrationId || `AG-${String(agent._id).substring(0, 6)}`,
-                role: agent.role,
-                kycStatus: agent.kycStatus,
+                role: agentRoleNorm,
+                kycStatus: agent.kycStatus || 'approved',
                 registrationFeePaid: agent.registrationFeePaid ?? false,
                 performanceScore: realScore,
                 weeklyEarnings,
                 targetsCompleted,
                 targetsTotal,
-                territory: terr,
+                territory: {
+                    state: terr.state || agent.state || scope?.state || 'Tamil Nadu',
+                    district: terr.district || agent.district || '',
+                    division: terr.division || agent.division || '',
+                    pincode: terr.pincode || agent.pincode || ''
+                },
                 trend: realScore >= 75 ? 'up' : realScore >= 40 ? 'stable' : 'down',
                 createdAt: agent.createdAt
             };
         });
-        // Sort leaderboard based on sortBy
-        leaderboard.sort((a, b) => {
-            if (sortBy === 'weeklyEarnings')
+        // Tie-breaking sorting function
+        const sortFn = (a, b) => {
+            if (sortBy === 'weeklyEarnings') {
+                if (b.weeklyEarnings !== a.weeklyEarnings)
+                    return b.weeklyEarnings - a.weeklyEarnings;
+                if (b.performanceScore !== a.performanceScore)
+                    return b.performanceScore - a.performanceScore;
+                if ((b.targetsCompleted || 0) !== (a.targetsCompleted || 0))
+                    return (b.targetsCompleted || 0) - (a.targetsCompleted || 0);
+                return (a.name || '').localeCompare(b.name || '');
+            }
+            if (sortBy === 'targetsCompleted') {
+                if ((b.targetsCompleted || 0) !== (a.targetsCompleted || 0))
+                    return (b.targetsCompleted || 0) - (a.targetsCompleted || 0);
+                if (b.performanceScore !== a.performanceScore)
+                    return b.performanceScore - a.performanceScore;
+                if (b.weeklyEarnings !== a.weeklyEarnings)
+                    return b.weeklyEarnings - a.weeklyEarnings;
+                return (a.name || '').localeCompare(b.name || '');
+            }
+            // default: performanceScore
+            if (b.performanceScore !== a.performanceScore)
+                return b.performanceScore - a.performanceScore;
+            if (b.weeklyEarnings !== a.weeklyEarnings)
                 return b.weeklyEarnings - a.weeklyEarnings;
-            if (sortBy === 'targetsCompleted')
-                return b.targetsCompleted - a.targetsCompleted;
-            return b.performanceScore - a.performanceScore;
-        });
-        // Attach rank
+            if ((b.targetsCompleted || 0) !== (a.targetsCompleted || 0))
+                return (b.targetsCompleted || 0) - (a.targetsCompleted || 0);
+            return (a.name || '').localeCompare(b.name || '');
+        };
+        let leaderboard = [];
+        if (activeTier === 'district' && canonicalRole === 'state') {
+            // Group by District within assigned State
+            const districtMap = new Map();
+            for (const agent of enrichedAgents) {
+                const dist = (agent.territory?.district || '').trim();
+                if (!dist)
+                    continue;
+                const key = dist.toLowerCase();
+                if (!districtMap.has(key)) {
+                    districtMap.set(key, {
+                        _id: `district_${key}`,
+                        name: dist,
+                        district: dist,
+                        parentState: scope?.state || agent.territory?.state || 'Tamil Nadu',
+                        role: 'district',
+                        tierRole: 'District Tier',
+                        territory: {
+                            state: scope?.state || agent.territory?.state || 'Tamil Nadu',
+                            district: dist
+                        },
+                        targetsCompleted: 0,
+                        targetsTotal: 0,
+                        weeklyEarnings: 0,
+                        agentsCount: 0,
+                        totalScoreSum: 0
+                    });
+                }
+                const d = districtMap.get(key);
+                d.targetsCompleted += agent.targetsCompleted;
+                d.targetsTotal += agent.targetsTotal;
+                d.weeklyEarnings += agent.weeklyEarnings;
+                d.agentsCount += 1;
+                d.totalScoreSum += agent.performanceScore;
+            }
+            leaderboard = Array.from(districtMap.values()).map(d => {
+                const performanceScore = d.targetsTotal > 0
+                    ? Math.min(100, Math.round((d.targetsCompleted / d.targetsTotal) * 100))
+                    : (d.agentsCount > 0 ? Math.round(d.totalScoreSum / d.agentsCount) : 0);
+                return {
+                    ...d,
+                    performanceScore,
+                    trend: performanceScore >= 75 ? 'up' : performanceScore >= 40 ? 'stable' : 'down'
+                };
+            });
+            leaderboard.sort(sortFn);
+        }
+        else if (activeTier === 'division' && (canonicalRole === 'state' || canonicalRole === 'district')) {
+            // Group by Division within authorized territory
+            const divisionMap = new Map();
+            for (const agent of enrichedAgents) {
+                const div = (agent.territory?.division || '').trim();
+                if (!div)
+                    continue;
+                if (canonicalRole === 'district' && scope?.district) {
+                    const agentDist = (agent.territory?.district || '').trim().toLowerCase();
+                    if (agentDist && !agentDist.includes(scope.district.toLowerCase()) && !scope.district.toLowerCase().includes(agentDist)) {
+                        continue;
+                    }
+                }
+                const key = div.toLowerCase();
+                if (!divisionMap.has(key)) {
+                    divisionMap.set(key, {
+                        _id: `division_${key}`,
+                        name: div,
+                        division: div,
+                        parentDistrict: agent.territory?.district || scope?.district || '',
+                        parentState: scope?.state || agent.territory?.state || 'Tamil Nadu',
+                        role: 'division',
+                        tierRole: 'Division Tier',
+                        territory: {
+                            state: scope?.state || agent.territory?.state || 'Tamil Nadu',
+                            district: agent.territory?.district || scope?.district || '',
+                            division: div
+                        },
+                        targetsCompleted: 0,
+                        targetsTotal: 0,
+                        weeklyEarnings: 0,
+                        agentsCount: 0,
+                        totalScoreSum: 0
+                    });
+                }
+                const d = divisionMap.get(key);
+                d.targetsCompleted += agent.targetsCompleted;
+                d.targetsTotal += agent.targetsTotal;
+                d.weeklyEarnings += agent.weeklyEarnings;
+                d.agentsCount += 1;
+                d.totalScoreSum += agent.performanceScore;
+            }
+            leaderboard = Array.from(divisionMap.values()).map(d => {
+                const performanceScore = d.targetsTotal > 0
+                    ? Math.min(100, Math.round((d.targetsCompleted / d.targetsTotal) * 100))
+                    : (d.agentsCount > 0 ? Math.round(d.totalScoreSum / d.agentsCount) : 0);
+                return {
+                    ...d,
+                    performanceScore,
+                    trend: performanceScore >= 75 ? 'up' : performanceScore >= 40 ? 'stable' : 'down'
+                };
+            });
+            leaderboard.sort(sortFn);
+        }
+        else if (activeTier === 'pincode' && (canonicalRole === 'state' || canonicalRole === 'district' || canonicalRole === 'division')) {
+            // Group by Pincode within authorized territory
+            const pincodeMap = new Map();
+            for (const agent of enrichedAgents) {
+                const pin = (agent.territory?.pincode || '').trim();
+                if (!pin)
+                    continue;
+                if (canonicalRole === 'division' && scope?.division) {
+                    const agentDiv = (agent.territory?.division || '').trim().toLowerCase();
+                    if (agentDiv && !agentDiv.includes(scope.division.toLowerCase()) && !scope.division.toLowerCase().includes(agentDiv)) {
+                        continue;
+                    }
+                }
+                else if (canonicalRole === 'district' && scope?.district) {
+                    const agentDist = (agent.territory?.district || '').trim().toLowerCase();
+                    if (agentDist && !agentDist.includes(scope.district.toLowerCase()) && !scope.district.toLowerCase().includes(agentDist)) {
+                        continue;
+                    }
+                }
+                const key = pin;
+                if (!pincodeMap.has(key)) {
+                    pincodeMap.set(key, {
+                        _id: `pincode_${key}`,
+                        name: `PIN ${pin}`,
+                        pincode: pin,
+                        parentDivision: agent.territory?.division || scope?.division || '',
+                        parentDistrict: agent.territory?.district || scope?.district || '',
+                        parentState: scope?.state || agent.territory?.state || 'Tamil Nadu',
+                        role: 'pincode',
+                        tierRole: 'Pincode Tier',
+                        territory: {
+                            state: scope?.state || agent.territory?.state || 'Tamil Nadu',
+                            district: agent.territory?.district || scope?.district || '',
+                            division: agent.territory?.division || scope?.division || '',
+                            pincode: pin
+                        },
+                        targetsCompleted: 0,
+                        targetsTotal: 0,
+                        weeklyEarnings: 0,
+                        agentsCount: 0,
+                        totalScoreSum: 0
+                    });
+                }
+                const p = pincodeMap.get(key);
+                p.targetsCompleted += agent.targetsCompleted;
+                p.targetsTotal += agent.targetsTotal;
+                p.weeklyEarnings += agent.weeklyEarnings;
+                p.agentsCount += 1;
+                p.totalScoreSum += agent.performanceScore;
+            }
+            leaderboard = Array.from(pincodeMap.values()).map(p => {
+                const performanceScore = p.targetsTotal > 0
+                    ? Math.min(100, Math.round((p.targetsCompleted / p.targetsTotal) * 100))
+                    : (p.agentsCount > 0 ? Math.round(p.totalScoreSum / p.agentsCount) : 0);
+                return {
+                    ...p,
+                    performanceScore,
+                    trend: performanceScore >= 75 ? 'up' : performanceScore >= 40 ? 'stable' : 'down'
+                };
+            });
+            leaderboard.sort(sortFn);
+        }
+        else {
+            // Default: 'overall' network of eligible individual agents
+            leaderboard = [...enrichedAgents];
+            leaderboard.sort(sortFn);
+        }
+        // Attach ranks
         leaderboard = leaderboard.map((item, index) => ({
             ...item,
             rank: index + 1
         }));
         return res.status(200).json({
             leaderboard,
+            topPerformers: leaderboard.slice(0, 3),
+            userRole: canonicalRole,
+            allowedTiers,
+            activeTier,
             timeframe,
             startDate: start ? start.toISOString() : null,
-            endDate: end ? end.toISOString() : null,
-            totalAgents: leaderboard.length,
-            topPerformers: leaderboard.slice(0, 3)
+            totalCount: leaderboard.length,
+            totalAgents: leaderboard.length
         });
     }
     catch (error) {

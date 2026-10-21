@@ -8,7 +8,7 @@ import { downloadReport } from '../../../utils/downloadReport';
 import {
   TrendingUp, Clock, CheckCircle2, ChevronRight,
   Plus, Users, Target, Ticket, Send, Download, BarChart2,
-  Eye, Wallet, Award, MapPin, Phone, Mail
+  Eye, Wallet, Award, MapPin, Phone, Mail, ChevronDown, ChevronUp
 } from 'lucide-react';
 
 interface PincodeSubordinate {
@@ -50,6 +50,12 @@ export const DivisionDashboard: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<'pincodes' | 'vendors' | 'agents'>('agents');
   const [selectedAgent, setSelectedAgent] = useState<PincodeSubordinate | null>(null);
+
+  const INITIAL_LIMIT = 10;
+  const [showAllDivisionPincodes, setShowAllDivisionPincodes] = useState(false);
+  const [showAllDivisionVendors, setShowAllDivisionVendors] = useState(false);
+  const [showAllPincodeAgents, setShowAllPincodeAgents] = useState(false);
+  const [showAllDivisionAlerts, setShowAllDivisionAlerts] = useState(false);
 
   const divisionPincodesList = React.useMemo(() => {
     if (!userDivision) return [];
@@ -381,12 +387,31 @@ export const DivisionDashboard: React.FC = () => {
                   <span>Pincode Area</span>
                   <span>Active Onboarders</span>
                 </div>
-                {divisionPincodesList.map((pin, i) => (
+                {(showAllDivisionPincodes ? divisionPincodesList : divisionPincodesList.slice(0, INITIAL_LIMIT)).map((pin, i) => (
                   <div key={i} className="py-3 flex justify-between text-xs font-semibold">
                     <span className="text-[#1b1c1c]">{pin.name}</span>
                     <span className="text-[#34647b]">1 Onboarder active</span>
                   </div>
                 ))}
+                {divisionPincodesList.length > INITIAL_LIMIT && (
+                  <div className="pt-3 flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() => setShowAllDivisionPincodes(!showAllDivisionPincodes)}
+                      className="px-4 py-2 text-xs font-bold text-[#864f19] bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 rounded-xl transition cursor-pointer shadow-2xs inline-flex items-center gap-1.5"
+                    >
+                      {showAllDivisionPincodes ? (
+                        <>
+                          <ChevronUp className="w-3.5 h-3.5" /> Show Less
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="w-3.5 h-3.5" /> View All ({divisionPincodesList.length})
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
               </>
             )}
 
@@ -399,7 +424,7 @@ export const DivisionDashboard: React.FC = () => {
                 {divisionVendors.length === 0 ? (
                   <p className="py-6 text-center text-xs text-slate-400 font-semibold">No registered vendors found in {userDivision}.</p>
                 ) : (
-                  divisionVendors.map((v: any) => (
+                  (showAllDivisionVendors ? divisionVendors : divisionVendors.slice(0, INITIAL_LIMIT)).map((v: any) => (
                     <div key={v.id || v._id} className="py-3 flex justify-between items-center text-xs font-semibold">
                       <div>
                         <span className="font-bold text-[#1b1c1c] block">{v.businessName || v.name}</span>
@@ -414,6 +439,25 @@ export const DivisionDashboard: React.FC = () => {
                       </span>
                     </div>
                   ))
+                )}
+                {divisionVendors.length > INITIAL_LIMIT && (
+                  <div className="pt-3 flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() => setShowAllDivisionVendors(!showAllDivisionVendors)}
+                      className="px-4 py-2 text-xs font-bold text-[#864f19] bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 rounded-xl transition cursor-pointer shadow-2xs inline-flex items-center gap-1.5"
+                    >
+                      {showAllDivisionVendors ? (
+                        <>
+                          <ChevronUp className="w-3.5 h-3.5" /> Show Less
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="w-3.5 h-3.5" /> View All ({divisionVendors.length})
+                        </>
+                      )}
+                    </button>
+                  </div>
                 )}
               </>
             )}
@@ -430,7 +474,7 @@ export const DivisionDashboard: React.FC = () => {
                     No Pincode Agents found in {userDivision || 'assigned'} Division.
                   </div>
                 ) : (
-                  pincodeAgentsList.map((agent) => (
+                  (showAllPincodeAgents ? pincodeAgentsList : pincodeAgentsList.slice(0, INITIAL_LIMIT)).map((agent) => (
                     <div key={agent.id} className="py-3 flex justify-between items-center text-xs font-semibold">
                       <div>
                         <span className="font-bold text-[#1b1c1c] block">{agent.name}</span>
@@ -453,6 +497,25 @@ export const DivisionDashboard: React.FC = () => {
                       </button>
                     </div>
                   ))
+                )}
+                {pincodeAgentsList.length > INITIAL_LIMIT && (
+                  <div className="pt-3 flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() => setShowAllPincodeAgents(!showAllPincodeAgents)}
+                      className="px-4 py-2 text-xs font-bold text-[#864f19] bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 rounded-xl transition cursor-pointer shadow-2xs inline-flex items-center gap-1.5"
+                    >
+                      {showAllPincodeAgents ? (
+                        <>
+                          <ChevronUp className="w-3.5 h-3.5" /> Show Less
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="w-3.5 h-3.5" /> View All ({pincodeAgentsList.length})
+                        </>
+                      )}
+                    </button>
+                  </div>
                 )}
               </>
             )}
@@ -587,7 +650,7 @@ export const DivisionDashboard: React.FC = () => {
               </div>
               
               <div className="space-y-3">
-                {divisionAlerts.map((notif: any, idx: number) => {
+                {(showAllDivisionAlerts ? divisionAlerts : divisionAlerts.slice(0, INITIAL_LIMIT)).map((notif: any, idx: number) => {
                   const isHigh = notif.priority === 'high' || notif.alert;
                   return (
                     <div key={notif._id || notif.id || idx} className="flex items-start gap-3 p-3 bg-[#fbf9f8] rounded-xl border border-[#eae8e7]/50">
@@ -602,6 +665,25 @@ export const DivisionDashboard: React.FC = () => {
                     </div>
                   );
                 })}
+                {divisionAlerts.length > INITIAL_LIMIT && (
+                  <div className="pt-2 flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() => setShowAllDivisionAlerts(!showAllDivisionAlerts)}
+                      className="px-3 py-1.5 text-[11px] font-bold text-[#864f19] bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 rounded-lg transition cursor-pointer inline-flex items-center gap-1"
+                    >
+                      {showAllDivisionAlerts ? (
+                        <>
+                          <ChevronUp className="w-3 h-3" /> Show Less
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="w-3 h-3" /> View All ({divisionAlerts.length})
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}

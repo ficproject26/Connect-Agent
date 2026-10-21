@@ -23,8 +23,11 @@ export interface ITicket extends Document {
     assignedAt: Date;
     reason?: string;
   }>;
+  vendorId?: any;
   vendorName?: string;
   storeName?: string;
+  ticketType?: 'my_issue' | 'vendor_issue' | 'agent_issue';
+  subject?: string;
   state?: string;
   district?: string;
   division?: string;
@@ -64,8 +67,11 @@ const ticketSchema = new Schema<ITicket>({
     assignedAt: { type: Date, default: Date.now },
     reason: { type: String }
   }],
+  vendorId: { type: Schema.Types.Mixed, ref: 'Vendor' },
   vendorName: { type: String },
   storeName: { type: String },
+  ticketType: { type: String, enum: ['my_issue', 'vendor_issue', 'agent_issue'], default: 'vendor_issue' },
+  subject: { type: String },
   state: { type: String },
   district: { type: String },
   division: { type: String },

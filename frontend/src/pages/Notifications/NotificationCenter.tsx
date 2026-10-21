@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Card, CardHeader, CardTitle, CardBody } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { StatusChip } from '../../components/ui/StatusChip';
-import { Bell, Search, Trash2, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { Bell, Search, Trash2, CheckCircle2, ShieldAlert, ExternalLink } from 'lucide-react';
 
 export const NotificationCenter: React.FC = () => {
   const { notifications, markNotificationRead, clearNotifications } = useAuth();
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('all');
 
@@ -123,21 +125,42 @@ export const NotificationCenter: React.FC = () => {
                 </p>
 
                 <div className="flex justify-between items-center border-t border-forgeGray-100 pt-3 mt-3 text-xs font-semibold">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
-                    notif.priority === 'high' ? 'bg-red-100 text-red-750' : 'bg-forgeGray-100'
-                  }`}>
-                    {notif.priority} Priority
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                      notif.priority === 'high' ? 'bg-red-100 text-red-750' : 'bg-forgeGray-100'
+                    }`}>
+                      {notif.priority} Priority
+                    </span>
+                    {notif.status && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-50 text-[#864f19] border border-amber-200/60">
+                        {notif.status}
+                      </span>
+                    )}
+                  </div>
                   
-                  {!notif.read && (
-                    <button
-                      onClick={() => markNotificationRead(notif.id)}
-                      className="text-secondary hover:underline flex items-center space-x-1.5"
-                    >
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Mark Read</span>
-                    </button>
-                  )}
+                  <div className="flex items-center gap-3">
+                    {notif.link && (
+                      <button
+                        onClick={() => {
+                          if (!notif.read) markNotificationRead(notif.id);
+                          navigate(notif.link!);
+                        }}
+                        className="text-[#864f19] hover:underline font-bold text-xs flex items-center gap-1 cursor-pointer bg-transparent border-none"
+                      >
+                        <span>View Details</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </button>
+                    )}
+                    {!notif.read && (
+                      <button
+                        onClick={() => markNotificationRead(notif.id)}
+                        className="text-secondary hover:underline flex items-center space-x-1.5 cursor-pointer bg-transparent border-none"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Mark Read</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               </Card>
             ))

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
@@ -14,12 +14,20 @@ interface LeaderboardItem {
   _id: string;
   rank: number;
   name: string;
-  email: string;
-  phone: string;
-  registrationId: string;
+  email?: string;
+  phone?: string;
+  registrationId?: string;
   role: 'state' | 'district' | 'division' | 'pincode';
-  kycStatus: 'approved' | 'pending' | 'rejected';
-  registrationFeePaid: boolean;
+  tierRole?: string;
+  district?: string;
+  division?: string;
+  pincode?: string;
+  parentState?: string;
+  parentDistrict?: string;
+  parentDivision?: string;
+  agentsCount?: number;
+  kycStatus?: 'approved' | 'pending' | 'rejected';
+  registrationFeePaid?: boolean;
   performanceScore: number;
   weeklyEarnings: number;
   targetsCompleted: number;
@@ -120,8 +128,8 @@ const formatCustomDisplayRange = (startStr: string, endStr: string) => {
 export const LeaderboardModule: React.FC = () => {
   const { user, addNotification } = useAuth();
 
-  // Active 4-Tier Tab: 'overall' | 'state' | 'district' | 'division' | 'pincode'
-  const [tierTab, setTierTab] = useState<'overall' | 'state' | 'district' | 'division' | 'pincode'>('overall');
+  // Active Tier Tab: 'overall' | 'district' | 'division' | 'pincode'
+  const [tierTab, setTierTab] = useState<'overall' | 'district' | 'division' | 'pincode'>('overall');
   const [timeframe, setTimeframe] = useState<string>('this_week');
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
@@ -133,6 +141,7 @@ export const LeaderboardModule: React.FC = () => {
   const [sortBy, setSortBy] = useState<string>('performanceScore');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAgent, setSelectedAgent] = useState<LeaderboardItem | null>(null);
+  const [showAllRows, setShowAllRows] = useState(false);
 
   const dynamicRanges = useMemo(() => getDynamicDateRanges(), []);
 
@@ -152,15 +161,40 @@ export const LeaderboardModule: React.FC = () => {
     };
   }, [timeframe, customStartDate, customEndDate, dynamicRanges]);
 
-  // Query leaderboard data
+  const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';
+  const effectiveRole = (rawRole === 'agent' ? ((user as any)?.level || 'pincode') : rawRole).toLowerCase();
+  const userRole: 'state' | 'district' | 'division' | 'pincode' = effectiveRole.includes('state')
+    ? 'state'
+    : effectiveRole.includes('district')
+    ? 'district'
+    : effectiveRole.includes('division')
+    ? 'division'
+    : 'pincode';
+
+  // Allowed Tier Tabs strictly based on logged-in Agent level
+  const allowedTiers: Array<'overall' | 'district' | 'division' | 'pincode'> = useMemo(() => {
+    if (userRole === 'state') return ['overall', 'district', 'division', 'pincode'];
+    if (userRole === 'district') return ['overall', 'division', 'pincode'];
+    if (userRole === 'division') return ['overall', 'pincode'];
+    return ['overall'];
+  }, [userRole]);
+
+  // Ensure active tier is within allowed tabs
+  useEffect(() => {
+    if (!allowedTiers.includes(tierTab)) {
+      setTierTab(allowedTiers[0]);
+    }
+  }, [allowedTiers, tierTab]);
+
+  // Query leaderboard data from backend
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['leaderboard', tierTab, timeframe, activeDateBoundaries.startDate, activeDateBoundaries.endDate, sortBy],
     queryFn: async () => {
       try {
-        const roleQuery = tierTab === 'overall' ? 'all' : tierTab;
         const res = await api.get('/admin/leaderboard', {
           params: {
-            role: roleQuery,
+            tier: tierTab,
+            role: tierTab === 'overall' ? 'all' : tierTab,
             timeframe,
             startDate: activeDateBoundaries.startDate,
             endDate: activeDateBoundaries.endDate,
@@ -170,7 +204,7 @@ export const LeaderboardModule: React.FC = () => {
         return res.data;
       } catch (err: any) {
         if (err?.response?.status !== 401) {
-          console.warn('Leaderboard API fallback to demo data:', err);
+          console.warn('Leaderboard API error:', err);
         }
         return null;
       }
@@ -184,84 +218,71 @@ export const LeaderboardModule: React.FC = () => {
     }
   });
 
-  const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';
-  const effectiveRole = (rawRole === 'agent' ? ((user as any)?.level || 'pincode') : rawRole).toLowerCase();
-  const userRole = effectiveRole.includes('state')
-    ? 'state'
-    : effectiveRole.includes('district')
-    ? 'district'
-    : effectiveRole.includes('division')
-    ? 'division'
-    : 'pincode';
-
-  const userTerritory = user?.assignedTerritory || user?.territory || {};
-  const userState = (userTerritory?.state || (user as any)?.state || '').toLowerCase();
-  const userDistrict = (userTerritory?.district || (user as any)?.district || '').toLowerCase();
-  const userDivision = (userTerritory?.division || (user as any)?.division || '').toLowerCase();
-  const userPincode = userTerritory?.pincode || (user as any)?.pincode || '';
-
-  // Filtered & Sorted Leaderboard List based on Active 4-Tier Tab and Territory Scope
+  // Filtered Leaderboard List based on Search Query and Sorting
   const leaderboardList: LeaderboardItem[] = useMemo(() => {
     let list: LeaderboardItem[] = data?.leaderboard || [];
 
-    // Filter strictly by logged-in agent's role and assigned territory
-    list = list.filter(item => {
-      const itemState = (item.territory?.state || '').toLowerCase();
-      const itemDistrict = (item.territory?.district || '').toLowerCase();
-      const itemDivision = (item.territory?.division || '').toLowerCase();
-      const itemPincode = item.territory?.pincode || '';
-
-      if (userRole === 'state') {
-        return !userState || itemState.includes(userState) || userState.includes(itemState);
-      }
-      if (userRole === 'district') {
-        if (item.role === 'state') return false;
-        return !userDistrict || !itemDistrict || itemDistrict.includes(userDistrict) || userDistrict.includes(itemDistrict);
-      }
-      if (userRole === 'division') {
-        if (item.role === 'state' || item.role === 'district') return false;
-        return !userDivision || itemDivision.includes(userDivision) || userDivision.includes(itemDivision);
-      }
-      if (userRole === 'pincode') {
-        if (item.role !== 'pincode') return false;
-        return !userPincode || itemPincode === userPincode;
-      }
-      return true;
-    });
-
-    // Filter by Tier Tab
-    if (tierTab !== 'overall') {
-      list = list.filter(item => item.role === tierTab);
-    }
-
-    // Filter by Search Query
+    // Filter by Search Query within authorized territory
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase();
       list = list.filter(item =>
-        item.name.toLowerCase().includes(q) ||
-        item.phone.includes(q) ||
-        item.registrationId.toLowerCase().includes(q) ||
+        (item.name && item.name.toLowerCase().includes(q)) ||
+        (item.phone && item.phone.includes(q)) ||
+        (item.registrationId && item.registrationId.toLowerCase().includes(q)) ||
         (item.territory?.district && item.territory.district.toLowerCase().includes(q)) ||
-        (item.territory?.state && item.territory.state.toLowerCase().includes(q))
+        (item.territory?.state && item.territory.state.toLowerCase().includes(q)) ||
+        (item.territory?.division && item.territory.division.toLowerCase().includes(q)) ||
+        (item.territory?.pincode && item.territory.pincode.includes(q)) ||
+        (item.district && item.district.toLowerCase().includes(q)) ||
+        (item.division && item.division.toLowerCase().includes(q)) ||
+        (item.pincode && item.pincode.includes(q))
       );
     }
 
-    // Sort accordingly
+    // Sort accordingly if changed on frontend
     list = [...list].sort((a, b) => {
-      if (sortBy === 'weeklyEarnings') return b.weeklyEarnings - a.weeklyEarnings;
-      if (sortBy === 'targetsCompleted') return b.targetsCompleted - a.targetsCompleted;
-      return b.performanceScore - a.performanceScore;
+      if (sortBy === 'weeklyEarnings') {
+        if (b.weeklyEarnings !== a.weeklyEarnings) return b.weeklyEarnings - a.weeklyEarnings;
+        if (b.performanceScore !== a.performanceScore) return b.performanceScore - a.performanceScore;
+        return (b.targetsCompleted || 0) - (a.targetsCompleted || 0);
+      }
+      if (sortBy === 'targetsCompleted') {
+        if ((b.targetsCompleted || 0) !== (a.targetsCompleted || 0)) return (b.targetsCompleted || 0) - (a.targetsCompleted || 0);
+        if (b.performanceScore !== a.performanceScore) return b.performanceScore - a.performanceScore;
+        return b.weeklyEarnings - a.weeklyEarnings;
+      }
+      if (b.performanceScore !== a.performanceScore) return b.performanceScore - a.performanceScore;
+      if (b.weeklyEarnings !== a.weeklyEarnings) return b.weeklyEarnings - a.weeklyEarnings;
+      return (b.targetsCompleted || 0) - (a.targetsCompleted || 0);
     });
 
     // Re-rank dynamically for the active view
     return list.map((item, idx) => ({ ...item, rank: idx + 1 }));
-  }, [data, tierTab, searchTerm, sortBy, userRole, userState, userDistrict, userDivision, userPincode]);
+  }, [data, searchTerm, sortBy]);
 
   const topPerformers = useMemo(() => {
     return leaderboardList.slice(0, 3);
   }, [leaderboardList]);
 
-  const getRoleBadge = (role: string) => {
+  // Display Top 3 performers in table by default, or all if user expands or searches
+  const displayedRows = useMemo(() => {
+    if (searchTerm.trim() || showAllRows) {
+      return leaderboardList;
+    }
+    return leaderboardList.slice(0, 3);
+  }, [leaderboardList, searchTerm, showAllRows]);
+
+  const getRoleBadge = (item: LeaderboardItem) => {
+    if (tierTab === 'district') {
+      return <span className="px-2 py-0.5 bg-[#864f19] text-white font-black text-[10px] uppercase rounded shadow-2xs">District Tier</span>;
+    }
+    if (tierTab === 'division') {
+      return <span className="px-2 py-0.5 bg-amber-600 text-white font-black text-[10px] uppercase rounded shadow-2xs">Division Tier</span>;
+    }
+    if (tierTab === 'pincode') {
+      return <span className="px-2 py-0.5 bg-slate-700 text-white font-black text-[10px] uppercase rounded shadow-2xs">Pincode Tier</span>;
+    }
+    const role = item.role;
     switch (role) {
       case 'state':
         return <span className="px-2 py-0.5 bg-blue-600 text-white font-black text-[10px] uppercase rounded shadow-2xs">State Agent</span>;
@@ -272,14 +293,13 @@ export const LeaderboardModule: React.FC = () => {
       case 'pincode':
         return <span className="px-2 py-0.5 bg-slate-700 text-white font-black text-[10px] uppercase rounded shadow-2xs">Pincode Agent</span>;
       default:
-        return null;
+        return <span className="px-2 py-0.5 bg-slate-600 text-white font-black text-[10px] uppercase rounded shadow-2xs">{role || 'Agent'}</span>;
     }
   };
 
   const renderTierTabIcon = (tabKey: string) => {
     switch (tabKey) {
       case 'overall': return <Globe className="w-4 h-4 shrink-0" />;
-      case 'state': return <Landmark className="w-4 h-4 shrink-0" />;
       case 'district': return <Building2 className="w-4 h-4 shrink-0" />;
       case 'division': return <Building className="w-4 h-4 shrink-0" />;
       case 'pincode': return <MapPin className="w-4 h-4 shrink-0" />;
@@ -290,7 +310,6 @@ export const LeaderboardModule: React.FC = () => {
   const getTierTabLabel = (tabKey: string) => {
     switch (tabKey) {
       case 'overall': return 'Overall Network';
-      case 'state': return 'State Tier';
       case 'district': return 'District Tier';
       case 'division': return 'Division Tier';
       case 'pincode': return 'Pincode Tier';
@@ -298,12 +317,32 @@ export const LeaderboardModule: React.FC = () => {
     }
   };
 
-  // Export Leaderboard CSV Spreadsheet
+  // Export Leaderboard CSV Spreadsheet (exports complete active view dataset, not just displayed rows)
   const handleExportCSV = () => {
-    const headers = 'Rank,Registration ID,Agent Name,Role,Territory,Targets Achieved,Weekly Earnings (INR),Performance Score (%)\n';
-    const rows = leaderboardList.map(item =>
-      `"${item.rank}","${item.registrationId}","${item.name}","${item.role.toUpperCase()}","${item.territory?.district || item.territory?.state || 'N/A'}","${item.targetsCompleted}/${item.targetsTotal}","${item.weeklyEarnings}","${item.performanceScore}%"`
-    ).join('\n');
+    let headers = '';
+    let rows = '';
+
+    if (tierTab === 'district') {
+      headers = 'Rank,District Name,Tier,Parent State,Active Agents,Targets Completed,Targets Total,Weekly Earnings (INR),Performance Score (%)\n';
+      rows = leaderboardList.map(item =>
+        `"${item.rank}","${item.name}","District Tier","${item.parentState || item.territory?.state || 'Tamil Nadu'}","${item.agentsCount || 0}","${item.targetsCompleted}","${item.targetsTotal}","${item.weeklyEarnings}","${item.performanceScore}%"`
+      ).join('\n');
+    } else if (tierTab === 'division') {
+      headers = 'Rank,Division Name,Tier,Parent District,Active Agents,Targets Completed,Targets Total,Weekly Earnings (INR),Performance Score (%)\n';
+      rows = leaderboardList.map(item =>
+        `"${item.rank}","${item.name}","Division Tier","${item.parentDistrict || item.territory?.district || 'N/A'}","${item.agentsCount || 0}","${item.targetsCompleted}","${item.targetsTotal}","${item.weeklyEarnings}","${item.performanceScore}%"`
+      ).join('\n');
+    } else if (tierTab === 'pincode') {
+      headers = 'Rank,Pincode,Tier,Parent Division,Parent District,Active Agents,Targets Completed,Targets Total,Weekly Earnings (INR),Performance Score (%)\n';
+      rows = leaderboardList.map(item =>
+        `"${item.rank}","${item.pincode || item.name}","Pincode Tier","${item.parentDivision || item.territory?.division || 'N/A'}","${item.parentDistrict || item.territory?.district || 'N/A'}","${item.agentsCount || 0}","${item.targetsCompleted}","${item.targetsTotal}","${item.weeklyEarnings}","${item.performanceScore}%"`
+      ).join('\n');
+    } else {
+      headers = 'Rank,Registration ID,Agent Name,Role,Territory,Targets Achieved,Weekly Earnings (INR),Performance Score (%)\n';
+      rows = leaderboardList.map(item =>
+        `"${item.rank}","${item.registrationId || ''}","${item.name}","${(item.role || '').toUpperCase()}","${item.territory?.district || item.territory?.state || 'N/A'}","${item.targetsCompleted}/${item.targetsTotal}","${item.weeklyEarnings}","${item.performanceScore}%"`
+      ).join('\n');
+    }
 
     const cleanPeriod = activeDateBoundaries.label.replace(/[^a-zA-Z0-9_\-]/g, '_');
     const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8;' });
@@ -318,14 +357,14 @@ export const LeaderboardModule: React.FC = () => {
     if (addNotification) {
       addNotification(
         'Leaderboard CSV Exported',
-        `Exported weekly agent leaderboard rankings for ${getTierTabLabel(tierTab)}.`,
+        `Exported weekly performance rankings for ${getTierTabLabel(tierTab)} (${leaderboardList.length} total records).`,
         'low',
         'system'
       );
     }
   };
 
-  // Export Printable PDF Executive Report
+  // Export Printable PDF Executive Report (exports complete active view dataset)
   const handleExportPDF = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
@@ -350,7 +389,7 @@ export const LeaderboardModule: React.FC = () => {
         </head>
         <body>
           <h1>ConnectPortal — Executive Performance Leaderboard Report</h1>
-          <div class="meta">Active Tier Scope: ${getTierTabLabel(tierTab)} • Period: ${activeDateBoundaries.label} • Total Agents: ${leaderboardList.length} • Generated: ${new Date().toLocaleDateString()}</div>
+          <div class="meta">Active Tier Scope: ${getTierTabLabel(tierTab)} • Period: ${activeDateBoundaries.label} • Total Records: ${leaderboardList.length} • Generated: ${new Date().toLocaleDateString()}</div>
           
           ${topPerformers.length >= 3 ? `
             <div class="podium">
@@ -373,23 +412,37 @@ export const LeaderboardModule: React.FC = () => {
             <thead>
               <tr>
                 <th>Rank</th>
-                <th>Reg ID</th>
-                <th>Agent Name</th>
-                <th>Role Tier</th>
-                <th>Territory</th>
-                <th>Targets</th>
+                ${tierTab === 'district' ? '<th>District Name</th><th>Parent State</th><th>Active Agents</th>' :
+                  tierTab === 'division' ? '<th>Division Name</th><th>Parent District</th><th>Active Agents</th>' :
+                  tierTab === 'pincode' ? '<th>Pincode Area</th><th>Division / District</th><th>Active Agents</th>' :
+                  '<th>Reg ID</th><th>Agent Name</th><th>Role Tier</th><th>Territory</th>'}
+                <th>Targets Achieved</th>
                 <th>Weekly Earnings</th>
-                <th>Performance</th>
+                <th>Performance Score</th>
               </tr>
             </thead>
             <tbody>
               ${leaderboardList.map(item => `
                 <tr>
                   <td><strong>#${item.rank}</strong></td>
-                  <td>${item.registrationId}</td>
-                  <td>${item.name}</td>
-                  <td>${item.role.toUpperCase()}</td>
-                  <td>${item.territory?.district || item.territory?.state || 'Karnataka'}</td>
+                  ${tierTab === 'district' ? `
+                    <td><strong>${item.name}</strong></td>
+                    <td>${item.parentState || item.territory?.state || 'Tamil Nadu'}</td>
+                    <td>${item.agentsCount || 0} Agents</td>
+                  ` : tierTab === 'division' ? `
+                    <td><strong>${item.name}</strong></td>
+                    <td>${item.parentDistrict || item.territory?.district || 'Salem'}</td>
+                    <td>${item.agentsCount || 0} Agents</td>
+                  ` : tierTab === 'pincode' ? `
+                    <td><strong>${item.pincode || item.name}</strong></td>
+                    <td>${item.parentDivision || ''} • ${item.parentDistrict || ''}</td>
+                    <td>${item.agentsCount || 0} Agents</td>
+                  ` : `
+                    <td>${item.registrationId || '—'}</td>
+                    <td>${item.name}</td>
+                    <td>${(item.role || '').toUpperCase()}</td>
+                    <td>${item.territory?.district || item.territory?.state || 'Tamil Nadu'}</td>
+                  `}
                   <td>${item.targetsCompleted} / ${item.targetsTotal}</td>
                   <td>₹${item.weeklyEarnings.toLocaleString()}</td>
                   <td><strong>${item.performanceScore}%</strong></td>
@@ -410,7 +463,7 @@ export const LeaderboardModule: React.FC = () => {
     if (addNotification) {
       addNotification(
         'Analytics Report Generated',
-        `Printed weekly executive performance report for ${getTierTabLabel(tierTab)}.`,
+        `Printed weekly executive performance report for ${getTierTabLabel(tierTab)} (${leaderboardList.length} records).`,
         'high',
         'system'
       );
@@ -497,12 +550,15 @@ export const LeaderboardModule: React.FC = () => {
           </div>
         </div>
 
-        {/* 4-TIER HIERARCHY SWITCHER TABS (Clean Vector Icons) */}
+        {/* DYNAMIC TIER HIERARCHY SWITCHER TABS (Clean Vector Icons) */}
         <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pt-2 border-t border-[#d7c3b5]/30">
-          {(['overall', 'state', 'district', 'division', 'pincode'] as const).map((tab) => (
+          {allowedTiers.map((tab) => (
             <button
               key={tab}
-              onClick={() => setTierTab(tab)}
+              onClick={() => {
+                setTierTab(tab);
+                setShowAllRows(false);
+              }}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all border-none cursor-pointer whitespace-nowrap ${
                 tierTab === tab
                   ? 'bg-[#864f19] text-white shadow-md'
@@ -524,7 +580,7 @@ export const LeaderboardModule: React.FC = () => {
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Search agent by name, phone, or region..."
+              placeholder={`Search ${tierTab === 'overall' ? 'agent' : tierTab} by name, phone, or region...`}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full bg-white border border-[#d7c3b5]/60 rounded-xl pl-10 pr-4 py-2 text-xs font-semibold text-[#1b1c1c] focus:outline-none focus:ring-2 focus:ring-[#864f19]/30"
@@ -580,7 +636,9 @@ export const LeaderboardModule: React.FC = () => {
 
         <div className="text-right shrink-0">
           <p className="text-[10px] uppercase font-extrabold text-slate-400">ACTIVE TAB SCOPE</p>
-          <p className="text-xs font-black text-[#864f19] uppercase">{getTierTabLabel(tierTab)} ({leaderboardList.length} AGENTS)</p>
+          <p className="text-xs font-black text-[#864f19] uppercase">
+            {getTierTabLabel(tierTab)} ({leaderboardList.length} {tierTab === 'overall' ? 'AGENTS' : tierTab === 'district' ? 'DISTRICTS' : tierTab === 'division' ? 'DIVISIONS' : 'PINCODES'})
+          </p>
         </div>
       </div>
 
@@ -600,7 +658,7 @@ export const LeaderboardModule: React.FC = () => {
             </div>
             <div>
               <h3 className="font-black text-sm text-[#1b1c1c]">{topPerformers[1].name}</h3>
-              <div className="mt-1">{getRoleBadge(topPerformers[1].role)}</div>
+              <div className="mt-1">{getRoleBadge(topPerformers[1])}</div>
             </div>
             <div className="w-full pt-2 border-t border-slate-200 flex justify-between items-center text-xs">
               <span className="font-bold text-slate-500">Weekly Score:</span>
@@ -625,9 +683,9 @@ export const LeaderboardModule: React.FC = () => {
             </div>
             <div>
               <h3 className="font-black text-base text-[#1b1c1c]">{topPerformers[0].name}</h3>
-              <div className="mt-1">{getRoleBadge(topPerformers[0].role)}</div>
+              <div className="mt-1">{getRoleBadge(topPerformers[0])}</div>
               <p className="text-[11px] font-bold text-amber-800 mt-1 flex items-center justify-center gap-1">
-                <MapPin className="w-3 h-3" /> {topPerformers[0].territory?.district || topPerformers[0].territory?.state || 'Karnataka'}
+                <MapPin className="w-3 h-3" /> {topPerformers[0].territory?.district ? `${topPerformers[0].territory.district}, ${topPerformers[0].territory.state}` : (topPerformers[0].territory?.state || 'Tamil Nadu')}
               </p>
             </div>
             <div className="w-full pt-3 border-t border-amber-200/80 flex justify-between items-center text-xs">
@@ -653,7 +711,7 @@ export const LeaderboardModule: React.FC = () => {
             </div>
             <div>
               <h3 className="font-black text-sm text-[#1b1c1c]">{topPerformers[2].name}</h3>
-              <div className="mt-1">{getRoleBadge(topPerformers[2].role)}</div>
+              <div className="mt-1">{getRoleBadge(topPerformers[2])}</div>
             </div>
             <div className="w-full pt-2 border-t border-amber-200/60 flex justify-between items-center text-xs">
               <span className="font-bold text-slate-500">Weekly Score:</span>
@@ -672,7 +730,7 @@ export const LeaderboardModule: React.FC = () => {
         <div className="p-4 bg-[#fbf9f8] border-b border-[#d7c3b5]/30 flex items-center justify-between">
           <h3 className="font-black text-sm text-[#1b1c1c] flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-[#864f19]" />
-            Rankings ({getTierTabLabel(tierTab)} — {leaderboardList.length} Agents)
+            Rankings ({getTierTabLabel(tierTab)} — Top 3 Performers)
           </h3>
           <span className="text-xs font-bold text-[#864f19] uppercase">Period: {activeDateBoundaries.label}</span>
         </div>
@@ -682,23 +740,27 @@ export const LeaderboardModule: React.FC = () => {
             <thead className="bg-[#f6f3f2] text-[#52443a] font-black uppercase tracking-wider text-[10px]">
               <tr>
                 <th className="py-3.5 px-4 text-center">Rank</th>
-                <th className="py-3.5 px-4">Agent Name</th>
+                <th className="py-3.5 px-4">
+                  {tierTab === 'district' ? 'District Name' : tierTab === 'division' ? 'Division Name' : tierTab === 'pincode' ? 'Pincode Area' : 'Agent Name'}
+                </th>
                 <th className="py-3.5 px-4">Tier Role</th>
-                <th className="py-3.5 px-4">Territory</th>
+                <th className="py-3.5 px-4">
+                  {tierTab === 'district' ? 'Parent State' : tierTab === 'division' ? 'Parent District' : tierTab === 'pincode' ? 'Division / District' : 'Territory'}
+                </th>
                 <th className="py-3.5 px-4 text-center">Targets Achieved</th>
                 <th className="py-3.5 px-4 text-right">Weekly Earnings</th>
                 <th className="py-3.5 px-4 text-center">Performance Score</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {leaderboardList.length === 0 ? (
+              {displayedRows.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-8 text-center text-xs font-semibold text-slate-400">
-                    No agents ranked under this tier tab for {activeDateBoundaries.label}.
+                    No records ranked under this tier tab for {activeDateBoundaries.label}.
                   </td>
                 </tr>
               ) : (
-                leaderboardList.map((item) => (
+                displayedRows.map((item) => (
                   <tr
                     key={item._id}
                     onClick={() => setSelectedAgent(item)}
@@ -724,23 +786,35 @@ export const LeaderboardModule: React.FC = () => {
 
                     <td className="py-4 px-4 font-bold text-[#1b1c1c]">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full bg-[#ffdcc2] text-[#864f19] font-black text-xs flex items-center justify-center uppercase shadow-2xs">
+                        <div className="w-8 h-8 rounded-full bg-[#ffdcc2] text-[#864f19] font-black text-xs flex items-center justify-center uppercase shadow-2xs shrink-0">
                           {item.name.charAt(0)}
                         </div>
                         <div>
                           <p className="font-extrabold text-xs text-[#1b1c1c]">{item.name}</p>
                           <p className="text-[10px] text-slate-400 font-semibold">
-                            {item.registrationId}
-                            {item.createdAt && ` • Reg: ${formatRegistrationDate(item.createdAt)}`}
+                            {tierTab === 'overall' ? (
+                              <>
+                                {item.registrationId}
+                                {item.createdAt && ` • Reg: ${formatRegistrationDate(item.createdAt)}`}
+                              </>
+                            ) : (
+                              `${item.agentsCount || 0} Active Agents in Territory`
+                            )}
                           </p>
                         </div>
                       </div>
                     </td>
 
-                    <td className="py-4 px-4">{getRoleBadge(item.role)}</td>
+                    <td className="py-4 px-4">{getRoleBadge(item)}</td>
 
                     <td className="py-4 px-4 font-semibold text-slate-600">
-                      {item.territory?.district || item.territory?.state || 'Karnataka'}
+                      {tierTab === 'district'
+                        ? (item.parentState || item.territory?.state || 'Tamil Nadu')
+                        : tierTab === 'division'
+                        ? (item.parentDistrict ? `${item.parentDistrict}, ${item.parentState || 'Tamil Nadu'}` : (item.territory?.district || 'Tamil Nadu'))
+                        : tierTab === 'pincode'
+                        ? (item.parentDivision ? `${item.parentDivision} • ${item.parentDistrict || ''}` : (item.territory?.district || 'Tamil Nadu'))
+                        : (item.territory?.district ? `${item.territory.district}, ${item.territory?.state || 'Tamil Nadu'}` : (item.territory?.state || 'Tamil Nadu'))}
                     </td>
 
                     <td className="py-4 px-4 text-center font-bold">
@@ -776,6 +850,20 @@ export const LeaderboardModule: React.FC = () => {
             </tbody>
           </table>
         </div>
+
+        {leaderboardList.length > 3 && !searchTerm.trim() && (
+          <div className="p-3 bg-[#fbf9f8] border-t border-[#d7c3b5]/30 flex items-center justify-between text-xs text-[#52443a]">
+            <span className="font-semibold text-slate-500">
+              Showing {showAllRows ? `all ${leaderboardList.length}` : 'Top 3'} ranked {tierTab === 'overall' ? 'agents' : 'entities'} within authorized territory.
+            </span>
+            <button
+              onClick={() => setShowAllRows(!showAllRows)}
+              className="px-3 py-1.5 bg-[#864f19]/10 hover:bg-[#864f19]/20 text-[#864f19] font-black rounded-lg transition border-none cursor-pointer"
+            >
+              {showAllRows ? 'Show Top 3 Only' : `View All (${leaderboardList.length})`}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* DETAILED AGENT DRILLDOWN MODAL */}
@@ -789,7 +877,7 @@ export const LeaderboardModule: React.FC = () => {
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    {getRoleBadge(selectedAgent.role)}
+                    {getRoleBadge(selectedAgent)}
                     <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-black rounded-full border border-emerald-200">
                       Rank #{selectedAgent.rank}
                     </span>

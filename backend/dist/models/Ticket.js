@@ -25,8 +25,11 @@ const ticketSchema = new mongoose_1.Schema({
             assignedAt: { type: Date, default: Date.now },
             reason: { type: String }
         }],
+    vendorId: { type: mongoose_1.Schema.Types.Mixed, ref: 'Vendor' },
     vendorName: { type: String },
     storeName: { type: String },
+    ticketType: { type: String, enum: ['my_issue', 'vendor_issue', 'agent_issue'], default: 'vendor_issue' },
+    subject: { type: String },
     state: { type: String },
     district: { type: String },
     division: { type: String },

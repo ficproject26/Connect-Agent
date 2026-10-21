@@ -12,6 +12,7 @@ const Task_1 = __importDefault(require("../models/Task"));
 const Agent_1 = __importDefault(require("../models/Agent"));
 const eventBus_1 = require("../realtime/eventBus");
 const cache_service_1 = require("../services/cache.service");
+const notification_service_1 = __importDefault(require("../services/notification.service"));
 const zod_1 = require("zod");
 const HIERARCHY_RANKS = {
     state: 4,
@@ -79,6 +80,7 @@ async function resolveUserContext(req) {
     };
     return {
         id: doc._id?.toString() || agentId,
+        registrationId: doc.registrationId || agentDoc?.registrationId || doc.agentId || agentDoc?.agentId || '',
         name: doc.name || tokenAgent.email?.split('@')[0] || 'User',
         email: doc.email || tokenAgent.email || '',
         role: effectiveRole,
@@ -284,6 +286,8 @@ const createTask = async (req, res) => {
             });
             await newTask.save();
             await cache_service_1.cacheService.delByPrefix('dashboard:').catch(() => { });
+            // Dispatch Task Assignment Notification to receiving Agent
+            await notification_service_1.default.notifyTaskAssignment(newTask, targetAgent._id).catch(() => { });
             (0, eventBus_1.publishEntityEvent)({
                 event: 'ENTITY_CREATED',
                 entity: 'task',
@@ -438,24 +442,22 @@ const getTasks = async (req, res) => {
         const pageNum = Math.max(1, parseInt(page, 10) || 1);
         const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 30));
         const filter = {};
-        // TAB FILTERING
+        // TAB FILTERING & MANAGER TASK EXCLUSION
         if (tab === 'my_tasks') {
-            filter.$or = [
-                { assignedAgentId: userCtx.id },
-                { assignedAgentId: new RegExp(`^${userCtx.id}$`, 'i') }
-            ];
+            const agentMatches = [userCtx.id, String(userCtx.id)];
             if (mongoose_1.default.Types.ObjectId.isValid(userCtx.id)) {
-                filter.$or.push({ assignedAgentId: new mongoose_1.default.Types.ObjectId(userCtx.id) });
+                agentMatches.push(new mongoose_1.default.Types.ObjectId(userCtx.id));
             }
+            filter.assignedAgentId = { $in: agentMatches };
+            // Rule: Tasks assigned to Managers must never appear in an Agent's My Assigned Tasks
+            filter.assignedManagerId = { $in: [null, undefined, ''] };
         }
         else if (tab === 'created') {
-            filter.$or = [
-                { createdById: userCtx.id },
-                { createdById: new RegExp(`^${userCtx.id}$`, 'i') }
-            ];
+            const agentMatches = [userCtx.id, String(userCtx.id)];
             if (mongoose_1.default.Types.ObjectId.isValid(userCtx.id)) {
-                filter.$or.push({ createdById: new mongoose_1.default.Types.ObjectId(userCtx.id) });
+                agentMatches.push(new mongoose_1.default.Types.ObjectId(userCtx.id));
             }
+            filter.createdById = { $in: agentMatches };
         }
         else if (tab === 'requests') {
             if (userCtx.isAdmin) {
@@ -464,14 +466,20 @@ const getTasks = async (req, res) => {
             }
             else {
                 // Agent sees requests they initiated
-                filter.$or = [
-                    { createdById: userCtx.id },
-                    { createdById: new RegExp(`^${userCtx.id}$`, 'i') }
-                ];
+                const agentMatches = [userCtx.id, String(userCtx.id)];
                 if (mongoose_1.default.Types.ObjectId.isValid(userCtx.id)) {
-                    filter.$or.push({ createdById: new mongoose_1.default.Types.ObjectId(userCtx.id) });
+                    agentMatches.push(new mongoose_1.default.Types.ObjectId(userCtx.id));
                 }
+                filter.createdById = { $in: agentMatches };
             }
+        }
+        else if (tab === 'territory') {
+            // Territory Task Monitoring: Show tasks authorized to monitor, excluding manager-only tasks
+            filter.assignedManagerId = { $in: [null, undefined, ''] };
+        }
+        // In Agent Website, exclude manager tasks from all tabs
+        if (userCtx.isAgent) {
+            filter.assignedManagerId = { $in: [null, undefined, ''] };
         }
         // STATUS FILTERING
         if (status && status !== 'all') {
@@ -506,45 +514,125 @@ const getTasks = async (req, res) => {
                 ]
             });
         }
-        // TERRITORY ISOLATION RULES (Section 5)
-        // Non-super-admins cannot view outside their authorized state/district/division/pincode
+        // AUTHORIZATION & STRICT TERRITORY ISOLATION RULES
         if (userCtx.role.toLowerCase() !== 'super admin' && userCtx.role.toLowerCase() !== 'admin') {
+            // 1. State Agent: strictly locked to assigned state
             if (userCtx.territory.state) {
-                filter.state = new RegExp(`^${userCtx.territory.state.trim()}$`, 'i');
+                if (state && typeof state === 'string' && state.trim()) {
+                    const reqSt = state.trim().toLowerCase();
+                    const userSt = userCtx.territory.state.trim().toLowerCase();
+                    if (reqSt !== userSt && !reqSt.includes(userSt) && !userSt.includes(reqSt)) {
+                        return res.status(403).json({ message: `Forbidden: You cannot access tasks outside your assigned state "${userCtx.territory.state}".` });
+                    }
+                }
+                filter.state = new RegExp(`^\\s*${userCtx.territory.state.trim()}\\s*$`, 'i');
             }
+            // 2. District Agent: strictly locked to assigned district and subordinate divisions & pincodes
             if (userCtx.level === 'district' && userCtx.territory.district) {
-                filter.district = new RegExp(`^${userCtx.territory.district.trim()}$`, 'i');
+                if (district && typeof district === 'string' && district.trim()) {
+                    const reqD = district.trim().toLowerCase().replace(/\s+district$/i, '');
+                    const userD = userCtx.territory.district.trim().toLowerCase().replace(/\s+district$/i, '');
+                    if (reqD !== userD && !reqD.includes(userD) && !userD.includes(reqD)) {
+                        return res.status(403).json({ message: `Forbidden: You cannot access tasks outside your assigned district "${userCtx.territory.district}".` });
+                    }
+                }
+                const baseD = userCtx.territory.district.trim().replace(/\s+district$/i, '');
+                filter.district = new RegExp(`^\\s*${baseD}(\\s+district)?\\s*$`, 'i');
             }
+            // 3. Division Agent: strictly locked to assigned division and subordinate pincodes
             if (userCtx.level === 'division' && userCtx.territory.division) {
-                filter.division = new RegExp(`^${userCtx.territory.division.trim()}$`, 'i');
+                if (division && typeof division === 'string' && division.trim()) {
+                    const reqDiv = division.trim().toLowerCase().replace(/\s+division$/i, '');
+                    const userDiv = userCtx.territory.division.trim().toLowerCase().replace(/\s+division$/i, '');
+                    if (reqDiv !== userDiv && !reqDiv.includes(userDiv) && !userDiv.includes(reqDiv)) {
+                        return res.status(403).json({ message: `Forbidden: You cannot access tasks outside your assigned division "${userCtx.territory.division}".` });
+                    }
+                }
+                const baseDiv = userCtx.territory.division.trim().replace(/\s+division$/i, '');
+                filter.division = new RegExp(baseDiv, 'i');
             }
-            if (userCtx.level === 'pincode' && userCtx.territory.pincode) {
-                filter.pincode = userCtx.territory.pincode.trim();
+            // 4. Pincode Agent: strictly authorized for assigned pincode AND tasks assigned to or created by them
+            if (userCtx.level === 'pincode') {
+                if (pincode && typeof pincode === 'string' && pincode.trim() && userCtx.territory.pincode && pincode.trim() !== userCtx.territory.pincode.trim()) {
+                    return res.status(403).json({ message: `Forbidden: You cannot access tasks outside your assigned pincode "${userCtx.territory.pincode}".` });
+                }
+                if (userCtx.territory.pincode) {
+                    filter.pincode = userCtx.territory.pincode.trim();
+                }
+                // Section 1: Pincode Agent must not expose tasks belonging to other pincodes or unrelated agents
+                const pinAgentMatches = [userCtx.id];
+                if (mongoose_1.default.Types.ObjectId.isValid(userCtx.id)) {
+                    pinAgentMatches.push(new mongoose_1.default.Types.ObjectId(userCtx.id));
+                }
+                filter.$and = filter.$and || [];
+                filter.$and.push({
+                    $or: [
+                        { assignedAgentId: { $in: pinAgentMatches } },
+                        { createdById: { $in: pinAgentMatches } }
+                    ]
+                });
             }
         }
-        // Optional drill-down filters from UI
-        if (state && typeof state === 'string')
+        // Optional drill-down filters from UI (for authorized higher levels)
+        if (state && typeof state === 'string' && (!filter.state || userCtx.role.toLowerCase() === 'super admin' || userCtx.role.toLowerCase() === 'admin')) {
             filter.state = new RegExp(`^${state.trim()}$`, 'i');
-        if (district && typeof district === 'string')
-            filter.district = new RegExp(`^${district.trim()}$`, 'i');
-        if (division && typeof division === 'string')
-            filter.division = new RegExp(`^${division.trim()}$`, 'i');
-        if (pincode && typeof pincode === 'string')
+        }
+        if (district && typeof district === 'string' && district.trim() && userCtx.level === 'state') {
+            const baseD = district.trim().replace(/\s+district$/i, '');
+            filter.district = new RegExp(`^\\s*${baseD}(\\s+district)?\\s*$`, 'i');
+        }
+        if (division && typeof division === 'string' && division.trim() && (userCtx.level === 'state' || userCtx.level === 'district')) {
+            const baseDiv = division.trim().replace(/\s+division$/i, '');
+            filter.division = new RegExp(baseDiv, 'i');
+        }
+        if (pincode && typeof pincode === 'string' && pincode.trim() && userCtx.level !== 'pincode') {
             filter.pincode = pincode.trim();
+        }
         const total = await Task_1.default.countDocuments(filter);
         const tasks = await Task_1.default.find(filter)
             .sort({ createdAt: -1 })
             .skip((pageNum - 1) * limitNum)
             .limit(limitNum)
             .lean();
+        // Section 3: Remove incorrect placeholder — resolve assigned agent name from authoritative records if missing
+        const unassignedWithId = tasks.filter((t) => t.assignedAgentId && !t.assignedAgentName);
+        if (unassignedWithId.length > 0) {
+            const agentIds = Array.from(new Set(unassignedWithId.map((t) => String(t.assignedAgentId))));
+            const agentDocs = await Agent_1.default.find({
+                $or: [
+                    { _id: { $in: agentIds.filter(id => mongoose_1.default.Types.ObjectId.isValid(id)).map(id => new mongoose_1.default.Types.ObjectId(id)) } },
+                    { registrationId: { $in: agentIds } },
+                    { agentId: { $in: agentIds } }
+                ]
+            }).select('_id name registrationId role').lean();
+            const agentMap = new Map();
+            agentDocs.forEach(a => {
+                agentMap.set(String(a._id), a);
+                if (a.registrationId)
+                    agentMap.set(a.registrationId, a);
+                if (a.agentId)
+                    agentMap.set(a.agentId, a);
+            });
+            tasks.forEach((t) => {
+                if (t.assignedAgentId && !t.assignedAgentName) {
+                    const found = agentMap.get(String(t.assignedAgentId));
+                    if (found) {
+                        t.assignedAgentName = found.name;
+                        if (!t.assignedAgentRole)
+                            t.assignedAgentRole = found.role;
+                    }
+                }
+            });
+        }
         // Map permissions and dynamic flags
         const enrichedTasks = tasks.map((t) => {
             const now = new Date();
             const isPastDue = t.dueDate ? now > new Date(t.dueDate) : false;
             const isClosed = ['Approved', 'Completed', 'Rejected', 'Closed'].includes(t.status);
             const isOverdue = isPastDue && !isClosed;
-            const isAssignedAgent = String(t.assignedAgentId) === String(userCtx.id) ||
-                (t.assignedAgentName && t.assignedAgentName.toLowerCase() === userCtx.name.toLowerCase());
+            const isAssignedAgent = !t.assignedManagerId &&
+                (String(t.assignedAgentId) === String(userCtx.id) ||
+                    Boolean(userCtx.registrationId && String(t.assignedAgentId) === String(userCtx.registrationId)));
             const isInitiator = String(t.createdById) === String(userCtx.id);
             // Check admin territory authority
             let hasAdminAuthority = userCtx.isAdmin;
@@ -623,6 +711,10 @@ const getTaskById = async (req, res) => {
         if (!task) {
             return res.status(404).json({ message: 'Task not found' });
         }
+        // In Agent Website, manager-assigned tasks must not be visible to agents
+        if (userCtx.isAgent && task.assignedManagerId) {
+            return res.status(403).json({ message: 'Forbidden: You are not authorized to view manager-assigned tasks.' });
+        }
         // Territory authorization check for viewing
         if (userCtx.role.toLowerCase() !== 'super admin' && userCtx.role.toLowerCase() !== 'admin') {
             if (userCtx.territory.state && task.state) {
@@ -631,27 +723,52 @@ const getTaskById = async (req, res) => {
                 }
             }
             if (userCtx.level === 'district' && userCtx.territory.district && task.district) {
-                if (userCtx.territory.district.toLowerCase() !== task.district.toLowerCase()) {
+                const cleanD = userCtx.territory.district.toLowerCase().replace(/\s+district$/i, '');
+                const taskD = task.district.toLowerCase().replace(/\s+district$/i, '');
+                if (cleanD !== taskD && !cleanD.includes(taskD) && !taskD.includes(cleanD)) {
                     return res.status(403).json({ message: 'Forbidden: You are not authorized to view tasks outside your district.' });
                 }
             }
             if (userCtx.level === 'division' && userCtx.territory.division && task.division) {
-                if (userCtx.territory.division.toLowerCase() !== task.division.toLowerCase()) {
+                const cleanDiv = userCtx.territory.division.toLowerCase().replace(/\s+division$/i, '');
+                const taskDiv = task.division.toLowerCase().replace(/\s+division$/i, '');
+                if (cleanDiv !== taskDiv && !cleanDiv.includes(taskDiv) && !taskDiv.includes(cleanDiv)) {
                     return res.status(403).json({ message: 'Forbidden: You are not authorized to view tasks outside your division.' });
                 }
             }
-            if (userCtx.level === 'pincode' && userCtx.territory.pincode && task.pincode) {
-                if (userCtx.territory.pincode !== task.pincode) {
-                    return res.status(403).json({ message: 'Forbidden: You are not authorized to view tasks outside your pincode.' });
+            if (userCtx.level === 'pincode') {
+                const isAssigned = String(task.assignedAgentId) === String(userCtx.id);
+                const isCreator = String(task.createdById) === String(userCtx.id);
+                const isPinMatch = userCtx.territory.pincode ? task.pincode === userCtx.territory.pincode : true;
+                if (!isPinMatch || (!isAssigned && !isCreator)) {
+                    return res.status(403).json({ message: 'Forbidden: You are not authorized to view tasks outside your assigned pincode.' });
                 }
+            }
+        }
+        // Section 3: Resolve assigned agent name from Agent record if missing
+        if (task.assignedAgentId && !task.assignedAgentName) {
+            let agentDoc = null;
+            if (mongoose_1.default.Types.ObjectId.isValid(task.assignedAgentId)) {
+                agentDoc = await Agent_1.default.findById(task.assignedAgentId).select('name role').lean();
+            }
+            if (!agentDoc) {
+                agentDoc = await Agent_1.default.findOne({
+                    $or: [{ registrationId: task.assignedAgentId }, { agentId: task.assignedAgentId }]
+                }).select('name role').lean();
+            }
+            if (agentDoc) {
+                task.assignedAgentName = agentDoc.name;
+                if (!task.assignedAgentRole)
+                    task.assignedAgentRole = agentDoc.role;
             }
         }
         const now = new Date();
         const isPastDue = task.dueDate ? now > new Date(task.dueDate) : false;
         const isClosed = ['Approved', 'Completed', 'Rejected', 'Closed'].includes(task.status);
         const isOverdue = isPastDue && !isClosed;
-        const isAssignedAgent = String(task.assignedAgentId) === String(userCtx.id) ||
-            (task.assignedAgentName && task.assignedAgentName.toLowerCase() === userCtx.name.toLowerCase());
+        const isAssignedAgent = !task.assignedManagerId &&
+            (String(task.assignedAgentId) === String(userCtx.id) ||
+                Boolean(userCtx.registrationId && String(task.assignedAgentId) === String(userCtx.registrationId)));
         let hasAdminAuthority = userCtx.isAdmin;
         if (hasAdminAuthority && userCtx.territory.state && task.state) {
             if (userCtx.territory.state.toLowerCase() !== task.state.toLowerCase())
@@ -785,6 +902,13 @@ const approveAndAssignRequest = async (req, res) => {
             }
         });
         await task.save();
+        // Trigger persistent notifications for task assignment
+        notification_service_1.default.notifyTaskAssignment(task, targetAgent._id).catch((err) => {
+            console.error('Failed to notify task assignment:', err);
+        });
+        if (task.createdById && String(task.createdById) !== String(targetAgent._id)) {
+            notification_service_1.default.notifyTaskStatusChange(task, task.createdById, 'approved').catch(() => { });
+        }
         (0, eventBus_1.publishEntityEvent)({
             event: 'ENTITY_UPDATED',
             entity: 'task',
@@ -845,6 +969,9 @@ const rejectRequest = async (req, res) => {
             details: { reason: rejectionReason.trim() }
         });
         await task.save();
+        if (task.createdById) {
+            notification_service_1.default.notifyTaskStatusChange(task, task.createdById, 'rejected').catch(() => { });
+        }
         (0, eventBus_1.publishEntityEvent)({
             event: 'ENTITY_UPDATED',
             entity: 'task',
@@ -876,8 +1003,9 @@ const acceptTask = async (req, res) => {
         if (!task) {
             return res.status(404).json({ message: 'Task not found.' });
         }
-        const isAssigned = String(task.assignedAgentId) === String(userCtx.id) ||
-            (task.assignedAgentName && task.assignedAgentName.toLowerCase() === userCtx.name.toLowerCase());
+        const isAssigned = !task.assignedManagerId &&
+            (String(task.assignedAgentId) === String(userCtx.id) ||
+                Boolean(userCtx.registrationId && String(task.assignedAgentId) === String(userCtx.registrationId)));
         if (!isAssigned) {
             return res.status(403).json({ message: 'Forbidden: Only the assigned agent can accept this task.' });
         }
@@ -935,8 +1063,9 @@ const rejectTask = async (req, res) => {
         if (!task) {
             return res.status(404).json({ message: 'Task not found.' });
         }
-        const isAssigned = String(task.assignedAgentId) === String(userCtx.id) ||
-            (task.assignedAgentName && task.assignedAgentName.toLowerCase() === userCtx.name.toLowerCase());
+        const isAssigned = !task.assignedManagerId &&
+            (String(task.assignedAgentId) === String(userCtx.id) ||
+                Boolean(userCtx.registrationId && String(task.assignedAgentId) === String(userCtx.registrationId)));
         if (!isAssigned) {
             return res.status(403).json({ message: 'Forbidden: Only the assigned agent can reject this task.' });
         }
@@ -973,6 +1102,9 @@ const rejectTask = async (req, res) => {
             details: { reason: rejectionReason.trim(), priority: task.priority }
         });
         await task.save();
+        if (task.createdById) {
+            notification_service_1.default.notifyTaskStatusChange(task, task.createdById, 'rejected').catch(() => { });
+        }
         (0, eventBus_1.publishEntityEvent)({
             event: 'ENTITY_UPDATED',
             entity: 'task',
@@ -1008,8 +1140,9 @@ const submitEvidence = async (req, res) => {
         if (!task) {
             return res.status(404).json({ message: 'Task not found.' });
         }
-        const isAssigned = String(task.assignedAgentId) === String(userCtx.id) ||
-            (task.assignedAgentName && task.assignedAgentName.toLowerCase() === userCtx.name.toLowerCase());
+        const isAssigned = !task.assignedManagerId &&
+            (String(task.assignedAgentId) === String(userCtx.id) ||
+                Boolean(userCtx.registrationId && String(task.assignedAgentId) === String(userCtx.registrationId)));
         if (!isAssigned) {
             return res.status(403).json({ message: 'Forbidden: Only the assigned agent can submit completion evidence.' });
         }
@@ -1109,6 +1242,9 @@ const reviewEvidence = async (req, res) => {
             });
             await task.save();
             await cache_service_1.cacheService.delByPrefix('dashboard:').catch(() => { });
+            if (task.assignedAgentId) {
+                notification_service_1.default.notifyTaskStatusChange(task, task.assignedAgentId, 'approved').catch(() => { });
+            }
             (0, eventBus_1.publishEntityEvent)({
                 event: 'ENTITY_UPDATED',
                 entity: 'task',
@@ -1157,6 +1293,9 @@ const reviewEvidence = async (req, res) => {
                 details: { reworkNotes: notes.trim(), cycle: previousSubmissions.length }
             });
             await task.save();
+            if (task.assignedAgentId) {
+                notification_service_1.default.notifyTaskStatusChange(task, task.assignedAgentId, 'rework').catch(() => { });
+            }
             (0, eventBus_1.publishEntityEvent)({
                 event: 'ENTITY_UPDATED',
                 entity: 'task',

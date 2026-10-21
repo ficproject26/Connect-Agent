@@ -918,7 +918,7 @@ export const TaskWorkflowModule: React.FC = () => {
                     </span>
                     <span className="flex items-center gap-1 text-slate-600">
                       <MapPin className="w-3 h-3 text-slate-400" />
-                      {task.district || task.state} {task.division ? `› ${task.division}` : ''} {task.pincode ? `(${task.pincode})` : ''}
+                      {[task.state, task.district, task.division].filter(Boolean).join(' › ')} {task.pincode ? `(${task.pincode})` : ''}
                     </span>
                   </div>
 
@@ -938,7 +938,15 @@ export const TaskWorkflowModule: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <span className="text-slate-400 font-bold">Assigned Agent:</span>
                       <span className="font-extrabold text-slate-800">
-                        {task.assignedAgentName || <em className="text-amber-600">Unassigned (Pending Review)</em>}
+                        {task.assignedAgentName ? (
+                          task.assignedAgentName
+                        ) : task.status === 'Pending Admin Review' ? (
+                          <em className="text-amber-600 font-semibold">Awaiting Admin Review (Unassigned)</em>
+                        ) : task.status === 'Rejected' ? (
+                          <em className="text-rose-600 font-semibold">Rejected (Unassigned)</em>
+                        ) : (
+                          <em className="text-slate-500 font-semibold">Unassigned</em>
+                        )}
                       </span>
                     </div>
                     {task.createdByName && (
@@ -1676,7 +1684,9 @@ export const TaskWorkflowModule: React.FC = () => {
               </div>
               <div>
                 <span className="text-[10px] font-bold text-slate-400 uppercase block">Territory</span>
-                <span className="font-extrabold text-slate-800">{selectedTask.district || selectedTask.state}</span>
+                <span className="font-extrabold text-slate-800">
+                  {[selectedTask.state, selectedTask.district, selectedTask.division].filter(Boolean).join(' › ')} {selectedTask.pincode ? `(${selectedTask.pincode})` : ''}
+                </span>
               </div>
               <div>
                 <span className="text-[10px] font-bold text-slate-400 uppercase block">Deadline</span>
@@ -1694,7 +1704,17 @@ export const TaskWorkflowModule: React.FC = () => {
               </div>
               <div>
                 <span className="text-[10px] font-bold text-slate-400 uppercase block">Assigned Agent</span>
-                <span className="font-extrabold text-slate-800">{selectedTask.assignedAgentName || 'Unassigned'}</span>
+                <span className="font-extrabold text-slate-800">
+                  {selectedTask.assignedAgentName ? (
+                    selectedTask.assignedAgentName
+                  ) : selectedTask.status === 'Pending Admin Review' ? (
+                    <em className="text-amber-600 font-semibold">Awaiting Admin Review (Unassigned)</em>
+                  ) : selectedTask.status === 'Rejected' ? (
+                    <em className="text-rose-600 font-semibold">Rejected (Unassigned)</em>
+                  ) : (
+                    'Unassigned'
+                  )}
+                </span>
               </div>
             </div>
 

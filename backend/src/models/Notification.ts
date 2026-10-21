@@ -1,23 +1,31 @@
-import { Schema, model, Document, Types } from 'mongoose';
+import { Schema, model, Document } from 'mongoose';
 
 export interface INotification extends Document {
-  receiver: Types.ObjectId; // References Agent/User
+  receiver: any; // References Agent/User (ObjectId or string ID)
   title: string;
   message: string;
   read: boolean;
   priority: 'low' | 'medium' | 'high';
-  category: 'target_assigned' | 'vendor_assigned' | 'ticket_assigned' | 'report_reminder' | 'approval_status' | 'announcement';
+  category: string;
+  link?: string;
+  relatedEntityId?: string;
+  relatedEntityType?: string;
+  metadata?: Record<string, any>;
   createdAt: Date;
 }
 
 const notificationSchema = new Schema<INotification>({
-  receiver: { type: Schema.Types.ObjectId, ref: 'Agent', required: true },
-  title: { type: String, required: true },
-  message: { type: String, required: true },
-  read: { type: Boolean, default: false },
+  receiver: { type: Schema.Types.Mixed, required: true, index: true },
+  title: { type: String, required: true, trim: true },
+  message: { type: String, required: true, trim: true },
+  read: { type: Boolean, default: false, index: true },
   priority: { type: String, enum: ['low', 'medium', 'high'], default: 'medium' },
-  category: { type: String, enum: ['target_assigned', 'vendor_assigned', 'ticket_assigned', 'report_reminder', 'approval_status', 'announcement'], required: true },
-  createdAt: { type: Date, default: Date.now }
+  category: { type: String, required: true, default: 'announcement' },
+  link: { type: String, default: '' },
+  relatedEntityId: { type: String, default: '' },
+  relatedEntityType: { type: String, default: '' },
+  metadata: { type: Schema.Types.Mixed, default: {} },
+  createdAt: { type: Date, default: Date.now, index: true }
 });
 
 notificationSchema.index({ receiver: 1, read: 1, createdAt: -1 });

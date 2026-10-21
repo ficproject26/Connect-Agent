@@ -35,6 +35,12 @@ export const getDashboardStats = async (req: Request, res: Response) => {
       { assignedAgentId: { $in: agentMatches } }
     ];
 
+    const activeVendorFilter = {
+      ...vendorFilter,
+      kycStatus: { $in: ['approved', 'Approved', 'verified', 'Verified'] },
+      status: { $in: ['active', 'Active', 'approved', 'Approved', 'verified', 'Verified'] }
+    };
+
     // Run all aggregations in parallel for performance with field projections
     const [
       totalVendors,
@@ -53,9 +59,9 @@ export const getDashboardStats = async (req: Request, res: Response) => {
       recentAssignments,
       recentVendors
     ] = await Promise.all([
-      Vendor.countDocuments(vendorFilter),
-      Vendor.countDocuments({ ...vendorFilter, status: 'active' }),
-      Vendor.countDocuments({ ...vendorFilter, status: 'pending' }),
+      Vendor.countDocuments(activeVendorFilter),
+      Vendor.countDocuments(activeVendorFilter),
+      0,
       TargetAssignment.countDocuments({ assignedTo: { $in: agentMatches } }),
       TargetAssignment.countDocuments({ assignedTo: { $in: agentMatches }, status: 'completed' }),
       TargetAssignment.countDocuments({ assignedTo: { $in: agentMatches }, status: 'overdue' }),
@@ -77,7 +83,7 @@ export const getDashboardStats = async (req: Request, res: Response) => {
         .limit(5)
         .lean(),
       Vendor.find({
-        ...vendorFilter,
+        ...activeVendorFilter,
         $or: [
           { businessName: { $exists: true, $nin: ['', null] } },
           { name: { $exists: true, $nin: ['', null] } }
@@ -93,22 +99,11 @@ export const getDashboardStats = async (req: Request, res: Response) => {
     const sanitizedRecentVendors = (recentVendors || [])
       .map((v: any) => {
         const rawName = (v.businessName || v.name || '').trim();
-        let effectiveKyc = String(v.kycStatus || '').trim().toLowerCase();
-        if (!effectiveKyc) {
-          const s = String(v.status || '').trim().toLowerCase();
-          effectiveKyc = (s === 'approved' || s === 'active') ? 'approved' : 'pending';
-        } else if (effectiveKyc.includes('approved') || effectiveKyc === 'verified') {
-          effectiveKyc = 'approved';
-        } else if (effectiveKyc.includes('reject')) {
-          effectiveKyc = 'rejected';
-        } else {
-          effectiveKyc = 'pending';
-        }
         return {
           ...v,
           name: rawName,
           businessName: rawName,
-          kycStatus: effectiveKyc
+          kycStatus: 'approved'
         };
       })
       .filter((v: any) => Boolean(v.name));
