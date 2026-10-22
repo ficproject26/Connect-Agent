@@ -133,8 +133,9 @@ async function buildHierarchyTree(scope: any = null, forceAll = false) {
     return filterHierarchyTree(cachedFullHierarchy, scope, forceAll);
   }
 
-  const db = mongoose.connection.db;
-  if (!db) throw new Error('Database connection unavailable');
+  const defaultDb = mongoose.connection.db;
+  if (!defaultDb) throw new Error('Database connection unavailable');
+  const db = ((mongoose.connection as any).useDb ? (mongoose.connection as any).useDb('connect_db') : null) || defaultDb;
 
   const [states, districts, divisions, pincodes] = await Promise.all([
     db.collection('states').find({}, { projection: { name: 1, code: 1, status: 1, stateId: 1 } }).toArray() as Promise<RawState[]>,
