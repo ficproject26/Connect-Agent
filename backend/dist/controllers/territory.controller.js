@@ -99,6 +99,24 @@ async function buildHierarchyTree(scope = null, forceAll = false) {
     const activeDistricts = districts.filter(isActive);
     const activeDivisions = divisions.filter(isActive);
     const activePincodes = pincodes.filter(isActive);
+    // If local activeStates is empty, fallback to Central Admin API server-to-server (bypasses browser CORS)
+    if (activeStates.length === 0) {
+        try {
+            const resp = await fetch('https://api.ficapp.in/admin-api/territory/hierarchy', { signal: AbortSignal.timeout(6000) });
+            if (resp.ok) {
+                const json = await resp.json();
+                const tree = json.hierarchy || json.states || (Array.isArray(json) ? json : null);
+                if (Array.isArray(tree) && tree.length > 0) {
+                    cachedFullHierarchy = tree;
+                    cachedFullHierarchyTime = now;
+                    return filterHierarchyTree(tree, scope, forceAll);
+                }
+            }
+        }
+        catch (e) {
+            console.warn('Backend server-to-server territory fetch fallback note:', e.message);
+        }
+    }
     // Pre-index pincodes into Map by division and district for fast O(1) lookups
     const pinsByDivKey = new Map();
     const pinsByDistKey = new Map();
