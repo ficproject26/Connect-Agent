@@ -171,7 +171,6 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-[#fbf9f8] text-[#1b1c1c] font-sans antialiased">
-      <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
 
       {/* Sidebar - Desktop collapsible */}
       <aside

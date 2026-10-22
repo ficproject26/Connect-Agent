@@ -40,6 +40,12 @@ export async function resolveUserContext(req: Request): Promise<UserContext | nu
   const agentId = tokenAgent.agentId;
   const email = tokenAgent.email;
 
+  const cacheKey = `userContext:${agentId || email}`;
+  try {
+    const cached = await cacheService.get<UserContext>(cacheKey);
+    if (cached) return cached;
+  } catch (_) {}
+
   // 1. Check Agent collection
   let agentDoc: any = null;
   if (mongoose.Types.ObjectId.isValid(agentId)) {
@@ -95,7 +101,7 @@ export async function resolveUserContext(req: Request): Promise<UserContext | nu
     pincode: (doc.territory?.pincode || doc.assignedTerritory?.pincode || agentDoc?.territory?.pincode || agentDoc?.assignedTerritory?.pincode || doc.pincode || doc.assignedPincode || '').trim()
   };
 
-  return {
+  const resolved: UserContext = {
     id: doc._id?.toString() || agentId,
     registrationId: doc.registrationId || agentDoc?.registrationId || (doc as any).agentId || (agentDoc as any)?.agentId || '',
     name: doc.name || tokenAgent.email?.split('@')[0] || 'User',
@@ -106,6 +112,9 @@ export async function resolveUserContext(req: Request): Promise<UserContext | nu
     level,
     territory
   };
+
+  await cacheService.set(cacheKey, resolved, 30).catch(() => {});
+  return resolved;
 }
 
 // Helper: Find receiving Admin for target level & territory

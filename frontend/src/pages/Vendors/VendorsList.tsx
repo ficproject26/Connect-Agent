@@ -128,6 +128,8 @@ export const VendorsList: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('all'); // all, active, inactive
   const [kycFilter, setKycFilter] = useState('all'); // all, pending, approved, rejected
   const [quickChip, setQuickChip] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(25);
 
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -637,6 +639,18 @@ export const VendorsList: React.FC = () => {
         matchesStatus && matchesKyc;
     });
   }, [scopedVendors, searchTerm, quickChip, dateFilter, categoryFilter, districtFilter, divisionFilter, pincodeFilter, agentFilter, statusFilter, kycFilter]);
+
+  // Reset page to 1 when any filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, quickChip, dateFilter, categoryFilter, districtFilter, divisionFilter, pincodeFilter, agentFilter, statusFilter, kycFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredVendors.length / pageSize));
+
+  const paginatedVendors = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredVendors.slice(start, start + pageSize);
+  }, [filteredVendors, currentPage, pageSize]);
 
   // Hierarchy Scope Text Description
   const getHierarchyScopeDescription = () => {
@@ -1338,7 +1352,8 @@ export const VendorsList: React.FC = () => {
               <p className="text-sm font-bold text-slate-500">No vendors registered in your assigned territory yet.</p>
             </div>
           ) : (
-            <table className="w-full text-left border-collapse">
+            <>
+              <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-[#fbf9f8] border-b border-[#eae8e7] text-[10px] font-black text-[#52443a] uppercase tracking-wider">
                   <th className="py-3.5 px-4">Vendor</th>
@@ -1352,7 +1367,7 @@ export const VendorsList: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#eae8e7] text-xs">
-                {filteredVendors.map((vendor) => (
+                {paginatedVendors.map((vendor) => (
                   <tr key={vendor.id} className="hover:bg-[#f6f3f2]/40 transition">
                     <td className="py-3.5 px-4">
                       <p className="font-extrabold text-[#1b1c1c] text-sm">{vendor.name}</p>
@@ -1418,7 +1433,54 @@ export const VendorsList: React.FC = () => {
                 ))}
               </tbody>
             </table>
-          )}
+            {filteredVendors.length > pageSize && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-[#fbf9f8] border-t border-[#eae8e7] text-xs">
+                <div className="text-slate-600 font-medium">
+                  Showing <span className="font-extrabold text-[#1b1c1c]">{(currentPage - 1) * pageSize + 1}</span> to{' '}
+                  <span className="font-extrabold text-[#1b1c1c]">{Math.min(currentPage * pageSize, filteredVendors.length)}</span> of{' '}
+                  <span className="font-extrabold text-[#864f19]">{filteredVendors.length}</span> entries
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 mr-2">
+                    <span className="text-slate-500 font-semibold text-[11px]">Rows per page:</span>
+                    <select
+                      value={pageSize}
+                      onChange={(e) => {
+                        setPageSize(Number(e.target.value));
+                        setCurrentPage(1);
+                      }}
+                      className="px-2 py-1 bg-white border border-[#d7c3b5]/60 rounded-lg text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-[#864f19]"
+                    >
+                      <option value={15}>15</option>
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage <= 1}
+                    className="px-3 py-1.5 rounded-lg border border-[#d7c3b5]/60 bg-white font-bold text-slate-700 hover:bg-[#ffdcc2] disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+                  >
+                    Previous
+                  </button>
+                  <span className="text-xs font-bold text-slate-700 px-1">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage >= totalPages}
+                    className="px-3 py-1.5 rounded-lg border border-[#d7c3b5]/60 bg-white font-bold text-slate-700 hover:bg-[#ffdcc2] disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
         </CardBody>
       </Card>
 

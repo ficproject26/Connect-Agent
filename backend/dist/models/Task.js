@@ -195,6 +195,14 @@ taskSchema.virtual('isOverdue').get(function () {
     const closedStatuses = ['Approved', 'Completed', 'Rejected', 'Closed'];
     return new Date() > new Date(this.dueDate) && !closedStatuses.includes(this.status);
 });
+// Optimized database indexes for task workflows, dashboard counters, and territory filtering
+taskSchema.index({ assignedAgentId: 1, status: 1, dueDate: 1 });
+taskSchema.index({ assignedAgentId: 1, createdAt: -1 });
+taskSchema.index({ createdById: 1, createdAt: -1 });
+taskSchema.index({ state: 1, district: 1, division: 1, pincode: 1 });
+taskSchema.index({ status: 1, dueDate: 1 });
+taskSchema.index({ taskNumber: 1 }, { unique: true, sparse: true });
+taskSchema.index({ createdAt: -1 });
 // Auto-generate ObjectId or string ID if missing
 taskSchema.pre('save', function (next) {
     if (!this._id) {

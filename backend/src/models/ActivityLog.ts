@@ -16,5 +16,7 @@ const activityLogSchema = new Schema<IActivityLog>({
   createdAt: { type: Date, default: Date.now }
 });
 
+activityLogSchema.index({ agent: 1, createdAt: -1 });
+
 export const ActivityLog = model<IActivityLog>('ActivityLog', activityLogSchema);
 export default ActivityLog;

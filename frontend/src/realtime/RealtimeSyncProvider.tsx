@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { queryClient } from '../utils/queryClient';
 import realtimeClient, { ConnectionStatus, RealtimeEvent } from './realtimeClient';
@@ -17,6 +17,15 @@ export const RealtimeSyncProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const { token, user, addNotification, triggerSound, refetchUser } = useAuth();
   const [status, setStatus] = useState<ConnectionStatus>(realtimeClient.getStatus());
 
+  const userRef = useRef(user);
+  userRef.current = user;
+  const addNotificationRef = useRef(addNotification);
+  addNotificationRef.current = addNotification;
+  const triggerSoundRef = useRef(triggerSound);
+  triggerSoundRef.current = triggerSound;
+  const refetchUserRef = useRef(refetchUser);
+  refetchUserRef.current = refetchUser;
+
   // 1. Maintain WebSocket connection synced with user authentication
   useEffect(() => {
     if (token) {
@@ -34,7 +43,7 @@ export const RealtimeSyncProvider: React.FC<{ children: React.ReactNode }> = ({ 
     };
   }, [token]);
 
-  // 2. Global Event-Driven State Synchronizer
+  // 2. Global Event-Driven State Synchronizer (Stable single subscription)
   useEffect(() => {
     const unsubEvents = realtimeClient.onAny((event: RealtimeEvent) => {
       const { entity, action } = event;
@@ -57,8 +66,9 @@ export const RealtimeSyncProvider: React.FC<{ children: React.ReactNode }> = ({ 
           queryClient.invalidateQueries({ queryKey: ['subordinatesAttendanceLive'], refetchType: 'active' });
 
           // If current agent's own profile or KYC status was updated, refetch user session
-          if (user && (event.entityId === user._id || event.scope?.targetAgentId === user._id)) {
-            refetchUser().catch(() => {});
+          const currentUser = userRef.current;
+          if (currentUser && (event.entityId === currentUser._id || event.scope?.targetAgentId === currentUser._id)) {
+            refetchUserRef.current().catch(() => {});
           }
           break;
 
@@ -93,18 +103,17 @@ export const RealtimeSyncProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
         case 'notification':
           if (event.data) {
-            addNotification(
+            addNotificationRef.current(
               event.data.title || 'System Notification',
               event.data.message || 'New update available',
               event.data.priority || 'medium',
               event.data.category || 'system'
             );
-            triggerSound('chirp');
+            triggerSoundRef.current('chirp');
           }
           break;
 
         default:
-          // Fallback: Invalidate queries matching entity name prefix
           queryClient.invalidateQueries({ queryKey: [entity], refetchType: 'active' });
           break;
       }
@@ -122,15 +131,19 @@ export const RealtimeSyncProvider: React.FC<{ children: React.ReactNode }> = ({ 
       unsubEvents();
       window.removeEventListener('connect:realtime:sync', handleReconnectedSync);
     };
-  }, [user, addNotification, triggerSound, refetchUser]);
+  }, []);
+
+  const reconnect = useCallback(() => {
+    realtimeClient.reconnect();
+  }, []);
+
+  const contextVal = useMemo(() => ({
+    status,
+    reconnect
+  }), [status, reconnect]);
 
   return (
-    <RealtimeContext.Provider
-      value={{
-        status,
-        reconnect: () => realtimeClient.reconnect()
-      }}
-    >
+    <RealtimeContext.Provider value={contextVal}>
       {children}
     </RealtimeContext.Provider>
   );

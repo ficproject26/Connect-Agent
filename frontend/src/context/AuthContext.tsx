@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import api from '../utils/api';
 import { queryClient } from '../utils/queryClient';
@@ -128,7 +128,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [soundProfile, setSoundProfile] = useState<'chirp' | 'melody' | 'siren'>('chirp');
   const [soundVolume, setSoundVolume] = useState<number>(0.5);
 
-  const fetchNotifications = async () => {
+  const logout = useCallback(() => {
+    queryClient.clear();
+    localStorage.removeItem('agent_token');
+    localStorage.removeItem('agent_user');
+    localStorage.removeItem('connect_portal_agent_saved_profile');
+    sessionStorage.removeItem('agent_registration_draft');
+    setToken(null);
+    setUser(null);
+    setNotifications([]);
+  }, []);
+
+  const fetchNotifications = useCallback(async () => {
     try {
       const response = await api.get('/notifications', { timeout: 8000 });
       const notifs = response.data?.notifications || [];
@@ -150,7 +161,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.warn('Failed to fetch backend notifications:', err);
       }
     }
-  };
+  }, []);
 
   const applySavedProfileOverrides = (agentData: AgentProfile): AgentProfile => {
     if (!agentData) return agentData;
@@ -180,7 +191,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return agentData;
   };
 
-  const refetchUser = async () => {
+  const refetchUser = useCallback(async () => {
     try {
       const response = await api.get('/auth/me');
       const agent = response.data.agent;
@@ -234,7 +245,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       // On network errors (status undefined, ERR_NETWORK, timeout, 500, etc.), do NOT logout and do NOT overwrite status! Keep current cached user!
     }
-  };
+  }, [logout, fetchNotifications]);
 
   useEffect(() => {
     const initializeAuth = async () => {
@@ -304,9 +315,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       clearInterval(intervalId);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [token]);
+  }, [token, fetchNotifications]);
 
-  const login = async (email: string, password: string): Promise<any> => {
+  const login = useCallback(async (email: string, password: string): Promise<any> => {
     const loginPayload = { email: email.trim().toLowerCase(), password };
 
     try {
@@ -341,14 +352,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     throw new Error('Invalid email or password. Please check your credentials or register an account.');
-  };
+  }, [fetchNotifications]);
 
   /**
    * loginWithToken – used by Mobile OTP flow after the backend verifies the OTP
    * and returns a pre-authenticated token + agent object. Sets up the auth session
    * identically to the email login flow without making another API call.
    */
-  const loginWithToken = (newToken: string, agentData: AgentProfile) => {
+  const loginWithToken = useCallback((newToken: string, agentData: AgentProfile) => {
     const agent = { ...agentData };
     const approved = isAgentApproved(agent);
     agent.status = approved ? 'active' as any : 'pending_approval' as any;
@@ -363,9 +374,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(finalAgent);
     setLoading(false);
     fetchNotifications().catch(() => {});
-  };
+  }, [fetchNotifications]);
 
-  const register = async (agentData: any): Promise<any> => {
+  const register = useCallback(async (agentData: any): Promise<any> => {
     try {
       const response = await api.post('/auth/register', agentData);
       if (response?.data) {
@@ -410,10 +421,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return resultData;
       }
     } catch (err: any) {
-      // Always propagate registration errors to the caller.
-      // NEVER fall through to the local fallback — it creates phantom REG-IDs
-      // stored only in localStorage that are never persisted to the database,
-      // making the Admin Onboarding Requests always appear empty.
       if (err?.response?.data?.errors && Array.isArray(err.response.data.errors)) {
         const msgs = (err.response.data.errors as any[]).map((e: any) => e.message || String(e)).join('. ');
         throw new Error(msgs);
@@ -427,80 +434,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (err?.response?.status) {
         throw new Error(`Registration failed (HTTP ${err.response.status}). Please check your details and try again.`);
       }
-      // True network error with no HTTP response — re-throw so the form shows a real error
       throw err;
     }
 
-    // DISABLED: This local fallback previously created phantom registrations in localStorage.
-    // These phantom entries were never saved to the database, making Admin Onboarding
-    // Requests show empty even after a successful-looking registration.
-    /* BEGIN DISABLED LOCAL FALLBACK
-    // If all remote endpoints failed, generate fallback registration entry locally
-    console.warn('Backend unavailable on all endpoints. Registering agent locally...');
-    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const randDigits = Math.floor(1000 + Math.random() * 9000);
-    const registrationId = `REG-${dateStr}-${randDigits}`;
-
-    const newRegistration = {
-      registrationId,
-      name: agentData.name,
-      email: agentData.email,
-      phone: agentData.phone,
-      role: agentData.role || 'state',
-      level: agentData.role || 'state',
-      territory: agentData.territory,
-      status: 'pending_approval',
-      kycStatus: 'pending',
-      assignedArea: agentData.territory ? [agentData.territory.state, agentData.territory.district, agentData.territory.division, agentData.territory.pincode].filter(Boolean).join(' / ') : '',
-      createdAt: new Date().toISOString()
-    };
-
-    try {
-      const existingPending = JSON.parse(localStorage.getItem('pending_agent_registrations') || '[]');
-      existingPending.push(newRegistration);
-      localStorage.setItem('pending_agent_registrations', JSON.stringify(existingPending));
-    } catch (e) { }
-
-    // END DISABLED LOCAL FALLBACK */
-    // This line is now unreachable — all registration errors are thrown above.
     throw new Error('Unexpected registration state. Please try again.');
-  };
+  }, []);
 
-  const logout = () => {
-    queryClient.clear();
-    localStorage.removeItem('agent_token');
-    localStorage.removeItem('agent_user');
-    localStorage.removeItem('connect_portal_agent_saved_profile');
-    sessionStorage.removeItem('agent_registration_draft');
-    setToken(null);
-    setUser(null);
-    setNotifications([]);
-  };
+  const updateAgent = useCallback((data: Partial<AgentProfile>) => {
+    setUser((prev) => {
+      if (!prev) return null;
+      const updated = { ...prev, ...data };
+      try {
+        const userKey = `connect_portal_saved_profile_${prev._id || prev.email?.toLowerCase()}`;
+        const existingSaved = JSON.parse(localStorage.getItem(userKey) || '{}');
+        const mergedSaved = { ...existingSaved, ...data };
+        localStorage.setItem(userKey, JSON.stringify(mergedSaved));
+        localStorage.setItem('agent_user', JSON.stringify(updated));
+      } catch (e) {
+        console.error('Failed to save profile changes to localStorage:', e);
+      }
+      return updated;
+    });
+  }, []);
 
-  const updateAgent = (data: Partial<AgentProfile>) => {
-    if (user) {
-      setUser((prev) => {
-        if (!prev) return null;
-        const updated = { ...prev, ...data };
-        try {
-          const userKey = `connect_portal_saved_profile_${prev._id || prev.email?.toLowerCase()}`;
-          const existingSaved = JSON.parse(localStorage.getItem(userKey) || '{}');
-          const mergedSaved = { ...existingSaved, ...data };
-          localStorage.setItem(userKey, JSON.stringify(mergedSaved));
-          localStorage.setItem('agent_user', JSON.stringify(updated));
-        } catch (e) {
-          console.error('Failed to save profile changes to localStorage:', e);
-        }
-        return updated;
-      });
-    }
-  };
-
-  const updateProfile = (profile: Partial<AgentProfile>) => {
+  const updateProfile = useCallback((profile: Partial<AgentProfile>) => {
     updateAgent(profile);
-  };
+  }, [updateAgent]);
 
-  const addNotification = (
+  const addNotification = useCallback((
     title: string,
     message: string,
     priority: 'high' | 'medium' | 'low' = 'low',
@@ -516,9 +477,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       category,
     };
     setNotifications((prev) => [newNotif, ...prev]);
-  };
+  }, []);
 
-  const markNotificationRead = async (id: string) => {
+  const markNotificationRead = useCallback(async (id: string) => {
     try {
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, read: true } : n))
@@ -527,18 +488,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err) {
       console.error('Failed to mark notification read:', err);
     }
-  };
+  }, []);
 
-  const clearNotifications = async () => {
+  const clearNotifications = useCallback(async () => {
     try {
       setNotifications([]);
       await api.delete('/notifications');
     } catch (err) {
       console.error('Failed to clear notifications:', err);
     }
-  };
+  }, []);
 
-  const triggerSound = (profileOverride?: 'chirp' | 'melody' | 'siren') => {
+  const triggerSound = useCallback((profileOverride?: 'chirp' | 'melody' | 'siren') => {
     try {
       const selected = profileOverride || soundProfile;
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -604,34 +565,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (e) {
       console.error('Audio play error:', e);
     }
-  };
+  }, [soundProfile, soundVolume]);
+
+  const effectiveRole = useMemo(() => (user ? (user.role as UserRole) : null), [user?.role]);
+
+  const contextValue = useMemo<AuthContextType>(() => ({
+    user,
+    role: effectiveRole,
+    token,
+    loading,
+    notifications,
+    fetchNotifications,
+    soundProfile,
+    soundVolume,
+    login,
+    loginWithToken,
+    register,
+    logout,
+    updateAgent,
+    updateProfile,
+    refetchUser,
+    addNotification,
+    markNotificationRead,
+    clearNotifications,
+    setSoundProfile,
+    setSoundVolume,
+    triggerSound
+  }), [
+    user,
+    effectiveRole,
+    token,
+    loading,
+    notifications,
+    fetchNotifications,
+    soundProfile,
+    soundVolume,
+    login,
+    loginWithToken,
+    register,
+    logout,
+    updateAgent,
+    updateProfile,
+    refetchUser,
+    addNotification,
+    markNotificationRead,
+    clearNotifications,
+    triggerSound
+  ]);
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        role: user ? (user.role as UserRole) : null,
-        token,
-        loading,
-        notifications,
-        fetchNotifications,
-        soundProfile,
-        soundVolume,
-        login,
-        loginWithToken,
-        register,
-        logout,
-        updateAgent,
-        updateProfile,
-        refetchUser,
-        addNotification,
-        markNotificationRead,
-        clearNotifications,
-        setSoundProfile,
-        setSoundVolume,
-        triggerSound
-      }}
-    >
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

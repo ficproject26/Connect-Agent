@@ -51,7 +51,7 @@ vendorSchema.index({ assignedAgent: 1, status: 1, createdAt: -1 });
 vendorSchema.index({ state: 1, createdAt: -1 });
 vendorSchema.index({ district: 1, createdAt: -1 });
 vendorSchema.index({ pincode: 1, status: 1, createdAt: -1 });
-vendorSchema.index({ assignedAgent: 1 });
+vendorSchema.index({ registrationId: 1 });
 vendorSchema.index({ agentId: 1 });
 vendorSchema.index({ onboardedBy: 1 });
 vendorSchema.index({ phone: 1 });

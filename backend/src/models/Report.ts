@@ -36,5 +36,10 @@ const reportSchema = new Schema<IReport>({
   timestamps: true
 });
 
+reportSchema.index({ agent: 1, createdAt: -1 });
+reportSchema.index({ division: 1, createdAt: -1 });
+reportSchema.index({ type: 1, createdAt: -1 });
+reportSchema.index({ createdAt: -1 });
+
 export const Report = model<IReport>('Report', reportSchema);
 export default Report;

@@ -100,6 +100,15 @@ export const getVendors = async (req: Request, res: Response) => {
     const pageNum = parseInt(page as string, 10);
     const limitNum = parseInt(limit as string, 10);
 
+    // Fast cache lookup for repeated vendor queries
+    const cacheKey = `vendors:${agentId}:${JSON.stringify(req.query)}`;
+    try {
+      const cached = await cacheService.get<any>(cacheKey);
+      if (cached) {
+        return res.status(200).json(cached);
+      }
+    } catch (_) {}
+
     // Validate requested drill-down territory parameters against Agent's authoritative scope
     if (qState && typeof qState === 'string' && qState.trim()) {
       const cleanState = qState.trim().toLowerCase();
@@ -356,7 +365,7 @@ export const getVendors = async (req: Request, res: Response) => {
     const total = deduplicated.length;
     const paginatedVendors = deduplicated.slice((pageNum - 1) * limitNum, pageNum * limitNum);
 
-    return res.status(200).json({
+    const resultPayload = {
       vendors: paginatedVendors,
       pagination: { page: pageNum, limit: limitNum, total, pages: Math.ceil(total / limitNum) },
       userScope: {
@@ -366,7 +375,12 @@ export const getVendors = async (req: Request, res: Response) => {
         division: scope.division,
         pincode: scope.pincode
       }
-    });
+    };
+
+    // Cache vendor list response for 20 seconds
+    await cacheService.set(cacheKey, resultPayload, 20).catch(() => {});
+
+    return res.status(200).json(resultPayload);
   } catch (error) {
     console.error('Get vendors error:', error);
     return res.status(500).json({ message: 'Internal server error' });
@@ -737,10 +751,11 @@ export const createVendor = async (req: Request, res: Response) => {
     } catch (syncErr) {
       console.error('Error syncing vendor to admin users collection:', syncErr);
     }
-    // Invalidate dashboard and hierarchy caches on new vendor onboarding
+    // Invalidate dashboard, hierarchy, and vendor caches on new vendor onboarding
     await Promise.all([
       cacheService.delByPrefix('dashboard:'),
-      cacheService.delByPrefix('hierarchy:')
+      cacheService.delByPrefix('hierarchy:'),
+      cacheService.delByPrefix('vendors:')
     ]);
 
     // Link Field Shop Visit if fieldVisitId was provided
@@ -872,10 +887,11 @@ export const updateVendor = async (req: Request, res: Response) => {
 
     if (!vendor) return res.status(404).json({ message: 'Vendor not found' });
 
-    // Invalidate dashboard and hierarchy caches
+    // Invalidate dashboard, hierarchy, and vendor caches
     await Promise.all([
       cacheService.delByPrefix('dashboard:'),
-      cacheService.delByPrefix('hierarchy:')
+      cacheService.delByPrefix('hierarchy:'),
+      cacheService.delByPrefix('vendors:')
     ]);
 
     // Publish Realtime Entity Event
@@ -935,10 +951,11 @@ export const updateVendorStatus = async (req: Request, res: Response) => {
 
     if (!vendor) return res.status(404).json({ message: 'Vendor not found' });
 
-    // Invalidate dashboard and hierarchy caches
+    // Invalidate dashboard, hierarchy, and vendor caches
     await Promise.all([
       cacheService.delByPrefix('dashboard:'),
-      cacheService.delByPrefix('hierarchy:')
+      cacheService.delByPrefix('hierarchy:'),
+      cacheService.delByPrefix('vendors:')
     ]);
 
     // Publish Realtime Entity Event

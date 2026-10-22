@@ -20,8 +20,17 @@ const exactRegex = (str) => new RegExp(`^\\s*${escapeRegex(str.trim())}\\s*$`, '
 const containsRegex = (str) => new RegExp(escapeRegex(str.trim()), 'i');
 /**
  * Resolve the authorized responsible agent for a given territory (Pincode -> Division -> District)
+ * Cached with TTL to eliminate N+1 queries when populating ticket lists
  */
 async function resolveResponsibleAgent(pincode, division, district, state) {
+    const cacheKey = `respAgent:${(pincode || '').trim()}:${(division || '').trim()}:${(district || '').trim()}:${(state || '').trim()}`;
+    try {
+        const cached = await cache_service_1.cacheService.get(cacheKey);
+        if (cached !== null) {
+            return cached === false ? null : cached;
+        }
+    }
+    catch (_) { }
     const db = mongoose_1.default.connection.db;
     // 1. Try to find approved Pincode Agent matching pincode
     if (pincode && pincode.trim()) {
@@ -37,8 +46,10 @@ async function resolveResponsibleAgent(pincode, division, district, state) {
             ],
             kycStatus: { $regex: /^(approved|verified)$/i }
         }).select('_id name email role phone registrationId assignedTerritory territory').lean();
-        if (pinAgent)
+        if (pinAgent) {
+            await cache_service_1.cacheService.set(cacheKey, pinAgent, 300).catch(() => { });
             return pinAgent;
+        }
         // Check users collection
         if (db) {
             const pinUser = await db.collection('users').findOne({
@@ -61,8 +72,10 @@ async function resolveResponsibleAgent(pincode, division, district, state) {
                     }
                 ]
             });
-            if (pinUser)
+            if (pinUser) {
+                await cache_service_1.cacheService.set(cacheKey, pinUser, 300).catch(() => { });
                 return pinUser;
+            }
         }
     }
     // 2. Try to find Division Agent matching division
@@ -88,8 +101,10 @@ async function resolveResponsibleAgent(pincode, division, district, state) {
                 }
             ]
         });
-        if (divUser)
+        if (divUser) {
+            await cache_service_1.cacheService.set(cacheKey, divUser, 300).catch(() => { });
             return divUser;
+        }
     }
     // 3. Try to find District Agent matching district
     if (district && district.trim() && db) {
@@ -114,9 +129,12 @@ async function resolveResponsibleAgent(pincode, division, district, state) {
                 }
             ]
         });
-        if (distUser)
+        if (distUser) {
+            await cache_service_1.cacheService.set(cacheKey, distUser, 300).catch(() => { });
             return distUser;
+        }
     }
+    await cache_service_1.cacheService.set(cacheKey, false, 300).catch(() => { });
     return null;
 }
 const createTicketSchema = zod_1.z.object({

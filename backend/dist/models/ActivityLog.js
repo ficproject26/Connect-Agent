@@ -9,6 +9,7 @@ const activityLogSchema = new mongoose_1.Schema({
     details: { type: String },
     createdAt: { type: Date, default: Date.now }
 });
+activityLogSchema.index({ agent: 1, createdAt: -1 });
 exports.ActivityLog = (0, mongoose_1.model)('ActivityLog', activityLogSchema);
 exports.default = exports.ActivityLog;
 //# sourceMappingURL=ActivityLog.js.map

@@ -20,6 +20,10 @@ const reportSchema = new mongoose_1.Schema({
 }, {
     timestamps: true
 });
+reportSchema.index({ agent: 1, createdAt: -1 });
+reportSchema.index({ division: 1, createdAt: -1 });
+reportSchema.index({ type: 1, createdAt: -1 });
+reportSchema.index({ createdAt: -1 });
 exports.Report = (0, mongoose_1.model)('Report', reportSchema);
 exports.default = exports.Report;
 //# sourceMappingURL=Report.js.map

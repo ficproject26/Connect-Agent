@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import compression from 'compression';
 import mongoose from 'mongoose';
 import { apiRateLimiter } from './middleware/rateLimiter.middleware';
 import { errorHandler } from './middleware/error.middleware';
@@ -22,6 +23,17 @@ import taskRoutes from './routes/task.routes';
 import { getCategories } from './controllers/admin.controller';
 
 const app = express();
+
+// Enable Gzip response compression for high performance on JSON payloads
+app.use(compression({
+  threshold: 1024, // Only compress responses larger than 1KB
+  filter: (req, res) => {
+    if (req.headers['x-no-compression']) {
+      return false;
+    }
+    return compression.filter(req, res);
+  }
+}));
 
 // Security and standard middlewares
 app.use(

@@ -19,8 +19,17 @@ const containsRegex = (str: string) => new RegExp(escapeRegex(str.trim()), 'i');
 
 /**
  * Resolve the authorized responsible agent for a given territory (Pincode -> Division -> District)
+ * Cached with TTL to eliminate N+1 queries when populating ticket lists
  */
 async function resolveResponsibleAgent(pincode?: string, division?: string, district?: string, state?: string) {
+  const cacheKey = `respAgent:${(pincode || '').trim()}:${(division || '').trim()}:${(district || '').trim()}:${(state || '').trim()}`;
+  try {
+    const cached = await cacheService.get(cacheKey);
+    if (cached !== null) {
+      return cached === false ? null : cached;
+    }
+  } catch (_) {}
+
   const db = mongoose.connection.db;
 
   // 1. Try to find approved Pincode Agent matching pincode
@@ -38,7 +47,10 @@ async function resolveResponsibleAgent(pincode?: string, division?: string, dist
       kycStatus: { $regex: /^(approved|verified)$/i }
     }).select('_id name email role phone registrationId assignedTerritory territory').lean();
 
-    if (pinAgent) return pinAgent;
+    if (pinAgent) {
+      await cacheService.set(cacheKey, pinAgent, 300).catch(() => {});
+      return pinAgent;
+    }
 
     // Check users collection
     if (db) {
@@ -62,7 +74,10 @@ async function resolveResponsibleAgent(pincode?: string, division?: string, dist
           }
         ]
       });
-      if (pinUser) return pinUser;
+      if (pinUser) {
+        await cacheService.set(cacheKey, pinUser, 300).catch(() => {});
+        return pinUser;
+      }
     }
   }
 
@@ -89,7 +104,10 @@ async function resolveResponsibleAgent(pincode?: string, division?: string, dist
         }
       ]
     });
-    if (divUser) return divUser;
+    if (divUser) {
+      await cacheService.set(cacheKey, divUser, 300).catch(() => {});
+      return divUser;
+    }
   }
 
   // 3. Try to find District Agent matching district
@@ -115,9 +133,13 @@ async function resolveResponsibleAgent(pincode?: string, division?: string, dist
         }
       ]
     });
-    if (distUser) return distUser;
+    if (distUser) {
+      await cacheService.set(cacheKey, distUser, 300).catch(() => {});
+      return distUser;
+    }
   }
 
+  await cacheService.set(cacheKey, false, 300).catch(() => {});
   return null;
 }
 

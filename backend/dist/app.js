@@ -7,6 +7,7 @@ require("dotenv/config");
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
+const compression_1 = __importDefault(require("compression"));
 const mongoose_1 = __importDefault(require("mongoose"));
 const rateLimiter_middleware_1 = require("./middleware/rateLimiter.middleware");
 const error_middleware_1 = require("./middleware/error.middleware");
@@ -25,6 +26,16 @@ const territory_routes_1 = __importDefault(require("./routes/territory.routes"))
 const task_routes_1 = __importDefault(require("./routes/task.routes"));
 const admin_controller_1 = require("./controllers/admin.controller");
 const app = (0, express_1.default)();
+// Enable Gzip response compression for high performance on JSON payloads
+app.use((0, compression_1.default)({
+    threshold: 1024, // Only compress responses larger than 1KB
+    filter: (req, res) => {
+        if (req.headers['x-no-compression']) {
+            return false;
+        }
+        return compression_1.default.filter(req, res);
+    }
+}));
 // Security and standard middlewares
 app.use((0, helmet_1.default)({
     contentSecurityPolicy: false,

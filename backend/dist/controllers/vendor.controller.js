@@ -77,6 +77,15 @@ const getVendors = async (req, res) => {
         const { page = '1', limit = '50', status, category, search, startDate, endDate, dateFilter, state: qState, district: qDistrict, division: qDivision, pincode: qPincode } = req.query;
         const pageNum = parseInt(page, 10);
         const limitNum = parseInt(limit, 10);
+        // Fast cache lookup for repeated vendor queries
+        const cacheKey = `vendors:${agentId}:${JSON.stringify(req.query)}`;
+        try {
+            const cached = await cache_service_1.cacheService.get(cacheKey);
+            if (cached) {
+                return res.status(200).json(cached);
+            }
+        }
+        catch (_) { }
         // Validate requested drill-down territory parameters against Agent's authoritative scope
         if (qState && typeof qState === 'string' && qState.trim()) {
             const cleanState = qState.trim().toLowerCase();
@@ -330,7 +339,7 @@ const getVendors = async (req, res) => {
         });
         const total = deduplicated.length;
         const paginatedVendors = deduplicated.slice((pageNum - 1) * limitNum, pageNum * limitNum);
-        return res.status(200).json({
+        const resultPayload = {
             vendors: paginatedVendors,
             pagination: { page: pageNum, limit: limitNum, total, pages: Math.ceil(total / limitNum) },
             userScope: {
@@ -340,7 +349,10 @@ const getVendors = async (req, res) => {
                 division: scope.division,
                 pincode: scope.pincode
             }
-        });
+        };
+        // Cache vendor list response for 20 seconds
+        await cache_service_1.cacheService.set(cacheKey, resultPayload, 20).catch(() => { });
+        return res.status(200).json(resultPayload);
     }
     catch (error) {
         console.error('Get vendors error:', error);
@@ -690,10 +702,11 @@ const createVendor = async (req, res) => {
         catch (syncErr) {
             console.error('Error syncing vendor to admin users collection:', syncErr);
         }
-        // Invalidate dashboard and hierarchy caches on new vendor onboarding
+        // Invalidate dashboard, hierarchy, and vendor caches on new vendor onboarding
         await Promise.all([
             cache_service_1.cacheService.delByPrefix('dashboard:'),
-            cache_service_1.cacheService.delByPrefix('hierarchy:')
+            cache_service_1.cacheService.delByPrefix('hierarchy:'),
+            cache_service_1.cacheService.delByPrefix('vendors:')
         ]);
         // Link Field Shop Visit if fieldVisitId was provided
         const fvId = req.body?.fieldVisitId || data?.fieldVisitId;
@@ -812,10 +825,11 @@ const updateVendor = async (req, res) => {
         const vendor = await Vendor_1.default.findOneAndUpdate(query, { $set: updateFields }, { new: true, runValidators: true }).populate('category', 'name').populate('assignedAgent', 'name email role phone');
         if (!vendor)
             return res.status(404).json({ message: 'Vendor not found' });
-        // Invalidate dashboard and hierarchy caches
+        // Invalidate dashboard, hierarchy, and vendor caches
         await Promise.all([
             cache_service_1.cacheService.delByPrefix('dashboard:'),
-            cache_service_1.cacheService.delByPrefix('hierarchy:')
+            cache_service_1.cacheService.delByPrefix('hierarchy:'),
+            cache_service_1.cacheService.delByPrefix('vendors:')
         ]);
         // Publish Realtime Entity Event
         (0, eventBus_1.publishEntityEvent)({
@@ -867,10 +881,11 @@ const updateVendorStatus = async (req, res) => {
         const vendor = await Vendor_1.default.findOneAndUpdate(query, { $set: { status, updatedAt: new Date() } }, { new: true }).populate('category', 'name');
         if (!vendor)
             return res.status(404).json({ message: 'Vendor not found' });
-        // Invalidate dashboard and hierarchy caches
+        // Invalidate dashboard, hierarchy, and vendor caches
         await Promise.all([
             cache_service_1.cacheService.delByPrefix('dashboard:'),
-            cache_service_1.cacheService.delByPrefix('hierarchy:')
+            cache_service_1.cacheService.delByPrefix('hierarchy:'),
+            cache_service_1.cacheService.delByPrefix('vendors:')
         ]);
         // Publish Realtime Entity Event
         (0, eventBus_1.publishEntityEvent)({

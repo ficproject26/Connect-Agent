@@ -26,6 +26,13 @@ async function resolveUserContext(req) {
         return null;
     const agentId = tokenAgent.agentId;
     const email = tokenAgent.email;
+    const cacheKey = `userContext:${agentId || email}`;
+    try {
+        const cached = await cache_service_1.cacheService.get(cacheKey);
+        if (cached)
+            return cached;
+    }
+    catch (_) { }
     // 1. Check Agent collection
     let agentDoc = null;
     if (mongoose_1.default.Types.ObjectId.isValid(agentId)) {
@@ -78,7 +85,7 @@ async function resolveUserContext(req) {
         division: (doc.territory?.division || doc.assignedTerritory?.division || agentDoc?.territory?.division || agentDoc?.assignedTerritory?.division || doc.division || doc.assignedDivision || '').trim(),
         pincode: (doc.territory?.pincode || doc.assignedTerritory?.pincode || agentDoc?.territory?.pincode || agentDoc?.assignedTerritory?.pincode || doc.pincode || doc.assignedPincode || '').trim()
     };
-    return {
+    const resolved = {
         id: doc._id?.toString() || agentId,
         registrationId: doc.registrationId || agentDoc?.registrationId || doc.agentId || agentDoc?.agentId || '',
         name: doc.name || tokenAgent.email?.split('@')[0] || 'User',
@@ -89,6 +96,8 @@ async function resolveUserContext(req) {
         level,
         territory
     };
+    await cache_service_1.cacheService.set(cacheKey, resolved, 30).catch(() => { });
+    return resolved;
 }
 // Helper: Find receiving Admin for target level & territory
 async function resolveReceivingAdmin(targetLevel, territory) {

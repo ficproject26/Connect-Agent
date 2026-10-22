@@ -2,12 +2,10 @@
 // Import from '@/components/ui' or '../../components/ui'
 
 export { Button } from './Button';
-
 export { Card, CardHeader, CardTitle, CardBody, CardFooter } from './Card';
-
-export { Charts } from './Charts';
-
 export { DataGrid } from './DataGrid';
+// export { Charts } from './Charts'; // Import directly from './Charts' if chart visualizations are needed to avoid bundling Chart.js into shared UI chunk
+
 
 export { Input } from './Input';
 

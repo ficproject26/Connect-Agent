@@ -7,6 +7,7 @@ exports.requireAdminApprover = exports.requireHigherOrEqualRole = exports.ROLE_H
 const mongoose_1 = __importDefault(require("mongoose"));
 const jwt_1 = require("../utils/jwt");
 const Agent_1 = __importDefault(require("../models/Agent"));
+const cache_service_1 = require("../services/cache.service");
 exports.AUTHORIZED_AGENT_ROLES = [
     'state',
     'district',
@@ -79,50 +80,63 @@ const authMiddleware = async (req, res, next) => {
         if (!decoded || !decoded.agentId) {
             return res.status(401).json({ message: 'Invalid token payload' });
         }
-        // Authoritative Database Verification (Enforces Realtime Revocation, Role Isolation & Approval Gates)
+        // Authoritative Database Verification with Fast 20s In-Memory Cache
+        const authCacheKey = `auth:agent:${decoded.agentId}`;
         let agent = null;
-        if (mongoose_1.default.Types.ObjectId.isValid(decoded.agentId)) {
-            agent = await Agent_1.default.findById(decoded.agentId)
-                .select('_id name email phone role status kycStatus isApproved isActive rejectionReason territory assignedTerritory')
-                .lean();
+        try {
+            const cached = await cache_service_1.cacheService.get(authCacheKey);
+            if (cached) {
+                agent = cached;
+            }
         }
-        if (!agent && decoded.agentId) {
-            agent = await Agent_1.default.findOne({
-                $or: [
-                    { registrationId: decoded.agentId },
-                    { email: decoded.email?.toLowerCase() }
-                ]
-            }).select('_id name email phone role status kycStatus isApproved isActive rejectionReason territory assignedTerritory')
-                .lean();
-        }
-        // Fallback: Check shared 'users' collection ONLY if genuine agent role (never convert other roles)
-        if (!agent && decoded.email) {
-            const db = mongoose_1.default.connection.db;
-            if (db) {
-                const userDoc = await db.collection('users').findOne({ email: decoded.email.toLowerCase() });
-                if (userDoc) {
-                    const canonicalUserRole = (0, exports.normalizeToAgentRole)(userDoc.role, userDoc.level);
-                    if (!canonicalUserRole) {
-                        return res.status(403).json({
-                            message: `Access denied: Account registered as '${userDoc.role || userDoc.level || 'different role'}' is not authorized for the Agent Portal.`,
-                            role: userDoc.role || userDoc.level
-                        });
+        catch (_) { }
+        if (!agent) {
+            if (mongoose_1.default.Types.ObjectId.isValid(decoded.agentId)) {
+                agent = await Agent_1.default.findById(decoded.agentId)
+                    .select('_id name email phone role status kycStatus isApproved isActive rejectionReason territory assignedTerritory')
+                    .lean();
+            }
+            if (!agent && decoded.agentId) {
+                agent = await Agent_1.default.findOne({
+                    $or: [
+                        { registrationId: decoded.agentId },
+                        { email: decoded.email?.toLowerCase() }
+                    ]
+                }).select('_id name email phone role status kycStatus isApproved isActive rejectionReason territory assignedTerritory')
+                    .lean();
+            }
+            // Fallback: Check shared 'users' collection ONLY if genuine agent role (never convert other roles)
+            if (!agent && decoded.email) {
+                const db = mongoose_1.default.connection.db;
+                if (db) {
+                    const userDoc = await db.collection('users').findOne({ email: decoded.email.toLowerCase() });
+                    if (userDoc) {
+                        const canonicalUserRole = (0, exports.normalizeToAgentRole)(userDoc.role, userDoc.level);
+                        if (!canonicalUserRole) {
+                            return res.status(403).json({
+                                message: `Access denied: Account registered as '${userDoc.role || userDoc.level || 'different role'}' is not authorized for the Agent Portal.`,
+                                role: userDoc.role || userDoc.level
+                            });
+                        }
+                        agent = {
+                            _id: userDoc._id,
+                            name: userDoc.name,
+                            email: userDoc.email,
+                            phone: userDoc.phone,
+                            role: canonicalUserRole,
+                            status: userDoc.status || 'pending',
+                            kycStatus: userDoc.kycStatus || userDoc.status || 'pending',
+                            isApproved: userDoc.isApproved,
+                            isActive: userDoc.isActive,
+                            rejectionReason: userDoc.rejectionReason,
+                            territory: userDoc.territory || {},
+                            assignedTerritory: userDoc.assignedTerritory || {}
+                        };
                     }
-                    agent = {
-                        _id: userDoc._id,
-                        name: userDoc.name,
-                        email: userDoc.email,
-                        phone: userDoc.phone,
-                        role: canonicalUserRole,
-                        status: userDoc.status || 'pending',
-                        kycStatus: userDoc.kycStatus || userDoc.status || 'pending',
-                        isApproved: userDoc.isApproved,
-                        isActive: userDoc.isActive,
-                        rejectionReason: userDoc.rejectionReason,
-                        territory: userDoc.territory || {},
-                        assignedTerritory: userDoc.assignedTerritory || {}
-                    };
                 }
+            }
+            if (agent) {
+                await cache_service_1.cacheService.set(authCacheKey, agent, 20).catch(() => { });
             }
         }
         if (!agent) {
