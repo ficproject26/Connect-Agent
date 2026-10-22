@@ -5,7 +5,7 @@ import mongoose from 'mongoose';
 import socketServer from './realtime/socketServer';
 
 const PORT = process.env.PORT || 8083;
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/forge-connect';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://Connect-App:Dhanush123@cluster0.riukwbj.mongodb.net/connect_db?retryWrites=true&w=majority';
 
 async function startServer() {
   try {
