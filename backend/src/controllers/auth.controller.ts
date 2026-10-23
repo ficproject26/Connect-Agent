@@ -99,7 +99,19 @@ const registerSchema = z.object({
     signature: z.string().optional().default(''),
     cancelledCheque: z.string().optional().default(''),
     educationalCertificates: z.string().optional().default('')
-  }).optional()
+  }).optional(),
+  bankDetails: z.object({
+    accountHolderName: z.string().trim().min(2, 'Account Holder Name is required'),
+    bankName: z.string().trim().min(2, 'Bank Name is required'),
+    bankBranch: z.string().trim().min(2, 'Bank Branch Name is required'),
+    accountNumber: z.string().trim().regex(/^\d+$/, 'Account Number must contain numeric digits only').min(6, 'Account Number must be at least 6 digits').max(20, 'Account Number cannot exceed 20 digits'),
+    ifscCode: z.string().trim().toUpperCase().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, 'IFSC Code must follow the Indian format (e.g. SBIN0001234)')
+  }).optional(),
+  accountHolderName: z.string().optional(),
+  bankName: z.string().optional(),
+  bankBranch: z.string().optional(),
+  accountNumber: z.string().optional(),
+  ifscCode: z.string().optional()
 });
 
 const loginSchema = z.object({
@@ -480,6 +492,17 @@ export const register = async (req: Request, res: Response) => {
 
     const cleanAlt = String(validatedData.altPhone || (req.body as any).alternateMobile || (req.body as any).alternativePhone || (req.body as any).secondaryPhone || '').trim();
 
+    const rawBank = (validatedData as any).bankDetails || (req.body as any).bankDetails || {};
+    const cleanBankDetails = {
+      accountHolderName: String(rawBank.accountHolderName || rawBank.accountHolder || (req.body as any).accountHolderName || (validatedData as any).accountHolderName || '').trim(),
+      accountHolder: String(rawBank.accountHolderName || rawBank.accountHolder || (req.body as any).accountHolderName || (validatedData as any).accountHolderName || '').trim(),
+      bankName: String(rawBank.bankName || (req.body as any).bankName || (validatedData as any).bankName || '').trim(),
+      bankBranch: String(rawBank.bankBranch || rawBank.branchName || (req.body as any).bankBranch || (req.body as any).branchName || (validatedData as any).bankBranch || '').trim(),
+      branchName: String(rawBank.bankBranch || rawBank.branchName || (req.body as any).bankBranch || (req.body as any).branchName || (validatedData as any).bankBranch || '').trim(),
+      accountNumber: String(rawBank.accountNumber || (req.body as any).accountNumber || (validatedData as any).accountNumber || '').replace(/\D/g, '').trim(),
+      ifscCode: String(rawBank.ifscCode || (req.body as any).ifscCode || (validatedData as any).ifscCode || '').toUpperCase().trim()
+    };
+
     const newAgent = new Agent({
       ...validatedData,
       alternateMobile: cleanAlt,
@@ -488,6 +511,7 @@ export const register = async (req: Request, res: Response) => {
       assignedTerritory: cleanAssignedTerritory,
       address: cleanAddress,
       fullAddress: constructedFullAddress,
+      bankDetails: cleanBankDetails,
       email: validatedData.email.toLowerCase(),
       dob: parsedDob,
       registrationId,
@@ -546,6 +570,7 @@ export const register = async (req: Request, res: Response) => {
                 educationalCertificates: (validatedData.kycDocs as any)?.educationalCertificates || '',
                 cancelledCheque: (validatedData.kycDocs as any)?.cancelledCheque || ''
               },
+              bankDetails: cleanBankDetails,
               createdAt: new Date()
             }
           },
@@ -568,6 +593,7 @@ export const register = async (req: Request, res: Response) => {
               isApproved: false,
               territory: cleanTerritory,
               assignedArea: assignedAreaStr,
+              bankDetails: cleanBankDetails,
               createdAt: new Date()
             }
           },

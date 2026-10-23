@@ -160,16 +160,48 @@ export const StateDashboard: React.FC = () => {
     return raw.filter((v: any) => isSameState(v.state || v.territory?.state || userState));
   }, [vendorsRes, userState, isSameState]);
 
-  // Compute live metrics strictly from assigned state data
-  const metrics = React.useMemo(() => {
-    const totalDistricts = stateDistricts.length;
-    const totalDivisions = stateDivisions.length;
-    const totalPincodes = statePincodes.length;
-    const totalVendors = stateVendors.length;
+  const stateName = (hierarchyRes?.state || userState || 'Tamil Nadu').trim();
+  const coveragePercent = typeof hierarchyRes?.coverage?.activeCoverage === 'number'
+    ? Math.round(hierarchyRes.coverage.activeCoverage)
+    : 0;
+  const performanceScore = typeof hierarchyRes?.performance?.score === 'number'
+    ? Math.round(hierarchyRes.performance.score)
+    : (typeof user?.performanceScore === 'number' ? Math.round(user.performanceScore) : 0);
 
-    const activeVendors = stateVendors.filter((v: any) => v.status === 'active' || v.status === 'approved').length;
+  // Compute live metrics strictly from assigned state data and dynamic hierarchy
+  const metrics = React.useMemo(() => {
+    const backendMetrics = hierarchyRes?.metrics;
+
+    const totalDistricts = typeof backendMetrics?.totalDistrictAgents === 'number'
+      ? backendMetrics.totalDistrictAgents
+      : stateDistricts.length;
+    const totalDivisions = typeof backendMetrics?.totalDivisionAgents === 'number'
+      ? backendMetrics.totalDivisionAgents
+      : stateDivisions.length;
+    const totalPincodes = typeof backendMetrics?.totalPincodeAgents === 'number'
+      ? backendMetrics.totalPincodeAgents
+      : statePincodes.length;
+    const totalVendors = typeof backendMetrics?.totalVendors === 'number'
+      ? backendMetrics.totalVendors
+      : stateVendors.length;
+
+    const activeVendors = typeof backendMetrics?.activeVendors === 'number'
+      ? backendMetrics.activeVendors
+      : stateVendors.filter((v: any) => {
+          const s = String(v.status || '').toLowerCase();
+          const k = String(v.kycStatus || '').toLowerCase();
+          return (s === 'active' || s === 'approved') && (k === 'approved' || k === 'verified' || !v.kycStatus);
+        }).length;
+
+    const pendingVendors = typeof backendMetrics?.pendingVendors === 'number'
+      ? backendMetrics.pendingVendors
+      : stateVendors.filter((v: any) => {
+          const s = String(v.status || '').toLowerCase();
+          const k = String(v.kycStatus || '').toLowerCase();
+          return s === 'pending' || k === 'pending' || k === 'kyc pending' || !['active', 'approved'].includes(s);
+        }).length;
+
     const inactiveVendors = stateVendors.filter((v: any) => v.status === 'inactive').length;
-    const pendingVendors = stateVendors.filter((v: any) => v.kycStatus === 'pending' || v.status === 'pending').length;
 
     return {
       totalDistricts,
@@ -180,7 +212,7 @@ export const StateDashboard: React.FC = () => {
       inactiveVendors,
       pendingVendors
     };
-  }, [stateDistricts, stateDivisions, statePincodes, stateVendors]);
+  }, [hierarchyRes, stateDistricts, stateDivisions, statePincodes, stateVendors]);
 
   // Format test or raw agent names into clean display format
   const formatCleanAgentName = (name?: string, defaultRole?: string, territory?: string) => {
@@ -321,7 +353,7 @@ export const StateDashboard: React.FC = () => {
         <div className="flex items-center gap-3 shrink-0">
           <div className="text-right">
             <span className="text-[9px] text-[#52443a] font-bold uppercase block">State Coverage</span>
-            <span className="text-lg font-black text-[#864f19]">{userState}</span>
+            <span className="text-lg font-black text-[#864f19]">{stateName}</span>
           </div>
           <div className="relative w-10 h-10 flex items-center justify-center shrink-0">
             <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
@@ -334,7 +366,7 @@ export const StateDashboard: React.FC = () => {
               />
               <path
                 className="text-[#864f19] transition-all duration-500 ease-out"
-                strokeDasharray="100, 100"
+                strokeDasharray={`${coveragePercent}, 100`}
                 strokeWidth="3.5"
                 strokeLinecap="round"
                 stroke="currentColor"
@@ -342,7 +374,7 @@ export const StateDashboard: React.FC = () => {
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
               />
             </svg>
-            <span className="absolute text-[10px] font-black text-slate-800">100%</span>
+            <span className="absolute text-[10px] font-black text-slate-800">{coveragePercent}%</span>
           </div>
         </div>
       </div>
@@ -353,16 +385,19 @@ export const StateDashboard: React.FC = () => {
         {/* KPI: State Overview card */}
         <div className="bg-white p-6 rounded-[16px] border border-[#eae8e7] shadow-sm flex flex-col justify-between min-h-[120px] md:col-span-2">
           <div>
-            <p className="text-[10px] text-[#52443a] font-bold uppercase tracking-wider mb-1">State Overview ({userState.toUpperCase()} REGION)</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-extrabold text-[#1b1c1c]">Active Coverage</span>
+            <p className="text-[10px] text-[#52443a] font-bold uppercase tracking-wider mb-1">State Overview ({stateName.toUpperCase()} REGION)</p>
+            <div className="flex items-baseline justify-between gap-2">
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-extrabold text-[#1b1c1c]">Active Coverage</span>
+                <span className="text-sm font-black text-[#864f19]">({coveragePercent}%)</span>
+              </div>
               <span className="text-green-600 text-xs font-bold flex items-center gap-0.5">
                 <TrendingUp className="w-3.5 h-3.5" /> Live
               </span>
             </div>
           </div>
           <div className="mt-3 w-full bg-[#f6f3f2] h-1.5 rounded-full overflow-hidden">
-            <div className="bg-[#864f19] h-full w-full rounded-full"></div>
+            <div className="bg-[#864f19] h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, coveragePercent))}%` }}></div>
           </div>
         </div>
 
@@ -371,7 +406,7 @@ export const StateDashboard: React.FC = () => {
           <div>
             <p className="text-[10px] text-[#52443a] font-bold uppercase tracking-wider mb-2">State Performance Score</p>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold text-[#864f19]">{user?.performanceScore || 100}%</span>
+              <span className="text-3xl font-extrabold text-[#864f19]">{performanceScore}%</span>
               <span className="text-[#34647b] text-[10px] font-bold">Active Status</span>
             </div>
           </div>
@@ -382,7 +417,7 @@ export const StateDashboard: React.FC = () => {
           <div>
             <p className="text-[10px] text-[#52443a] font-bold uppercase tracking-wider mb-2">Assigned Territory</p>
             <div className="flex items-baseline gap-2">
-              <span className="text-xl font-extrabold text-[#34647b]">{userState}</span>
+              <span className="text-xl font-extrabold text-[#34647b]">{stateName}</span>
             </div>
           </div>
         </div>
@@ -995,49 +1030,15 @@ export const StateDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Reports and Notification Panels */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        
-        {/* Reports Download list */}
-        <div className="bg-white rounded-[16px] border border-[#eae8e7] shadow-sm p-6 space-y-4">
-          <div className="border-b border-[#eae8e7] pb-3">
-            <h3 className="font-extrabold text-sm text-[#1b1c1c]">Statewide Reports Center</h3>
-          </div>
-          
-          <div className="space-y-3">
-            {[
-              { title: 'State Report', desc: 'Overall state-level KPI performance logs' },
-              { title: 'Vendor Report', desc: 'Active/inactive merchant statistics & verification logs' },
-              { title: 'Agent Performance Report', desc: 'District, Division & Pincode rankings efficiency score' },
-              { title: 'Target Report', desc: 'Assigned, completed, pending, and overdue targets logs' }
-            ].map((rep, idx) => (
-              <div key={idx} className="flex justify-between items-center p-3 bg-[#fbf9f8] rounded-xl border border-[#eae8e7]/55">
-                <div className="space-y-0.5">
-                  <span className="text-xs font-bold text-[#1b1c1c]">{rep.title}</span>
-                  <p className="text-[10px] text-[#52443a]">{rep.desc}</p>
-                </div>
-                <button 
-                  onClick={() => downloadReport(rep.title, user?.role || 'state', user)}
-                  title={`Download ${rep.title}`}
-                  className="p-2 bg-white text-[#864f19] border border-[#d7c3b5]/50 rounded-lg hover:bg-[#864f19] hover:text-white transition cursor-pointer flex items-center justify-center shadow-xs"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))}
-          </div>
+      {/* Escalated Alerts and Notifications Panel */}
+      <div className="bg-white rounded-[16px] border border-[#eae8e7] shadow-sm p-6 space-y-4">
+        <div className="border-b border-[#eae8e7] pb-3">
+          <h3 className="font-extrabold text-sm text-[#1b1c1c]">Escalated Alerts & Notifications</h3>
         </div>
-
-        {/* Escalated Alerts and Notifications */}
-        <div className="bg-white rounded-[16px] border border-[#eae8e7] shadow-sm p-6 space-y-4">
-          <div className="border-b border-[#eae8e7] pb-3">
-            <h3 className="font-extrabold text-sm text-[#1b1c1c]">Escalated Alerts & Notifications</h3>
-          </div>
-          
-          <div className="space-y-3">
-            <div className="p-4 text-center text-xs text-[#52443a] italic bg-[#fbf9f8] rounded-xl border border-dashed border-[#eae8e7]">
-              All escalated state alerts & notifications cleared for {userState}.
-            </div>
+        
+        <div className="space-y-3">
+          <div className="p-4 text-center text-xs text-[#52443a] italic bg-[#fbf9f8] rounded-xl border border-dashed border-[#eae8e7]">
+            All escalated state alerts & notifications cleared for {stateName}.
           </div>
         </div>
       </div>

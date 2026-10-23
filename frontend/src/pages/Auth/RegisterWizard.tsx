@@ -337,6 +337,14 @@ export const RegisterWizard: React.FC = () => {
     previousCompany: ''
   });
 
+  const [bankDetails, setBankDetails] = useState({
+    accountHolderName: '',
+    bankName: '',
+    bankBranch: '',
+    accountNumber: '',
+    ifscCode: ''
+  });
+
   const [documents, setDocuments] = useState<Record<string, { fileName: string; dataUrl: string; size: number }>>({
     aadhaarCard: { fileName: '', dataUrl: '', size: 0 },
     panCard: { fileName: '', dataUrl: '', size: 0 },
@@ -386,6 +394,7 @@ export const RegisterWizard: React.FC = () => {
       pincode: ''
     });
     setProfessionalInfo({ qualification: '', experience: 'fresher', previousCompany: '' });
+    setBankDetails({ accountHolderName: '', bankName: '', bankBranch: '', accountNumber: '', ifscCode: '' });
     setDocuments({
       aadhaarCard: { fileName: '', dataUrl: '', size: 0 },
       panCard: { fileName: '', dataUrl: '', size: 0 },
@@ -445,6 +454,16 @@ export const RegisterWizard: React.FC = () => {
           qualification: editingAgent.qualification || prev.qualification,
           experience: editingAgent.experience || prev.experience,
           previousCompany: editingAgent.previousCompany || prev.previousCompany
+        }));
+      }
+      if (editingAgent.bankDetails) {
+        setBankDetails(prev => ({
+          ...prev,
+          accountHolderName: editingAgent.bankDetails.accountHolderName || editingAgent.bankDetails.accountHolder || prev.accountHolderName,
+          bankName: editingAgent.bankDetails.bankName || prev.bankName,
+          bankBranch: editingAgent.bankDetails.bankBranch || editingAgent.bankDetails.branchName || prev.bankBranch,
+          accountNumber: editingAgent.bankDetails.accountNumber || prev.accountNumber,
+          ifscCode: editingAgent.bankDetails.ifscCode || prev.ifscCode
         }));
       }
     } else {
@@ -690,6 +709,31 @@ export const RegisterWizard: React.FC = () => {
         setFormErrors('Qualification and Experience are required.');
         return;
       }
+      if (!bankDetails.accountHolderName.trim() || bankDetails.accountHolderName.trim().length < 2) {
+        setFormErrors('Account Holder Name is required (minimum 2 characters).');
+        return;
+      }
+      if (!bankDetails.bankName.trim() || bankDetails.bankName.trim().length < 2) {
+        setFormErrors('Bank Name is required.');
+        return;
+      }
+      if (!bankDetails.bankBranch.trim() || bankDetails.bankBranch.trim().length < 2) {
+        setFormErrors('Bank Branch Name is required.');
+        return;
+      }
+      if (!bankDetails.accountNumber.trim() || !/^\d+$/.test(bankDetails.accountNumber.trim())) {
+        setFormErrors('Account Number is required and must accept numeric digits only.');
+        return;
+      }
+      if (bankDetails.accountNumber.trim().length < 6 || bankDetails.accountNumber.trim().length > 20) {
+        setFormErrors('Account Number must be between 6 and 20 numeric digits.');
+        return;
+      }
+      const cleanIfsc = bankDetails.ifscCode.trim().toUpperCase();
+      if (!cleanIfsc || !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(cleanIfsc)) {
+        setFormErrors('Please enter a valid Indian IFSC Code in format SBIN0001234 (4 uppercase letters, digit 0, 6 alphanumeric).');
+        return;
+      }
     }
 
     if (currentStep < totalSteps) {
@@ -733,6 +777,20 @@ export const RegisterWizard: React.FC = () => {
     }
     if (!isValidPan(personalInfo.panNumber)) {
       setFormErrors('PAN number must be 10 characters in format ABCDE1234F.');
+      return;
+    }
+
+    // Bank Details validation
+    if (!bankDetails.accountHolderName.trim() || !bankDetails.bankName.trim() || !bankDetails.bankBranch.trim()) {
+      setFormErrors('All 5 Bank Details fields are mandatory.');
+      return;
+    }
+    if (!/^\d{6,20}$/.test(bankDetails.accountNumber.trim())) {
+      setFormErrors('Account Number must contain numeric digits only (6-20 digits).');
+      return;
+    }
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(bankDetails.ifscCode.trim().toUpperCase())) {
+      setFormErrors('Please enter a valid Indian IFSC Code format.');
       return;
     }
 
@@ -797,6 +855,13 @@ export const RegisterWizard: React.FC = () => {
           district: role === 'state' ? '' : assignedTerritory.district,
           division: (role === 'state' || role === 'district') ? '' : assignedTerritory.division,
           pincode: role === 'pincode' ? assignedTerritory.pincode : ''
+        },
+        bankDetails: {
+          accountHolderName: bankDetails.accountHolderName.trim(),
+          bankName: bankDetails.bankName.trim(),
+          bankBranch: bankDetails.bankBranch.trim(),
+          accountNumber: bankDetails.accountNumber.trim(),
+          ifscCode: bankDetails.ifscCode.trim().toUpperCase()
         },
         kycDocs: {
           aadhaarNumber: personalInfo.aadhaarNumber || '',
@@ -1613,6 +1678,120 @@ export const RegisterWizard: React.FC = () => {
                     className={professionalInfo.experience === 'fresher' ? 'bg-slate-50 opacity-80 cursor-not-allowed' : ''}
                   />
                 </div>
+
+                {/* Section: BANK DETAILS (Bug 1 - Mandatory) */}
+                <div className="p-5 bg-gradient-to-br from-slate-50/90 to-amber-50/20 border border-slate-200/90 rounded-2xl space-y-4 shadow-2xs mt-6">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-slate-200">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center text-[#864f19]">
+                        <Building2 className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                          • BANK DETAILS
+                        </h4>
+                        <p className="text-[11px] text-slate-500 font-semibold">
+                          Required for commission payouts, incentives, and e-wallet settlements.
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-amber-100 text-[#864f19] border border-amber-300">
+                      All Fields Mandatory *
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                    {/* 1. Account Holder Name */}
+                    <div className="md:col-span-2">
+                      <Input
+                        label="Account Holder Name *"
+                        placeholder="e.g. Ramesh Kumar"
+                        value={bankDetails.accountHolderName}
+                        onChange={(e) => {
+                          setBankDetails({ ...bankDetails, accountHolderName: e.target.value });
+                          if (formErrors) setFormErrors('');
+                        }}
+                        required
+                      />
+                    </div>
+
+                    {/* 2. Bank Name */}
+                    <div>
+                      <Input
+                        label="Bank Name *"
+                        placeholder="e.g. State Bank of India, HDFC Bank"
+                        value={bankDetails.bankName}
+                        onChange={(e) => {
+                          setBankDetails({ ...bankDetails, bankName: e.target.value });
+                          if (formErrors) setFormErrors('');
+                        }}
+                        required
+                      />
+                    </div>
+
+                    {/* 3. Bank Branch Name */}
+                    <div>
+                      <Input
+                        label="Bank Branch Name *"
+                        placeholder="e.g. Salem Main Branch, Anna Nagar"
+                        value={bankDetails.bankBranch}
+                        onChange={(e) => {
+                          setBankDetails({ ...bankDetails, bankBranch: e.target.value });
+                          if (formErrors) setFormErrors('');
+                        }}
+                        required
+                      />
+                    </div>
+
+                    {/* 4. Account Number */}
+                    <div>
+                      <Input
+                        label="Account Number *"
+                        inputMode="numeric"
+                        placeholder="e.g. 123456789012"
+                        value={bankDetails.accountNumber}
+                        onChange={(e) => {
+                          const numericVal = e.target.value.replace(/\D/g, '');
+                          setBankDetails({ ...bankDetails, accountNumber: numericVal });
+                          if (formErrors) setFormErrors('');
+                        }}
+                        required
+                      />
+                      {bankDetails.accountNumber && (
+                        <p className="text-[10px] text-slate-400 mt-1 font-semibold">
+                          Numeric digits only ({bankDetails.accountNumber.length} digits)
+                        </p>
+                      )}
+                    </div>
+
+                    {/* 5. IFSC Code */}
+                    <div>
+                      <Input
+                        label="IFSC Code *"
+                        maxLength={11}
+                        placeholder="e.g. SBIN0001234"
+                        value={bankDetails.ifscCode}
+                        onChange={(e) => {
+                          const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11);
+                          setBankDetails({ ...bankDetails, ifscCode: val });
+                          if (formErrors) setFormErrors('');
+                        }}
+                        required
+                      />
+                      {bankDetails.ifscCode.length > 0 && (
+                        <p className={`text-[10px] mt-1 font-bold ${
+                          /^[A-Z]{4}0[A-Z0-9]{6}$/.test(bankDetails.ifscCode)
+                            ? 'text-emerald-600'
+                            : 'text-amber-600'
+                        }`}>
+                          {/^[A-Z]{4}0[A-Z0-9]{6}$/.test(bankDetails.ifscCode)
+                            ? '✓ Valid Indian IFSC format'
+                            : 'Format: 4 letters, 0, then 6 alphanumeric characters (11 characters)'}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -1624,22 +1803,42 @@ export const RegisterWizard: React.FC = () => {
                   <p className="text-xs text-slate-500 font-semibold mt-1">Provide clear scans of requested credentials. Allowed: JPG, JPEG, PNG, PDF (Max 5MB).</p>
                 </div>
 
-                {/* Document selectors grid */}
+                {/* Document selectors grid (Bug 4 - Consistent Alignment) */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {[
-                    { key: 'aadhaarCard', label: 'Aadhaar Card (Required)' },
-                    { key: 'panCard', label: 'PAN Card (Required)' },
-                    { key: 'passportPhoto', label: 'Passport Photo (Required)' },
-                    { key: 'educationalCertificate', label: 'Educational Certificate (Optional)' },
-                    { key: 'bankProof', label: 'Bank Proof / Cancelled Cheque (Optional)' }
+                    { key: 'aadhaarCard', label: 'Aadhaar Card', required: true },
+                    { key: 'panCard', label: 'PAN Card', required: true },
+                    { key: 'passportPhoto', label: 'Passport Photo', required: true },
+                    { key: 'educationalCertificate', label: 'Educational Certificate', required: false },
+                    { key: 'bankProof', label: 'Bank Proof / Cancelled Cheque', required: false }
                   ].map((doc) => {
                     const docInfo = documents[doc.key];
                     const isUploaded = Boolean(docInfo?.fileName && docInfo?.dataUrl);
 
                     return (
-                      <div key={doc.key} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                        <label className="block text-xs font-bold text-slate-700">{doc.label}</label>
-                        <div className="flex items-center gap-3">
+                      <div
+                        key={doc.key}
+                        className="p-4 bg-slate-50/90 hover:bg-slate-50 rounded-2xl border border-slate-200 flex flex-col justify-between min-h-[110px] space-y-3 transition-all shadow-2xs"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <label className="block text-xs font-bold text-slate-800">
+                            {doc.label}{' '}
+                            <span className={doc.required ? 'text-rose-600 font-extrabold' : 'text-slate-400 font-semibold'}>
+                              {doc.required ? '(Required)' : '(Optional)'}
+                            </span>
+                          </label>
+                          {isUploaded ? (
+                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              Uploaded
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-semibold text-slate-400">
+                              Max 5MB
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
                           <input
                             type="file"
                             accept=".jpg,.jpeg,.png,.pdf"
@@ -1647,28 +1846,35 @@ export const RegisterWizard: React.FC = () => {
                             className="hidden"
                             onChange={(e) => handleFileUpload(e, doc.key)}
                           />
-                          <button
-                            type="button"
-                            onClick={() => document.getElementById(`file-${doc.key}`)?.click()}
-                            className="flex items-center gap-2 px-4 py-2 border border-[#864f19] text-[#864f19] rounded-xl text-xs font-bold bg-white hover:bg-slate-50 cursor-pointer"
-                          >
-                            <FileText className="w-4 h-4" />
-                            {isUploaded ? 'Change File' : 'Select File'}
-                          </button>
+
+                          <div className="flex items-center gap-2 flex-grow min-w-0">
+                            <button
+                              type="button"
+                              onClick={() => document.getElementById(`file-${doc.key}`)?.click()}
+                              className="flex items-center justify-center gap-1.5 px-3 py-1.5 border border-[#864f19] text-[#864f19] hover:bg-[#864f19] hover:text-white rounded-xl text-xs font-bold bg-white transition-all cursor-pointer shrink-0 shadow-2xs"
+                            >
+                              <FileText className="w-3.5 h-3.5" />
+                              <span>{isUploaded ? 'Change File' : 'Select File'}</span>
+                            </button>
+
+                            {isUploaded && (
+                              <div className="flex items-center gap-1 bg-white border border-emerald-200 px-2 py-1 rounded-lg min-w-0 flex-grow max-w-[170px]" title={docInfo.fileName}>
+                                <span className="text-[10px] text-emerald-700 font-extrabold truncate">
+                                  ✓ {docInfo.fileName}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
                           {isUploaded && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] text-emerald-600 font-bold truncate max-w-[130px]" title={docInfo.fileName}>
-                                ✓ {docInfo.fileName}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => removeDocument(doc.key)}
-                                className="text-[10px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-1 rounded-lg border border-rose-200 transition-colors cursor-pointer shrink-0"
-                                title="Remove file"
-                              >
-                                Remove
-                              </button>
-                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeDocument(doc.key)}
+                              className="text-[10px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2.5 py-1.5 rounded-xl border border-rose-200 transition-colors cursor-pointer shrink-0"
+                              title="Remove file"
+                            >
+                              Remove
+                            </button>
                           )}
                         </div>
                       </div>
@@ -1676,14 +1882,16 @@ export const RegisterWizard: React.FC = () => {
                   })}
                 </div>
 
-                {/* Customer Digital Signature File Upload & Drawing Pad */}
-                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <label className="block text-xs font-bold text-slate-700">Customer Digital Signature (Required)</label>
+                {/* Customer Digital Signature File Upload & Drawing Pad (Bug 4 - Consistent Alignment) */}
+                <div className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200 flex flex-col justify-between min-h-[110px] space-y-3 shadow-2xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="block text-xs font-bold text-slate-800">
+                      Customer Digital Signature <span className="text-rose-600 font-extrabold">(Required)</span>
+                    </label>
                     <span className="text-[10px] text-slate-500 font-semibold">Allowed: JPG, PNG, PDF (Max 5MB)</span>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
                     <input
                       type="file"
                       accept=".jpg,.jpeg,.png,.pdf"
@@ -1691,30 +1899,39 @@ export const RegisterWizard: React.FC = () => {
                       className="hidden"
                       onChange={(e) => handleFileUpload(e, 'signature')}
                     />
-                    <button
-                      type="button"
-                      onClick={() => document.getElementById('file-signature')?.click()}
-                      className="flex items-center gap-2 px-4 py-2 border border-[#864f19] text-[#864f19] rounded-xl text-xs font-bold bg-white hover:bg-slate-50 cursor-pointer"
-                    >
-                      <FileText className="w-4 h-4" />
-                      {documents.signature?.fileName && documents.signature.fileName !== 'digital_signature.png'
-                        ? 'Change Signature File'
-                        : 'Upload Signature File (JPG/PNG/PDF)'}
-                    </button>
+
+                    <div className="flex items-center gap-2 flex-grow min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => document.getElementById('file-signature')?.click()}
+                        className="flex items-center justify-center gap-1.5 px-3 py-1.5 border border-[#864f19] text-[#864f19] hover:bg-[#864f19] hover:text-white rounded-xl text-xs font-bold bg-white transition-all cursor-pointer shrink-0 shadow-2xs"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        <span>
+                          {documents.signature?.fileName && documents.signature.fileName !== 'digital_signature.png'
+                            ? 'Change Signature File'
+                            : 'Upload Signature File (JPG/PNG/PDF)'}
+                        </span>
+                      </button>
+
+                      {documents.signature?.fileName && (
+                        <div className="flex items-center gap-1 bg-white border border-emerald-200 px-2 py-1 rounded-lg min-w-0 flex-grow max-w-[200px]" title={documents.signature.fileName}>
+                          <span className="text-[10px] text-emerald-700 font-extrabold truncate">
+                            ✓ {documents.signature.fileName}
+                          </span>
+                        </div>
+                      )}
+                    </div>
 
                     {documents.signature?.fileName && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-emerald-600 font-bold truncate max-w-[160px]" title={documents.signature.fileName}>
-                          ✓ {documents.signature.fileName}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => removeDocument('signature')}
-                          className="text-[10px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-1 rounded-lg border border-rose-200 transition-colors cursor-pointer shrink-0"
-                        >
-                          Remove
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeDocument('signature')}
+                        className="text-[10px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2.5 py-1.5 rounded-xl border border-rose-200 transition-colors cursor-pointer shrink-0"
+                        title="Remove signature"
+                      >
+                        Remove
+                      </button>
                     )}
                   </div>
                 </div>

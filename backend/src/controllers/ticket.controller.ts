@@ -158,6 +158,127 @@ async function resolveResponsibleAgent(pincode?: string, division?: string, dist
   return null;
 }
 
+/**
+ * Resolves the authorized administrator for a submitting agent based on their role and territory:
+ * - Pincode Agent -> Pincode Admin for the assigned pincode
+ * - Division Agent -> Division Admin for the assigned division
+ * - District Agent -> District Admin for the assigned district
+ * - State Agent -> State Admin for the assigned state
+ */
+export async function resolveAuthorizedAdminForAgent(
+  submittingRole: string,
+  territory: { state?: string; district?: string; division?: string; pincode?: string }
+) {
+  const db = mongoose.connection.db;
+  if (!db) return null;
+
+  const rawRole = (submittingRole || '').toLowerCase().trim();
+  const role = rawRole.replace(/_agent|_lead|agent/gi, '').trim() || 'pincode';
+  const state = (territory.state || 'Tamil Nadu').trim();
+  const district = (territory.district || '').trim();
+  const division = (territory.division || '').trim();
+  const pincode = (territory.pincode || '').trim();
+
+  let targetAdmin: any = null;
+
+  if (role === 'pincode') {
+    if (!pincode) return null;
+    targetAdmin = await db.collection('users').findOne({
+      $or: [
+        { role: { $regex: /^pincode\s*admin/i } },
+        { adminRole: 'pincode-admin' },
+        { role: { $regex: /pincode.*admin/i } }
+      ],
+      $and: [
+        {
+          $or: [
+            { pincode: pincode },
+            { assignedPincode: pincode },
+            { 'assignedTerritory.pincode': pincode },
+            { 'territory.pincode': pincode }
+          ]
+        },
+        { status: { $in: ['active', 'approved', 'Active', 'Approved'] } }
+      ]
+    });
+  } else if (role === 'division') {
+    if (!division) return null;
+    const cleanDiv = division.replace(/division|manager/gi, '').trim();
+    targetAdmin = await db.collection('users').findOne({
+      $or: [
+        { role: { $regex: /^division\s*admin/i } },
+        { adminRole: { $regex: /division/i } },
+        { role: { $regex: /division.*admin/i } }
+      ],
+      $and: [
+        {
+          $or: [
+            { division: new RegExp(escapeRegex(cleanDiv), 'i') },
+            { assignedDivision: new RegExp(escapeRegex(cleanDiv), 'i') },
+            { 'assignedTerritory.division': new RegExp(escapeRegex(cleanDiv), 'i') },
+            { 'territory.division': new RegExp(escapeRegex(cleanDiv), 'i') }
+          ]
+        },
+        { status: { $in: ['active', 'approved', 'Active', 'Approved'] } }
+      ]
+    });
+  } else if (role === 'district') {
+    if (!district) return null;
+    const cleanDist = district.replace(/district/gi, '').trim();
+    targetAdmin = await db.collection('users').findOne({
+      $or: [
+        { role: { $regex: /^district\s*admin/i } },
+        { adminRole: { $regex: /district/i } },
+        { role: { $regex: /district.*admin/i } }
+      ],
+      $and: [
+        {
+          $or: [
+            { district: new RegExp(escapeRegex(cleanDist), 'i') },
+            { assignedDistrict: new RegExp(escapeRegex(cleanDist), 'i') },
+            { 'assignedTerritory.district': new RegExp(escapeRegex(cleanDist), 'i') },
+            { 'territory.district': new RegExp(escapeRegex(cleanDist), 'i') }
+          ]
+        },
+        { status: { $in: ['active', 'approved', 'Active', 'Approved'] } }
+      ]
+    });
+  } else if (role === 'state') {
+    const cleanState = (state || 'Tamil Nadu').trim();
+    targetAdmin = await db.collection('users').findOne({
+      $or: [
+        { role: { $regex: /^state\s*admin/i } },
+        { adminRole: { $regex: /state/i } },
+        { role: { $regex: /state.*admin/i } }
+      ],
+      $and: [
+        {
+          $or: [
+            { state: new RegExp(escapeRegex(cleanState), 'i') },
+            { assignedState: new RegExp(escapeRegex(cleanState), 'i') },
+            { 'assignedTerritory.state': new RegExp(escapeRegex(cleanState), 'i') },
+            { 'territory.state': new RegExp(escapeRegex(cleanState), 'i') }
+          ]
+        },
+        { status: { $in: ['active', 'approved', 'Active', 'Approved'] } }
+      ]
+    });
+
+    if (!targetAdmin) {
+      targetAdmin = await db.collection('users').findOne({
+        $or: [
+          { role: 'super-admin' },
+          { role: 'superadmin' },
+          { adminRole: 'super-admin' }
+        ],
+        status: { $in: ['active', 'approved', 'Active', 'Approved'] }
+      });
+    }
+  }
+
+  return targetAdmin;
+}
+
 const createTicketSchema = z.object({
   ticketType: z.enum(['my_issue', 'vendor_issue', 'agent_issue']).optional(),
   category: z.string().min(1, 'Category is required'),
@@ -591,38 +712,53 @@ export const createTicket = async (req: Request, res: Response) => {
 
     const territory = data.territory || [district, division, pincode].filter(Boolean).join(' → ') || (state ? `${state} Scope` : '');
 
-    // Automatically resolve the responsible agent based on territory hierarchy
-    const responsibleAgent: any = await resolveResponsibleAgent(pincode, division, district, state);
-    let assignedTo = undefined;
-    let assignedAgent = data.assignedAgent || (responsibleAgent ? responsibleAgent.name : 'Unassigned');
-    let assignedAgentIdStr = undefined;
-    let assignedAgentRole = undefined;
-    let assignedAgentPhone = undefined;
-    let assignedAgentPincode = undefined;
-    let assignedAgentDistrict = undefined;
-    let assignedAgentDivision = undefined;
-    let assignedAgentState = undefined;
-    let assignmentStatus: 'assigned' | 'unassigned' = 'unassigned';
+    // Determine the submitting agent's trusted role from server-side authenticated context
+    const rawRole = (scope?.role || (req as any).agent?.role || agent?.role || 'pincode').toLowerCase();
+    const submittingRole = rawRole.includes('state') ? 'state' :
+                           rawRole.includes('district') ? 'district' :
+                           rawRole.includes('division') ? 'division' : 'pincode';
 
-    if (responsibleAgent) {
-      assignedTo = responsibleAgent._id;
-      assignedAgent = responsibleAgent.name;
-      assignedAgentIdStr = responsibleAgent.registrationId || responsibleAgent.agentId || String(responsibleAgent._id);
-      const rawR = (responsibleAgent.role || responsibleAgent.level || 'pincode').toLowerCase();
-      assignedAgentRole = rawR === 'agent' ? (responsibleAgent.level || 'Pincode Agent') : rawR;
-      assignedAgentPhone = responsibleAgent.phone || responsibleAgent.mobile || '';
-      assignedAgentPincode = responsibleAgent.pincode || responsibleAgent.assignedTerritory?.pincode || pincode;
-      assignedAgentDistrict = responsibleAgent.district || responsibleAgent.assignedTerritory?.district || district;
-      assignedAgentDivision = responsibleAgent.division || responsibleAgent.assignedTerritory?.division || division;
-      assignedAgentState = responsibleAgent.state || responsibleAgent.assignedTerritory?.state || state;
-      assignmentStatus = 'assigned';
-    } else if (data.assignedAgent && data.assignedAgent !== 'Unassigned') {
-      assignmentStatus = 'assigned';
-      assignedAgent = data.assignedAgent;
-      assignedAgentRole = data.assignedAgent.includes('District') ? 'District Lead' :
-                          data.assignedAgent.includes('Division') ? 'Division Lead' :
-                          data.assignedAgent.includes('Pincode') ? 'Pincode Agent' : 'Assigned Agent';
+    // Agent's authoritative territory from trusted profile / scope
+    const authState = (scope?.state || agent?.assignedTerritory?.state || agent?.territory?.state || 'Tamil Nadu').trim();
+    const authDistrict = (scope?.district || agent?.assignedTerritory?.district || agent?.territory?.district || district || '').trim();
+    const authDivision = (scope?.division || agent?.assignedTerritory?.division || agent?.territory?.division || division || '').trim();
+    const authPincode = (scope?.pincode || agent?.assignedTerritory?.pincode || agent?.territory?.pincode || pincode || '').trim();
+
+    // Route issues automatically to the authorized administrator based on agent's role and assigned territory
+    const authorizedAdmin: any = await resolveAuthorizedAdminForAgent(submittingRole, {
+      state: authState,
+      district: authDistrict,
+      division: authDivision,
+      pincode: authPincode
+    });
+
+    if (!authorizedAdmin) {
+      const roleLabel = submittingRole.charAt(0).toUpperCase() + submittingRole.slice(1);
+      const territoryLabel = submittingRole === 'pincode' ? `Pincode ${authPincode}` :
+                             submittingRole === 'division' ? `Division ${authDivision}` :
+                             submittingRole === 'district' ? `District ${authDistrict}` :
+                             `State ${authState}`;
+      return res.status(400).json({
+        message: `No authorized ${roleLabel} Admin found for your assigned territory (${territoryLabel}). Please verify your territory assignment or contact administration.`
+      });
     }
+
+    const adminId = authorizedAdmin._id;
+    const adminIdStr = authorizedAdmin.id || authorizedAdmin.registrationId || String(authorizedAdmin._id);
+    const adminName = authorizedAdmin.name || 'Authorized Admin';
+    const adminRoleTitle = authorizedAdmin.role || authorizedAdmin.adminRole || `${submittingRole.charAt(0).toUpperCase() + submittingRole.slice(1)} Admin`;
+    const adminPhone = authorizedAdmin.phone || authorizedAdmin.mobile || '';
+
+    const assignedTo = adminId;
+    const assignedAgent = adminName;
+    const assignedAgentIdStr = adminIdStr;
+    const assignedAgentRole = adminRoleTitle;
+    const assignedAgentPhone = adminPhone;
+    const assignedAgentPincode = authorizedAdmin.pincode || authorizedAdmin.assignedTerritory?.pincode || (submittingRole === 'pincode' ? authPincode : undefined);
+    const assignedAgentDivision = authorizedAdmin.division || authorizedAdmin.assignedTerritory?.division || (['pincode', 'division'].includes(submittingRole) ? authDivision : undefined);
+    const assignedAgentDistrict = authorizedAdmin.district || authorizedAdmin.assignedTerritory?.district || (['pincode', 'division', 'district'].includes(submittingRole) ? authDistrict : undefined);
+    const assignedAgentState = authorizedAdmin.state || authorizedAdmin.assignedTerritory?.state || authState;
+    const assignmentStatus = 'assigned';
 
     const ticket = new Ticket({
       ticketId: generateTicketId(),
@@ -645,7 +781,7 @@ export const createTicket = async (req: Request, res: Response) => {
         role: assignedAgentRole,
         assignedBy: agentRole,
         assignedAt: new Date(),
-        reason: 'Auto-assigned by territory hierarchy upon ticket creation'
+        reason: `Auto-routed to authorized ${assignedAgentRole} for ${submittingRole} territory`
       }] : [],
       ticketType,
       subject: data.subject || (ticketType === 'vendor_issue' ? `Vendor Issue - ${vendorName}` : 'Agent Support Ticket'),

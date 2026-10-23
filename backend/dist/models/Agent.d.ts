@@ -72,10 +72,13 @@ export interface IAgent extends Document {
         }>;
     };
     bankDetails?: {
+        accountHolderName?: string;
+        accountHolder?: string;
         bankName: string;
+        bankBranch?: string;
+        branchName?: string;
         accountNumber: string;
         ifscCode: string;
-        accountHolder: string;
     };
     createdAt: Date;
     updatedAt: Date;

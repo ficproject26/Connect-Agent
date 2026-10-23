@@ -1025,9 +1025,13 @@ export const TicketsList: React.FC = () => {
                   <span className="text-[9px] font-black text-[#864f19] uppercase tracking-wider block">Logged-In Agent Territory Hierarchy</span>
                   <p className="text-slate-700">
                     <strong>{effectiveState || userState || 'Tamil Nadu'}</strong>
-                    {userDistrict ? ` › ${userDistrict}` : ''}
-                    {resolvedDivision || userDivision ? ` › ${resolvedDivision || userDivision}` : ''}
-                    {userPincode ? ` › PIN ${userPincode}` : ''}
+                    {activeRole !== 'state' && (
+                      <>
+                        {userDistrict ? ` › ${userDistrict}` : ''}
+                        {resolvedDivision || userDivision ? ` › ${resolvedDivision || userDivision}` : ''}
+                        {userPincode ? ` › PIN ${userPincode}` : ''}
+                      </>
+                    )}
                   </p>
                   <p className="text-[10px] text-slate-500">
                     Role: <span className="font-bold text-[#864f19] uppercase">{activeRole} Agent</span> • ID: <span className="font-mono">{user?.agentId || (user as any)?._id || 'Verified'}</span>

@@ -136,17 +136,13 @@ export const FieldShopVisitModal: React.FC<FieldShopVisitModalProps> = ({
         }
       }, 100);
     } catch (err: any) {
-      console.warn('Camera stream error, trying fallback to file input:', err);
-      // Fallback to mobile camera capture input
-      if (mobileCameraInputRef.current) {
-        mobileCameraInputRef.current.click();
-      } else {
-        setCameraError(
-          err.name === 'NotAllowedError'
-            ? 'Camera permission denied. Please allow camera access in your browser or select an image file.'
-            : 'Could not access device camera. Please upload an image file instead.'
-        );
-      }
+      console.warn('Camera stream error:', err);
+      setIsCameraActive(false);
+      setCameraError(
+        err.name === 'NotAllowedError'
+          ? 'Camera permission denied or dismissed. Please use the "Upload Photo" option below to select an image from your device.'
+          : 'Could not access device camera. Please use the "Upload Photo" option below.'
+      );
     }
   };
 

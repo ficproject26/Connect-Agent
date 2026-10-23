@@ -1879,13 +1879,6 @@ export const VendorsList: React.FC = () => {
             refetchVendors();
           });
 
-          // 2. Direct sync to Admin backend agent-onboard endpoint for guaranteed real-time availability
-          fetch('https://connect-admin-seven.vercel.app/api/admin/enterprise/vendors/agent-onboard', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(vendorPayload)
-          }).catch(err => console.warn('Admin direct sync warning:', err));
-
           addNotification(
             'Merchant Onboarded & Submitted to Admin!',
             `${wizardData.name} has been submitted for Admin review and added to your dashboard under PIN ${targetPincode}.`,

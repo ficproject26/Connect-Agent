@@ -71,10 +71,13 @@ export interface IAgent extends Document {
     vehicles?: Record<string, { model?: string; number?: string }>;
   };
   bankDetails?: {
+    accountHolderName?: string;
+    accountHolder?: string;
     bankName: string;
+    bankBranch?: string;
+    branchName?: string;
     accountNumber: string;
     ifscCode: string;
-    accountHolder: string;
   };
   createdAt: Date;
   updatedAt: Date;
@@ -174,10 +177,13 @@ const agentSchema = new Schema<IAgent>({
   profilePhoto: { type: String, default: '' },
   vehicleDetails: { type: Schema.Types.Mixed, default: () => ({}) },
   bankDetails: {
+    accountHolderName: { type: String, default: '' },
+    accountHolder: { type: String, default: '' },
     bankName: { type: String, default: '' },
+    bankBranch: { type: String, default: '' },
+    branchName: { type: String, default: '' },
     accountNumber: { type: String, default: '' },
-    ifscCode: { type: String, default: '' },
-    accountHolder: { type: String, default: '' }
+    ifscCode: { type: String, default: '' }
   },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }

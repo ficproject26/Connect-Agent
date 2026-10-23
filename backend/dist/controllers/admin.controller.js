@@ -763,6 +763,7 @@ const getHierarchyTree = async (req, res) => {
         const pincodesByDivision = new Map();
         let canonicalDistricts = [];
         let canonicalDivisions = [];
+        let totalCanonicalPincodeCount = 0;
         const stateMapById = new Map();
         const stateMapByName = new Map();
         try {
@@ -774,6 +775,7 @@ const getHierarchyTree = async (req, res) => {
                     db.collection('divisions').find({ status: { $regex: /^active$/i } }).toArray(),
                     db.collection('states').find({}).toArray()
                 ]);
+                totalCanonicalPincodeCount = allDbPincodes ? allDbPincodes.length : 0;
                 for (const st of (dbStates || [])) {
                     const idStr = String(st._id);
                     const name = String(st.name || '').trim();
@@ -1134,6 +1136,31 @@ const getHierarchyTree = async (req, res) => {
         else {
             tree = enrichedPincodes;
         }
+        // Authoritative State Active Coverage Calculation
+        const totalCanonicalDistCount = canonicalDistricts.length || 1;
+        const totalCanonicalDivCount = canonicalDivisions.length || 1;
+        const totalCanonicalPinCount = totalCanonicalPincodeCount || 1;
+        const assignedDistCount = districtAgents.length;
+        const assignedDivCount = divisionAgents.length;
+        const assignedPinCount = pincodeAgents.length;
+        // Multi-tier coverage formula: balanced average of active assigned territory units vs total canonical territory units
+        const distRatio = Math.min(1, assignedDistCount / totalCanonicalDistCount);
+        const divRatio = Math.min(1, assignedDivCount / totalCanonicalDivCount);
+        const pinRatio = Math.min(1, assignedPinCount / totalCanonicalPinCount);
+        const activeCoverageScore = Math.max(0, Math.min(100, Math.round(((distRatio + divRatio + pinRatio) / 3) * 100)));
+        // Authoritative State Performance Score Calculation from TargetAssignments
+        let statePerformanceScore = 0;
+        try {
+            const db = mongoose_1.default.connection.db;
+            if (db) {
+                const stateTargetAssignments = await db.collection('targetassignments').find({}).toArray();
+                if (stateTargetAssignments && stateTargetAssignments.length > 0) {
+                    const completedCount = stateTargetAssignments.filter((t) => t.status === 'completed' || t.status === 'Completed' || t.progress >= 100).length;
+                    statePerformanceScore = Math.round((completedCount / stateTargetAssignments.length) * 100);
+                }
+            }
+        }
+        catch (_) { }
         const responseData = {
             agents: uniqueAgents,
             tree,
@@ -1142,11 +1169,26 @@ const getHierarchyTree = async (req, res) => {
             divisions: finalDivisions,
             pincodes: enrichedPincodes,
             totalAgents: uniqueAgents.length,
+            coverage: {
+                activeCoverage: activeCoverageScore,
+                assignedDistricts: assignedDistCount,
+                totalDistricts: totalCanonicalDistCount,
+                assignedDivisions: assignedDivCount,
+                totalDivisions: totalCanonicalDivCount,
+                assignedPincodes: assignedPinCount,
+                totalPincodes: totalCanonicalPinCount
+            },
+            performance: {
+                score: statePerformanceScore
+            },
             metrics: {
                 totalState: stateAgents.length,
-                totalDistrict: finalDistricts.length,
-                totalDivision: finalDivisions.length,
-                totalPincode: enrichedPincodes.length,
+                totalDistrict: districtAgents.length,
+                totalDistrictAgents: districtAgents.length,
+                totalDivision: divisionAgents.length,
+                totalDivisionAgents: divisionAgents.length,
+                totalPincode: pincodeAgents.length,
+                totalPincodeAgents: pincodeAgents.length,
                 pendingKycCount: 0,
                 approvedKycCount: uniqueAgents.length,
                 totalEarnings: (tree.length > 0 ? tree : enrichedDistricts).reduce((acc, d) => acc + (d.teamEarnings || d.earnings || 0), 0)

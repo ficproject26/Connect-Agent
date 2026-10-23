@@ -95,10 +95,13 @@ const agentSchema = new mongoose_1.Schema({
     profilePhoto: { type: String, default: '' },
     vehicleDetails: { type: mongoose_1.Schema.Types.Mixed, default: () => ({}) },
     bankDetails: {
+        accountHolderName: { type: String, default: '' },
+        accountHolder: { type: String, default: '' },
         bankName: { type: String, default: '' },
+        bankBranch: { type: String, default: '' },
+        branchName: { type: String, default: '' },
         accountNumber: { type: String, default: '' },
-        ifscCode: { type: String, default: '' },
-        accountHolder: { type: String, default: '' }
+        ifscCode: { type: String, default: '' }
     },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }

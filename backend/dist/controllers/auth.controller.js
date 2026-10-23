@@ -86,7 +86,19 @@ const registerSchema = zod_1.z.object({
         signature: zod_1.z.string().optional().default(''),
         cancelledCheque: zod_1.z.string().optional().default(''),
         educationalCertificates: zod_1.z.string().optional().default('')
-    }).optional()
+    }).optional(),
+    bankDetails: zod_1.z.object({
+        accountHolderName: zod_1.z.string().trim().min(2, 'Account Holder Name is required'),
+        bankName: zod_1.z.string().trim().min(2, 'Bank Name is required'),
+        bankBranch: zod_1.z.string().trim().min(2, 'Bank Branch Name is required'),
+        accountNumber: zod_1.z.string().trim().regex(/^\d+$/, 'Account Number must contain numeric digits only').min(6, 'Account Number must be at least 6 digits').max(20, 'Account Number cannot exceed 20 digits'),
+        ifscCode: zod_1.z.string().trim().toUpperCase().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, 'IFSC Code must follow the Indian format (e.g. SBIN0001234)')
+    }).optional(),
+    accountHolderName: zod_1.z.string().optional(),
+    bankName: zod_1.z.string().optional(),
+    bankBranch: zod_1.z.string().optional(),
+    accountNumber: zod_1.z.string().optional(),
+    ifscCode: zod_1.z.string().optional()
 });
 const loginSchema = zod_1.z.object({
     email: zod_1.z.string().email('Invalid email address'),
@@ -425,6 +437,16 @@ const register = async (req, res) => {
         const randDigits = Math.floor(1000 + Math.random() * 9000);
         const registrationId = `REG-${dateStr}-${randDigits}`;
         const cleanAlt = String(validatedData.altPhone || req.body.alternateMobile || req.body.alternativePhone || req.body.secondaryPhone || '').trim();
+        const rawBank = validatedData.bankDetails || req.body.bankDetails || {};
+        const cleanBankDetails = {
+            accountHolderName: String(rawBank.accountHolderName || rawBank.accountHolder || req.body.accountHolderName || validatedData.accountHolderName || '').trim(),
+            accountHolder: String(rawBank.accountHolderName || rawBank.accountHolder || req.body.accountHolderName || validatedData.accountHolderName || '').trim(),
+            bankName: String(rawBank.bankName || req.body.bankName || validatedData.bankName || '').trim(),
+            bankBranch: String(rawBank.bankBranch || rawBank.branchName || req.body.bankBranch || req.body.branchName || validatedData.bankBranch || '').trim(),
+            branchName: String(rawBank.bankBranch || rawBank.branchName || req.body.bankBranch || req.body.branchName || validatedData.bankBranch || '').trim(),
+            accountNumber: String(rawBank.accountNumber || req.body.accountNumber || validatedData.accountNumber || '').replace(/\D/g, '').trim(),
+            ifscCode: String(rawBank.ifscCode || req.body.ifscCode || validatedData.ifscCode || '').toUpperCase().trim()
+        };
         const newAgent = new Agent_1.default({
             ...validatedData,
             alternateMobile: cleanAlt,
@@ -433,6 +455,7 @@ const register = async (req, res) => {
             assignedTerritory: cleanAssignedTerritory,
             address: cleanAddress,
             fullAddress: constructedFullAddress,
+            bankDetails: cleanBankDetails,
             email: validatedData.email.toLowerCase(),
             dob: parsedDob,
             registrationId,
@@ -487,6 +510,7 @@ const register = async (req, res) => {
                             educationalCertificates: validatedData.kycDocs?.educationalCertificates || '',
                             cancelledCheque: validatedData.kycDocs?.cancelledCheque || ''
                         },
+                        bankDetails: cleanBankDetails,
                         createdAt: new Date()
                     }
                 }, { upsert: true });
@@ -504,6 +528,7 @@ const register = async (req, res) => {
                         isApproved: false,
                         territory: cleanTerritory,
                         assignedArea: assignedAreaStr,
+                        bankDetails: cleanBankDetails,
                         createdAt: new Date()
                     }
                 }, { upsert: true }).catch(() => { });
