@@ -56,7 +56,12 @@ async function resolveResponsibleAgent(pincode?: string, division?: string, dist
     if (db) {
       const pinUser = await db.collection('users').findOne({
         $and: [
-          { $or: [{ role: /pincode/i }, { level: /pincode/i }, { role: 'agent', level: 'pincode' }] },
+          {
+            role: {
+              $in: ['pincode', 'pincode_agent', 'agent'],
+              $nin: ['admin', 'super-admin', 'District Admin', 'Division Admin', 'Pincode Admin', 'manager', 'pincode_manager', 'Vendor', 'customer']
+            }
+          },
           {
             $or: [
               { 'assignedTerritory.pincode': cleanPin },
@@ -74,7 +79,7 @@ async function resolveResponsibleAgent(pincode?: string, division?: string, dist
           }
         ]
       });
-      if (pinUser) {
+      if (pinUser && !/^(ADM-|usr_mgr|MGR-|cust_|ven-)/i.test(String(pinUser._id))) {
         await cacheService.set(cacheKey, pinUser, 300).catch(() => {});
         return pinUser;
       }
@@ -86,7 +91,12 @@ async function resolveResponsibleAgent(pincode?: string, division?: string, dist
     const cleanDiv = division.toLowerCase().replace(/division|manager/g, '').trim();
     const divUser = await db.collection('users').findOne({
       $and: [
-        { $or: [{ role: /division/i }, { level: /division/i }, { role: 'agent', level: 'division' }] },
+        {
+          role: {
+            $in: ['division', 'division_agent', 'division_lead', 'agent'],
+            $nin: ['admin', 'super-admin', 'District Admin', 'Division Admin', 'manager', 'division_manager', 'Vendor', 'customer']
+          }
+        },
         {
           $or: [
             { 'assignedTerritory.division': new RegExp(cleanDiv, 'i') },
@@ -104,7 +114,7 @@ async function resolveResponsibleAgent(pincode?: string, division?: string, dist
         }
       ]
     });
-    if (divUser) {
+    if (divUser && !/^(ADM-|usr_mgr|MGR-|cust_|ven-)/i.test(String(divUser._id))) {
       await cacheService.set(cacheKey, divUser, 300).catch(() => {});
       return divUser;
     }
@@ -115,7 +125,12 @@ async function resolveResponsibleAgent(pincode?: string, division?: string, dist
     const cleanDist = district.toLowerCase().trim();
     const distUser = await db.collection('users').findOne({
       $and: [
-        { $or: [{ role: /district/i }, { level: /district/i }, { role: 'agent', level: 'district' }] },
+        {
+          role: {
+            $in: ['district', 'district_agent', 'district_lead', 'agent'],
+            $nin: ['admin', 'super-admin', 'District Admin', 'Division Admin', 'manager', 'district_manager', 'Vendor', 'customer']
+          }
+        },
         {
           $or: [
             { 'assignedTerritory.district': new RegExp(cleanDist, 'i') },

@@ -82,7 +82,14 @@ export const DivisionDashboard: React.FC = () => {
           // Defensive territory isolation: only allow active, approved pincode agents belonging to this division
           const uDiv = (userDivision || '').trim().toLowerCase();
           const filteredSubs = rawSubs.filter((s: any) => {
+            const sId = String(s._id || s.id || '');
+            const sRegId = String(s.registrationId || '');
             const sRole = (s.role || s.level || '').toLowerCase();
+
+            // Strictly exclude non-agent IDs, prefixes, or roles
+            if (/^(ADM-|usr_mgr|MGR-|cust_|ven-|FIC-CUS-)/i.test(sId) || /^(ADM-|usr_mgr|MGR-|cust_|ven-|FIC-CUS-)/i.test(sRegId)) return false;
+            if (/admin|manager|vendor|customer|delivery|technician|executive/i.test(sRole)) return false;
+
             if (sRole !== 'pincode' && sRole !== 'pincode_agent') return false;
 
             const sStatus = (s.status || '').toLowerCase().trim();

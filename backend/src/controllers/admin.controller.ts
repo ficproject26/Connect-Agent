@@ -41,7 +41,12 @@ export const getRegistrations = async (req: Request, res: Response) => {
     try {
       const db = mongoose.connection.db;
       if (db) {
-        const userFilter: any = { role: { $in: ['agent', 'state', 'district', 'division', 'pincode'] } };
+        const userFilter: any = {
+          role: {
+            $in: ['agent', 'state', 'district', 'division', 'pincode', 'state_agent', 'district_agent', 'division_agent', 'pincode_agent'],
+            $nin: ['admin', 'super-admin', 'superadmin', 'District Admin', 'Division Admin', 'Pincode Admin', 'State Admin', 'manager', 'state_manager', 'district_manager', 'division_manager', 'pincode_manager', 'Vendor', 'vendor', 'Customer', 'customer', 'technician', 'delivery_partner']
+          }
+        };
         if (statusQuery && statusQuery !== 'all') {
           if (statusQuery === 'pending' || statusQuery === 'pending_approval') {
             userFilter.$or = [
@@ -59,6 +64,15 @@ export const getRegistrations = async (req: Request, res: Response) => {
         // Merge users docs if not already present in registrations list
         const existingEmails = new Set(registrations.map(r => r.email.toLowerCase()));
         for (const uDoc of userDocs) {
+          const uId = String(uDoc._id || '');
+          const regId = String(uDoc.registrationId || '');
+          const rawRole = String(uDoc.role || '').toLowerCase();
+          const rawLevel = String(uDoc.level || '').toLowerCase();
+
+          // Exclude any non-agent IDs, prefixes, or roles
+          if (/^(ADM-|usr_mgr|MGR-|cust_|ven-|FIC-CUS-)/i.test(uId) || /^(ADM-|usr_mgr|MGR-|cust_|ven-|FIC-CUS-)/i.test(regId)) continue;
+          if (/admin|manager|vendor|customer|delivery|technician|executive/i.test(rawRole) || /admin|manager|vendor|customer|delivery|technician|executive/i.test(rawLevel)) continue;
+
           if (uDoc.email && !existingEmails.has(uDoc.email.toLowerCase())) {
             const uRole = (uDoc.level || uDoc.role || 'pincode').toLowerCase();
             const uState = (uDoc.territory?.state || uDoc.state || uDoc.assignedState || '').trim().toLowerCase();
@@ -506,8 +520,13 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
     try {
       const db = mongoose.connection.db;
       if (db) {
-        const candidateRoles = new Set(['state', 'district', 'division', 'pincode', 'agent', 'district_manager', 'division_manager', 'pincode_agent', 'District Admin', 'Division Admin']);
-        const allUserDocs = await db.collection('users').find({}, {
+        const candidateRoles = new Set(['state', 'district', 'division', 'pincode', 'agent', 'state_agent', 'district_agent', 'division_agent', 'pincode_agent']);
+        const allUserDocs = await db.collection('users').find({
+          role: {
+            $in: ['state', 'district', 'division', 'pincode', 'agent', 'state_agent', 'district_agent', 'division_agent', 'pincode_agent'],
+            $nin: ['admin', 'super-admin', 'superadmin', 'District Admin', 'Division Admin', 'Pincode Admin', 'State Admin', 'manager', 'state_manager', 'district_manager', 'division_manager', 'pincode_manager', 'Vendor', 'vendor', 'Customer', 'customer', 'technician', 'delivery_partner']
+          }
+        }, {
           projection: {
             role: 1, level: 1, email: 1, phone: 1, mobile: 1, name: 1,
             assignedTerritory: 1, territory: 1, state: 1, district: 1, division: 1, pincode: 1,
@@ -517,8 +536,20 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
         }).hint({ _id: 1 }).maxTimeMS(4000).toArray();
 
         const approvedUserDocs = allUserDocs.filter(uDoc => {
-          const r = uDoc.role || uDoc.level || '';
-          if (!candidateRoles.has(r)) return false;
+          const r = String(uDoc.role || '').trim().toLowerCase();
+          const lvl = String(uDoc.level || '').trim().toLowerCase();
+          const uIdStr = String(uDoc._id || '');
+          const regIdStr = String(uDoc.registrationId || '');
+
+          // Strictly exclude any non-agent accounts by ID, prefix, or role
+          if (/^(ADM-|usr_mgr|MGR-|cust_|ven-|FIC-CUS-)/i.test(uIdStr) || /^(ADM-|usr_mgr|MGR-|cust_|ven-|FIC-CUS-)/i.test(regIdStr)) {
+            return false;
+          }
+          if (/admin|manager|vendor|customer|delivery|technician|executive/i.test(r) || /admin|manager|vendor|customer|delivery|technician|executive/i.test(lvl)) {
+            return false;
+          }
+
+          if (!candidateRoles.has(r) && !candidateRoles.has(lvl)) return false;
           const kyc = String(uDoc.kycStatus || '').toLowerCase();
           const st = String(uDoc.status || '').toLowerCase();
           const isApproved = kyc === 'approved' || kyc === 'verified' || st === 'approved' || st === 'active';
@@ -1258,12 +1289,22 @@ export const getWeeklyLeaderboard = async (req: Request, res: Response) => {
       end = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
     }
 
-    // Query scoped agents from Agent model
-    const agents = await Agent.find(scopeFilter)
+    // Strictly query approved and active agents from Agent model for the leaderboard
+    const agentScopeFilter: any = {
+      ...scopeFilter,
+      $or: [
+        { kycStatus: { $in: ['approved', 'Approved', 'verified', 'Verified'] } },
+        { status: { $in: ['approved', 'Approved', 'active', 'Active'] } }
+      ],
+      kycStatus: { $nin: ['rejected', 'pending', 'pending_verification', 'suspended', 'in_review', 'Rejected', 'Pending'] },
+      status: { $nin: ['rejected', 'pending', 'pending_approval', 'suspended', 'inactive', 'under_review', 'Rejected', 'Pending'] }
+    };
+
+    const agents = await Agent.find(agentScopeFilter)
       .select('_id name email phone registrationId role level kycStatus registrationFeePaid performanceScore territory assignedTerritory createdAt')
       .lean();
 
-    // Also include approved agents from users collection within the authorized territory
+    // Also include approved agents from users collection within the authorized territory (strictly Agent accounts only)
     try {
       const db = mongoose.connection.db;
       if (db) {
@@ -1271,7 +1312,22 @@ export const getWeeklyLeaderboard = async (req: Request, res: Response) => {
           .find({
             $and: [
               scopeFilter,
-              { status: { $nin: ['rejected', 'suspended'] } }
+              {
+                role: {
+                  $in: ['agent', 'state', 'district', 'division', 'pincode', 'state_agent', 'district_agent', 'division_agent', 'pincode_agent'],
+                  $nin: ['admin', 'super-admin', 'superadmin', 'District Admin', 'Division Admin', 'Pincode Admin', 'State Admin', 'manager', 'state_manager', 'district_manager', 'division_manager', 'pincode_manager', 'Vendor', 'vendor', 'Customer', 'customer', 'technician', 'delivery_partner']
+                }
+              },
+              {
+                $or: [
+                  { kycStatus: { $in: ['approved', 'Approved', 'verified', 'Verified'] } },
+                  { status: { $in: ['approved', 'Approved', 'active', 'Active'] } }
+                ]
+              },
+              {
+                kycStatus: { $nin: ['rejected', 'pending', 'pending_verification', 'suspended', 'Rejected', 'Pending'] },
+                status: { $nin: ['rejected', 'pending', 'pending_approval', 'suspended', 'inactive', 'under_review', 'Rejected', 'Pending'] }
+              }
             ]
           })
           .limit(100)
@@ -1284,6 +1340,13 @@ export const getWeeklyLeaderboard = async (req: Request, res: Response) => {
         for (const u of userDocs) {
           const uId = String(u._id);
           const uEmail = (u.email || '').toLowerCase();
+          const regId = String(u.registrationId || '');
+          const rawRole = String(u.role || '').toLowerCase();
+          const rawLevel = String(u.level || '').toLowerCase();
+
+          // Strictly exclude non-agent IDs, prefixes, and roles
+          if (/^(ADM-|usr_mgr|MGR-|cust_|ven-|FIC-CUS-)/i.test(uId) || /^(ADM-|usr_mgr|MGR-|cust_|ven-|FIC-CUS-)/i.test(regId)) continue;
+          if (/admin|manager|vendor|customer|delivery|technician|executive/i.test(rawRole) || /admin|manager|vendor|customer|delivery|technician|executive/i.test(rawLevel)) continue;
           if (existingIds.has(uId) || (uEmail && existingEmails.has(uEmail))) continue;
 
           const uTerritory = u.assignedTerritory || u.territory || {
@@ -1306,7 +1369,7 @@ export const getWeeklyLeaderboard = async (req: Request, res: Response) => {
             phone: u.phone || u.mobile || '',
             registrationId: u.registrationId || `AG-${String(u._id).substring(0, 6)}`,
             role: uRole as any,
-            kycStatus: u.kycStatus || 'approved',
+            kycStatus: 'approved',
             registrationFeePaid: u.registrationFeePaid ?? true,
             performanceScore: u.performanceScore || 0,
             territory: uTerritory,

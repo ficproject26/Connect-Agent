@@ -79,12 +79,15 @@ async function checkExistingDistrictAssignment(state, district, districtId, excl
     if (existingAgent) {
         return { exists: true, agent: existingAgent };
     }
-    // Also check users collection for active approved assignments
+    // Also check users collection for active approved assignments (strictly Agent role only)
     try {
         const db = mongoose_1.default.connection.db;
         if (db) {
             const userQuery = {
-                role: { $in: ['district', 'district_agent', 'district_manager', 'District Admin'] },
+                role: {
+                    $in: ['district', 'district_agent', 'district_lead'],
+                    $nin: ['admin', 'super-admin', 'superadmin', 'District Admin', 'Division Admin', 'Pincode Admin', 'State Admin', 'manager', 'state_manager', 'district_manager', 'division_manager', 'pincode_manager', 'Vendor', 'vendor', 'Customer', 'customer']
+                },
                 $or: districtConditions,
                 $and: [
                     {
@@ -115,7 +118,12 @@ async function checkExistingDistrictAssignment(state, district, districtId, excl
             }
             const existingUser = await db.collection('users').findOne(userQuery);
             if (existingUser) {
-                return { exists: true, agent: existingUser };
+                const uId = String(existingUser._id || '');
+                const uRole = String(existingUser.role || '').toLowerCase();
+                // Strictly exclude non-agent user types
+                if (!/^(ADM-|usr_mgr|MGR-|cust_|ven-)/i.test(uId) && !/admin|manager|vendor|customer/i.test(uRole)) {
+                    return { exists: true, agent: existingUser };
+                }
             }
         }
     }

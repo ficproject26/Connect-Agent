@@ -284,10 +284,10 @@ const getSubordinates = async (req, res) => {
             filter.$and = filter.$and || [];
             let rolePatterns = [effectiveRole];
             if (effectiveRole === 'district') {
-                rolePatterns = ['district', 'district_agent', 'district_lead', 'district admin'];
+                rolePatterns = ['district', 'district_agent', 'district_lead'];
             }
             else if (effectiveRole === 'division') {
-                rolePatterns = ['division', 'division_agent', 'division_lead', 'division_manager'];
+                rolePatterns = ['division', 'division_agent', 'division_lead'];
             }
             else if (effectiveRole === 'pincode') {
                 rolePatterns = ['pincode', 'pincode_agent'];
@@ -304,11 +304,15 @@ const getSubordinates = async (req, res) => {
             .select('_id name role level assignedTerritory territory state district division pincode email phone status kycStatus performanceScore')
             .sort({ createdAt: -1 })
             .lean();
-        // Query 'users' collection in MongoDB for agents registered or stored in users collection
+        // Query 'users' collection in MongoDB for agents registered or stored in users collection (strictly Agent roles only)
         try {
             const db = mongoose_1.default.connection.db;
             if (db) {
                 const userFilter = {
+                    role: {
+                        $in: ['agent', 'state', 'district', 'division', 'pincode', 'state_agent', 'district_agent', 'division_agent', 'pincode_agent'],
+                        $nin: ['admin', 'super-admin', 'superadmin', 'District Admin', 'Division Admin', 'Pincode Admin', 'State Admin', 'manager', 'state_manager', 'district_manager', 'division_manager', 'pincode_manager', 'Vendor', 'vendor', 'Customer', 'customer', 'technician', 'delivery_partner']
+                    },
                     $or: [
                         { status: { $in: ['active', 'Active', 'approved', 'Approved', 'verified', 'Verified'] } },
                         { kycStatus: { $in: ['active', 'Active', 'approved', 'Approved', 'verified', 'Verified'] } },
@@ -319,7 +323,7 @@ const getSubordinates = async (req, res) => {
                 if (rClean === 'district') {
                     userFilter.$and = [{
                             $or: [
-                                { role: { $in: ['district', 'district_agent', 'district_lead', 'District Admin'] } },
+                                { role: { $in: ['district', 'district_agent', 'district_lead'] } },
                                 { level: /^district/i }
                             ]
                         }];
@@ -327,7 +331,7 @@ const getSubordinates = async (req, res) => {
                 else if (rClean === 'division') {
                     userFilter.$and = [{
                             $or: [
-                                { role: { $in: ['division', 'division_agent', 'division_lead', 'division_manager'] } },
+                                { role: { $in: ['division', 'division_agent', 'division_lead'] } },
                                 { level: /^division/i }
                             ]
                         }];
@@ -346,9 +350,15 @@ const getSubordinates = async (req, res) => {
                 for (const u of userDocs) {
                     const uId = String(u._id);
                     const uEmail = (u.email || '').toLowerCase();
+                    const regId = String(u.registrationId || '');
+                    const uRole = (u.role || u.level || '').toLowerCase();
+                    // Strictly exclude non-agent IDs, prefixes, or roles
+                    if (/^(ADM-|usr_mgr|MGR-|cust_|ven-|FIC-CUS-)/i.test(uId) || /^(ADM-|usr_mgr|MGR-|cust_|ven-|FIC-CUS-)/i.test(regId))
+                        continue;
+                    if (/admin|manager|vendor|customer|delivery|technician|executive/i.test(uRole))
+                        continue;
                     if (existingIds.has(uId) || (uEmail && existingEmails.has(uEmail)))
                         continue;
-                    const uRole = (u.role || u.level || '').toLowerCase();
                     const uStatus = (u.status || '').toLowerCase().trim();
                     const uKyc = (u.kycStatus || '').toLowerCase().trim();
                     if (uStatus !== 'active' && uStatus !== 'approved' && uKyc !== 'verified' && uKyc !== 'approved' && !u.isApproved)

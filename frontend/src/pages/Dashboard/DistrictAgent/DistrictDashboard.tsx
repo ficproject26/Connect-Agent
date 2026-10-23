@@ -53,7 +53,14 @@ export const DistrictDashboard: React.FC = () => {
 
           // Strict territory filtering: only allow division and pincode agents within this assigned district and state
           const filteredSubs = res.data.subordinates.filter((s: any) => {
+            const sId = String(s._id || s.id || '');
+            const sRegId = String(s.registrationId || '');
             const sRole = (s.role || '').toLowerCase();
+
+            // Strictly exclude non-agent IDs, prefixes, or roles
+            if (/^(ADM-|usr_mgr|MGR-|cust_|ven-|FIC-CUS-)/i.test(sId) || /^(ADM-|usr_mgr|MGR-|cust_|ven-|FIC-CUS-)/i.test(sRegId)) return false;
+            if (/admin|manager|vendor|customer|delivery|technician|executive/i.test(sRole)) return false;
+
             if (sRole !== 'division' && sRole !== 'pincode') return false;
 
             const sState = (typeof s.territory === 'object' ? s.territory?.state : s.state || '').trim().toLowerCase();

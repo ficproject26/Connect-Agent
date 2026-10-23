@@ -218,9 +218,42 @@ export const LeaderboardModule: React.FC = () => {
     }
   });
 
-  // Filtered Leaderboard List based on Search Query and Sorting
+  // Defensive pure Agent verification safeguard
+  const isPureAgentItem = (item: LeaderboardItem): boolean => {
+    if (!item) return false;
+    const idStr = String(item._id || '');
+    const regIdStr = String(item.registrationId || '');
+    const roleStr = String(item.role || item.tierRole || '').toLowerCase();
+    const nameStr = String(item.name || '').toLowerCase();
+
+    // Territory aggregated tier cards (district, division, pincode tiers)
+    if (tierTab === 'district' && idStr.startsWith('district_')) return true;
+    if (tierTab === 'division' && idStr.startsWith('division_')) return true;
+    if (tierTab === 'pincode' && idStr.startsWith('pincode_')) return true;
+
+    // Non-agent ID and registration ID prefixes
+    if (/^(ADM-|usr_mgr|MGR-|cust_|ven-|FIC-CUS-)/i.test(idStr) || /^(ADM-|usr_mgr|MGR-|cust_|ven-|FIC-CUS-)/i.test(regIdStr)) {
+      return false;
+    }
+
+    // Non-agent roles
+    if (/admin|manager|vendor|customer|delivery|technician|executive/i.test(roleStr)) {
+      return false;
+    }
+
+    // Non-agent name titles
+    if (/^(main admin|super admin)$/i.test(nameStr)) {
+      return false;
+    }
+
+    const validAgentRoles = ['state', 'district', 'division', 'pincode', 'agent', 'state_agent', 'district_agent', 'division_agent', 'pincode_agent'];
+    return validAgentRoles.includes(roleStr);
+  };
+
+  // Filtered Leaderboard List based on Search Query, Role Verification, and Sorting
   const leaderboardList: LeaderboardItem[] = useMemo(() => {
-    let list: LeaderboardItem[] = data?.leaderboard || [];
+    const rawList: LeaderboardItem[] = data?.leaderboard || [];
+    let list: LeaderboardItem[] = rawList.filter(isPureAgentItem);
 
     // Filter by Search Query within authorized territory
     if (searchTerm.trim()) {
@@ -258,7 +291,7 @@ export const LeaderboardModule: React.FC = () => {
 
     // Re-rank dynamically for the active view
     return list.map((item, idx) => ({ ...item, rank: idx + 1 }));
-  }, [data, searchTerm, sortBy]);
+  }, [data, searchTerm, sortBy, tierTab]);
 
   const topPerformers = useMemo(() => {
     return leaderboardList.slice(0, 3);

@@ -93,9 +93,33 @@ export const AgentManagement: React.FC = () => {
   const userDivision = (userTerritory?.division || '').trim();
   const userPincode = (userTerritory?.pincode || '').trim();
 
-  // Helper function to strictly verify approved status
+  // Helper function to strictly verify approved status and pure agent role
   const isApprovedAgent = (a: any): boolean => {
     if (!a) return false;
+    const id = String(a._id || a.id || '');
+    const regId = String(a.registrationId || '');
+    const role = String(a.role || '').toLowerCase();
+    const name = String(a.name || '').toLowerCase();
+
+    // Canonical territory containers (e.g., "Madurai District", "DIST-...") are valid
+    if (id.startsWith('DIST-') || id.startsWith('DIV-') || name.endsWith('district') || name.endsWith('division')) {
+      return true;
+    }
+
+    // Exclude non-agent IDs and registration IDs
+    if (/^(ADM-|usr_mgr|MGR-|cust_|ven-|FIC-CUS-)/i.test(id) || /^(ADM-|usr_mgr|MGR-|cust_|ven-|FIC-CUS-)/i.test(regId)) {
+      return false;
+    }
+
+    // Exclude non-agent roles
+    if (/admin|manager|vendor|customer|delivery|technician|executive/i.test(role)) {
+      return false;
+    }
+
+    if (/^(main admin|super admin)$/i.test(name)) {
+      return false;
+    }
+
     const kyc = String(a.kycStatus || '').trim().toLowerCase();
     const st = String(a.status || '').trim().toLowerCase();
     if (kyc === 'rejected' || st === 'rejected' || st === 'suspended' || st === 'inactive' || kyc === 'pending' || st === 'pending' || st === 'pending_approval') {

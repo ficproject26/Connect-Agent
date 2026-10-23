@@ -554,28 +554,41 @@ const getFieldVisitAgents = async (req, res) => {
             .select('_id name role level registrationId assignedTerritory territory state district division pincode email phone status')
             .sort({ name: 1 })
             .lean();
-        // Merge registered agents from users collection
+        // Merge registered agents from users collection (strictly Agent role only)
         try {
             const db = mongoose_1.default.connection.db;
             if (db) {
-                const userFilter = { status: { $nin: ['rejected', 'suspended'] } };
+                const userFilter = {
+                    role: {
+                        $in: ['agent', 'state', 'district', 'division', 'pincode', 'state_agent', 'district_agent', 'division_agent', 'pincode_agent'],
+                        $nin: ['admin', 'super-admin', 'superadmin', 'District Admin', 'Division Admin', 'Pincode Admin', 'State Admin', 'manager', 'state_manager', 'district_manager', 'division_manager', 'pincode_manager', 'Vendor', 'vendor', 'Customer', 'customer', 'technician', 'delivery_partner']
+                    },
+                    status: { $nin: ['rejected', 'pending', 'pending_approval', 'suspended', 'inactive', 'under_review', 'Rejected', 'Pending'] },
+                    kycStatus: { $nin: ['rejected', 'pending', 'pending_verification', 'suspended', 'Rejected', 'Pending'] }
+                };
                 if (rClean === 'district') {
-                    userFilter.$or = [
-                        { role: { $in: ['district', 'district_agent', 'district_lead', 'District Admin', 'agent'] } },
-                        { level: /district/i }
-                    ];
+                    userFilter.$and = [{
+                            $or: [
+                                { role: { $in: ['district', 'district_agent', 'district_lead'] } },
+                                { level: /^district/i }
+                            ]
+                        }];
                 }
                 else if (rClean === 'division') {
-                    userFilter.$or = [
-                        { role: { $in: ['division', 'division_agent', 'division_lead', 'division_manager', 'agent'] } },
-                        { level: /division/i }
-                    ];
+                    userFilter.$and = [{
+                            $or: [
+                                { role: { $in: ['division', 'division_agent', 'division_lead'] } },
+                                { level: /^division/i }
+                            ]
+                        }];
                 }
                 else if (rClean === 'pincode') {
-                    userFilter.$or = [
-                        { role: { $in: ['pincode', 'pincode_agent', 'agent'] } },
-                        { level: /pincode/i }
-                    ];
+                    userFilter.$and = [{
+                            $or: [
+                                { role: { $in: ['pincode', 'pincode_agent'] } },
+                                { level: /^pincode/i }
+                            ]
+                        }];
                 }
                 const userDocs = await db.collection('users').find(userFilter).limit(50).maxTimeMS(4000).toArray();
                 const existingEmails = new Set(agents.map(a => (a.email || '').toLowerCase()));
@@ -583,6 +596,13 @@ const getFieldVisitAgents = async (req, res) => {
                 for (const u of userDocs) {
                     const uId = String(u._id);
                     const uEmail = (u.email || '').toLowerCase();
+                    const regId = String(u.registrationId || '');
+                    const uRole = (u.role || u.level || '').toLowerCase();
+                    // Strictly exclude non-agent IDs, prefixes, or roles
+                    if (/^(ADM-|usr_mgr|MGR-|cust_|ven-|FIC-CUS-)/i.test(uId) || /^(ADM-|usr_mgr|MGR-|cust_|ven-|FIC-CUS-)/i.test(regId))
+                        continue;
+                    if (/admin|manager|vendor|customer|delivery|technician|executive/i.test(uRole))
+                        continue;
                     if (existingIds.has(uId) || (uEmail && existingEmails.has(uEmail)))
                         continue;
                     const uState = (u.assignedTerritory?.state || u.territory?.state || u.state || u.assignedState || '').trim();

@@ -80,10 +80,40 @@ export const StateDashboard: React.FC = () => {
     return st1.includes(st2) || st2.includes(st1);
   }, [userState]);
 
+  // Pure Agent verification safeguard for state dashboard hierarchy nodes
+  const isPureAgentNode = React.useCallback((node: any) => {
+    if (!node) return false;
+    const id = String(node._id || node.id || '');
+    const regId = String(node.registrationId || '');
+    const role = String(node.role || '').toLowerCase();
+    const name = String(node.name || '').toLowerCase();
+
+    // Canonical territory containers (e.g., "Madurai District", "DIST-...") are valid
+    if (id.startsWith('DIST-') || id.startsWith('DIV-') || name.endsWith('district') || name.endsWith('division')) {
+      return true;
+    }
+
+    if (/^(ADM-|usr_mgr|MGR-|cust_|ven-|FIC-CUS-)/i.test(id) || /^(ADM-|usr_mgr|MGR-|cust_|ven-|FIC-CUS-)/i.test(regId)) {
+      return false;
+    }
+
+    if (/admin|manager|vendor|customer|delivery|technician|executive/i.test(role)) {
+      return false;
+    }
+
+    if (/^(main admin|super admin)$/i.test(name)) {
+      return false;
+    }
+
+    return true;
+  }, []);
+
   // State-scoped raw data with canonical district deduplication
   const stateDistricts = React.useMemo(() => {
     const raw: any[] = hierarchyRes?.districts || hierarchyRes?.tree?.flatMap((s: any) => s.districts || []) || [];
-    const filtered = raw.filter((d: any) => isSameState(d.territory?.state || d.state || userState));
+    const filtered = raw
+      .filter(isPureAgentNode)
+      .filter((d: any) => isSameState(d.territory?.state || d.state || userState));
 
     // Deduplicate by canonical district identifier or district name
     const districtMap = new Map<string, any>();
@@ -91,14 +121,14 @@ export const StateDashboard: React.FC = () => {
       const canonicalName = (d.territory?.district || d.district || d.name || '').trim();
       const key = (d.districtId || canonicalName).toLowerCase();
       if (!districtMap.has(key)) {
-        districtMap.set(key, { ...d, agents: d.agents || [d] });
+        districtMap.set(key, { ...d, agents: (d.agents || [d]).filter(isPureAgentNode) });
       } else {
         const existing = districtMap.get(key);
         const existingAgentIds = new Set((existing.agents || []).map((a: any) => String(a._id || a.id)));
-        const newAgents = (d.agents || [d]).filter((a: any) => !existingAgentIds.has(String(a._id || a.id)));
+        const newAgents = (d.agents || [d]).filter(isPureAgentNode).filter((a: any) => !existingAgentIds.has(String(a._id || a.id)));
         existing.agents = [...(existing.agents || []), ...newAgents];
         const existingDivIds = new Set((existing.divisions || []).map((dv: any) => String(dv._id || dv.id || dv.name)));
-        const newDivs = (d.divisions || []).filter((dv: any) => !existingDivIds.has(String(dv._id || dv.id || dv.name)));
+        const newDivs = (d.divisions || []).filter(isPureAgentNode).filter((dv: any) => !existingDivIds.has(String(dv._id || dv.id || dv.name)));
         existing.divisions = [...(existing.divisions || []), ...newDivs];
       }
     });
@@ -108,17 +138,21 @@ export const StateDashboard: React.FC = () => {
       const nameB = b.territory?.district || b.district || b.name || '';
       return nameA.localeCompare(nameB);
     });
-  }, [hierarchyRes, userState, isSameState]);
+  }, [hierarchyRes, userState, isSameState, isPureAgentNode]);
 
   const stateDivisions = React.useMemo(() => {
     const raw = hierarchyRes?.divisions || [];
-    return raw.filter((div: any) => isSameState(div.territory?.state || div.state || userState));
-  }, [hierarchyRes, userState, isSameState]);
+    return raw
+      .filter(isPureAgentNode)
+      .filter((div: any) => isSameState(div.territory?.state || div.state || userState));
+  }, [hierarchyRes, userState, isSameState, isPureAgentNode]);
 
   const statePincodes = React.useMemo(() => {
     const raw = hierarchyRes?.pincodes || [];
-    return raw.filter((pin: any) => isSameState(pin.territory?.state || pin.state || userState));
-  }, [hierarchyRes, userState, isSameState]);
+    return raw
+      .filter(isPureAgentNode)
+      .filter((pin: any) => isSameState(pin.territory?.state || pin.state || userState));
+  }, [hierarchyRes, userState, isSameState, isPureAgentNode]);
 
   const stateVendors = React.useMemo(() => {
     const raw = vendorsRes?.vendors || vendorsRes || [];
