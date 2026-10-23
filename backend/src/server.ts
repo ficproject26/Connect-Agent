@@ -23,8 +23,9 @@ async function startServer() {
     // Pre-warm territory hierarchy cache in background so users experience instant <1ms responses
     const { warmupTerritoryCache } = await import('./controllers/territory.controller');
     warmupTerritoryCache().catch(() => {});
-  } catch (error) {
-    console.error('Warning: Failed to connect to MongoDB. Starting server without DB:', error);
+  } catch (error: any) {
+    console.error('FATAL: Failed to connect to MongoDB Atlas. Cannot start server in uninitialized state:', error.message || error);
+    process.exit(1);
   }
 
   // Create HTTP server wrapping Express

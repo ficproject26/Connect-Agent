@@ -42,7 +42,7 @@ const app_1 = __importDefault(require("./app"));
 const mongoose_1 = __importDefault(require("mongoose"));
 const socketServer_1 = __importDefault(require("./realtime/socketServer"));
 const PORT = process.env.PORT || 8083;
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/forge-connect';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://Connect-App:Dhanush123@cluster0.riukwbj.mongodb.net/connect_db?retryWrites=true&w=majority';
 async function startServer() {
     try {
         // Attempt MongoDB Connection with optimized pooling and fast timeout failover
@@ -61,7 +61,8 @@ async function startServer() {
         warmupTerritoryCache().catch(() => { });
     }
     catch (error) {
-        console.error('Warning: Failed to connect to MongoDB. Starting server without DB:', error);
+        console.error('FATAL: Failed to connect to MongoDB Atlas. Cannot start server in uninitialized state:', error.message || error);
+        process.exit(1);
     }
     // Create HTTP server wrapping Express
     const server = http_1.default.createServer(app_1.default);
