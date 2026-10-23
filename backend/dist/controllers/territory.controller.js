@@ -89,7 +89,7 @@ async function buildHierarchyTree(scope = null, forceAll = false) {
     const defaultDb = mongoose_1.default.connection.db;
     if (!defaultDb)
         throw new Error('Database connection unavailable');
-    const db = (mongoose_1.default.connection.useDb ? mongoose_1.default.connection.useDb('connect_db') : null) || defaultDb;
+    const db = defaultDb;
     const [states, districts, divisions, pincodes] = await Promise.all([
         db.collection('states').find({}, { projection: { name: 1, code: 1, status: 1, stateId: 1 } }).toArray(),
         db.collection('districts').find({}, { projection: { name: 1, code: 1, status: 1, stateId: 1, state: 1, districtId: 1 } }).toArray(),

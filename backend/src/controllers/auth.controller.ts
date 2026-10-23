@@ -185,7 +185,7 @@ export const register = async (req: Request, res: Response) => {
     }
 
     // Server-side Territory Hierarchy Verification against Admin Territory Database
-    const territoryDb = ((mongoose.connection as any).useDb ? (mongoose.connection as any).useDb('connect_db') : null) || db;
+    const territoryDb = db || mongoose.connection.db;
     if (territoryDb) {
       // 1. Verify State exists and is active
       const stateQueries: any[] = [
@@ -220,7 +220,7 @@ export const register = async (req: Request, res: Response) => {
 
         if (canonicalMatch) {
           stateDoc = {
-            _id: canonicalMatch.stateId,
+            _id: canonicalMatch.stateId as any,
             stateId: canonicalMatch.stateId,
             name: canonicalMatch.name,
             code: canonicalMatch.code,

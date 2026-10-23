@@ -21,7 +21,7 @@ async function runTests() {
     }
   }
 
-  await mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://Connect-App:Dhanush123@cluster0.riukwbj.mongodb.net/connect_db?retryWrites=true&w=majority');
+  await mongoose.connect(process.env.MONGODB_URI );
   const db = mongoose.connection.db;
 
   // -------------------------------------------------------------

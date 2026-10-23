@@ -163,7 +163,7 @@ const register = async (req, res) => {
             return res.status(400).json({ message: 'Assigned PIN Code is required for Pincode Agent.' });
         }
         // Server-side Territory Hierarchy Verification against Admin Territory Database
-        const territoryDb = (mongoose_1.default.connection.useDb ? mongoose_1.default.connection.useDb('connect_db') : null) || db;
+        const territoryDb = db || mongoose_1.default.connection.db;
         if (territoryDb) {
             // 1. Verify State exists and is active
             const stateQueries = [

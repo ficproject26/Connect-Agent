@@ -5,12 +5,16 @@ import mongoose from 'mongoose';
 import socketServer from './realtime/socketServer';
 
 const PORT = process.env.PORT || 8083;
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://Connect-App:Dhanush123@cluster0.riukwbj.mongodb.net/connect_db?retryWrites=true&w=majority';
+const MONGODB_URI = process.env.MONGODB_URI || process.env.MONGO_URI;
 
 async function startServer() {
   try {
     // Attempt MongoDB Connection with optimized pooling and fast timeout failover
     console.log('Connecting to MongoDB...');
+    if (!MONGODB_URI) {
+      console.error('FATAL: MONGODB_URI environment variable is not configured. Please define MONGODB_URI in your .env file.');
+      process.exit(1);
+    }
     await mongoose.connect(MONGODB_URI, {
       maxPoolSize: 50,
       minPoolSize: 5,
