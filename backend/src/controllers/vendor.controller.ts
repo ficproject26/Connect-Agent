@@ -292,6 +292,37 @@ export const getVendors = async (req: Request, res: Response) => {
       }
     }
 
+    // Fallback: Resolve active Pincode Agent by vendor pincode for any remaining unresolved vendors
+    const unresolvedPinVendors = (rawVendors as any[]).filter(v => (!v.assignedAgent || typeof v.assignedAgent !== 'object' || !v.assignedAgent.name) && v.pincode);
+    if (unresolvedPinVendors.length > 0) {
+      const pinCodes = Array.from(new Set(unresolvedPinVendors.map(v => String(v.pincode).trim())));
+      const pinAgents = await Agent.find({
+        role: 'pincode',
+        status: { $in: ['active', 'Active', 'approved', 'Approved'] },
+        $or: [
+          { 'territory.pincode': { $in: pinCodes } },
+          { 'assignedTerritory.pincode': { $in: pinCodes } },
+          { pincode: { $in: pinCodes } }
+        ]
+      }).select('name email role territory assignedTerritory pincode').lean();
+
+      const agentByPin = new Map<string, any>();
+      for (const ag of pinAgents) {
+        const pCode = String(ag.territory?.pincode || ag.assignedTerritory?.pincode || (ag as any).pincode || '').trim();
+        if (pCode && !agentByPin.has(pCode)) {
+          agentByPin.set(pCode, ag);
+        }
+      }
+
+      for (const v of unresolvedPinVendors) {
+        const pCode = String(v.pincode || '').trim();
+        if (agentByPin.has(pCode)) {
+          const ag = agentByPin.get(pCode);
+          v.assignedAgent = { name: ag.name, email: ag.email, role: 'pincode' };
+        }
+      }
+    }
+
     // Robust canonical vendor deduplication
     const getVendorCanonicalKey = (v: any): string => {
       if (!v) return '';

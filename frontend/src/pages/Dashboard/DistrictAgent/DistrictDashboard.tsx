@@ -7,8 +7,9 @@ import { downloadReport } from '../../../utils/downloadReport';
 import {
   TrendingUp, Clock, CheckCircle2,
   Plus, Users, Target, Ticket, Send, Download, BarChart2,
-  Eye, Wallet, Award, MapPin, Phone, Mail, ChevronDown, ChevronUp
+  Eye, Wallet, Award, MapPin, Phone, Mail, ChevronDown, ChevronUp, Layers, AlertCircle
 } from 'lucide-react';
+import api from '../../../utils/api';
 
 interface SubordinateAgent {
   id: string;
@@ -34,11 +35,13 @@ export const DistrictDashboard: React.FC = () => {
   const [pincode, setPincode] = useState('');
   const [dailyGoal, setDailyGoal] = useState('');
   const [isAllocating, setIsAllocating] = useState(false);
-  const [activeTab, setActiveTab] = useState<'schedule' | 'followups' | 'visits' | 'subordinates'>('subordinates');
+  const [activeTab, setActiveTab] = useState<'divisions' | 'pincodes'>('divisions');
   const [selectedAgent, setSelectedAgent] = useState<SubordinateAgent | null>(null);
 
   const INITIAL_LIMIT = 10;
   const [showAllSubordinates, setShowAllSubordinates] = useState(false);
+  const [showAllDivisions, setShowAllDivisions] = useState(false);
+  const [showAllPincodes, setShowAllPincodes] = useState(false);
   const [showAllDistrictAlerts, setShowAllDistrictAlerts] = useState(false);
 
   // Silent 45s background auto-refresh for subordinates with tab visibility management
@@ -105,6 +108,160 @@ export const DistrictDashboard: React.FC = () => {
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true
   });
+
+  // Hierarchy query for dynamic canonical divisions and pincodes in assigned district
+  const { data: hierarchyRes } = useQuery({
+    queryKey: ['districtHierarchy', user?.territory?.district || 'district'],
+    queryFn: async () => {
+      try {
+        const res = await api.get('/admin/hierarchy');
+        return res.data;
+      } catch (_) {
+        return null;
+      }
+    },
+    staleTime: 60000
+  });
+
+  // Backend stats for vendor approval and KYC breakdowns
+  const { data: statsRes } = useQuery({
+    queryKey: ['districtStats', user?._id],
+    queryFn: async () => {
+      try {
+        const res = await api.get('/dashboard/stats');
+        return res.data;
+      } catch (_) {
+        return null;
+      }
+    },
+    staleTime: 30000
+  });
+
+  // Scoped vendors query for fallback accurate counts
+  const { data: vendorsRes } = useQuery({
+    queryKey: ['districtVendors', user?.territory?.district || 'district'],
+    queryFn: async () => {
+      try {
+        const res = await api.get('/vendors', { params: { limit: 1000 } });
+        return res.data?.vendors || [];
+      } catch (_) {
+        return [];
+      }
+    },
+    staleTime: 60000
+  });
+
+  const userDistrict = (user?.territory?.district || (user as any)?.assignedDistrict || '').trim();
+
+  // Find current district in hierarchy
+  const currentDistrict = React.useMemo(() => {
+    if (!hierarchyRes?.districts) return null;
+    const uDistNorm = userDistrict.toLowerCase().replace(/district/g, '').trim();
+    return hierarchyRes.districts.find((d: any) => {
+      const dName = (d.territory?.district || d.district || d.name || '').toLowerCase().replace(/district/g, '').trim();
+      return dName && (dName === uDistNorm || dName.includes(uDistNorm) || uDistNorm.includes(dName));
+    }) || null;
+  }, [hierarchyRes, userDistrict]);
+
+  // Registered divisions under assigned district
+  const divisionItems = React.useMemo(() => {
+    const list: any[] = [];
+    if (currentDistrict?.divisions && Array.isArray(currentDistrict.divisions)) {
+      currentDistrict.divisions.forEach((div: any) => {
+        const divName = div.territory?.division || div.division || div.name || 'Division Sector';
+        const agentName = div.name && div.name !== 'old' ? div.name : 'Division Management';
+        list.push({
+          id: div._id || div.id,
+          name: divName,
+          agentName,
+          pincodesCount: div.pincodes?.length || 0,
+          pincodes: div.pincodes || []
+        });
+      });
+    }
+    if (list.length === 0) {
+      subordinatesList.filter(s => s.role === 'division').forEach(s => {
+        list.push({
+          id: s.id,
+          name: s.territory,
+          agentName: s.name,
+          pincodesCount: 1,
+          pincodes: []
+        });
+      });
+    }
+    return list;
+  }, [currentDistrict, subordinatesList]);
+
+  // Registered pincodes under assigned district
+  const districtPincodes = React.useMemo(() => {
+    const list: any[] = [];
+    const divList = currentDistrict?.divisions || [];
+    divList.forEach((div: any) => {
+      (div.pincodes || []).forEach((pin: any) => {
+        list.push({
+          ...pin,
+          divisionName: div.territory?.division || div.name || 'Division Sector'
+        });
+      });
+    });
+    if (list.length === 0 && hierarchyRes?.pincodes) {
+      const uDist = userDistrict.toLowerCase().replace(/district/g, '').trim();
+      return hierarchyRes.pincodes.filter((p: any) => {
+        const pDist = (p.territory?.district || p.district || '').toLowerCase().replace(/district/g, '').trim();
+        return !uDist || pDist.includes(uDist) || uDist.includes(pDist);
+      });
+    }
+    if (list.length === 0) {
+      return subordinatesList.filter(s => s.role === 'pincode').map(s => ({
+        id: s.id,
+        name: s.name,
+        pincode: s.territory,
+        divisionName: 'Division Sector'
+      }));
+    }
+    return list;
+  }, [currentDistrict, hierarchyRes, subordinatesList, userDistrict]);
+
+  // Dynamic vendor KPI counts
+  const vendorCounts = React.useMemo(() => {
+    const list = Array.isArray(vendorsRes) ? vendorsRes : [];
+    const uDist = userDistrict.toLowerCase().replace(/district/g, '').trim();
+    const districtVendors = list.filter((v: any) => {
+      const d = String(v.district || v.assignedDistrict || '').toLowerCase().replace(/district/g, '').trim();
+      return !uDist || d.includes(uDist) || uDist.includes(d);
+    });
+
+    const total = statsRes?.stats?.vendors?.total ?? districtVendors.length;
+    const active = statsRes?.stats?.vendors?.active ?? districtVendors.filter((v: any) => {
+      const s = String(v.status || '').toLowerCase().trim();
+      const k = String(v.kycStatus || '').toLowerCase().trim();
+      return (s === 'active' || s === 'approved') && (k === 'approved' || k === 'verified');
+    }).length;
+
+    const adminPending = statsRes?.stats?.vendors?.adminPending ?? districtVendors.filter((v: any) => {
+      const s = String(v.status || '').toLowerCase().trim();
+      const a = String(v.approvalStatus || '').toLowerCase().trim();
+      const isAdminApproved = a === 'approved' || (s === 'active' && a !== 'pending_pincode_approval' && a !== 'pending');
+      return !isAdminApproved || a.includes('pending') || s === 'pending';
+    }).length;
+
+    const kycPending = statsRes?.stats?.vendors?.kycPending ?? districtVendors.filter((v: any) => {
+      const s = String(v.status || '').toLowerCase().trim();
+      const k = String(v.kycStatus || '').toLowerCase().trim();
+      const a = String(v.approvalStatus || '').toLowerCase().trim();
+      const isAdminApproved = a === 'approved' || (s === 'active' && a !== 'pending_pincode_approval' && a !== 'pending');
+      const isKycApproved = k === 'approved' || k === 'verified';
+      return isAdminApproved && !isKycApproved;
+    }).length;
+
+    return { total, active, adminPending, kycPending };
+  }, [vendorsRes, statsRes, userDistrict]);
+
+  // Total divisions available in this district
+  const totalDistrictDivisions = typeof currentDistrict?.totalDivisions === 'number'
+    ? currentDistrict.totalDivisions
+    : (divisionItems.length > 0 ? divisionItems.length : subordinatesList.filter(s => s.role === 'division').length);
 
   // Alerts Stack State
   const [districtAlerts, setDistrictAlerts] = useState<any[]>([]);
@@ -261,22 +418,20 @@ export const DistrictDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* KPI Cards Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* 6 KPI Cards Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
-          { label: 'Total Pincode Agents', val: `${totalPincodeAgents} Agents`, icon: <Users className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
-          { label: 'Active Pincode Agents', val: `${totalPincodeAgents} Active`, icon: <Users className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
-          { label: 'Assigned Vendors', val: `${totalShops} Shops`, icon: <Users className="w-4 h-4 text-[#4f4635]" />, bg: 'bg-[#efe1ca]' },
-          { label: 'New Vendors Onboarded', val: `${totalShops} Total`, icon: <Plus className="w-4 h-4 text-emerald-700" />, bg: 'bg-emerald-50' },
-          { label: 'Pending Verification', val: '0 shops', icon: <Clock className="w-4 h-4 text-[#4f4635]" />, bg: 'bg-[#efe1ca]' },
-          { label: 'Today\'s Targets', val: `${totalAssignedTargets} visits goal`, icon: <Target className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
-          { label: 'Pending Targets', val: `${Math.max(0, totalAssignedTargets - totalCompletedTargets)} visits left`, icon: <Clock className="w-4 h-4 text-[#4f4635]" />, bg: 'bg-[#efe1ca]' },
-          { label: 'Open Support Tickets', val: '0 Active', icon: <Ticket className="w-4 h-4 text-red-700" />, bg: 'bg-red-50' }
+          { label: 'Total Divisions', val: totalDistrictDivisions.toString(), icon: <Layers className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
+          { label: 'Total Pincodes', val: districtPincodes.length.toString(), icon: <MapPin className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
+          { label: 'Total Registered Vendors', val: vendorCounts.total.toString(), icon: <Users className="w-4 h-4 text-[#4f4635]" />, bg: 'bg-[#efe1ca]' },
+          { label: 'Total Active Vendors', val: vendorCounts.active.toString(), icon: <CheckCircle2 className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
+          { label: 'Admin Pending Approvals', val: vendorCounts.adminPending.toString(), icon: <Clock className="w-4 h-4 text-amber-700" />, bg: 'bg-amber-50' },
+          { label: 'KYC Pending', val: vendorCounts.kycPending.toString(), icon: <AlertCircle className="w-4 h-4 text-blue-700" />, bg: 'bg-blue-50' },
         ].map((card, idx) => (
-          <div key={idx} className="bg-white p-5 rounded-[16px] border border-[#eae8e7] flex items-center justify-between shadow-sm relative overflow-hidden group">
+          <div key={idx} className="bg-white p-4 rounded-xl border border-[#eae8e7] flex items-center justify-between shadow-sm relative overflow-hidden group">
             <div className="space-y-1">
               <span className="text-[9px] font-bold text-[#52443a] uppercase tracking-wider block">{card.label}</span>
-              <span className="text-base font-extrabold text-[#1b1c1c]">{card.val}</span>
+              <span className="text-lg font-black text-[#1b1c1c]">{card.val}</span>
             </div>
             <div className={`h-8 w-8 rounded-lg ${card.bg} flex items-center justify-center`}>
               {card.icon}
@@ -292,87 +447,85 @@ export const DistrictDashboard: React.FC = () => {
         <div className="lg:col-span-2 bg-white rounded-[16px] border border-[#eae8e7] shadow-sm overflow-hidden flex flex-col justify-between">
           <div className="px-6 py-4 border-b border-[#eae8e7] flex justify-between items-center bg-white">
             <div className="flex gap-4">
-              <button onClick={() => setActiveTab('subordinates')} className={`text-xs font-extrabold uppercase pb-1 border-b-2 transition-all ${activeTab === 'subordinates' ? 'border-[#864f19] text-[#1b1c1c]' : 'border-transparent text-[#52443a]'}`}>Division & Pincode Agents</button>
-              <button onClick={() => setActiveTab('schedule')} className={`text-xs font-extrabold uppercase pb-1 border-b-2 transition-all ${activeTab === 'schedule' ? 'border-[#864f19] text-[#1b1c1c]' : 'border-transparent text-[#52443a]'}`}>Visit Schedule</button>
-              <button onClick={() => setActiveTab('followups')} className={`text-xs font-extrabold uppercase pb-1 border-b-2 transition-all ${activeTab === 'followups' ? 'border-[#864f19] text-[#1b1c1c]' : 'border-transparent text-[#52443a]'}`}>Follow-up List</button>
-              <button onClick={() => setActiveTab('visits')} className={`text-xs font-extrabold uppercase pb-1 border-b-2 transition-all ${activeTab === 'visits' ? 'border-[#864f19] text-[#1b1c1c]' : 'border-transparent text-[#52443a]'}`}>Visits Overview</button>
+              <button onClick={() => setActiveTab('divisions')} className={`text-xs font-extrabold uppercase pb-1 border-b-2 transition-all ${activeTab === 'divisions' ? 'border-[#864f19] text-[#1b1c1c]' : 'border-transparent text-[#52443a]'}`}>Division List ({divisionItems.length})</button>
+              <button onClick={() => setActiveTab('pincodes')} className={`text-xs font-extrabold uppercase pb-1 border-b-2 transition-all ${activeTab === 'pincodes' ? 'border-[#864f19] text-[#1b1c1c]' : 'border-transparent text-[#52443a]'}`}>Pincode List ({districtPincodes.length})</button>
             </div>
           </div>
           
           <div className="p-6 divide-y divide-[#eae8e7]">
-            {activeTab === 'subordinates' && (
+            {activeTab === 'divisions' && (
               <>
                 <div className="py-2.5 flex justify-between text-xs font-bold text-[#52443a]">
-                  <span>Agent Name & Role</span>
-                  <span>Territory & Status</span>
-                  <span>Inspect Action</span>
+                  <span>Division Sector & Management</span>
+                  <span>Assigned Pincodes</span>
                 </div>
-                {subordinatesList.length > 0 ? (
-                  (showAllSubordinates ? subordinatesList : subordinatesList.slice(0, INITIAL_LIMIT)).map((sub) => (
-                    <div key={sub.id} className="py-3 flex justify-between items-center text-xs font-semibold">
+                {divisionItems.length === 0 ? (
+                  <div className="py-8 text-center text-xs font-semibold text-[#847468]">
+                    No divisions registered under {userDistrict || 'assigned district'}.
+                  </div>
+                ) : (
+                  (showAllDivisions ? divisionItems : divisionItems.slice(0, INITIAL_LIMIT)).map((div: any, i: number) => (
+                    <div key={div.id || i} className="py-3 flex justify-between items-center text-xs font-semibold">
                       <div>
-                        <span className="font-bold text-[#1b1c1c] block">{sub.name}</span>
-                        <span className="text-[10px] text-[#864f19] uppercase font-black">{sub.role} Agent</span>
+                        <span className="font-bold text-[#1b1c1c] block">{div.name}</span>
+                        <span className="text-[10px] text-slate-500 font-medium">{div.agentName}</span>
                       </div>
-                      <div>
-                        <span className="text-[#52443a] block">{sub.territory} ({sub.assignedTargets} Targets)</span>
-                        <span className={`inline-block text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded ${
-                          sub.status === 'present' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
-                        }`}>
-                          {sub.status}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedAgent(sub)}
-                        className="py-1 px-3 bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 text-[#864f19] text-[10px] font-extrabold uppercase tracking-wider rounded-lg transition cursor-pointer flex items-center gap-1"
-                      >
-                        <Eye className="w-3.5 h-3.5" /> Inspect
-                      </button>
+                      <span className="text-[#34647b] font-extrabold">{div.pincodesCount} Pincodes</span>
                     </div>
                   ))
-                ) : (
-                  <div className="py-12 text-center text-xs font-semibold text-[#847468]">
-                    No Division or Pincode Agents found in {user?.territory?.district || 'assigned'} District.
-                  </div>
                 )}
-                {subordinatesList.length > INITIAL_LIMIT && (
+                {divisionItems.length > INITIAL_LIMIT && (
                   <div className="pt-3 flex justify-center">
                     <button
                       type="button"
-                      onClick={() => setShowAllSubordinates(!showAllSubordinates)}
+                      onClick={() => setShowAllDivisions(!showAllDivisions)}
                       className="px-4 py-2 text-xs font-bold text-[#864f19] bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 rounded-xl transition cursor-pointer shadow-2xs inline-flex items-center gap-1.5"
                     >
-                      {showAllSubordinates ? (
-                        <>
-                          <ChevronUp className="w-3.5 h-3.5" /> Show Less
-                        </>
-                      ) : (
-                        <>
-                          <ChevronDown className="w-3.5 h-3.5" /> View All ({subordinatesList.length})
-                        </>
-                      )}
+                      {showAllDivisions ? <>Show Less</> : <>View All ({divisionItems.length})</>}
                     </button>
                   </div>
                 )}
               </>
             )}
-            {activeTab === 'schedule' && (
-              <div className="py-8 text-center text-xs font-semibold text-[#847468]">
-                No visit schedules recorded for today.
-              </div>
-            )}
 
-            {activeTab === 'followups' && (
-              <div className="py-8 text-center text-xs font-semibold text-[#847468]">
-                No pending merchant follow-ups.
-              </div>
-            )}
-
-            {activeTab === 'visits' && (
-              <div className="py-8 text-center text-xs font-semibold text-[#847468]">
-                No visits completed today yet.
-              </div>
+            {activeTab === 'pincodes' && (
+              <>
+                <div className="py-2.5 flex justify-between text-xs font-bold text-[#52443a]">
+                  <span>Pincode Area & Pincode Agent</span>
+                  <span>Division Sector</span>
+                </div>
+                {districtPincodes.length === 0 ? (
+                  <div className="py-8 text-center text-xs font-semibold text-[#847468]">
+                    No pincodes registered under {userDistrict || 'assigned district'}.
+                  </div>
+                ) : (
+                  (showAllPincodes ? districtPincodes : districtPincodes.slice(0, INITIAL_LIMIT)).map((pin: any, i: number) => {
+                    const pinCodeStr = pin.territory?.pincode || pin.pincode || 'Sector';
+                    const agentName = pin.name || 'Pincode Agent';
+                    const divName = pin.divisionName || pin.territory?.division || pin.division || 'Division Sector';
+                    return (
+                      <div key={pin.id || pin._id || i} className="py-3 flex justify-between items-center text-xs font-semibold">
+                        <div>
+                          <span className="font-bold text-[#1b1c1c] block">PIN {pinCodeStr}</span>
+                          <span className="text-[10px] text-slate-500 font-medium">{agentName}</span>
+                        </div>
+                        <span className="text-[#34647b] font-extrabold">{divName}</span>
+                      </div>
+                    );
+                  })
+                )}
+                {districtPincodes.length > INITIAL_LIMIT && (
+                  <div className="pt-3 flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() => setShowAllPincodes(!showAllPincodes)}
+                      className="px-4 py-2 text-xs font-bold text-[#864f19] bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 rounded-xl transition cursor-pointer shadow-2xs inline-flex items-center gap-1.5"
+                    >
+                      {showAllPincodes ? <>Show Less</> : <>View All ({districtPincodes.length})</>}
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

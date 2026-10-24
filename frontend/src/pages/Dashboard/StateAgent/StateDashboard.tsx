@@ -3,7 +3,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { downloadReport } from '../../../utils/downloadReport';
 import {
   TrendingUp, Download, ShieldAlert, Award,
-  Clock, CheckCircle2, ChevronRight, Users, Target, Ticket, FileText, Plus, Landmark, Megaphone, Send, BarChart2, Briefcase, ListCollapse, GitFork, MapPin, Layers, Building2, ChevronDown, ChevronUp
+  Clock, CheckCircle2, ChevronRight, Users, Target, Ticket, FileText, Plus, Landmark, Megaphone, Send, BarChart2, Briefcase, ListCollapse, GitFork, MapPin, Layers, Building2, ChevronDown, ChevronUp, AlertCircle
 } from 'lucide-react';
 
 import { useQuery } from '@tanstack/react-query';
@@ -14,7 +14,7 @@ export const StateDashboard: React.FC = () => {
   const [targetGoalText, setTargetGoalText] = useState('');
   const [announcementText, setAnnouncementText] = useState('');
   const [broadcasted, setBroadcasted] = useState(false);
-  const [activeTab, setActiveTab] = useState<'districts' | 'divisions' | 'rankings'>('districts');
+  const [activeTab, setActiveTab] = useState<'districts' | 'divisions' | 'pincodes'>('districts');
 
   const INITIAL_LIMIT = 10;
   const [showAllStateDistricts, setShowAllStateDistricts] = useState(false);
@@ -24,7 +24,7 @@ export const StateDashboard: React.FC = () => {
   const [showAllPerfDivisions, setShowAllPerfDivisions] = useState(false);
   const [showAllTabDistricts, setShowAllTabDistricts] = useState(false);
   const [showAllTabDivisions, setShowAllTabDivisions] = useState(false);
-  const [showAllTabRankings, setShowAllTabRankings] = useState(false);
+  const [showAllTabPincodes, setShowAllTabPincodes] = useState(false);
 
   // Hierarchy drill-down state
   const [drilledDistrictId, setDrilledDistrictId] = useState<string | null>(null);
@@ -124,6 +124,9 @@ export const StateDashboard: React.FC = () => {
         districtMap.set(key, { ...d, agents: (d.agents || [d]).filter(isPureAgentNode) });
       } else {
         const existing = districtMap.get(key);
+        existing.totalDivisions = existing.totalDivisions || d.totalDivisions;
+        existing.divisionsCount = existing.divisionsCount || d.divisionsCount;
+        existing.coveragePercent = existing.coveragePercent ?? d.coveragePercent;
         const existingAgentIds = new Set((existing.agents || []).map((a: any) => String(a._id || a.id)));
         const newAgents = (d.agents || [d]).filter(isPureAgentNode).filter((a: any) => !existingAgentIds.has(String(a._id || a.id)));
         existing.agents = [...(existing.agents || []), ...newAgents];
@@ -181,25 +184,29 @@ export const StateDashboard: React.FC = () => {
     const totalPincodes = typeof backendMetrics?.totalPincodeAgents === 'number'
       ? backendMetrics.totalPincodeAgents
       : statePincodes.length;
-    const totalVendors = typeof backendMetrics?.totalVendors === 'number'
-      ? backendMetrics.totalVendors
-      : stateVendors.length;
+    const totalVendors = stateVendors.length;
 
-    const activeVendors = typeof backendMetrics?.activeVendors === 'number'
-      ? backendMetrics.activeVendors
-      : stateVendors.filter((v: any) => {
-          const s = String(v.status || '').toLowerCase();
-          const k = String(v.kycStatus || '').toLowerCase();
-          return (s === 'active' || s === 'approved') && (k === 'approved' || k === 'verified' || !v.kycStatus);
-        }).length;
+    const activeVendors = stateVendors.filter((v: any) => {
+      const s = String(v.status || '').toLowerCase().trim();
+      const k = String(v.kycStatus || '').toLowerCase().trim();
+      return (s === 'active' || s === 'approved') && (k === 'approved' || k === 'verified');
+    }).length;
 
-    const pendingVendors = typeof backendMetrics?.pendingVendors === 'number'
-      ? backendMetrics.pendingVendors
-      : stateVendors.filter((v: any) => {
-          const s = String(v.status || '').toLowerCase();
-          const k = String(v.kycStatus || '').toLowerCase();
-          return s === 'pending' || k === 'pending' || k === 'kyc pending' || !['active', 'approved'].includes(s);
-        }).length;
+    const adminPendingApprovals = stateVendors.filter((v: any) => {
+      const s = String(v.status || '').toLowerCase().trim();
+      const a = String(v.approvalStatus || '').toLowerCase().trim();
+      const isAdminApproved = a === 'approved' || (s === 'active' && a !== 'pending_pincode_approval' && a !== 'pending');
+      return !isAdminApproved || a.includes('pending') || s === 'pending';
+    }).length;
+
+    const kycPending = stateVendors.filter((v: any) => {
+      const s = String(v.status || '').toLowerCase().trim();
+      const k = String(v.kycStatus || '').toLowerCase().trim();
+      const a = String(v.approvalStatus || '').toLowerCase().trim();
+      const isAdminApproved = a === 'approved' || (s === 'active' && a !== 'pending_pincode_approval' && a !== 'pending');
+      const isKycApproved = k === 'approved' || k === 'verified';
+      return isAdminApproved && !isKycApproved;
+    }).length;
 
     const inactiveVendors = stateVendors.filter((v: any) => v.status === 'inactive').length;
 
@@ -210,7 +217,8 @@ export const StateDashboard: React.FC = () => {
       totalVendors,
       activeVendors,
       inactiveVendors,
-      pendingVendors
+      adminPendingApprovals,
+      kycPending
     };
   }, [hierarchyRes, stateDistricts, stateDivisions, statePincodes, stateVendors]);
 
@@ -273,6 +281,25 @@ export const StateDashboard: React.FC = () => {
       };
     });
   }, [stateDivisions]);
+
+  const pincodesList = React.useMemo(() => {
+    return statePincodes.map((pin: any) => {
+      const pinCodeStr = pin.territory?.pincode || pin.pincode || 'Sector';
+      const agentName = formatCleanAgentName(pin.name, 'Pincode Agent', `PIN ${pinCodeStr}`);
+      const divName = pin.territory?.division || pin.division || '';
+      const distName = pin.territory?.district || pin.district || '';
+      return {
+        id: pin._id || pin.id,
+        name: `PIN ${pinCodeStr} (${agentName})`,
+        pincode: pinCodeStr,
+        agentName,
+        divisionName: divName,
+        districtName: distName,
+        location: [divName, distName].filter(Boolean).join(', ') || `${userState} Territory`,
+        status: pin.status || 'Active'
+      };
+    });
+  }, [statePincodes, userState]);
 
   // Multi-tier Agent Rankings (District, Division, and Pincode Agents for assigned State)
   const agentRankingsList = React.useMemo(() => {
@@ -423,15 +450,16 @@ export const StateDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* KPI Cards Grid - "Total District Leads" explicitly renamed to "Total District Agents" */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+      {/* 7 KPI Cards Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
         {[
-          { label: 'Total District Agents', val: metrics.totalDistricts.toString(), icon: <Landmark className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
-          { label: 'Total Division Management', val: metrics.totalDivisions.toString(), icon: <Users className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
-          { label: 'Total Pincode Agents', val: metrics.totalPincodes.toString(), icon: <Users className="w-4 h-4 text-[#4f4635]" />, bg: 'bg-[#efe1ca]' },
+          { label: 'Total Districts', val: metrics.totalDistricts.toString(), icon: <Landmark className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
+          { label: 'Total Divisions', val: metrics.totalDivisions.toString(), icon: <Layers className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
+          { label: 'Total Pincodes', val: metrics.totalPincodes.toString(), icon: <MapPin className="w-4 h-4 text-[#4f4635]" />, bg: 'bg-[#efe1ca]' },
           { label: 'Total Registered Vendors', val: metrics.totalVendors.toString(), icon: <Users className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
-          { label: 'Active Vendors', val: metrics.activeVendors.toString(), icon: <CheckCircle2 className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
-          { label: 'Pending Vendor Approvals', val: metrics.pendingVendors.toString(), icon: <Plus className="w-4 h-4 text-emerald-700" />, bg: 'bg-emerald-50' },
+          { label: 'Total Active Vendors', val: metrics.activeVendors.toString(), icon: <CheckCircle2 className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
+          { label: 'Admin Pending Approvals', val: metrics.adminPendingApprovals.toString(), icon: <Clock className="w-4 h-4 text-amber-700" />, bg: 'bg-amber-50' },
+          { label: 'KYC Pending', val: metrics.kycPending.toString(), icon: <AlertCircle className="w-4 h-4 text-blue-700" />, bg: 'bg-blue-50' },
         ].map((card, idx) => (
           <div key={idx} className="bg-white p-4 rounded-xl border border-[#eae8e7] flex items-center justify-between shadow-sm relative overflow-hidden group">
             <div className="space-y-1">
@@ -500,7 +528,7 @@ export const StateDashboard: React.FC = () => {
                   const territoryStr = dist.territory?.district || dist.district || 'District Area';
                   const agentCount = dist.agents?.length || (dist.agentCount ? dist.agentCount : 1);
                   const agentName = formatCleanAgentName(dist.name, 'District Agent', territoryStr);
-                  const divCount = dist.divisions?.length || 0;
+                  const divCount = typeof dist.totalDivisions === 'number' ? dist.totalDivisions : (dist.divisions?.length || 0);
                   return (
                     <div
                       key={dist._id || dist.id}
@@ -528,7 +556,7 @@ export const StateDashboard: React.FC = () => {
                       </div>
                       <div className="pt-2 border-t border-[#d7c3b5]/40 flex justify-between text-[10px] font-extrabold text-slate-600">
                         <span>{divCount} Divisions</span>
-                        <span className="text-emerald-700">{dist.performanceScore || 100}% Score</span>
+                        <span className="text-emerald-700 font-extrabold">{dist.coveragePercent ?? 0}% Coverage</span>
                       </div>
                     </div>
                   );
@@ -765,13 +793,13 @@ export const StateDashboard: React.FC = () => {
               <div className="flex justify-between text-xs font-bold text-[#52443a] mb-1">
                 <span>Pending Approvals Ratio</span>
                 <span className="text-[#34647b]">
-                  {metrics.totalVendors > 0 ? Math.round((metrics.pendingVendors / metrics.totalVendors) * 100) : 0}% Pending
+                  {metrics.totalVendors > 0 ? Math.round((((metrics as any).pendingVendors || metrics.adminPendingApprovals || 0) / metrics.totalVendors) * 100) : 0}% Pending
                 </span>
               </div>
               <div className="w-full bg-[#f6f3f2] h-2 rounded-full overflow-hidden">
                 <div
                   className="bg-[#34647b] h-full rounded-full transition-all duration-500"
-                  style={{ width: `${metrics.totalVendors > 0 ? Math.round((metrics.pendingVendors / metrics.totalVendors) * 100) : 0}%` }}
+                  style={{ width: `${metrics.totalVendors > 0 ? Math.round((((metrics as any).pendingVendors || metrics.adminPendingApprovals || 0) / metrics.totalVendors) * 100) : 0}%` }}
                 />
               </div>
             </div>
@@ -860,7 +888,7 @@ export const StateDashboard: React.FC = () => {
             <div className="flex gap-4">
               <button onClick={() => setActiveTab('districts')} className={`text-xs font-extrabold uppercase pb-1 border-b-2 transition-all ${activeTab === 'districts' ? 'border-[#864f19] text-[#1b1c1c]' : 'border-transparent text-[#52443a]'}`}>District List ({districtsList.length})</button>
               <button onClick={() => setActiveTab('divisions')} className={`text-xs font-extrabold uppercase pb-1 border-b-2 transition-all ${activeTab === 'divisions' ? 'border-[#864f19] text-[#1b1c1c]' : 'border-transparent text-[#52443a]'}`}>Division List ({divisionsList.length})</button>
-              <button onClick={() => setActiveTab('rankings')} className={`text-xs font-extrabold uppercase pb-1 border-b-2 transition-all ${activeTab === 'rankings' ? 'border-[#864f19] text-[#1b1c1c]' : 'border-transparent text-[#52443a]'}`}>Agent Rankings ({agentRankingsList.length})</button>
+              <button onClick={() => setActiveTab('pincodes')} className={`text-xs font-extrabold uppercase pb-1 border-b-2 transition-all ${activeTab === 'pincodes' ? 'border-[#864f19] text-[#1b1c1c]' : 'border-transparent text-[#52443a]'}`}>Pincode List ({pincodesList.length})</button>
             </div>
           </div>
           
@@ -943,42 +971,40 @@ export const StateDashboard: React.FC = () => {
               </>
             )}
 
-            {/* Tab 3: Agent Rankings (Covering District, Division AND Pincode agents) */}
-            {activeTab === 'rankings' && (
+            {/* Tab 3: Pincode List */}
+            {activeTab === 'pincodes' && (
               <>
                 <div className="py-2.5 flex justify-between text-xs font-bold text-[#52443a]">
-                  <span>Agent Name & Territory Role</span>
-                  <span>Performance Rating</span>
+                  <span>Pincode Area & Pincode Agent</span>
+                  <span>Division & District</span>
                 </div>
-                {agentRankingsList.length === 0 ? (
-                  <p className="py-6 text-center text-xs text-slate-400 font-semibold">No agent rankings recorded under {userState} yet.</p>
+                {pincodesList.length === 0 ? (
+                  <p className="py-6 text-center text-xs text-slate-400 font-semibold">No pincode agents registered under {userState}.</p>
                 ) : (
-                  (showAllTabRankings ? agentRankingsList : agentRankingsList.slice(0, INITIAL_LIMIT)).map((item, i) => (
+                  (showAllTabPincodes ? pincodesList : pincodesList.slice(0, INITIAL_LIMIT)).map((item, i) => (
                     <div key={i} className="py-3 flex justify-between items-center text-xs font-semibold">
                       <div>
                         <span className="text-[#1b1c1c] font-bold block">{item.name}</span>
-                        <span className="text-[10px] text-[#52443a] font-medium">
-                          {item.role} • {item.territory}
-                        </span>
+                        <span className="text-[10px] text-slate-500 font-medium">{item.agentName}</span>
                       </div>
-                      <span className="text-[#864f19] font-black text-sm">{item.score}% Score</span>
+                      <span className="text-[#34647b] font-extrabold">{item.location}</span>
                     </div>
                   ))
                 )}
-                {agentRankingsList.length > INITIAL_LIMIT && (
+                {pincodesList.length > INITIAL_LIMIT && (
                   <div className="pt-3 flex justify-center">
                     <button
                       type="button"
-                      onClick={() => setShowAllTabRankings(!showAllTabRankings)}
+                      onClick={() => setShowAllTabPincodes(!showAllTabPincodes)}
                       className="px-4 py-2 text-xs font-bold text-[#864f19] bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 rounded-xl transition cursor-pointer shadow-2xs inline-flex items-center gap-1.5"
                     >
-                      {showAllTabRankings ? (
+                      {showAllTabPincodes ? (
                         <>
                           <ChevronUp className="w-3.5 h-3.5" /> Show Less
                         </>
                       ) : (
                         <>
-                          <ChevronDown className="w-3.5 h-3.5" /> View All ({agentRankingsList.length})
+                          <ChevronDown className="w-3.5 h-3.5" /> View All ({pincodesList.length})
                         </>
                       )}
                     </button>

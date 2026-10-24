@@ -3,6 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+const s3_1 = require("./config/s3");
 require("dotenv/config");
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
@@ -77,6 +78,66 @@ app.use('/api/territory', territory_routes_1.default);
 app.use('/territory', territory_routes_1.default);
 app.use('/api/tasks', task_routes_1.default);
 app.use('/tasks', task_routes_1.default);
+// S3 Media streaming proxy and presigned view handler
+const mediaHandler = async (req, res) => {
+    try {
+        const rawKey = req.params[0] || req.params.key;
+        if (!rawKey)
+            return res.status(400).json({ error: 'Missing object key' });
+        const key = decodeURIComponent(rawKey);
+        // Private folders check (e.g. kyc, admin_docs, agent_docs)
+        const isPrivate = key.startsWith('kyc') || key.startsWith('admin_docs') || key.startsWith('agent_docs');
+        if (isPrivate && !req.agent && !req.user) {
+            return res.status(403).json({ error: 'Authentication required for private documents' });
+        }
+        const { body, contentType, contentLength } = await (0, s3_1.getObjectStream)(key);
+        if (contentType)
+            res.setHeader('Content-Type', contentType);
+        if (contentLength)
+            res.setHeader('Content-Length', contentLength);
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        if (body && typeof body.pipe === 'function') {
+            body.pipe(res);
+        }
+        else {
+            const presigned = await (0, s3_1.getPresignedUrl)(key, 900);
+            return res.redirect(presigned);
+        }
+    }
+    catch (err) {
+        if (err.name === 'NoSuchKey' || err.$metadata?.httpStatusCode === 404) {
+            return res.status(404).json({ error: 'File not found in S3' });
+        }
+        console.error('S3 streaming proxy error:', err);
+        return res.status(500).json({ error: 'Failed to retrieve file from storage' });
+    }
+};
+app.get('/api/media/s3/*', mediaHandler);
+app.get('/media/s3/*', mediaHandler);
+const uploadRouteHandler = async (req, res) => {
+    try {
+        const base64Data = req.body && (req.body.image || req.body.file || req.body.base64 || req.body.data);
+        if (base64Data && typeof base64Data === 'string' && base64Data.startsWith('data:')) {
+            const folder = (req.body && req.body.folder) || 'agent_uploads';
+            const filename = (req.body && req.body.filename) || `upload_${Date.now()}`;
+            const result = await (0, s3_1.uploadToS3)(base64Data, folder, filename);
+            return res.status(200).json({
+                success: true,
+                url: result.durableUrl || result.url,
+                key: result.key,
+                contentType: result.contentType,
+                size: result.size
+            });
+        }
+        return res.status(400).json({ success: false, error: 'No base64 data provided' });
+    }
+    catch (uploadErr) {
+        console.error('Agent upload error:', uploadErr);
+        return res.status(500).json({ success: false, error: uploadErr.message || 'Upload failed' });
+    }
+};
+app.post('/api/upload', uploadRouteHandler);
+app.post('/upload', uploadRouteHandler);
 // Detailed health check route with DB connectivity verification
 const healthHandler = (req, res) => {
     const dbState = mongoose_1.default.connection.readyState;

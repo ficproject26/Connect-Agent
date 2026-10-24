@@ -1,3 +1,4 @@
+import { getPresignedUrl, getObjectStream, uploadToS3 } from './config/s3';
 import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
@@ -93,6 +94,67 @@ app.use('/territory', territoryRoutes);
 
 app.use('/api/tasks', taskRoutes);
 app.use('/tasks', taskRoutes);
+
+// S3 Media streaming proxy and presigned view handler
+const mediaHandler = async (req: Request, res: Response) => {
+  try {
+    const rawKey = req.params[0] || (req.params as any).key;
+    if (!rawKey) return res.status(400).json({ error: 'Missing object key' });
+    const key = decodeURIComponent(rawKey);
+
+    // Private folders check (e.g. kyc, admin_docs, agent_docs)
+    const isPrivate = key.startsWith('kyc') || key.startsWith('admin_docs') || key.startsWith('agent_docs');
+    if (isPrivate && !(req as any).agent && !(req as any).user) {
+      return res.status(403).json({ error: 'Authentication required for private documents' });
+    }
+
+    const { body, contentType, contentLength } = await getObjectStream(key);
+    if (contentType) res.setHeader('Content-Type', contentType);
+    if (contentLength) res.setHeader('Content-Length', contentLength);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    if (body && typeof (body as any).pipe === 'function') {
+      (body as any).pipe(res);
+    } else {
+      const presigned = await getPresignedUrl(key, 900);
+      return res.redirect(presigned);
+    }
+  } catch (err: any) {
+    if (err.name === 'NoSuchKey' || err.$metadata?.httpStatusCode === 404) {
+      return res.status(404).json({ error: 'File not found in S3' });
+    }
+    console.error('S3 streaming proxy error:', err);
+    return res.status(500).json({ error: 'Failed to retrieve file from storage' });
+  }
+};
+
+app.get('/api/media/s3/*', mediaHandler);
+app.get('/media/s3/*', mediaHandler);
+
+const uploadRouteHandler = async (req: Request, res: Response) => {
+  try {
+    const base64Data = req.body && (req.body.image || req.body.file || req.body.base64 || req.body.data);
+    if (base64Data && typeof base64Data === 'string' && base64Data.startsWith('data:')) {
+      const folder = (req.body && req.body.folder) || 'agent_uploads';
+      const filename = (req.body && req.body.filename) || `upload_${Date.now()}`;
+      const result = await uploadToS3(base64Data, folder, filename);
+      return res.status(200).json({
+        success: true,
+        url: result.durableUrl || result.url,
+        key: result.key,
+        contentType: result.contentType,
+        size: result.size
+      });
+    }
+
+    return res.status(400).json({ success: false, error: 'No base64 data provided' });
+  } catch (uploadErr: any) {
+    console.error('Agent upload error:', uploadErr);
+    return res.status(500).json({ success: false, error: uploadErr.message || 'Upload failed' });
+  }
+};
+
+app.post('/api/upload', uploadRouteHandler);
+app.post('/upload', uploadRouteHandler);
 
 // Detailed health check route with DB connectivity verification
 const healthHandler = (req: Request, res: Response) => {

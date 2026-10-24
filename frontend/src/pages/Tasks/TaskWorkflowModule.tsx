@@ -132,6 +132,12 @@ export interface TaskItem {
   updatedAt: string;
 }
 
+const getMinDateTimeString = () => {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+};
+
 export const TaskWorkflowModule: React.FC = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -230,6 +236,13 @@ export const TaskWorkflowModule: React.FC = () => {
     vendor: '',
     location: ''
   });
+
+  // Helper to get local ISO string formatted for datetime-local min attribute (YYYY-MM-DDTHH:mm)
+  const getMinDateTimeString = () => {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  };
 
   // Cascading territory dropdown states for creation
   const [statesList, setStatesList] = useState<string[]>([]);
@@ -532,7 +545,7 @@ export const TaskWorkflowModule: React.FC = () => {
     }
     const dueTime = new Date(createForm.dueDate).getTime();
     if (isNaN(dueTime) || dueTime <= Date.now()) {
-      setActionError('Task deadline must be a valid future date and time.');
+      setActionError('Deadline must be in the future. Past dates or times are not permitted.');
       return;
     }
 
@@ -1154,8 +1167,20 @@ export const TaskWorkflowModule: React.FC = () => {
                 <input
                   type="datetime-local"
                   required
+                  min={getMinDateTimeString()}
                   value={createForm.dueDate}
-                  onChange={(e) => setCreateForm({ ...createForm, dueDate: e.target.value })}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val) {
+                      const selectedTime = new Date(val).getTime();
+                      if (isNaN(selectedTime) || selectedTime <= Date.now()) {
+                        setActionError('Deadline must be in the future. Past dates or times cannot be selected.');
+                      } else {
+                        setActionError('');
+                      }
+                    }
+                    setCreateForm({ ...createForm, dueDate: val });
+                  }}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#864f19]/30"
                 />
               </div>

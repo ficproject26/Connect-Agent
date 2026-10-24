@@ -1,3 +1,4 @@
+import { uploadBase64ToS3 } from '../config/s3';
 import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
@@ -491,6 +492,22 @@ export const register = async (req: Request, res: Response) => {
     const registrationId = `REG-${dateStr}-${randDigits}`;
 
     const cleanAlt = String(validatedData.altPhone || (req.body as any).alternateMobile || (req.body as any).alternativePhone || (req.body as any).secondaryPhone || '').trim();
+
+    // Upload base64 KYC documents to S3
+    if (validatedData.kycDocs && typeof validatedData.kycDocs === 'object') {
+      const docFields = ['aadhaarCard', 'panCard', 'passportPhoto', 'signature', 'cancelledCheque', 'educationalCertificates'];
+      for (const field of docFields) {
+        const val = (validatedData.kycDocs as any)[field];
+        if (typeof val === 'string' && val.startsWith('data:')) {
+          try {
+            const upRes = await uploadBase64ToS3(val, 'agent_docs/kyc', `reg_${Date.now()}_${field}`);
+            (validatedData.kycDocs as any)[field] = upRes.durableUrl || upRes.url || upRes.key;
+          } catch (e) {
+            console.error(`Failed to upload KYC doc ${field} to S3:`, e);
+          }
+        }
+      }
+    }
 
     const rawBank = (validatedData as any).bankDetails || (req.body as any).bankDetails || {};
     const cleanBankDetails = {

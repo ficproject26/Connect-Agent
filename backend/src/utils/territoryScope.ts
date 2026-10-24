@@ -433,15 +433,11 @@ export function buildVendorScopeFilter(scope: TerritoryScope | null, divisionPin
 
     if (scope.pincode) {
       return {
-        $and: [
-          {
-            $or: [
-              { pincode: scope.pincode },
-              { assignedPincode: scope.pincode },
-              { 'location.pincode': scope.pincode }
-            ]
-          },
-          { $or: agentFilterClauses }
+        $or: [
+          { pincode: scope.pincode },
+          { assignedPincode: scope.pincode },
+          { 'location.pincode': scope.pincode },
+          ...agentFilterClauses
         ]
       };
     }

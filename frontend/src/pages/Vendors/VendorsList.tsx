@@ -301,6 +301,20 @@ export const VendorsList: React.FC = () => {
     }
   });
 
+  // Query hierarchy to resolve active assigned Pincode Agents for Division/District territory
+  const { data: hierarchyRes } = useQuery({
+    queryKey: ['vendorsHierarchyScope', user?._id || (user as any)?.id],
+    queryFn: async () => {
+      try {
+        const res = await api.get('/admin/hierarchy');
+        return res.data;
+      } catch (_) {
+        return null;
+      }
+    },
+    staleTime: 60000
+  });
+
   const rawRole = (user?.role as string) || (user as any)?.level || 'pincode';
   const activeRole = (rawRole === 'agent' ? ((user as any)?.level || 'pincode') : rawRole).toLowerCase();
   const userTerritory = user?.assignedTerritory || user?.territory || {
@@ -339,6 +353,13 @@ export const VendorsList: React.FC = () => {
           }
           if (typeof v.onboardedBy === 'string' && v.onboardedBy.trim() && !v.onboardedBy.match(/^[0-9a-fA-F]{24}$/)) {
             return v.onboardedBy.trim();
+          }
+          if (v.pincode && hierarchyRes?.pincodes && Array.isArray(hierarchyRes.pincodes)) {
+            const cleanVpin = String(v.pincode).trim();
+            const pinAgent = hierarchyRes.pincodes.find((p: any) => String(p.territory?.pincode || p.pincode || '').trim() === cleanVpin);
+            if (pinAgent?.name) {
+              return `${pinAgent.name} (Pincode Agent)`;
+            }
           }
           return 'Unavailable';
         })();
@@ -432,7 +453,7 @@ export const VendorsList: React.FC = () => {
         return matching ? { ...prev, ...matching } : prev;
       });
     }
-  }, [apiVendorsData, user?.name, userState, userDistrict, userDivision, userPincode, userVendorsKey]);
+  }, [apiVendorsData, hierarchyRes, user?.name, userState, userDistrict, userDivision, userPincode, userVendorsKey]);
 
   // Reset child filters when parent changes
   useEffect(() => {
@@ -513,7 +534,30 @@ export const VendorsList: React.FC = () => {
     }
     return Array.from(new Set(scopedVendors.map(v => v.pincode).filter(Boolean)));
   }, [scopedVendors, effectiveDivisionForPincodes]);
-  const agents = useMemo(() => Array.from(new Set(scopedVendors.map(v => v.assignedAgent).filter(Boolean))), [scopedVendors]);
+
+  const agents = useMemo(() => {
+    const fromVendors = scopedVendors.map(v => v.assignedAgent).filter(Boolean);
+    const fromHierarchy: string[] = [];
+
+    if (hierarchyRes?.pincodes && Array.isArray(hierarchyRes.pincodes)) {
+      hierarchyRes.pincodes.forEach((p: any) => {
+        const pinCode = String(p.territory?.pincode || p.pincode || '').trim();
+        const agentName = (p.name || '').trim();
+        if (!agentName) return;
+
+        // If a specific pincode filter is active, only include the agent for that pincode
+        if (pincodeFilter && pincodeFilter !== 'all') {
+          if (pinCode === String(pincodeFilter).trim()) {
+            fromHierarchy.push(agentName);
+          }
+        } else {
+          fromHierarchy.push(agentName);
+        }
+      });
+    }
+
+    return Array.from(new Set([...fromHierarchy, ...fromVendors]));
+  }, [scopedVendors, hierarchyRes, pincodeFilter]);
 
   // Compute 6 KPI Card Metrics from SCOPED active vendors list with dynamic calendar boundaries
   const metrics = useMemo(() => {
@@ -630,7 +674,9 @@ export const VendorsList: React.FC = () => {
       const matchesDistrict = districtFilter === 'all' || vendor.district === districtFilter;
       const matchesDivision = divisionFilter === 'all' || vendor.division === divisionFilter;
       const matchesPincode = pincodeFilter === 'all' || vendor.pincode === pincodeFilter;
-      const matchesAgent = agentFilter === 'all' || vendor.assignedAgent === agentFilter;
+      const matchesAgent = agentFilter === 'all' || 
+        vendor.assignedAgent === agentFilter || 
+        (typeof vendor.assignedAgent === 'string' && vendor.assignedAgent.toLowerCase().includes(agentFilter.toLowerCase()));
       const matchesStatus = statusFilter === 'all' || vendor.status === statusFilter;
       const matchesKyc = kycFilter === 'all' || vendor.kycStatus === kycFilter;
 

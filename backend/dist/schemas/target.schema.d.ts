@@ -12,14 +12,14 @@ export declare const createTargetSchema: z.ZodObject<{
         assignedTo: string;
         targetQuantity: number;
         deadline: string;
-        type?: "vendor_onboarding" | "field_visits" | "revenue" | undefined;
+        type?: "field_visits" | "vendor_onboarding" | "revenue" | undefined;
         description?: string | undefined;
     }, {
         title: string;
         assignedTo: string;
         targetQuantity: number;
         deadline: string;
-        type?: "vendor_onboarding" | "field_visits" | "revenue" | undefined;
+        type?: "field_visits" | "vendor_onboarding" | "revenue" | undefined;
         description?: string | undefined;
     }>;
 }, "strip", z.ZodTypeAny, {
@@ -28,7 +28,7 @@ export declare const createTargetSchema: z.ZodObject<{
         assignedTo: string;
         targetQuantity: number;
         deadline: string;
-        type?: "vendor_onboarding" | "field_visits" | "revenue" | undefined;
+        type?: "field_visits" | "vendor_onboarding" | "revenue" | undefined;
         description?: string | undefined;
     };
 }, {
@@ -37,7 +37,7 @@ export declare const createTargetSchema: z.ZodObject<{
         assignedTo: string;
         targetQuantity: number;
         deadline: string;
-        type?: "vendor_onboarding" | "field_visits" | "revenue" | undefined;
+        type?: "field_visits" | "vendor_onboarding" | "revenue" | undefined;
         description?: string | undefined;
     };
 }>;

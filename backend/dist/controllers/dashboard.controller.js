@@ -11,8 +11,10 @@ const Task_1 = __importDefault(require("../models/Task"));
 const Ticket_1 = __importDefault(require("../models/Ticket"));
 const Notification_1 = __importDefault(require("../models/Notification"));
 const Report_1 = __importDefault(require("../models/Report"));
+const Agent_1 = __importDefault(require("../models/Agent"));
 const territoryScope_1 = require("../utils/territoryScope");
 const cache_service_1 = require("../services/cache.service");
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // GET /api/dashboard/stats
 const getDashboardStats = async (req, res) => {
     try {
@@ -35,16 +37,86 @@ const getDashboardStats = async (req, res) => {
             { assignedAgentId: agentId },
             { assignedAgentId: { $in: agentMatches } }
         ];
-        const activeVendorFilter = {
-            ...vendorFilter,
-            kycStatus: { $in: ['approved', 'Approved', 'verified', 'Verified'] },
-            status: { $in: ['active', 'Active', 'approved', 'Approved', 'verified', 'Verified'] }
+        const totalRegisteredFilter = {
+            $and: [
+                vendorFilter,
+                {
+                    $or: [
+                        { businessName: { $exists: true, $nin: ['', null] } },
+                        { name: { $exists: true, $nin: ['', null] } }
+                    ]
+                }
+            ]
         };
+        const activeVendorFilter = {
+            $and: [
+                vendorFilter,
+                { kycStatus: { $in: ['approved', 'Approved', 'verified', 'Verified'] } },
+                { status: { $in: ['active', 'Active', 'approved', 'Approved', 'verified', 'Verified'] } }
+            ]
+        };
+        const adminPendingFilter = {
+            $and: [
+                vendorFilter,
+                {
+                    $or: [
+                        { approvalStatus: { $in: ['PENDING_PINCODE_APPROVAL', 'pending_pincode_approval', 'pending', 'Pending'] } },
+                        { status: { $in: ['pending', 'Pending', 'PENDING_PINCODE_APPROVAL'] } }
+                    ]
+                },
+                { approvalStatus: { $nin: ['approved', 'Approved'] } }
+            ]
+        };
+        const kycPendingFilter = {
+            $and: [
+                vendorFilter,
+                {
+                    $or: [
+                        { approvalStatus: { $in: ['approved', 'Approved'] } },
+                        { status: { $in: ['active', 'Active', 'approved', 'Approved'] } }
+                    ]
+                },
+                { approvalStatus: { $nin: ['PENDING_PINCODE_APPROVAL', 'pending_pincode_approval', 'pending', 'Pending'] } },
+                { kycStatus: { $nin: ['approved', 'Approved', 'verified', 'Verified'] } }
+            ]
+        };
+        // Calculate dynamic territory counts within authorized scope
+        let totalDistricts = 0;
+        let totalDivisions = 0;
+        let totalPincodes = 0;
+        if (scope) {
+            if (scope.role === 'state' && scope.state) {
+                const sRegex = new RegExp(`^\\s*${escapeRegex(scope.state)}\\s*$`, 'i');
+                const [distDocs, divDocs, pinDocs] = await Promise.all([
+                    Agent_1.default.distinct('territory.district', { role: 'district', status: { $in: ['active', 'approved'] }, 'territory.state': sRegex }),
+                    Agent_1.default.distinct('territory.division', { role: 'division', status: { $in: ['active', 'approved'] }, 'territory.state': sRegex }),
+                    Agent_1.default.distinct('territory.pincode', { role: 'pincode', status: { $in: ['active', 'approved'] }, 'territory.state': sRegex })
+                ]);
+                totalDistricts = distDocs.filter(Boolean).length;
+                totalDivisions = divDocs.filter(Boolean).length;
+                totalPincodes = pinDocs.filter(Boolean).length;
+            }
+            else if (scope.role === 'district' && scope.district) {
+                const dRegex = new RegExp(`^\\s*${escapeRegex(scope.district)}\\s*$`, 'i');
+                const [divDocs, pinDocs] = await Promise.all([
+                    Agent_1.default.distinct('territory.division', { role: 'division', status: { $in: ['active', 'approved'] }, 'territory.district': dRegex }),
+                    Agent_1.default.distinct('territory.pincode', { role: 'pincode', status: { $in: ['active', 'approved'] }, 'territory.district': dRegex })
+                ]);
+                totalDivisions = divDocs.filter(Boolean).length;
+                totalPincodes = pinDocs.filter(Boolean).length;
+            }
+            else if (scope.role === 'division' && scope.division) {
+                const divRegex = new RegExp(`^\\s*${escapeRegex(scope.division)}\\s*$`, 'i');
+                const pinDocs = await Agent_1.default.distinct('territory.pincode', { role: 'pincode', status: { $in: ['active', 'approved'] }, 'territory.division': divRegex });
+                totalPincodes = pinDocs.filter(Boolean).length;
+            }
+        }
         // Run all aggregations in parallel for performance with field projections
-        const [totalVendors, activeVendors, pendingVendors, totalAssignments, completedAssignments, overdueAssignments, totalTasks, completedTasks, overdueTasks, openTickets, resolvedTickets, unreadNotifications, totalReports, recentAssignments, recentVendors] = await Promise.all([
+        const [totalVendors, activeVendors, adminPendingVendors, kycPendingVendors, totalAssignments, completedAssignments, overdueAssignments, totalTasks, completedTasks, overdueTasks, openTickets, resolvedTickets, unreadNotifications, totalReports, recentAssignments, recentVendors] = await Promise.all([
+            Vendor_1.default.countDocuments(totalRegisteredFilter),
             Vendor_1.default.countDocuments(activeVendorFilter),
-            Vendor_1.default.countDocuments(activeVendorFilter),
-            0,
+            Vendor_1.default.countDocuments(adminPendingFilter),
+            Vendor_1.default.countDocuments(kycPendingFilter),
             TargetAssignment_1.default.countDocuments({ assignedTo: { $in: agentMatches } }),
             TargetAssignment_1.default.countDocuments({ assignedTo: { $in: agentMatches }, status: 'completed' }),
             TargetAssignment_1.default.countDocuments({ assignedTo: { $in: agentMatches }, status: 'overdue' }),
@@ -94,10 +166,17 @@ const getDashboardStats = async (req, res) => {
         const overdueTargetsAll = overdueAssignments + overdueTasks;
         const resultPayload = {
             stats: {
+                territory: {
+                    districts: totalDistricts,
+                    divisions: totalDivisions,
+                    pincodes: totalPincodes
+                },
                 vendors: {
                     total: totalVendors,
                     active: activeVendors,
-                    pending: pendingVendors
+                    pending: adminPendingVendors,
+                    adminPending: adminPendingVendors,
+                    kycPending: kycPendingVendors
                 },
                 targets: {
                     total: totalTargetsAll,

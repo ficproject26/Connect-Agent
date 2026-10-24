@@ -1015,13 +1015,14 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
 
       const leadAgent = enrichAgentData(leadAgentDoc);
       const canonicalName = getAgentDistrict(leadAgent) || distKey;
-      const distState = getAgentState(leadAgent) || scope?.state || '';
+      const rawDistState = getAgentState(leadAgent) || scope?.state || '';
+      const distState = rawDistState.toLowerCase().trim();
 
       // Match child divisions strictly belonging to this district (from allDivisions)
       const matchingDivisions = allDivisions.filter(div => {
         const divDist = getAgentDistrict(div).toLowerCase();
         const divDistId = String(div.assignedTerritory?.districtId || '');
-        const divState = getAgentState(div).toLowerCase();
+        const divState = getAgentState(div).toLowerCase().trim();
         if (distState && divState && !distState.includes(divState) && !divState.includes(distState)) return false;
         if (leadAgent.assignedTerritory?.districtId && divDistId && String(leadAgent.assignedTerritory.districtId) === divDistId) {
           return true;
@@ -1030,6 +1031,23 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
         const kNorm = cleanWord(distKey);
         return Boolean(divDist && (divDist === distKey || dNorm === kNorm || divDist.includes(distKey) || distKey.includes(divDist)));
       });
+
+      // Find all registered/canonical divisions in the database for this district
+      const leadDistId = String(leadAgent.assignedTerritory?.districtId || leadAgentDoc._id || '');
+      const districtCanonicalDivs = canonicalDivisions.filter(cDiv => {
+        const cDivDistId = String(cDiv.districtId || '');
+        if (cDivDistId && leadDistId && cDivDistId === leadDistId) return true;
+        const cDist = canonicalDistricts.find(cd => String(cd._id) === cDivDistId);
+        if (cDist && cleanWord(cDist.name) === cleanWord(canonicalName)) return true;
+        if (cDiv.district && cleanWord(cDiv.district) === cleanWord(canonicalName)) return true;
+        return false;
+      });
+
+      const totalDistrictDivisions = districtCanonicalDivs.length > 0 ? districtCanonicalDivs.length : matchingDivisions.length;
+      const assignedDivisionsCount = matchingDivisions.length;
+      const divisionCoveragePercent = totalDistrictDivisions > 0
+        ? Math.round((assignedDivisionsCount / totalDistrictDivisions) * 100)
+        : 0;
 
       const totalPincodes = matchingDivisions.reduce((acc, d) => acc + (d.pincodes?.length || d.teamSize || 0), 0);
       const districtTeamEarnings = matchingDivisions.reduce((acc, d) => acc + (d.teamEarnings || d.earnings || 0), 0) + leadAgent.earnings;
@@ -1040,17 +1058,22 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
         territory: {
           ...leadAgent.territory,
           district: canonicalName,
-          state: distState || leadAgent.territory?.state
+          state: rawDistState || leadAgent.territory?.state
         },
         assignedTerritory: {
           ...leadAgent.assignedTerritory,
           district: canonicalName,
-          state: distState || leadAgent.assignedTerritory?.state
+          state: rawDistState || leadAgent.assignedTerritory?.state
         },
         district: canonicalName,
         agents: [leadAgent], // Strictly exactly 1 active approved district agent per district
         agentCount: 1,
         divisions: matchingDivisions,
+        totalDivisions: totalDistrictDivisions,
+        divisionsCount: totalDistrictDivisions,
+        assignedDivisions: assignedDivisionsCount,
+        coveragePercent: divisionCoveragePercent,
+        performanceScore: divisionCoveragePercent,
         teamSize: 1 + matchingDivisions.length + totalPincodes,
         teamEarnings: districtTeamEarnings,
         teamPendingKyc: 0,
@@ -1075,6 +1098,13 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
           const totalPincodes = matchingDivisions.reduce((acc, d) => acc + (d.pincodes?.length || d.teamSize || 0), 0);
           const verifiedState = cDist.state || stateMapById.get(String(cDist.stateId)) || scope?.state || '';
 
+          const districtCanonicalDivs = canonicalDivisions.filter(cDiv => String(cDiv.districtId || '') === String(cDist._id));
+          const totalDistrictDivisions = districtCanonicalDivs.length > 0 ? districtCanonicalDivs.length : matchingDivisions.length;
+          const assignedDivisionsCount = matchingDivisions.length;
+          const divisionCoveragePercent = totalDistrictDivisions > 0
+            ? Math.round((assignedDivisionsCount / totalDistrictDivisions) * 100)
+            : 0;
+
           uniqueDistrictsList.push({
             _id: cDist._id,
             name: `${cDist.name} District`,
@@ -1085,7 +1115,11 @@ export const getHierarchyTree = async (req: Request, res: Response) => {
             status: 'approved',
             kycStatus: 'approved',
             registrationFeePaid: true,
-            performanceScore: 0,
+            performanceScore: divisionCoveragePercent,
+            coveragePercent: divisionCoveragePercent,
+            totalDivisions: totalDistrictDivisions,
+            divisionsCount: totalDistrictDivisions,
+            assignedDivisions: assignedDivisionsCount,
             earnings: 0,
             tieupsToday: 0,
             tieupsYesterday: 0,

@@ -3,7 +3,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
 import { downloadReport } from '../../../utils/downloadReport';
 import {
-  TrendingUp, Clock, CheckCircle2,
+  TrendingUp, Clock, CheckCircle2, AlertCircle,
   Plus, Users, Target, Ticket, Send, ShieldAlert, FileText, Camera, Download, Loader2, MessageSquare, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -30,7 +30,7 @@ export const PincodeDashboard: React.FC = () => {
 
   const stats = dashboardData?.stats || {
     targets: { total: 0, completed: 0, completionRate: 0 },
-    vendors: { total: 0, pending: 0 },
+    vendors: { total: 0, active: 0, pending: 0, adminPending: 0, kycPending: 0 },
     notifications: { unread: 0 },
     tickets: { open: 0, resolved: 0 }
   };
@@ -154,17 +154,13 @@ export const PincodeDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Clean KPI Cards Grid */}
+      {/* 4 KPI Cards Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Field Visits', val: `${stats?.targets?.total || 0} Visits`, icon: <Target className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
-          { label: 'Completed Visits', val: `${stats?.targets?.completed || 0} Done`, icon: <CheckCircle2 className="w-4 h-4 text-emerald-700" />, bg: 'bg-emerald-50' },
-          { label: 'Pending Verifications', val: `${stats?.vendors?.pending || 0} Pending`, icon: <Clock className="w-4 h-4 text-[#4f4635]" />, bg: 'bg-[#efe1ca]' },
-          { label: 'Assigned Vendors', val: `${stats?.vendors?.total || 0} Shops`, icon: <Users className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
-          { label: 'New Registrations', val: `${stats?.vendors?.pending || 0} New`, icon: <Plus className="w-4 h-4 text-emerald-700" />, bg: 'bg-emerald-50' },
-          { label: 'Open Tickets', val: `${stats?.tickets?.open || 0} Active`, icon: <Ticket className="w-4 h-4 text-red-700" />, bg: 'bg-red-50' },
-          { label: 'Resolved Tickets', val: `${stats?.tickets?.resolved || 0} Resolved`, icon: <CheckCircle2 className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
-          { label: 'My Targets Progress', val: `${stats?.targets?.completionRate || 0}% Done`, icon: <TrendingUp className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' }
+          { label: 'Total Registered Vendors', val: `${stats?.vendors?.total || 0}`, icon: <Users className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
+          { label: 'Total Active Vendors', val: `${stats?.vendors?.active || 0}`, icon: <CheckCircle2 className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
+          { label: 'Admin Pending Approvals', val: `${stats?.vendors?.adminPending ?? stats?.vendors?.pending ?? 0}`, icon: <Clock className="w-4 h-4 text-amber-700" />, bg: 'bg-amber-50' },
+          { label: 'KYC Pending', val: `${stats?.vendors?.kycPending || 0}`, icon: <AlertCircle className="w-4 h-4 text-blue-700" />, bg: 'bg-blue-50' }
         ].map((card, idx) => (
           <div key={idx} className="bg-white p-5 rounded-[16px] border border-[#eae8e7] flex items-center justify-between shadow-sm relative overflow-hidden group">
             <div className="space-y-1">
@@ -172,7 +168,7 @@ export const PincodeDashboard: React.FC = () => {
               {isLoading && !dashboardData ? (
                 <div className="h-5 w-16 bg-slate-100 animate-pulse rounded my-0.5" />
               ) : (
-                <span className="text-base font-extrabold text-[#1b1c1c]">{card.val}</span>
+                <span className="text-xl font-black text-[#1b1c1c]">{card.val}</span>
               )}
             </div>
             <div className={`h-8 w-8 rounded-lg ${card.bg} flex items-center justify-center`}>

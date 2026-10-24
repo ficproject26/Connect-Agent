@@ -1,3 +1,4 @@
+import { uploadBase64ToS3 } from '../config/s3';
 import { Request, Response } from 'express';
 import { z } from 'zod';
 import FieldVisit from '../models/FieldVisit';
@@ -741,15 +742,35 @@ export const recordShopVisit = async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: 'Shop name / business title is required' });
     }
 
-    const resolvedStatus = (interestedStatus || interestStatus || 'YES').toUpperCase() === 'NO' ? 'NO' : 'YES';
+        const resolvedStatus = (interestedStatus || interestStatus || 'YES').toUpperCase() === 'NO' ? 'NO' : 'YES';
     const resolvedCategory = category || businessCategory || 'Products';
-    const resolvedPhoto = shopPhoto || storefrontPhoto || null;
+    let resolvedPhoto = shopPhoto || storefrontPhoto || null;
 
     if (!resolvedPhoto) {
       return res.status(400).json({ success: false, message: 'Storefront photo is required' });
     }
 
-    const resolvedVoice = voiceNote || audioVoiceNote || null;
+    let resolvedVoice = voiceNote || audioVoiceNote || null;
+
+    // Upload storefront photo to S3 if base64 DataURL
+    if (resolvedPhoto && typeof resolvedPhoto === 'string' && resolvedPhoto.startsWith('data:')) {
+      try {
+        const uploadRes = await uploadBase64ToS3(resolvedPhoto, 'field_visits', `visit_${Date.now()}`);
+        resolvedPhoto = uploadRes.durableUrl || uploadRes.url || uploadRes.key;
+      } catch (uploadErr) {
+        console.error('Failed to upload field visit photo to S3:', uploadErr);
+      }
+    }
+
+    // Upload voice note to S3 if base64 DataURL
+    if (resolvedVoice && typeof resolvedVoice === 'string' && resolvedVoice.startsWith('data:')) {
+      try {
+        const uploadRes = await uploadBase64ToS3(resolvedVoice, 'voice_notes', `voice_${Date.now()}`);
+        resolvedVoice = uploadRes.durableUrl || uploadRes.url || uploadRes.key;
+      } catch (uploadErr) {
+        console.error('Failed to upload field visit voice note to S3:', uploadErr);
+      }
+    }
     const resolvedReason = notInterestedReason || (resolvedStatus === 'YES' ? 'Interested in Onboarding' : 'Not specified');
     const resolvedOther = otherReason || customReason || null;
 

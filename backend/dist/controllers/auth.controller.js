@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.verifyMobileOtp = exports.sendOtp = exports.resetPassword = exports.verifyOtp = exports.forgotPassword = exports.updateKyc = exports.changePassword = exports.updateProfile = exports.getMe = exports.login = exports.register = void 0;
+const s3_1 = require("../config/s3");
 const mongoose_1 = __importDefault(require("mongoose"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const Agent_1 = __importDefault(require("../models/Agent"));
@@ -437,6 +438,22 @@ const register = async (req, res) => {
         const randDigits = Math.floor(1000 + Math.random() * 9000);
         const registrationId = `REG-${dateStr}-${randDigits}`;
         const cleanAlt = String(validatedData.altPhone || req.body.alternateMobile || req.body.alternativePhone || req.body.secondaryPhone || '').trim();
+        // Upload base64 KYC documents to S3
+        if (validatedData.kycDocs && typeof validatedData.kycDocs === 'object') {
+            const docFields = ['aadhaarCard', 'panCard', 'passportPhoto', 'signature', 'cancelledCheque', 'educationalCertificates'];
+            for (const field of docFields) {
+                const val = validatedData.kycDocs[field];
+                if (typeof val === 'string' && val.startsWith('data:')) {
+                    try {
+                        const upRes = await (0, s3_1.uploadBase64ToS3)(val, 'agent_docs/kyc', `reg_${Date.now()}_${field}`);
+                        validatedData.kycDocs[field] = upRes.durableUrl || upRes.url || upRes.key;
+                    }
+                    catch (e) {
+                        console.error(`Failed to upload KYC doc ${field} to S3:`, e);
+                    }
+                }
+            }
+        }
         const rawBank = validatedData.bankDetails || req.body.bankDetails || {};
         const cleanBankDetails = {
             accountHolderName: String(rawBank.accountHolderName || rawBank.accountHolder || req.body.accountHolderName || validatedData.accountHolderName || '').trim(),

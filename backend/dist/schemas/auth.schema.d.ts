@@ -141,6 +141,7 @@ export declare const updateProfileSchema: z.ZodObject<{
     }, z.ZodTypeAny, "passthrough">>;
 }, "strip", z.ZodTypeAny, {
     body: {
+        mobile?: string | undefined;
         name?: string | undefined;
         email?: string | undefined;
         phone?: string | undefined;
@@ -150,13 +151,13 @@ export declare const updateProfileSchema: z.ZodObject<{
         fullAddress?: string | undefined;
         alternateMobile?: string | undefined;
         altPhone?: string | undefined;
-        mobile?: string | undefined;
         phoneNumber?: string | undefined;
     } & {
         [k: string]: unknown;
     };
 }, {
     body: {
+        mobile?: string | undefined;
         name?: string | undefined;
         email?: string | undefined;
         phone?: string | undefined;
@@ -166,7 +167,6 @@ export declare const updateProfileSchema: z.ZodObject<{
         fullAddress?: string | undefined;
         alternateMobile?: string | undefined;
         altPhone?: string | undefined;
-        mobile?: string | undefined;
         phoneNumber?: string | undefined;
     } & {
         [k: string]: unknown;

@@ -1857,10 +1857,16 @@ export const RegisterWizard: React.FC = () => {
                               <span>{isUploaded ? 'Change File' : 'Select File'}</span>
                             </button>
 
-                            {isUploaded && (
+                            {isUploaded ? (
                               <div className="flex items-center gap-1 bg-white border border-emerald-200 px-2 py-1 rounded-lg min-w-0 flex-grow max-w-[170px]" title={docInfo.fileName}>
                                 <span className="text-[10px] text-emerald-700 font-extrabold truncate">
                                   ✓ {docInfo.fileName}
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1 bg-slate-100 border border-dashed border-slate-300 px-2.5 py-1 rounded-lg min-w-0 flex-grow max-w-[170px]" title="No file chosen">
+                                <span className="text-[10px] text-slate-400 font-medium truncate">
+                                  No file chosen
                                 </span>
                               </div>
                             )}
@@ -1883,58 +1889,71 @@ export const RegisterWizard: React.FC = () => {
                 </div>
 
                 {/* Customer Digital Signature File Upload & Drawing Pad (Bug 4 - Consistent Alignment) */}
-                <div className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200 flex flex-col justify-between min-h-[110px] space-y-3 shadow-2xs">
-                  <div className="flex items-center justify-between gap-2">
-                    <label className="block text-xs font-bold text-slate-800">
-                      Customer Digital Signature <span className="text-rose-600 font-extrabold">(Required)</span>
-                    </label>
-                    <span className="text-[10px] text-slate-500 font-semibold">Allowed: JPG, PNG, PDF (Max 5MB)</span>
-                  </div>
-
-                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
-                    <input
-                      type="file"
-                      accept=".jpg,.jpeg,.png,.pdf"
-                      id="file-signature"
-                      className="hidden"
-                      onChange={(e) => handleFileUpload(e, 'signature')}
-                    />
-
-                    <div className="flex items-center gap-2 flex-grow min-w-0">
-                      <button
-                        type="button"
-                        onClick={() => document.getElementById('file-signature')?.click()}
-                        className="flex items-center justify-center gap-1.5 px-3 py-1.5 border border-[#864f19] text-[#864f19] hover:bg-[#864f19] hover:text-white rounded-xl text-xs font-bold bg-white transition-all cursor-pointer shrink-0 shadow-2xs"
-                      >
-                        <FileText className="w-3.5 h-3.5" />
-                        <span>
-                          {documents.signature?.fileName && documents.signature.fileName !== 'digital_signature.png'
-                            ? 'Change Signature File'
-                            : 'Upload Signature File (JPG/PNG/PDF)'}
-                        </span>
-                      </button>
-
-                      {documents.signature?.fileName && (
-                        <div className="flex items-center gap-1 bg-white border border-emerald-200 px-2 py-1 rounded-lg min-w-0 flex-grow max-w-[200px]" title={documents.signature.fileName}>
-                          <span className="text-[10px] text-emerald-700 font-extrabold truncate">
-                            ✓ {documents.signature.fileName}
+                {(() => {
+                  const isSigUploaded = Boolean(documents.signature?.fileName && documents.signature?.dataUrl);
+                  return (
+                    <div className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200 flex flex-col justify-between min-h-[110px] space-y-3 shadow-2xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="block text-xs font-bold text-slate-800">
+                          Customer Digital Signature <span className="text-rose-600 font-extrabold">(Required)</span>
+                        </label>
+                        {isSigUploaded ? (
+                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            Uploaded
                           </span>
-                        </div>
-                      )}
-                    </div>
+                        ) : (
+                          <span className="text-[10px] font-semibold text-slate-400">Allowed: JPG, PNG, PDF (Max 5MB)</span>
+                        )}
+                      </div>
 
-                    {documents.signature?.fileName && (
-                      <button
-                        type="button"
-                        onClick={() => removeDocument('signature')}
-                        className="text-[10px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2.5 py-1.5 rounded-xl border border-rose-200 transition-colors cursor-pointer shrink-0"
-                        title="Remove signature"
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                </div>
+                      <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
+                        <input
+                          type="file"
+                          accept=".jpg,.jpeg,.png,.pdf"
+                          id="file-signature"
+                          className="hidden"
+                          onChange={(e) => handleFileUpload(e, 'signature')}
+                        />
+
+                        <div className="flex items-center gap-2 flex-grow min-w-0">
+                          <button
+                            type="button"
+                            onClick={() => document.getElementById('file-signature')?.click()}
+                            className="flex items-center justify-center gap-1.5 px-3 py-1.5 border border-[#864f19] text-[#864f19] hover:bg-[#864f19] hover:text-white rounded-xl text-xs font-bold bg-white transition-all cursor-pointer shrink-0 shadow-2xs"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                            <span>{isSigUploaded ? 'Change File' : 'Select File'}</span>
+                          </button>
+
+                          {isSigUploaded ? (
+                            <div className="flex items-center gap-1 bg-white border border-emerald-200 px-2 py-1 rounded-lg min-w-0 flex-grow max-w-[200px]" title={documents.signature.fileName}>
+                              <span className="text-[10px] text-emerald-700 font-extrabold truncate">
+                                ✓ {documents.signature.fileName}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1 bg-slate-100 border border-dashed border-slate-300 px-2.5 py-1 rounded-lg min-w-0 flex-grow max-w-[200px]" title="No file chosen">
+                              <span className="text-[10px] text-slate-400 font-medium truncate">
+                                No file chosen
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        {isSigUploaded && (
+                          <button
+                            type="button"
+                            onClick={() => removeDocument('signature')}
+                            className="text-[10px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2.5 py-1.5 rounded-xl border border-rose-200 transition-colors cursor-pointer shrink-0"
+                            title="Remove signature"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Declaration checkboxes */}
                 <div className="pt-4 border-t border-slate-100 space-y-3">

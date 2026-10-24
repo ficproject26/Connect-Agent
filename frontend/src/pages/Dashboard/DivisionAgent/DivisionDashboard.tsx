@@ -8,7 +8,7 @@ import { downloadReport } from '../../../utils/downloadReport';
 import {
   TrendingUp, Clock, CheckCircle2, ChevronRight,
   Plus, Users, Target, Ticket, Send, Download, BarChart2,
-  Eye, Wallet, Award, MapPin, Phone, Mail, ChevronDown, ChevronUp
+  Eye, Wallet, Award, MapPin, Phone, Mail, ChevronDown, ChevronUp, AlertCircle
 } from 'lucide-react';
 
 interface PincodeSubordinate {
@@ -48,7 +48,7 @@ export const DivisionDashboard: React.FC = () => {
 
   const [districtTargetAssigned, setDistrictTargetAssigned] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'pincodes' | 'vendors' | 'agents'>('agents');
+  const [activeTab, setActiveTab] = useState<'pincodes'>('pincodes');
   const [selectedAgent, setSelectedAgent] = useState<PincodeSubordinate | null>(null);
 
   const INITIAL_LIMIT = 10;
@@ -57,13 +57,89 @@ export const DivisionDashboard: React.FC = () => {
   const [showAllPincodeAgents, setShowAllPincodeAgents] = useState(false);
   const [showAllDivisionAlerts, setShowAllDivisionAlerts] = useState(false);
 
+  // Query hierarchy for registered pincodes under this division
+  const { data: hierarchyRes } = useQuery({
+    queryKey: ['divisionHierarchy', userDivision],
+    queryFn: async () => {
+      try {
+        const res = await api.get('/admin/hierarchy');
+        return res.data;
+      } catch (_) {
+        return null;
+      }
+    },
+    staleTime: 60000
+  });
+
+  // Backend stats for accurate territory vendors and approval statuses
+  const { data: statsRes } = useQuery({
+    queryKey: ['divisionStats', (user as any)?._id],
+    queryFn: async () => {
+      try {
+        const res = await api.get('/dashboard/stats');
+        return res.data;
+      } catch (_) {
+        return null;
+      }
+    },
+    staleTime: 30000
+  });
+
+  const registeredPincodes = React.useMemo(() => {
+    const list: any[] = [];
+    if (hierarchyRes?.pincodes && Array.isArray(hierarchyRes.pincodes)) {
+      const uDivNorm = userDivision.toLowerCase().replace(/division/g, '').trim();
+      hierarchyRes.pincodes.forEach((p: any) => {
+        const pDiv = (p.territory?.division || p.division || '').toLowerCase().replace(/division/g, '').trim();
+        if (!uDivNorm || pDiv === uDivNorm || pDiv.includes(uDivNorm) || uDivNorm.includes(pDiv)) {
+          const pinCode = String(p.territory?.pincode || p.pincode || '').trim();
+          list.push({
+            id: p._id || p.id || pinCode,
+            name: `PIN ${pinCode}`,
+            code: pinCode,
+            agentName: p.name || 'Pincode Agent',
+            status: p.status || 'Active'
+          });
+        }
+      });
+    }
+    if (list.length === 0) {
+      pincodeAgentsList.forEach(s => {
+        list.push({
+          id: s.id,
+          name: `PIN ${s.pincode}`,
+          code: s.pincode,
+          agentName: s.name,
+          status: s.status === 'present' ? 'Active' : 'On Leave'
+        });
+      });
+    }
+    if (list.length === 0 && userPincode) {
+      list.push({
+        id: userPincode,
+        name: `PIN ${userPincode}`,
+        code: userPincode,
+        agentName: 'Assigned Agent',
+        status: 'Active'
+      });
+    }
+    return list;
+  }, [hierarchyRes, userDivision, pincodeAgentsList, userPincode]);
+
   const divisionPincodesList = React.useMemo(() => {
+    if (registeredPincodes.length > 0) {
+      return registeredPincodes.map(p => ({
+        name: `${userDivision} (${p.code})`,
+        code: p.code,
+        score: 'Assigned Pincode'
+      }));
+    }
     if (!userDivision) return [];
     if (userPincode) {
       return [{ name: `${userDivision} (${userPincode})`, code: userPincode, score: 'Assigned Pincode' }];
     }
     return [{ name: `${userDivision} Division Sector`, code: userDivision, score: 'Assigned Division' }];
-  }, [userDivision, userPincode]);
+  }, [registeredPincodes, userDivision, userPincode]);
 
   useEffect(() => {
     if (divisionPincodesList.length > 0 && !selectedPincode) {
@@ -159,10 +235,27 @@ export const DivisionDashboard: React.FC = () => {
   });
 
   // Calculate actual registered vendors and active vendors independently
-  const totalRegisteredVendors = divisionVendors.length;
-  const activeDivisionVendors = divisionVendors.filter((v: any) => {
+  const totalRegisteredVendors = statsRes?.stats?.vendors?.total ?? divisionVendors.length;
+  const activeDivisionVendors = statsRes?.stats?.vendors?.active ?? divisionVendors.filter((v: any) => {
     const s = String(v.status || '').toLowerCase().trim();
-    return s === 'active' || s === 'approved' || s === 'verified';
+    const k = String(v.kycStatus || '').toLowerCase().trim();
+    return (s === 'active' || s === 'approved') && (k === 'approved' || k === 'verified');
+  }).length;
+
+  const adminPendingVendorsCount = statsRes?.stats?.vendors?.adminPending ?? divisionVendors.filter((v: any) => {
+    const s = String(v.status || '').toLowerCase().trim();
+    const a = String(v.approvalStatus || '').toLowerCase().trim();
+    const isAdminApproved = a === 'approved' || (s === 'active' && a !== 'pending_pincode_approval' && a !== 'pending');
+    return !isAdminApproved || a.includes('pending') || s === 'pending';
+  }).length;
+
+  const kycPendingVendorsCount = statsRes?.stats?.vendors?.kycPending ?? divisionVendors.filter((v: any) => {
+    const s = String(v.status || '').toLowerCase().trim();
+    const k = String(v.kycStatus || '').toLowerCase().trim();
+    const a = String(v.approvalStatus || '').toLowerCase().trim();
+    const isAdminApproved = a === 'approved' || (s === 'active' && a !== 'pending_pincode_approval' && a !== 'pending');
+    const isKycApproved = k === 'approved' || k === 'verified';
+    return isAdminApproved && !isKycApproved;
   }).length;
 
   // Real division reports query scoped to division
@@ -285,22 +378,19 @@ export const DivisionDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Simplified Division KPI Cards Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* 5 KPI Cards Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         {[
-          { label: 'Assigned Pincodes', val: `${divisionPincodesList.length} Pincodes`, icon: <MapPin className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
-          { label: 'Active Pincode Agents', val: `${pincodeAgentsList.length} active`, icon: <Users className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
-          { label: 'Total Vendors', val: `${totalRegisteredVendors} registered`, icon: <Users className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
-          { label: 'Active Vendors', val: `${activeDivisionVendors} active`, icon: <CheckCircle2 className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
-          { label: "Today's Targets", val: `${totalAssignedTargets} targets`, icon: <Target className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
-          { label: 'Pending Targets', val: `${Math.max(0, totalAssignedTargets - totalCompletedTargets)} remaining`, icon: <Clock className="w-4 h-4 text-[#4f4635]" />, bg: 'bg-[#efe1ca]' },
-          { label: 'Open Tickets', val: '0 unresolved', icon: <Ticket className="w-4 h-4 text-red-700" />, bg: 'bg-red-50' },
-          { label: 'Division Performance', val: `${realPerformanceScore}%`, icon: <TrendingUp className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' }
+          { label: 'Total Pincodes', val: registeredPincodes.length.toString(), icon: <MapPin className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
+          { label: 'Total Registered Vendors', val: totalRegisteredVendors.toString(), icon: <Users className="w-4 h-4 text-[#184c62]" />, bg: 'bg-[#c1e8ff]' },
+          { label: 'Total Active Vendors', val: activeDivisionVendors.toString(), icon: <CheckCircle2 className="w-4 h-4 text-[#864f19]" />, bg: 'bg-[#ffdcc2]' },
+          { label: 'Admin Pending Approvals', val: adminPendingVendorsCount.toString(), icon: <Clock className="w-4 h-4 text-amber-700" />, bg: 'bg-amber-50' },
+          { label: 'KYC Pending', val: kycPendingVendorsCount.toString(), icon: <AlertCircle className="w-4 h-4 text-blue-700" />, bg: 'bg-blue-50' },
         ].map((card, idx) => (
-          <div key={idx} className="bg-white p-5 rounded-[16px] border border-[#eae8e7] flex items-center justify-between shadow-sm relative overflow-hidden group">
+          <div key={idx} className="bg-white p-4 rounded-xl border border-[#eae8e7] flex items-center justify-between shadow-sm relative overflow-hidden group">
             <div className="space-y-1">
               <span className="text-[9px] font-bold text-[#52443a] uppercase tracking-wider block">{card.label}</span>
-              <span className="text-base font-extrabold text-[#1b1c1c]">{card.val}</span>
+              <span className="text-lg font-black text-[#1b1c1c]">{card.val}</span>
             </div>
             <div className={`h-8 w-8 rounded-lg ${card.bg} flex items-center justify-center`}>
               {card.icon}
@@ -381,9 +471,7 @@ export const DivisionDashboard: React.FC = () => {
         <div className="lg:col-span-2 bg-white rounded-[16px] border border-[#eae8e7] shadow-sm overflow-hidden flex flex-col justify-between">
           <div className="px-6 py-4 border-b border-[#eae8e7] flex justify-between items-center bg-white">
             <div className="flex gap-4">
-              <button onClick={() => setActiveTab('pincodes')} className={`text-xs font-extrabold uppercase pb-1 border-b-2 transition-all ${activeTab === 'pincodes' ? 'border-[#864f19] text-[#1b1c1c]' : 'border-transparent text-[#52443a]'}`}>Pincode Distribution</button>
-              <button onClick={() => setActiveTab('vendors')} className={`text-xs font-extrabold uppercase pb-1 border-b-2 transition-all ${activeTab === 'vendors' ? 'border-[#864f19] text-[#1b1c1c]' : 'border-transparent text-[#52443a]'}`}>Vendor Status</button>
-              <button onClick={() => setActiveTab('agents')} className={`text-xs font-extrabold uppercase pb-1 border-b-2 transition-all ${activeTab === 'agents' ? 'border-[#864f19] text-[#1b1c1c]' : 'border-transparent text-[#52443a]'}`}>Agent Performance</button>
+              <button onClick={() => setActiveTab('pincodes')} className="text-xs font-extrabold uppercase pb-1 border-b-2 border-[#864f19] text-[#1b1c1c]">Pincode List ({registeredPincodes.length})</button>
             </div>
           </div>
           
@@ -391,136 +479,34 @@ export const DivisionDashboard: React.FC = () => {
             {activeTab === 'pincodes' && (
               <>
                 <div className="py-2.5 flex justify-between text-xs font-bold text-[#52443a]">
-                  <span>Pincode Area</span>
-                  <span>Active Onboarders</span>
+                  <span>Pincode Area & Pincode Agent</span>
+                  <span>Status</span>
                 </div>
-                {(showAllDivisionPincodes ? divisionPincodesList : divisionPincodesList.slice(0, INITIAL_LIMIT)).map((pin, i) => (
-                  <div key={i} className="py-3 flex justify-between text-xs font-semibold">
-                    <span className="text-[#1b1c1c]">{pin.name}</span>
-                    <span className="text-[#34647b]">1 Onboarder active</span>
+                {registeredPincodes.length === 0 ? (
+                  <div className="py-8 text-center text-xs font-semibold text-[#847468]">
+                    No pincodes registered under {userDivision || 'assigned division'}.
                   </div>
-                ))}
-                {divisionPincodesList.length > INITIAL_LIMIT && (
+                ) : (
+                  (showAllDivisionPincodes ? registeredPincodes : registeredPincodes.slice(0, INITIAL_LIMIT)).map((pin: any, i: number) => (
+                    <div key={pin.id || i} className="py-3 flex justify-between items-center text-xs font-semibold">
+                      <div>
+                        <span className="font-bold text-[#1b1c1c] block">{pin.name}</span>
+                        <span className="text-[10px] text-slate-500 font-medium">{pin.agentName}</span>
+                      </div>
+                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-black rounded">
+                        {pin.status}
+                      </span>
+                    </div>
+                  ))
+                )}
+                {registeredPincodes.length > INITIAL_LIMIT && (
                   <div className="pt-3 flex justify-center">
                     <button
                       type="button"
                       onClick={() => setShowAllDivisionPincodes(!showAllDivisionPincodes)}
                       className="px-4 py-2 text-xs font-bold text-[#864f19] bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 rounded-xl transition cursor-pointer shadow-2xs inline-flex items-center gap-1.5"
                     >
-                      {showAllDivisionPincodes ? (
-                        <>
-                          <ChevronUp className="w-3.5 h-3.5" /> Show Less
-                        </>
-                      ) : (
-                        <>
-                          <ChevronDown className="w-3.5 h-3.5" /> View All ({divisionPincodesList.length})
-                        </>
-                      )}
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
-
-            {activeTab === 'vendors' && (
-              <>
-                <div className="py-2.5 flex justify-between text-xs font-bold text-[#52443a]">
-                  <span>Merchant Shop</span>
-                  <span>Status</span>
-                </div>
-                {divisionVendors.length === 0 ? (
-                  <p className="py-6 text-center text-xs text-slate-400 font-semibold">No registered vendors found in {userDivision}.</p>
-                ) : (
-                  (showAllDivisionVendors ? divisionVendors : divisionVendors.slice(0, INITIAL_LIMIT)).map((v: any) => (
-                    <div key={v.id || v._id} className="py-3 flex justify-between items-center text-xs font-semibold">
-                      <div>
-                        <span className="font-bold text-[#1b1c1c] block">{v.businessName || v.name}</span>
-                        <span className="text-[10px] text-[#864f19] uppercase font-black">PIN: {v.pincode} • {v.category || v.storeType || 'Merchant'}</span>
-                      </div>
-                      <span className={`inline-block text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded ${
-                        (v.status || '').toLowerCase() === 'active' || (v.status || '').toLowerCase() === 'approved'
-                          ? 'bg-emerald-50 text-emerald-700'
-                          : 'bg-amber-50 text-[#864f19]'
-                      }`}>
-                        {v.status}
-                      </span>
-                    </div>
-                  ))
-                )}
-                {divisionVendors.length > INITIAL_LIMIT && (
-                  <div className="pt-3 flex justify-center">
-                    <button
-                      type="button"
-                      onClick={() => setShowAllDivisionVendors(!showAllDivisionVendors)}
-                      className="px-4 py-2 text-xs font-bold text-[#864f19] bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 rounded-xl transition cursor-pointer shadow-2xs inline-flex items-center gap-1.5"
-                    >
-                      {showAllDivisionVendors ? (
-                        <>
-                          <ChevronUp className="w-3.5 h-3.5" /> Show Less
-                        </>
-                      ) : (
-                        <>
-                          <ChevronDown className="w-3.5 h-3.5" /> View All ({divisionVendors.length})
-                        </>
-                      )}
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
-
-            {activeTab === 'agents' && (
-              <>
-                <div className="py-2.5 flex justify-between text-xs font-bold text-[#52443a]">
-                  <span>Pincode Agent & Territory</span>
-                  <span>Target Progress</span>
-                  <span>Inspect Action</span>
-                </div>
-                {pincodeAgentsList.length === 0 ? (
-                  <div className="py-12 text-center text-xs font-semibold text-[#847468]">
-                    No Pincode Agents found in {userDivision || 'assigned'} Division.
-                  </div>
-                ) : (
-                  (showAllPincodeAgents ? pincodeAgentsList : pincodeAgentsList.slice(0, INITIAL_LIMIT)).map((agent) => (
-                    <div key={agent.id} className="py-3 flex justify-between items-center text-xs font-semibold">
-                      <div>
-                        <span className="font-bold text-[#1b1c1c] block">{agent.name}</span>
-                        <span className="text-[10px] text-[#864f19] uppercase font-black">PIN: {agent.pincode}</span>
-                      </div>
-                      <div>
-                        <span className="text-[#52443a] block font-bold">{agent.completedTargets ?? 0} / {agent.assignedTargets ?? 0} Targets</span>
-                        <span className={`inline-block text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded ${
-                          agent.status === 'present' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-[#864f19]'
-                        }`}>
-                          {agent.status}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedAgent(agent)}
-                        className="py-1 px-3 bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 text-[#864f19] text-[10px] font-extrabold uppercase tracking-wider rounded-lg transition cursor-pointer flex items-center gap-1"
-                      >
-                        <Eye className="w-3.5 h-3.5" /> Inspect
-                      </button>
-                    </div>
-                  ))
-                )}
-                {pincodeAgentsList.length > INITIAL_LIMIT && (
-                  <div className="pt-3 flex justify-center">
-                    <button
-                      type="button"
-                      onClick={() => setShowAllPincodeAgents(!showAllPincodeAgents)}
-                      className="px-4 py-2 text-xs font-bold text-[#864f19] bg-[#fbf9f8] hover:bg-[#ffdcc2] border border-[#d7c3b5]/60 rounded-xl transition cursor-pointer shadow-2xs inline-flex items-center gap-1.5"
-                    >
-                      {showAllPincodeAgents ? (
-                        <>
-                          <ChevronUp className="w-3.5 h-3.5" /> Show Less
-                        </>
-                      ) : (
-                        <>
-                          <ChevronDown className="w-3.5 h-3.5" /> View All ({pincodeAgentsList.length})
-                        </>
-                      )}
+                      {showAllDivisionPincodes ? <>Show Less</> : <>View All ({registeredPincodes.length})</>}
                     </button>
                   </div>
                 )}

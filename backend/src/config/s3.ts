@@ -1,8 +1,9 @@
 import path from 'path';
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
+import fs from 'fs';
 
 dotenv.config();
 
@@ -21,90 +22,411 @@ export function getS3Client(): S3Client {
 }
 
 export interface S3UploadResult {
-  success: boolean;
-  key: string;
+  success?: boolean;
   url: string;
-  secure_url: string;
+  secure_url?: string;
+  durableUrl?: string;
+  key?: string;
+  publicId?: string;
+  bucket?: string;
+  contentType?: string;
+  mimeType?: string;
+  size?: number;
+  category?: string;
+  extension?: string;
+  originalName?: string;
+  error?: string;
+  toString?: () => string;
 }
 
-/**
- * Uploads a document/photo buffer or base64 string to AWS S3.
- * Returns the secure pre-signed view URL for the private S3 object.
- */
-export async function uploadToS3(
-  fileBufferOrBase64: Buffer | string,
-  folder = 'agent_docs',
-  filenameHint = 'document.jpg'
-): Promise<S3UploadResult> {
-  const bucket = process.env.AWS_S3_BUCKET;
-  const client = getS3Client();
+// In-memory cache for presigned viewing URLs to eliminate redundant AWS signing requests (TTL: 1 hour)
+interface PresignedUrlCacheEntry {
+  url: string;
+  expiresAt: number;
+}
+const presignedUrlCache = new Map<string, PresignedUrlCacheEntry>();
 
-  let buffer: Buffer;
-  let ext = path.extname(filenameHint).toLowerCase() || '.jpg';
-  let mimeType = 'image/jpeg';
-
-  if (Buffer.isBuffer(fileBufferOrBase64)) {
-    buffer = fileBufferOrBase64;
-  } else if (typeof fileBufferOrBase64 === 'string') {
-    if (fileBufferOrBase64.startsWith('data:')) {
-      const match = fileBufferOrBase64.match(/^data:([^;]+);base64,(.+)$/s);
-      if (match) {
-        mimeType = match[1].toLowerCase();
-        buffer = Buffer.from(match[2], 'base64');
-        ext = `.${mimeType.split('/')[1] || 'jpg'}`;
-      } else {
-        throw new Error('Malformed base64 string provided');
-      }
-    } else {
-      throw new Error('String input must be a valid base64 data URI');
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, entry] of presignedUrlCache.entries()) {
+    if (entry.expiresAt <= now) {
+      presignedUrlCache.delete(k);
     }
-  } else {
-    throw new Error('Input must be a Buffer or base64 data string');
+  }
+}, 10 * 60 * 1000).unref?.();
+
+// Comprehensive MIME allowlist supporting Images, Documents, and Audio
+export const ALLOWED_MIME_MAP: Record<string, { ext: string; category: 'image' | 'document' | 'audio'; maxSizeBytes: number }> = {
+  // Images (Max 15MB)
+  'image/jpeg': { ext: 'jpg', category: 'image', maxSizeBytes: 15 * 1024 * 1024 },
+  'image/jpg': { ext: 'jpg', category: 'image', maxSizeBytes: 15 * 1024 * 1024 },
+  'image/png': { ext: 'png', category: 'image', maxSizeBytes: 15 * 1024 * 1024 },
+  'image/webp': { ext: 'webp', category: 'image', maxSizeBytes: 15 * 1024 * 1024 },
+  'image/gif': { ext: 'gif', category: 'image', maxSizeBytes: 15 * 1024 * 1024 },
+  'image/avif': { ext: 'avif', category: 'image', maxSizeBytes: 15 * 1024 * 1024 },
+  'image/svg+xml': { ext: 'svg', category: 'image', maxSizeBytes: 5 * 1024 * 1024 },
+
+  // Documents (Max 25MB)
+  'application/pdf': { ext: 'pdf', category: 'document', maxSizeBytes: 25 * 1024 * 1024 },
+  'application/msword': { ext: 'doc', category: 'document', maxSizeBytes: 25 * 1024 * 1024 },
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': { ext: 'docx', category: 'document', maxSizeBytes: 25 * 1024 * 1024 },
+  'application/vnd.ms-excel': { ext: 'xls', category: 'document', maxSizeBytes: 25 * 1024 * 1024 },
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': { ext: 'xlsx', category: 'document', maxSizeBytes: 25 * 1024 * 1024 },
+  'text/csv': { ext: 'csv', category: 'document', maxSizeBytes: 10 * 1024 * 1024 },
+  'text/plain': { ext: 'txt', category: 'document', maxSizeBytes: 10 * 1024 * 1024 },
+
+  // Audio (Max 25MB)
+  'audio/webm': { ext: 'webm', category: 'audio', maxSizeBytes: 25 * 1024 * 1024 },
+  'video/webm': { ext: 'webm', category: 'audio', maxSizeBytes: 25 * 1024 * 1024 },
+  'audio/mpeg': { ext: 'mp3', category: 'audio', maxSizeBytes: 25 * 1024 * 1024 },
+  'audio/mp3': { ext: 'mp3', category: 'audio', maxSizeBytes: 25 * 1024 * 1024 },
+  'audio/wav': { ext: 'wav', category: 'audio', maxSizeBytes: 25 * 1024 * 1024 },
+  'audio/x-wav': { ext: 'wav', category: 'audio', maxSizeBytes: 25 * 1024 * 1024 },
+  'audio/wave': { ext: 'wav', category: 'audio', maxSizeBytes: 25 * 1024 * 1024 },
+  'audio/m4a': { ext: 'm4a', category: 'audio', maxSizeBytes: 25 * 1024 * 1024 },
+  'audio/x-m4a': { ext: 'm4a', category: 'audio', maxSizeBytes: 25 * 1024 * 1024 },
+  'audio/mp4': { ext: 'm4a', category: 'audio', maxSizeBytes: 25 * 1024 * 1024 },
+  'audio/ogg': { ext: 'ogg', category: 'audio', maxSizeBytes: 25 * 1024 * 1024 },
+  'application/ogg': { ext: 'ogg', category: 'audio', maxSizeBytes: 25 * 1024 * 1024 },
+  'audio/aac': { ext: 'aac', category: 'audio', maxSizeBytes: 25 * 1024 * 1024 }
+};
+
+export const EXTENSION_TO_MIME: Record<string, string> = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  gif: 'image/gif',
+  avif: 'image/avif',
+  svg: 'image/svg+xml',
+  pdf: 'application/pdf',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  csv: 'text/csv',
+  txt: 'text/plain',
+  webm: 'audio/webm',
+  mp3: 'audio/mpeg',
+  wav: 'audio/wav',
+  m4a: 'audio/m4a',
+  ogg: 'audio/ogg',
+  aac: 'audio/aac'
+};
+
+export function detectMagicBytes(buf: Buffer): string | null {
+  if (!Buffer.isBuffer(buf) || buf.length < 4) return null;
+  // JPEG
+  if (buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return 'image/jpeg';
+  // PNG
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) return 'image/png';
+  // GIF
+  if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x38) return 'image/gif';
+  // PDF
+  if (buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46) return 'application/pdf';
+  // WebM (EBML)
+  if (buf[0] === 0x1A && buf[1] === 0x45 && buf[2] === 0xDF && buf[3] === 0xA3) return 'audio/webm';
+  // MP3 ID3
+  if (buf[0] === 0x49 && buf[1] === 0x44 && buf[2] === 0x33) return 'audio/mpeg';
+  // RIFF (WAV or WEBP)
+  if (buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 && buf.length >= 12) {
+    const sub = buf.toString('ascii', 8, 12);
+    if (sub === 'WEBP') return 'image/webp';
+    if (sub === 'WAVE') return 'audio/wav';
+  }
+  // OGG
+  if (buf[0] === 0x4F && buf[1] === 0x67 && buf[2] === 0x67 && buf[3] === 0x53) return 'audio/ogg';
+  // Office OpenXML / ZIP
+  if (buf[0] === 0x50 && buf[1] === 0x4B && buf[2] === 0x03 && buf[3] === 0x04) return 'application/zip';
+  return null;
+}
+
+export function extractS3Key(urlOrKey: string): string | null {
+  if (!urlOrKey || typeof urlOrKey !== 'string') return null;
+  const trimmed = urlOrKey.trim();
+
+  if (trimmed.startsWith('data:') || trimmed.startsWith('blob:') || trimmed.startsWith('https://res.cloudinary.com/')) {
+    return null;
   }
 
-  if (ext === '.pdf') mimeType = 'application/pdf';
-  else if (ext === '.png') mimeType = 'image/png';
-  else if (ext === '.jpg' || ext === '.jpeg') mimeType = 'image/jpeg';
-  else if (ext === '.webp') mimeType = 'image/webp';
+  const mediaMatch = trimmed.match(/\/api\/(?:media|uploads)\/s3\/([^?#]+)/i);
+  if (mediaMatch && mediaMatch[1]) {
+    return decodeURIComponent(mediaMatch[1]).replace(/^\/+/, '');
+  }
 
-  const safeFolder = String(folder || 'agent_docs').replace(/[^a-zA-Z0-9_-]/g, '_');
-  const randSuffix = crypto.randomBytes(8).toString('hex');
-  const objectKey = `${safeFolder}/${Date.now()}-${randSuffix}${ext}`;
+  const cfDomain = (process.env.AWS_CLOUDFRONT_URL || process.env.CLOUDFRONT_URL || '').replace(/https?:\/\//i, '').replace(/\/+$/, '');
+  if (cfDomain && trimmed.includes(cfDomain)) {
+    try {
+      const parsed = new URL(trimmed.startsWith('http') ? trimmed : `https://${trimmed}`);
+      return decodeURIComponent(parsed.pathname).replace(/^\/+/, '');
+    } catch {}
+  }
 
-  const putCommand = new PutObjectCommand({
-    Bucket: bucket,
-    Key: objectKey,
-    Body: buffer,
-    ContentType: mimeType
-  });
+  if (trimmed.includes('amazonaws.com')) {
+    try {
+      const parsed = new URL(trimmed);
+      let p = decodeURIComponent(parsed.pathname).replace(/^\/+/, '');
+      const parts = p.split('/');
+      if (parts.length > 1 && ['products', 'vendor_uploads', 'admin_docs', 'subadmin_docs', 'agent_docs', 'voice_notes', 'kyc', 'documents', 'field_visits', 'tasks'].includes(parts[1])) {
+        p = parts.slice(1).join('/');
+      }
+      return p;
+    } catch {
+      const match = trimmed.match(/amazonaws\.com\/([^?#]+)/);
+      if (match && match[1]) {
+        return decodeURIComponent(match[1]).replace(/^\/+/, '');
+      }
+    }
+  }
 
-  await client.send(putCommand);
+  if (/^[a-zA-Z0-9_\-]+\/[a-zA-Z0-9_\-\.]+\.(jpg|jpeg|png|webp|gif|avif|svg|pdf|doc|docx|xls|xlsx|csv|txt|webm|mp3|wav|m4a|ogg|aac)$/i.test(trimmed)) {
+    return trimmed;
+  }
 
-  const getCommand = new GetObjectCommand({
-    Bucket: bucket,
-    Key: objectKey
-  });
+  return null;
+}
 
-  const presignedUrl = await getSignedUrl(client, getCommand, { expiresIn: 604800 });
-
-  return {
-    success: true,
-    key: objectKey,
-    url: presignedUrl,
-    secure_url: presignedUrl
-  };
+export function getDurableImageUrl(objectKey: string): string {
+  if (!objectKey) return '';
+  const cleanKey = objectKey.replace(/^\/+/, '');
+  const cloudfrontDomain = process.env.AWS_CLOUDFRONT_URL || process.env.CLOUDFRONT_URL;
+  if (cloudfrontDomain) {
+    const cfBase = cloudfrontDomain.startsWith('http') ? cloudfrontDomain : `https://${cloudfrontDomain}`;
+    return `${cfBase.replace(/\/+$/, '')}/${cleanKey}`;
+  }
+  const backendBase = process.env.BACKEND_URL || 'http://3.110.88.42:8083';
+  return `${backendBase.replace(/\/+$/, '')}/api/media/s3/${cleanKey}`;
 }
 
 export async function getPresignedUrl(key: string, expiresIn = 3600): Promise<string> {
   if (!key || typeof key !== 'string') return '';
-  if (key.startsWith('http://') || key.startsWith('https://')) return key;
+  const cleanKey = extractS3Key(key) || key.replace(/^\/+/, '');
+  const cacheKey = `${cleanKey}:${expiresIn}`;
+  const cached = presignedUrlCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now() + 60000) {
+    return cached.url;
+  }
   const bucket = process.env.AWS_S3_BUCKET;
   const client = getS3Client();
   const command = new GetObjectCommand({
     Bucket: bucket,
-    Key: key.replace(/^\/+/, '')
+    Key: cleanKey
   });
-  return await getSignedUrl(client, command, { expiresIn });
+  const signedUrl = await getSignedUrl(client, command, { expiresIn });
+  presignedUrlCache.set(cacheKey, {
+    url: signedUrl,
+    expiresAt: Date.now() + (expiresIn - 60) * 1000
+  });
+  return signedUrl;
+}
+
+export async function getObjectStream(key: string): Promise<{
+  success: boolean;
+  body?: any;
+  contentType?: string;
+  contentLength?: number;
+  etag?: string;
+  error?: string;
+}> {
+  try {
+    const bucket = process.env.AWS_S3_BUCKET;
+    const client = getS3Client();
+    const cleanKey = key.replace(/^\/+/, '');
+    const command = new GetObjectCommand({
+      Bucket: bucket,
+      Key: cleanKey
+    });
+    const response = await client.send(command);
+    return {
+      success: true,
+      body: response.Body,
+      contentType: response.ContentType || 'application/octet-stream',
+      contentLength: response.ContentLength,
+      etag: response.ETag
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: err.name === 'NoSuchKey' ? 'Object not found in S3 bucket' : (err.message || 'Failed to fetch object from S3')
+    };
+  }
+}
+
+/**
+ * Uploads Images, Documents, Files, or Audio (Buffer, base64 DataURI, or file path) to AWS S3.
+ * Returns a hybrid result object with durable URL and clean S3 key.
+ */
+export async function uploadToS3(
+  fileInput: string | Buffer,
+  folder = 'agent_docs',
+  filenameHint?: string
+): Promise<S3UploadResult> {
+  try {
+    let fileBuffer: Buffer;
+    let mimeType = 'application/octet-stream';
+    let extension = 'bin';
+    let originalName = filenameHint || 'file';
+
+    if (Buffer.isBuffer(fileInput)) {
+      fileBuffer = fileInput;
+      if (filenameHint) {
+        const ext = path.extname(filenameHint).replace('.', '').toLowerCase();
+        if (ext && EXTENSION_TO_MIME[ext]) {
+          extension = ext;
+          mimeType = EXTENSION_TO_MIME[ext];
+        }
+      }
+      const magicMime = detectMagicBytes(fileBuffer);
+      if (magicMime && ALLOWED_MIME_MAP[magicMime]) {
+        mimeType = magicMime;
+        extension = ALLOWED_MIME_MAP[magicMime].ext;
+      }
+    } else if (typeof fileInput === 'string') {
+      const trimmed = fileInput.trim();
+
+      if (trimmed.startsWith('https://res.cloudinary.com/')) {
+        return {
+          success: true,
+          url: trimmed,
+          secure_url: trimmed,
+          key: trimmed,
+          publicId: trimmed,
+          toString() { return trimmed; }
+        };
+      }
+
+      if (trimmed.includes('/api/media/s3/')) {
+        const key = extractS3Key(trimmed) || trimmed;
+        return {
+          success: true,
+          url: trimmed,
+          secure_url: trimmed,
+          key,
+          publicId: key,
+          toString() { return trimmed; }
+        };
+      }
+
+      if (trimmed.includes('amazonaws.com')) {
+        const existingKey = extractS3Key(trimmed);
+        if (existingKey) {
+          const durableUrl = getDurableImageUrl(existingKey);
+          return {
+            success: true,
+            url: durableUrl,
+            secure_url: durableUrl,
+            key: existingKey,
+            publicId: existingKey,
+            toString() { return durableUrl; }
+          };
+        }
+      }
+
+      if (fs.existsSync(trimmed)) {
+        fileBuffer = fs.readFileSync(trimmed);
+        originalName = path.basename(trimmed);
+        const ext = path.extname(trimmed).replace('.', '').toLowerCase();
+        if (ext && EXTENSION_TO_MIME[ext]) {
+          extension = ext;
+          mimeType = EXTENSION_TO_MIME[ext];
+        }
+      } else if (trimmed.startsWith('data:')) {
+        const match = trimmed.match(/^data:([^;]+);base64,(.+)$/s);
+        if (!match) {
+          return { success: false, url: '', secure_url: '', error: 'Malformed base64 data URI.' };
+        }
+        mimeType = match[1].toLowerCase().trim();
+        const conf = ALLOWED_MIME_MAP[mimeType];
+        if (!conf) {
+          return {
+            success: false,
+            url: '',
+            secure_url: '',
+            error: `MIME type '\${mimeType}' is not permitted.`
+          };
+        }
+        extension = conf.ext;
+        fileBuffer = Buffer.from(match[2], 'base64');
+      } else {
+        return { success: false, url: '', secure_url: '', error: 'Invalid file format: must be base64 data URI or file path.' };
+      }
+    } else {
+      return { success: false, url: '', secure_url: '', error: 'Invalid file input type.' };
+    }
+
+    const magicMime = detectMagicBytes(fileBuffer);
+    if (magicMime && ALLOWED_MIME_MAP[magicMime]) {
+      mimeType = magicMime;
+      extension = ALLOWED_MIME_MAP[magicMime].ext;
+    }
+
+    const mimeConfig = ALLOWED_MIME_MAP[mimeType] || { category: 'file' as const, maxSizeBytes: 25 * 1024 * 1024, ext: extension };
+    if (!ALLOWED_MIME_MAP[mimeType]) {
+      return {
+        success: false,
+        url: '',
+        secure_url: '',
+        error: `File format '\${mimeType}' is not supported.`
+      };
+    }
+
+    if (fileBuffer.length > mimeConfig.maxSizeBytes) {
+      const maxMb = Math.round(mimeConfig.maxSizeBytes / (1024 * 1024));
+      return {
+        success: false,
+        url: '',
+        secure_url: '',
+        error: `Payload size exceeds maximum limit of \${maxMb} MB for \${mimeConfig.category}s.`
+      };
+    }
+
+    const bucket = process.env.AWS_S3_BUCKET;
+    const client = getS3Client();
+
+    const safeFolder = /^[a-zA-Z0-9_-]{1,50}$/.test(folder) ? folder : 'agent_docs';
+    const randSuffix = crypto.randomBytes(8).toString('hex');
+    const objectKey = `\${safeFolder}/\${Date.now()}-\${randSuffix}.\${extension}`;
+
+    const putCommand = new PutObjectCommand({
+      Bucket: bucket,
+      Key: objectKey,
+      Body: fileBuffer,
+      ContentType: mimeType,
+      Metadata: {
+        'original-name': encodeURIComponent(path.basename(originalName)),
+        category: mimeConfig.category
+      }
+    });
+
+    await client.send(putCommand);
+
+    const durableUrl = getDurableImageUrl(objectKey);
+
+    return {
+      success: true,
+      url: durableUrl,
+      secure_url: durableUrl,
+      key: objectKey,
+      publicId: objectKey,
+      category: mimeConfig.category,
+      mimeType,
+      extension,
+      size: fileBuffer.length,
+      originalName,
+      toString() { return durableUrl; }
+    };
+  } catch (err: any) {
+    console.error('[AWS S3 Agent Upload Error]:', err.message);
+    return {
+      success: false,
+      url: '',
+      secure_url: '',
+      error: err.message || 'Failed to upload file to AWS S3'
+    };
+  }
 }
 
 export const uploadToCloudinary = uploadToS3;
+
+export const uploadBase64ToS3 = uploadToS3;
+export const getPresignedViewUrl = getPresignedUrl;
